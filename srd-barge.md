@@ -280,6 +280,10 @@ pluggable.
 - **PR-02** Spec-kit carries: constitution, specify, plan, tasks, analyze, implement. ADRs
   record contested or hard-to-reverse decisions; spikes write a dated `FINDING.md`.
 - **PR-03** Every gate and every refusal test is watched failing before it is trusted.
+- **PR-04 (Persistent previews.)** Every pull request publishes a rendered preview of its
+  documents and site to gh-pages under `pr/<number>/`, refreshed on each push and left in
+  place after the pull request closes, so that review links stay live. The published
+  root always reflects `main`. A preview from a fork is built but not published.
 
 ## 9. Acceptance criteria
 
