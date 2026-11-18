@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Software Requirements Document</title>
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<div class="banner">Preview of pull request #1 (42bb290). Not the published document.</div>
+<main>
+<nav id="TOC" aria-label="Contents">
+<ul>
+<li><a href="#software-requirements-document"
+id="toc-software-requirements-document">Software Requirements
+Document</a>
+<ul>
+<li><a href="#canal-barge-weather-demonstrator-version-1"
+id="toc-canal-barge-weather-demonstrator-version-1">Canal barge weather
+demonstrator, Version 1</a></li>
+<li><a href="#1-purpose" id="toc-1-purpose">1. Purpose</a></li>
+<li><a href="#2-architecture" id="toc-2-architecture">2.
+Architecture</a></li>
+<li><a href="#3-simulated-world-time-and-randomness"
+id="toc-3-simulated-world-time-and-randomness">3. Simulated world, time
+and randomness</a></li>
+<li><a href="#4-components" id="toc-4-components">4. Components</a></li>
+<li><a href="#5-functional-requirements"
+id="toc-5-functional-requirements">5. Functional requirements</a></li>
+<li><a href="#6-interfaces-and-shared-types"
+id="toc-6-interfaces-and-shared-types">6. Interfaces and shared
+types</a></li>
+<li><a href="#7-delivery" id="toc-7-delivery">7. Delivery</a></li>
+<li><a href="#8-development-process" id="toc-8-development-process">8.
+Development process</a></li>
+<li><a href="#9-acceptance-criteria" id="toc-9-acceptance-criteria">9.
+Acceptance criteria</a></li>
+<li><a href="#10-open-questions" id="toc-10-open-questions">10. Open
+questions</a></li>
+<li><a href="#11-deliberate-exclusions-from-version-1"
+id="toc-11-deliberate-exclusions-from-version-1">11. Deliberate
+exclusions from Version 1</a></li>
+</ul></li>
+</ul>
+</nav>
+<h1 id="software-requirements-document">Software Requirements
+Document</h1>
+<h2 id="canal-barge-weather-demonstrator-version-1">Canal barge weather
+demonstrator, Version 1</h2>
+<p><strong>Status:</strong> Draft for review <strong>Author:</strong>
+Doc <strong>Working name:</strong> to be chosen (see §10). This document
+says <em>the demonstrator</em>.</p>
+<hr />
+<h2 id="1-purpose">1. Purpose</h2>
+<p>The demonstrator is a <strong>system and architecture
+demonstrator</strong> set aboard an <strong>uncrewed electric cargo
+barge</strong> shuttling freight between two wharves on a fictional
+canal, around the clock, for weeks at a time. The barge carries a
+weather sensor at the <strong>bow</strong> and another at the
+<strong>stern</strong>, about twenty metres apart, logging to an old
+data logger in its equipment locker. The demonstrator runs whole in one
+browser session and shows a standards-based display and analysis
+architecture working over that data.</p>
+<p>Its audience is <strong>people deciding whether to adopt this
+architecture</strong> for a small, long-lived system with an old store.
+It exists to make two claims, in this order:</p>
+<ol type="1">
+<li><strong>C1. A standards facade over an awkward legacy store
+works.</strong> An OGC API-EDR server can sit in front of a store it
+does not control, while that store grows, and serve a modern display and
+analysis code without changing the store.</li>
+<li><strong>C2. The architecture transfers to small, old
+systems.</strong> A standards seam, a clock and RNG as ports, scored
+ground truth, and Python analysis as an ordinary client are worth their
+cost at small scale.</li>
+</ol>
+<p>Both claims are supported by acceptance tests (§9), never asserted by
+the display.</p>
+<ul>
+<li><strong>NFR-01 (One browser session.)</strong> Every component runs
+in the browser. No step of building, testing or demonstrating requires a
+server, a container or a daemon.</li>
+<li><strong>NFR-02 (Two languages, by design.)</strong> The front end is
+TypeScript; the backend and all analysis are Python running in Pyodide.
+The second language is the point: it is the language the backend and an
+analyst's code would be written in for real.</li>
+<li><strong>NFR-03 (The backend is deployable.)</strong> The Python
+backend is a standard ASGI application. The code that runs in the
+demonstrator runs unchanged under an ordinary ASGI server, and a test
+proves it (AT-02).</li>
+</ul>
+<h3 id="11-what-this-is-not">1.1 What this is not</h3>
+<ul>
+<li><strong>FR-01</strong> The demonstrator models no real canal, boat,
+person or place. The canal, its towns, locks and tunnels are fictional
+and sit at a <strong>declared fictional location</strong>; no coordinate
+in the repository is a real place someone lives. The weather is
+synthetic. The landing page states this plainly.</li>
+<li>It is not a weather or navigation product. Its numbers are
+plausible, not accurate.</li>
+</ul>
+<hr />
+<h2 id="2-architecture">2. Architecture</h2>
+<p>One browser application in three parts, with one seam between
+them:</p>
+<ul>
+<li><strong>The display</strong>: TypeScript and React, rendering
+everything a reader sees.</li>
+<li><strong>The backend</strong>: Python in a Pyodide Web Worker,
+holding the simulation, the boat, the sensors, the logger stand-in, the
+store adapter, the EDR server and the analysis service.</li>
+<li><strong>The analyst's workspace</strong>: Python in a second,
+separate Pyodide Web Worker, running code a reader edits in the
+browser.</li>
+</ul>
+<h3 id="21-the-seam">2.1 The seam</h3>
+<ul>
+<li><strong>FR-02</strong> All traffic between the display, the backend
+and the workspace crosses as HTTP and nowhere else. Requests are
+relative URLs, intercepted by a <strong>Service Worker</strong> and
+passed to the backend worker, which calls the ASGI application directly.
+The Service Worker contains no application logic.</li>
+<li><strong>FR-03</strong> The display and the workspace are clients of
+the same interface. Requests from the workspace worker pass through the
+same Service Worker as requests from the display; neither has a private
+route into the backend.</li>
+<li><strong>FR-04</strong> No client code or configuration carries an
+absolute URL. Pointing the display at a real server is a change of base
+URL alone.</li>
+<li><strong>FR-05</strong> Every shape crossing the seam is governed by
+a committed master: OpenAPI for the HTTP interface, CoverageJSON for
+coverage responses, JSON Schema for request parameters and results. Seam
+traffic is validated against the masters in tests.</li>
+</ul>
+<h3 id="22-honest-ports">2.2 Honest ports</h3>
+<p>Genuine ports, each with more than one real implementation planned:
+the <strong>seam transport</strong> (Service Worker today, network
+later), the <strong>clock</strong>, the <strong>RNG</strong>, and the
+<strong>store adapter</strong> (the stand-in today, other formats
+later). Nothing else is presented as pluggable.</p>
+<hr />
+<h2 id="3-simulated-world-time-and-randomness">3. Simulated world, time
+and randomness</h2>
+<ul>
+<li><p><strong>FR-06</strong> The barge shuttles <strong>continuously,
+day and night</strong>, between two wharves on a fictional canal
+declared as a <strong>centreline with chainage</strong> (distance along
+the canal). It turns at each wharf after a declared dwell for loading.
+It moves at canal speed within a declared limit, stops at
+<strong>locks</strong> where its elevation changes, and slows through
+<strong>bridges and the tunnel</strong>. Its position, heading and speed
+are a pure function of the clock, the declared timetable and its seed
+stream. A run lasts <strong>weeks</strong> of simulated time.</p></li>
+<li><p><strong>FR-06a</strong> Because every place on the route is
+passed <strong>many times a day, in both directions and at every
+hour</strong>, the data contains <strong>revisits</strong>: the same
+place at different times and times of day, and the same weather at
+different places. Revisits are what let the analysis separate the effect
+of place from the effect of weather and of the diurnal cycle (FR-22).
+The timetable is declared so that every reach is passed in every hour of
+the day within the first week, and the timetable's period does not
+divide a day evenly, so passes drift through the clock rather than
+repeating at the same hours.</p></li>
+<li><p><strong>FR-06b</strong> The timetable declares occasional
+<strong>stoppages</strong> (a lock closed for repair, a wharf delay), so
+the record contains long stationary periods at one place, as a real
+long-running vessel's would.</p></li>
+<li><p><strong>FR-07</strong> Two sensors, <strong>bow</strong> and
+<strong>stern</strong>, separated by a declared distance along the boat,
+each report seven parameters once per simulated second:</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Unit</th>
+<th>Note</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Air temperature</td>
+<td>°C</td>
+<td></td>
+</tr>
+<tr>
+<td>Relative humidity</td>
+<td>%</td>
+<td></td>
+</tr>
+<tr>
+<td>Barometric pressure</td>
+<td>hPa</td>
+<td>Station pressure; changes with elevation at locks</td>
+</tr>
+<tr>
+<td>Apparent wind speed</td>
+<td>m s⁻¹</td>
+<td>Relative to the moving boat</td>
+</tr>
+<tr>
+<td>Apparent wind direction</td>
+<td>degrees relative to the bow</td>
+<td>Relative to the moving boat</td>
+</tr>
+<tr>
+<td>Solar irradiance</td>
+<td>W m⁻²</td>
+<td></td>
+</tr>
+<tr>
+<td>Water temperature</td>
+<td>°C</td>
+<td>Canal surface water</td>
+</tr>
+</tbody>
+</table></li>
+<li><p><strong>FR-08</strong> The canal passes through declared
+<strong>reaches</strong>, each with its own microclimate: open
+embankment, sheltered cutting, woodland, town (urban heat), an aqueduct
+over a valley, and a <strong>tunnel</strong> (dark, still, cool and
+damp). Each reach declares how it modifies the weather. These are the
+demonstrator's equivalent of crossing into a new body of water.</p></li>
+<li><p><strong>FR-09</strong> Over the reaches, the weather passes
+through <strong>several air masses separated by fronts</strong>. Each
+air mass declares a mean and a covariance over the parameters; each
+front declares an arrival time, a passage duration and the change it
+brings. A diurnal cycle drives temperature and irradiance. Readings
+carry declared noise and occasional spikes.</p></li>
+<li><p><strong>FR-10</strong> Every run writes a
+<strong>manifest</strong> recording the canal, its reaches and locks,
+the voyage plan, the air masses, fronts, diurnal cycle, noise model,
+seeds and generator version. The manifest is the ground truth that
+detection, clustering and correction are scored against.</p></li>
+<li><p><strong>FR-11</strong> All components read time from the
+simulation clock; no host clock is used for any operational purpose. The
+clock runs in real time or <strong>accelerated</strong>, with rate
+controlled from the display within declared bounds, because a run takes
+weeks and a demonstration takes minutes. At the highest declared rate, a
+week of simulated time passes in under an hour.</p></li>
+<li><p><strong>FR-12</strong> All randomness comes from named, seeded
+streams recorded in the manifest.</p></li>
+</ul>
+<hr />
+<h2 id="4-components">4. Components</h2>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Component</th>
+<th>Responsibility</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>B-C01</td>
+<td>Simulation clock</td>
+<td>Single source of time; real time or accelerated; a port for later
+replay</td>
+</tr>
+<tr>
+<td>B-C02</td>
+<td>World generator</td>
+<td>Canal, reaches, air masses, fronts, diurnal cycle, noise; writes the
+manifest</td>
+</tr>
+<tr>
+<td>B-C03</td>
+<td>Boat</td>
+<td>Moves along the canal under the voyage plan; locks, tunnels,
+moorings</td>
+</tr>
+<tr>
+<td>B-C04</td>
+<td>Sensors</td>
+<td>Bow and stern; sample the world at the boat's positions at 1 Hz</td>
+</tr>
+<tr>
+<td>B-C05</td>
+<td>Logger stand-in</td>
+<td>Deliberately awkward, append-only storage (FR-13)</td>
+</tr>
+<tr>
+<td>B-C06</td>
+<td>Store adapter</td>
+<td>The only code that understands the logger's format</td>
+</tr>
+<tr>
+<td>B-C07</td>
+<td>EDR server</td>
+<td>OGC API-EDR over the adapter, as an ASGI application</td>
+</tr>
+<tr>
+<td>B-C08</td>
+<td>Analysis service</td>
+<td>Derived values, correlation, detection and clustering, served in EDR
+shape</td>
+</tr>
+<tr>
+<td>B-C09</td>
+<td>Analyst's workspace</td>
+<td>In-browser Python editor and its own Pyodide worker</td>
+</tr>
+<tr>
+<td>B-C10</td>
+<td>Display</td>
+<td>Linked charts, the canal map, analysis views and their controls</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="5-functional-requirements">5. Functional requirements</h2>
+<h3 id="51-the-logger-stand-in">5.1 The logger stand-in</h3>
+<ul>
+<li><strong>FR-13</strong> The stand-in shall be <strong>deliberately
+awkward</strong>, the way an old logger's archive is: fixed-width text
+records, bow and stern in separate files rolling over daily, position
+held as a GPS sentence string rather than numbers, time in a
+non-standard unit and epoch, coded values for some fields, no index, and
+records appended while they are being read. It is not a tidy modern
+store wearing an old label.</li>
+<li><strong>FR-14</strong> The stand-in is written only by the sensors
+and read only by the store adapter. Nothing else knows its format.</li>
+<li><strong>FR-15</strong> The claim C1 is stated as <em>the facade
+works over an awkward store, to be confirmed against a real one</em>.
+The landing page and the documentation say so.</li>
+</ul>
+<h3 id="52-the-edr-server">5.2 The EDR server</h3>
+<ul>
+<li><strong>FR-16</strong> The EDR server shall serve the sensor data as
+an honest subset of OGC API-EDR: collection discovery,
+<strong>trajectory</strong> queries along the boat's track carrying a
+time at each vertex, and <strong>corridor</strong> queries along a
+stretch of canal, both returning CoverageJSON.</li>
+<li><strong>FR-17</strong> Every unsupported query type, option or
+parameter is refused with the thing refused named. The served
+conformance statement matches the code, held by a test.</li>
+<li><strong>FR-18</strong> Responses reflect the store as it stands at
+the moment of the request, including records appended during the
+run.</li>
+<li><strong>FR-18a</strong> The facade shall stay responsive as the
+store grows over a <strong>multi-week run</strong>: two sensors at 1 Hz
+write about 1.2 million records a week. A declared query, such as the
+last hour along the route or one reach across all passes, shall answer
+within a declared time budget at any point in the run, and the facade
+may build <strong>its own index</strong> over the store to meet it. The
+store itself is never altered, and the index is rebuilt from the store
+if lost, never the other way round.</li>
+<li><strong>FR-18b</strong> A query whose result would exceed a declared
+size is refused with the limit named, and the refusal states how to
+narrow it. The facade never times out silently or returns a truncated
+result as though it were complete.</li>
+<li><strong>FR-19</strong> Quality control (spike and range flagging,
+and GPS dropout inside the tunnel) is applied in the facade as
+<strong>flags</strong>, never by altering stored records. Raw values
+remain retrievable.</li>
+</ul>
+<h3 id="53-the-analysis-service">5.3 The analysis service</h3>
+<ul>
+<li><strong>FR-20</strong> The analysis service computes <strong>derived
+values</strong>:
+<ul>
+<li><strong>true wind</strong> from apparent wind, the boat's heading
+and its speed;</li>
+<li><strong>pressure reduced to a common datum</strong>, removing the
+steps the locks introduce;</li>
+<li><strong>dew point</strong> and the air-minus-water temperature
+difference;</li>
+<li>the <strong>bow-minus-stern difference</strong>, after <strong>lag
+correction</strong>: the stern's reading aligned to the moment it
+reached the bow's position, using the boat's speed. Without this, every
+change looks like a gradient along the boat.</li>
+</ul></li>
+<li><strong>FR-21</strong> It also computes a <strong>correlation
+matrix</strong> over a chosen window, sensor and parameter set; a
+<strong>reach detector</strong> flagging a sustained change of
+conditions, never a single spike; and a <strong>clustering</strong> of
+readings into regimes.</li>
+<li><strong>FR-22</strong> The analysis must separate <strong>where the
+boat is</strong> (its reach) from <strong>what the weather is
+doing</strong> (fronts and the diurnal cycle). The detector reports
+which of the two it believes caused each change. The service also
+estimates each reach's <strong>standing offset</strong> from the
+revisits: what that reach does to each parameter, after the weather
+common to all passes is removed. Each offset carries the number of
+passes it rests on.</li>
+<li><strong>FR-23</strong> Analysis parameters (window, sensor,
+parameters included, number of clusters, detector sensitivity) come from
+the reader through the display. The service owns the bounds and refuses
+an out-of-range value by naming the bound.</li>
+<li><strong>FR-24</strong> Every analysis result carries the parameters
+and data range it was computed from.</li>
+<li><strong>FR-25</strong> Results are served in the <strong>same EDR
+and CoverageJSON shape as the sensor data</strong>, so the display
+renders them with no code specific to the analysis. This is the
+<em>promotion contract</em>, and the analysis service is its first
+user.</li>
+<li><strong>FR-26</strong> Results are <strong>scored against the
+manifest</strong>: each detected change against the reach boundaries and
+fronts that caused it, each cluster against the reaches and air masses,
+true wind against the declared wind, the lag correction against the
+declared sensor separation. A result is never presented as correct
+merely because it looks plausible.</li>
+</ul>
+<h3 id="54-the-analysts-workspace">5.4 The analyst's workspace</h3>
+<ul>
+<li><strong>FR-27</strong> The display offers an <strong>in-browser
+Python editor</strong>. Code written there runs in its own Pyodide
+worker, separate from the backend, and reaches the backend only through
+the seam, as an ordinary EDR client.</li>
+<li><strong>FR-28</strong> A broken, slow or failing script shall never
+affect the backend. Errors are shown in the workspace; the display and
+the EDR server keep running.</li>
+<li><strong>FR-29</strong> A script may <strong>promote</strong> its
+output by serving it in the promotion contract's shape (FR-25) at a
+configured path prefix. The display then renders it as it renders any
+other series, with no new display code.</li>
+<li><strong>FR-30</strong> The workspace ships with worked examples
+using the libraries available in Pyodide (numpy, pandas, scipy,
+scikit-learn), among them a tunnel detector and a comparison of bow and
+stern before and after lag correction.</li>
+</ul>
+<h3 id="55-the-display">5.5 The display</h3>
+<ul>
+<li><strong>FR-31</strong> The display shows the seven parameters as
+<strong>linked time-series charts</strong>, bow and stern overlaid, with
+a shared cursor and zoom across all seven. Wind direction is drawn as a
+direction, never as a line jumping between 359 and 0 degrees.</li>
+<li><strong>FR-32</strong> The display shows a <strong>map of the
+canal</strong> with its reaches, locks and tunnel, the boat's track so
+far coloured by any parameter or by cluster, and the boat's current
+position and heading. Moving the shared cursor on the charts moves a
+marker on the map.</li>
+<li><strong>FR-33</strong> The display shows the analysis outputs:
+derived series, the correlation matrix, a scatter of any two parameters,
+detected changes as marks on the time axis and the map, and cluster
+assignments, each with its score against the manifest (FR-26).</li>
+<li><strong>FR-34</strong> Analysis controls (FR-23) and clock controls
+(FR-11) are drawn from the backend's own statement of what it accepts.
+The display holds no bounds of its own.</li>
+<li><strong>FR-35</strong> Live data reaches the display by
+<strong>polling the EDR server at 1 Hz</strong>. This is a recorded
+placeholder, not a tested design for live delivery, and the
+documentation says so (see §11).</li>
+<li><strong>FR-36</strong> While Pyodide loads, the display shows its
+progress honestly. It never shows an empty chart as though the logger
+were empty.</li>
+</ul>
+<hr />
+<h2 id="6-interfaces-and-shared-types">6. Interfaces and shared
+types</h2>
+<ul>
+<li><strong>NFR-04</strong> Masters under <code>contracts/</code> are
+the single authority for seam shapes. TypeScript types are generated
+from them for the display; the Python backend validates against the same
+masters.</li>
+</ul>
+<h2 id="7-delivery">7. Delivery</h2>
+<ul>
+<li><strong>NFR-05</strong> The demonstrator builds to static assets and
+is published as a public site on gh-pages. Each visit starts a fresh
+seeded run; nothing persists between visits.</li>
+<li><strong>NFR-06</strong> Pyodide and every Python package are served
+from the site itself, never from a third-party CDN, so every request is
+same-origin.</li>
+<li><strong>NFR-07</strong> The site is served over HTTPS, which the
+Service Worker requires.</li>
+<li><strong>NFR-08</strong> A startup time budget is declared and
+measured (see §10).</li>
+</ul>
+<h2 id="8-development-process">8. Development process</h2>
+<ul>
+<li><strong>PR-01</strong> The repository is public. It contains no
+material about any other project, customer or system, and no real place.
+A vocabulary gate enforces a list of forbidden terms, which is held
+privately rather than committed.</li>
+<li><strong>PR-02</strong> Spec-kit carries: constitution, specify,
+plan, tasks, analyze, implement. ADRs record contested or
+hard-to-reverse decisions; spikes write a dated
+<code>FINDING.md</code>.</li>
+<li><strong>PR-03</strong> Every gate and every refusal test is watched
+failing before it is trusted.</li>
+<li><strong>PR-04 (Persistent previews.)</strong> Every pull request
+publishes a rendered preview of its documents and site to gh-pages under
+<code>pr/&lt;number&gt;/</code>, refreshed on each push and left in
+place after the pull request closes, so that review links stay live. The
+published root always reflects <code>main</code>. A preview from a fork
+is built but not published.</li>
+</ul>
+<h2 id="9-acceptance-criteria">9. Acceptance criteria</h2>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Test</th>
+<th>Supports</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>AT-01</td>
+<td>A trajectory query through the seam returns values matching the
+manifest's ground truth at the boat's positions and times, while the
+logger is growing</td>
+<td>C1</td>
+</tr>
+<tr>
+<td>AT-02</td>
+<td>The same ASGI application passes the same contract test suite in
+Pyodide behind the Service Worker and in CPython under an ordinary ASGI
+server</td>
+<td>C2</td>
+</tr>
+<tr>
+<td>AT-03</td>
+<td>Replacing the logger stand-in with a second, differently awkward
+format requires changes to the store adapter only, and AT-01 still
+passes</td>
+<td>C1</td>
+</tr>
+<tr>
+<td>AT-04</td>
+<td>The reach detector and the clustering recover the manifest's reach
+boundaries, fronts and air masses with known and reported scores, and
+the detector attributes each change to place or weather correctly at a
+reported rate</td>
+<td>C2</td>
+</tr>
+<tr>
+<td>AT-05</td>
+<td>Lag correction reduces the bow-minus-stern difference across a reach
+boundary to within a bound derived from the declared noise, never typed
+into the test</td>
+<td>C2</td>
+</tr>
+<tr>
+<td>AT-06</td>
+<td>The reach offsets estimated from revisits recover the manifest's
+declared reach effects within a bound derived from the declared noise
+and the number of passes, and the bound tightens as passes
+accumulate</td>
+<td>C2</td>
+</tr>
+<tr>
+<td>AT-07</td>
+<td>After four simulated weeks, the declared queries of FR-18a still
+meet their time budget in the browser, and deleting the facade's index
+and rebuilding it from the store reproduces identical query results</td>
+<td>C1</td>
+</tr>
+<tr>
+<td>AT-08</td>
+<td>An edit to a workspace script changes what the display shows without
+a page reload; a deliberately broken script leaves the EDR server
+answering</td>
+<td>C2</td>
+</tr>
+</tbody>
+</table>
+<h2 id="10-open-questions">10. Open questions</h2>
+<ul>
+<li><strong>Name.</strong> A coined working name with no
+association.</li>
+<li><strong>Collection layout.</strong> One collection per sensor, or
+one collection with bow and stern as parameter groups (FR-16). Decided
+by the first spike.</li>
+<li><strong>Browser memory.</strong> Weeks of records, a facade index
+and two Pyodide workers in one tab may press on browser memory limits.
+Whether the stand-in lives in memory or in the browser's Origin Private
+File System is decided by measurement, and the answer is itself a
+finding worth recording.</li>
+<li><strong>Startup budget.</strong> Two Pyodide workers with scientific
+packages is a large first load. The budget, and whether the workspace
+worker loads lazily, are decided by measurement.</li>
+<li><strong>Second stand-in format.</strong> What the second format for
+AT-03 looks like.</li>
+</ul>
+<h2 id="11-deliberate-exclusions-from-version-1">11. Deliberate
+exclusions from Version 1</h2>
+<ul>
+<li><strong>Replay of recorded trips.</strong> The clock is a port so
+that replay can follow without a second code path.</li>
+<li><strong>Push delivery.</strong> Polling stands in (FR-35),
+deliberately.</li>
+<li><strong>Real weather, real waterways and real places.</strong></li>
+<li><strong>Persistence, authentication and a release
+boundary.</strong></li>
+</ul>
+<footer>Rendered from <code>srd-barge.md</code>.</footer>
+</main>
+</body>
+</html>
