@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>$title$</title>
+$for(css)$
+<link rel="stylesheet" href="$css$">
+$endfor$
+</head>
+<body>
+$if(banner)$
+<div class="banner">$banner$</div>
+$endif$
+<main>
+$if(toc)$
+<nav id="TOC" aria-label="Contents">
+$table-of-contents$
+</nav>
+$endif$
+$body$
+<footer>Rendered from <code>srd-barge.md</code>.</footer>
+</main>
+</body>
+</html>
