@@ -3,6 +3,10 @@
 #   push to main            -> site root        https://<owner>.github.io/<repo>/
 #   pull request #N         -> pr/N/            https://<owner>.github.io/<repo>/pr/N/
 #
+# Each holds the SRD at its root and the demonstrator under demo/. Pyodide is
+# published once per version to pyodide/<version>/ at the site root and is
+# shared by every preview.
+#
 # Every deploy uses keep_files so that earlier previews survive: a PR's
 # preview is persistent. It is updated on each push to the PR and is NOT
 # removed when the PR closes, so review links in the PR stay live.
@@ -68,6 +72,33 @@ jobs:
       - name: Build site
         run: scripts/build-site.sh site "${{ steps.paths.outputs.banner }}"
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - uses: actions/cache@v4
+        with:
+          path: .cache/pyodide
+          key: pyodide-${{ hashFiles('web/scripts/fetch-pyodide.mjs') }}
+
+      - name: Build the demonstrator into site/demo
+        working-directory: web
+        env:
+          # Pyodide is published once per version at the site root and shared
+          # by every preview (same origin, NFR-06); the path is relative.
+          VITE_PYODIDE_PATH: ${{ env.IS_PR == 'true' && '../../../pyodide/0.29.5/' || '../pyodide/0.29.5/' }}
+        run: |
+          npm ci
+          npm run pyodide
+          npm run build
+          cp -r dist ../site/demo
+
       - name: Upload rendered site (always, so fork PRs can still be inspected)
         uses: actions/upload-artifact@v4
         with:
@@ -86,6 +117,17 @@ jobs:
           keep_files: true
           commit_message: "deploy ${{ steps.paths.outputs.dest || 'root' }} from ${{ env.SOURCE_SHA }}"
 
+      - name: Deploy Pyodide to the shared versioned folder
+        if: env.CAN_DEPLOY == 'true'
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: ./.cache/pyodide/0.29.5
+          destination_dir: pyodide/0.29.5
+          keep_files: true
+          commit_message: "deploy pyodide 0.29.5"
+
       - name: Comment preview link on the PR
         if: env.IS_PR == 'true' && env.CAN_DEPLOY == 'true'
         uses: actions/github-script@v7
@@ -97,7 +139,8 @@ jobs:
             const marker = '<!-- pages-preview -->';
             const body = [
               marker,
-              `**Preview:** ${process.env.PREVIEW_URL}`,
+              `**Demonstrator preview:** ${process.env.PREVIEW_URL}demo/`,
+              `**Documents preview:** ${process.env.PREVIEW_URL}`,
               '',
               `Rendered from ${process.env.SOURCE_SHA.substring(0, 7)}. The link is persistent: it is updated on every push and stays after the PR closes. Pages may take a minute to refresh.`,
             ].join('\n');

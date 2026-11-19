@@ -1,0 +1,55 @@
+# Tests: the Python backend in CPython (including the contract suite under
+# uvicorn, AT-02's CPython half), the vocabulary gate, the web build, and the
+# end-to-end tests in Chromium (AT-02's browser half, AT-08, NFR-08).
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: pip install -r backend/requirements-dev.txt
+      - run: python -m pytest -q
+        working-directory: backend
+      - name: Vocabulary gate (PR-01)
+        env:
+          VOCABULARY_TERMS: ${{ secrets.VOCABULARY_TERMS }}
+        run: python scripts/vocab_gate.py .
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      - uses: actions/cache@v4
+        with:
+          path: .cache/pyodide
+          key: pyodide-${{ hashFiles('web/scripts/fetch-pyodide.mjs') }}
+      - run: npm run pyodide && npm run build && npm run site
+        working-directory: web
+      - run: npx playwright install --with-deps chromium
+        working-directory: web
+      - run: npx playwright test --trace off
+        working-directory: web
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-results
+          path: web/e2e-results.json

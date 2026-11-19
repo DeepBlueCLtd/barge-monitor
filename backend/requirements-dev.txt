@@ -1,0 +1,7 @@
+# CPython test environment. numpy is pinned to the version Pyodide 0.29.5 ships,
+# so the backend runs the same numpy in both places.
+numpy==2.2.5
+uvicorn==0.32.1
+httpx==0.28.1
+jsonschema==4.23.0
+pytest==8.3.5

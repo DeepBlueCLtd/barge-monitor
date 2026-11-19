@@ -1,0 +1,1247 @@
+{
+ "openapi": "3.1.0",
+ "info": {
+  "title": "Canal barge weather demonstrator",
+  "version": "0.1.0",
+  "description": "Master of the HTTP seam (FR-05, NFR-04). An honest subset of OGC API-EDR plus the demonstrator's clock and chart endpoints. Paths are relative to the API base URL."
+ },
+ "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
+ "servers": [
+  {
+   "url": "api",
+   "description": "relative to the page; the Service Worker answers it in the browser"
+  }
+ ],
+ "paths": {
+  "/": {
+   "get": {
+    "operationId": "landing",
+    "responses": {
+     "200": {
+      "description": "Landing page",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Landing"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/conformance": {
+   "get": {
+    "operationId": "conformance",
+    "responses": {
+     "200": {
+      "description": "Conformance",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Conformance"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api": {
+   "get": {
+    "operationId": "openapi",
+    "responses": {
+     "200": {
+      "description": "This document"
+     }
+    }
+   }
+  },
+  "/collections": {
+   "get": {
+    "operationId": "collections",
+    "responses": {
+     "200": {
+      "description": "Collections",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Collections"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/collections/{collectionId}": {
+   "get": {
+    "operationId": "collection",
+    "parameters": [
+     {
+      "name": "collectionId",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Collection",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Collection"
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "Refused, with the thing refused named",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Exception"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/collections/{collectionId}/trajectory": {
+   "get": {
+    "operationId": "trajectory",
+    "parameters": [
+     {
+      "name": "collectionId",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "coords",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string"
+      },
+      "description": "WKT LINESTRING(lon lat, ...) or LINESTRINGM(lon lat epoch_seconds, ...)"
+     },
+     {
+      "name": "datetime",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string"
+      },
+      "description": "ISO 8601 instant or interval a/b, with .. for open ends; UTC"
+     },
+     {
+      "name": "parameter-name",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string"
+      },
+      "description": "comma-separated parameter names"
+     },
+     {
+      "name": "crs",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "enum": [
+        "CRS84",
+        "OGC:CRS84",
+        "http://www.opengis.net/def/crs/OGC/1.3/CRS84"
+       ]
+      },
+      "description": "only CRS84"
+     },
+     {
+      "name": "f",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "enum": [
+        "CoverageJSON",
+        "covjson",
+        "application/prs.coverage+json"
+       ]
+      },
+      "description": "only CoverageJSON"
+     },
+     {
+      "name": "window-hours",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "number"
+      },
+      "description": "analysis collections only"
+     },
+     {
+      "name": "sensor",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "enum": [
+        "bow",
+        "stern"
+       ]
+      },
+      "description": "analysis collections only"
+     },
+     {
+      "name": "clusters",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer"
+      },
+      "description": "analysis collections only"
+     },
+     {
+      "name": "sensitivity",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "number"
+      },
+      "description": "analysis collections only"
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "CoverageJSON",
+      "content": {
+       "application/prs.coverage+json": {
+        "schema": {
+         "$ref": "#/components/schemas/Coverage"
+        }
+       }
+      }
+     },
+     "400": {
+      "description": "Refused, with the thing refused named",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Exception"
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "Refused, with the thing refused named",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Exception"
+        }
+       }
+      }
+     },
+     "413": {
+      "description": "Refused, with the thing refused named",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Exception"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/collections/{collectionId}/corridor": {
+   "get": {
+    "operationId": "corridor",
+    "parameters": [
+     {
+      "name": "collectionId",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "enum": [
+        "bow",
+        "stern"
+       ]
+      }
+     },
+     {
+      "name": "coords",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string"
+      },
+      "description": "WKT LINESTRING(lon lat, ...) or LINESTRINGM(lon lat epoch_seconds, ...)"
+     },
+     {
+      "name": "datetime",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string"
+      },
+      "description": "ISO 8601 instant or interval a/b, with .. for open ends; UTC"
+     },
+     {
+      "name": "parameter-name",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string"
+      },
+      "description": "comma-separated parameter names"
+     },
+     {
+      "name": "crs",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "enum": [
+        "CRS84",
+        "OGC:CRS84",
+        "http://www.opengis.net/def/crs/OGC/1.3/CRS84"
+       ]
+      },
+      "description": "only CRS84"
+     },
+     {
+      "name": "f",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "enum": [
+        "CoverageJSON",
+        "covjson",
+        "application/prs.coverage+json"
+       ]
+      },
+      "description": "only CoverageJSON"
+     },
+     {
+      "name": "corridor-width",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "number"
+      },
+      "description": "full width of the corridor"
+     },
+     {
+      "name": "width-units",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "enum": [
+        "m"
+       ]
+      },
+      "description": "only metres"
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "CoverageJSON",
+      "content": {
+       "application/prs.coverage+json": {
+        "schema": {
+         "$ref": "#/components/schemas/Coverage"
+        }
+       }
+      }
+     },
+     "400": {
+      "description": "Refused, with the thing refused named",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Exception"
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "Refused, with the thing refused named",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Exception"
+        }
+       }
+      }
+     },
+     "413": {
+      "description": "Refused, with the thing refused named",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Exception"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/sim/clock": {
+   "get": {
+    "operationId": "clock",
+    "responses": {
+     "200": {
+      "description": "Clock state and statement",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ClockState"
+        }
+       }
+      }
+     }
+    }
+   },
+   "put": {
+    "operationId": "setClock",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ClockUpdate"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Clock state",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ClockState"
+        }
+       }
+      }
+     },
+     "400": {
+      "description": "Refused, with the thing refused named",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Exception"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/sim/canal": {
+   "get": {
+    "operationId": "canal",
+    "responses": {
+     "200": {
+      "description": "The canal as a chart shows it",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Canal"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/sim/manifest": {
+   "get": {
+    "operationId": "manifest",
+    "responses": {
+     "200": {
+      "description": "The run's ground truth (FR-10)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/sim/boat": {
+   "get": {
+    "operationId": "boat",
+    "responses": {
+     "200": {
+      "description": "Last reported position",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/BoatNow"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/sim/index": {
+   "delete": {
+    "operationId": "dropIndex",
+    "responses": {
+     "200": {
+      "description": "Facade index dropped; rebuilt from the store on the next request"
+     }
+    }
+   }
+  }
+ },
+ "components": {
+  "schemas": {
+   "Link": {
+    "type": "object",
+    "required": [
+     "href",
+     "rel"
+    ],
+    "properties": {
+     "href": {
+      "type": "string"
+     },
+     "rel": {
+      "type": "string"
+     },
+     "type": {
+      "type": "string"
+     },
+     "title": {
+      "type": "string"
+     }
+    }
+   },
+   "Exception": {
+    "type": "object",
+    "required": [
+     "code",
+     "description"
+    ],
+    "properties": {
+     "code": {
+      "type": "string"
+     },
+     "description": {
+      "type": "string"
+     },
+     "refused": {
+      "type": "string"
+     },
+     "limit": {
+      "type": "integer"
+     },
+     "matched": {
+      "type": "integer"
+     },
+     "advice": {
+      "type": "string"
+     }
+    }
+   },
+   "Landing": {
+    "type": "object",
+    "required": [
+     "title",
+     "links"
+    ],
+    "properties": {
+     "title": {
+      "type": "string"
+     },
+     "description": {
+      "type": "string"
+     },
+     "links": {
+      "type": "array",
+      "items": {
+       "$ref": "#/components/schemas/Link"
+      }
+     }
+    }
+   },
+   "Conformance": {
+    "type": "object",
+    "required": [
+     "conformsTo"
+    ],
+    "properties": {
+     "conformsTo": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     }
+    }
+   },
+   "Collections": {
+    "type": "object",
+    "required": [
+     "links",
+     "collections"
+    ],
+    "properties": {
+     "links": {
+      "type": "array",
+      "items": {
+       "$ref": "#/components/schemas/Link"
+      }
+     },
+     "collections": {
+      "type": "array",
+      "items": {
+       "$ref": "#/components/schemas/Collection"
+      }
+     }
+    }
+   },
+   "Collection": {
+    "type": "object",
+    "required": [
+     "id",
+     "links",
+     "extent",
+     "data_queries",
+     "parameter_names"
+    ],
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "title": {
+      "type": "string"
+     },
+     "links": {
+      "type": "array",
+      "items": {
+       "$ref": "#/components/schemas/Link"
+      }
+     },
+     "extent": {
+      "type": "object",
+      "required": [
+       "spatial",
+       "temporal"
+      ],
+      "properties": {
+       "spatial": {
+        "type": "object",
+        "required": [
+         "bbox"
+        ],
+        "properties": {
+         "bbox": {
+          "type": "array",
+          "items": {
+           "type": "array",
+           "items": {
+            "type": "number"
+           },
+           "minItems": 4,
+           "maxItems": 4
+          }
+         },
+         "crs": {
+          "type": "string"
+         }
+        }
+       },
+       "temporal": {
+        "type": "object",
+        "required": [
+         "interval"
+        ],
+        "properties": {
+         "interval": {
+          "type": "array",
+          "items": {
+           "type": "array",
+           "items": {
+            "type": [
+             "string",
+             "null"
+            ]
+           },
+           "minItems": 2,
+           "maxItems": 2
+          }
+         },
+         "trs": {
+          "type": "string"
+         }
+        }
+       }
+      }
+     },
+     "data_queries": {
+      "type": "object",
+      "additionalProperties": {
+       "type": "object",
+       "required": [
+        "link"
+       ],
+       "properties": {
+        "link": {
+         "type": "object",
+         "required": [
+          "href",
+          "rel"
+         ],
+         "properties": {
+          "href": {
+           "type": "string"
+          },
+          "rel": {
+           "type": "string"
+          },
+          "variables": {
+           "type": "object"
+          }
+         }
+        }
+       }
+      }
+     },
+     "crs": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "output_formats": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "parameter_names": {
+      "type": "object",
+      "additionalProperties": {
+       "$ref": "#/components/schemas/Parameter"
+      }
+     },
+     "barge:limits": {
+      "type": "object",
+      "required": [
+       "max_response_points",
+       "trajectory_tolerance_m",
+       "query_budget_ms"
+      ],
+      "properties": {
+       "max_response_points": {
+        "type": "integer"
+       },
+       "trajectory_tolerance_m": {
+        "type": "number"
+       },
+       "query_budget_ms": {
+        "type": "object",
+        "additionalProperties": {
+         "type": "number"
+        }
+       }
+      }
+     },
+     "barge:analysis_parameters": {
+      "$ref": "#/components/schemas/AnalysisParameters"
+     }
+    }
+   },
+   "AnalysisParameters": {
+    "description": "A JSON Schema stating the analysis parameters the service accepts and their bounds (FR-23, FR-34)",
+    "type": "object",
+    "required": [
+     "type",
+     "properties"
+    ],
+    "properties": {
+     "type": {
+      "const": "object"
+     },
+     "properties": {
+      "type": "object",
+      "additionalProperties": {
+       "type": "object"
+      }
+     }
+    }
+   },
+   "ClockUpdate": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+     "rate": {
+      "type": "number"
+     }
+    }
+   },
+   "ClockState": {
+    "type": "object",
+    "required": [
+     "now",
+     "t",
+     "rate",
+     "statement",
+     "records"
+    ],
+    "properties": {
+     "now": {
+      "type": "string"
+     },
+     "t": {
+      "type": "number"
+     },
+     "rate": {
+      "type": "number"
+     },
+     "seed": {
+      "type": "integer"
+     },
+     "statement": {
+      "type": "object",
+      "required": [
+       "rates",
+       "default_rate"
+      ],
+      "properties": {
+       "rates": {
+        "type": "array",
+        "items": {
+         "type": "number"
+        }
+       },
+       "default_rate": {
+        "type": "number"
+       },
+       "unit": {
+        "type": "string"
+       },
+       "max_tick_simulated_seconds": {
+        "type": "number"
+       }
+      }
+     },
+     "records": {
+      "type": "object",
+      "additionalProperties": {
+       "type": "integer"
+      }
+     },
+     "store_bytes": {
+      "type": "integer"
+     },
+     "files": {
+      "type": "integer"
+     }
+    }
+   },
+   "Canal": {
+    "type": "object",
+    "required": [
+     "centreline",
+     "reaches",
+     "locks"
+    ],
+    "properties": {
+     "length_m": {
+      "type": "number"
+     },
+     "fictional": {
+      "type": "string"
+     },
+     "sensor_separation_m": {
+      "type": "number"
+     },
+     "origin": {
+      "type": "object",
+      "properties": {
+       "lat": {
+        "type": "number"
+       },
+       "lon": {
+        "type": "number"
+       }
+      }
+     },
+     "centreline": {
+      "type": "object",
+      "required": [
+       "lon",
+       "lat",
+       "chainage"
+      ],
+      "properties": {
+       "lon": {
+        "type": "array",
+        "items": {
+         "type": "number"
+        }
+       },
+       "lat": {
+        "type": "array",
+        "items": {
+         "type": "number"
+        }
+       },
+       "chainage": {
+        "type": "array",
+        "items": {
+         "type": "number"
+        }
+       }
+      }
+     },
+     "reaches": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "required": [
+        "id",
+        "name",
+        "kind",
+        "start",
+        "end"
+       ],
+       "properties": {
+        "id": {
+         "type": "string"
+        },
+        "name": {
+         "type": "string"
+        },
+        "kind": {
+         "type": "string"
+        },
+        "start": {
+         "type": "number"
+        },
+        "end": {
+         "type": "number"
+        }
+       }
+      }
+     },
+     "locks": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "required": [
+        "id",
+        "chainage"
+       ],
+       "properties": {
+        "id": {
+         "type": "string"
+        },
+        "chainage": {
+         "type": "number"
+        },
+        "rise_m": {
+         "type": "number"
+        }
+       }
+      }
+     },
+     "bridges": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      }
+     },
+     "wharves": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "properties": {
+        "id": {
+         "type": "string"
+        },
+        "name": {
+         "type": "string"
+        },
+        "chainage": {
+         "type": "number"
+        }
+       }
+      }
+     }
+    }
+   },
+   "BoatNow": {
+    "type": "object",
+    "properties": {
+     "t": {
+      "type": "string"
+     },
+     "lon": {
+      "type": "number"
+     },
+     "lat": {
+      "type": "number"
+     },
+     "position_qc": {
+      "type": "integer"
+     }
+    }
+   },
+   "I18N": {
+    "type": "object",
+    "additionalProperties": {
+     "type": "string"
+    }
+   },
+   "Parameter": {
+    "type": "object",
+    "required": [
+     "type",
+     "observedProperty"
+    ],
+    "properties": {
+     "type": {
+      "const": "Parameter"
+     },
+     "description": {
+      "$ref": "#/components/schemas/I18N"
+     },
+     "observedProperty": {
+      "type": "object",
+      "required": [
+       "label"
+      ],
+      "properties": {
+       "label": {
+        "$ref": "#/components/schemas/I18N"
+       },
+       "categories": {
+        "type": "array",
+        "items": {
+         "type": "object",
+         "required": [
+          "id",
+          "label"
+         ],
+         "properties": {
+          "id": {
+           "type": "string"
+          },
+          "label": {
+           "$ref": "#/components/schemas/I18N"
+          }
+         }
+        }
+       }
+      }
+     },
+     "unit": {
+      "type": "object",
+      "properties": {
+       "label": {
+        "$ref": "#/components/schemas/I18N"
+       },
+       "symbol": {
+        "type": "string"
+       }
+      }
+     },
+     "categoryEncoding": {
+      "type": "object",
+      "additionalProperties": {
+       "type": "integer"
+      }
+     }
+    }
+   },
+   "NdArray": {
+    "type": "object",
+    "required": [
+     "type",
+     "dataType",
+     "values"
+    ],
+    "properties": {
+     "type": {
+      "const": "NdArray"
+     },
+     "dataType": {
+      "enum": [
+       "float",
+       "integer",
+       "string"
+      ]
+     },
+     "axisNames": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "shape": {
+      "type": "array",
+      "items": {
+       "type": "integer"
+      }
+     },
+     "values": {
+      "type": "array",
+      "items": {
+       "type": [
+        "number",
+        "string",
+        "null"
+       ]
+      }
+     }
+    }
+   },
+   "Axis": {
+    "type": "object",
+    "required": [
+     "values"
+    ],
+    "properties": {
+     "dataType": {
+      "type": "string"
+     },
+     "coordinates": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "values": {
+      "type": "array"
+     }
+    }
+   },
+   "Domain": {
+    "type": "object",
+    "required": [
+     "type",
+     "axes"
+    ],
+    "properties": {
+     "type": {
+      "const": "Domain"
+     },
+     "domainType": {
+      "type": "string"
+     },
+     "axes": {
+      "type": "object",
+      "additionalProperties": {
+       "$ref": "#/components/schemas/Axis"
+      }
+     },
+     "referencing": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "required": [
+        "coordinates",
+        "system"
+       ]
+      }
+     }
+    }
+   },
+   "AnalysisMeta": {
+    "description": "Every analysis result carries its parameters and data range (FR-24) and its score against the manifest (FR-26)",
+    "type": "object",
+    "required": [
+     "parameters",
+     "data_range"
+    ],
+    "properties": {
+     "parameters": {
+      "type": "object"
+     },
+     "data_range": {
+      "type": "object",
+      "required": [
+       "start",
+       "end",
+       "records"
+      ],
+      "properties": {
+       "start": {
+        "type": "string"
+       },
+       "end": {
+        "type": "string"
+       },
+       "records": {
+        "type": "integer"
+       }
+      }
+     },
+     "scores": {
+      "type": "object"
+     },
+     "method": {
+      "type": "string"
+     }
+    }
+   },
+   "Coverage": {
+    "description": "The subset of CoverageJSON the demonstrator serves: the promotion contract (FR-25)",
+    "type": "object",
+    "required": [
+     "type",
+     "domain",
+     "parameters",
+     "ranges"
+    ],
+    "properties": {
+     "type": {
+      "const": "Coverage"
+     },
+     "domain": {
+      "$ref": "#/components/schemas/Domain"
+     },
+     "parameters": {
+      "type": "object",
+      "additionalProperties": {
+       "$ref": "#/components/schemas/Parameter"
+      }
+     },
+     "ranges": {
+      "type": "object",
+      "additionalProperties": {
+       "$ref": "#/components/schemas/NdArray"
+      }
+     },
+     "barge:analysis": {
+      "$ref": "#/components/schemas/AnalysisMeta"
+     },
+     "barge:query": {
+      "type": "object"
+     }
+    }
+   }
+  }
+ }
+}
