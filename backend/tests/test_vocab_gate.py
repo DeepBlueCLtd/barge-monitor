@@ -20,5 +20,5 @@ def test_gate_fails_on_a_present_term_without_printing_it():
 
 
 def test_gate_passes_on_absent_terms():
-    r = run("zq-not-a-word-xj")
+    r = run("zq-not-" + "a-word-xj")  # built at run time, so this file does not contain it
     assert r.returncode == 0
