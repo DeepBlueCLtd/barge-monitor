@@ -148,7 +148,10 @@ export function DisplayClient({ onRestart }: { onRestart: () => void }) {
           <h3 className="other-head">Other sources <small>shown by schema type alone</small></h3>
           <div className="generic" data-testid="generic-views">
             <ReadoutTable>
-              {[...groups.entries()].flatMap(([key, g]) => g.items.map(({ field, dsId }) => <GenericView key={`${key}:${field.name}`} title={g.title} field={field} rows={rows(dsId)} />))}
+              {[...groups.entries()].flatMap(([key, g]) => [
+                <tr key={key} className="group" data-testid={`generic-${key}`}><th colSpan={4}>{g.title}</th></tr>,
+                ...g.items.map(({ field, dsId }) => <GenericView key={`${key}:${field.name}`} field={field} rows={rows(dsId)} />),
+              ])}
             </ReadoutTable>
           </div>
         </div>

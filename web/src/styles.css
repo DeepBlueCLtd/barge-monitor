@@ -178,3 +178,11 @@ footer { margin-top: 12px; }
 .matrix thead th { writing-mode: vertical-rl; transform: rotate(180deg); text-align: left; height: 7.5rem; }
 .matrix td { padding: 3px 6px; text-align: right; border: 1px solid var(--line); }
 .matrix td.strong { background: #eef4ff; font-weight: 600; }
+.readouts tr.group th { font: 0.95rem var(--hand-sc); color: #1e40af; letter-spacing: 0.03em; padding-top: 10px; border-bottom: 1.4px solid var(--line); }
+.readouts tbody th { max-width: 16rem; }
+.readouts { table-layout: fixed; }
+.readouts thead th:nth-child(1) { width: 34%; }
+.readouts thead th:nth-child(2) { width: 22%; }
+.readouts thead th:nth-child(3) { width: 26%; }
+.readouts td, .readouts th { overflow: hidden; text-overflow: ellipsis; }
+.readouts td.value { white-space: nowrap; }

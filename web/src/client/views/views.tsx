@@ -23,7 +23,7 @@ export function Reading({ label, rows, field, unit, digits, testid }: { label: s
       <th>{label}</th>
       <td className="value">{num(last?.[field], digits)}{unit && last ? ` ${unit}` : ''}</td>
       <td className="mono">{time(last)}</td>
-      <td className="mono">{rows.length.toLocaleString()}{flags ? <span className="flags" title="QC-flagged readings"> · {flags} flagged</span> : null}</td>
+      <td className="mono">{rows.length.toLocaleString()}{flags ? <span className="flags" title={`${flags} QC-flagged readings`}> · {flags} QC</span> : null}</td>
     </tr>
   );
 }
@@ -65,7 +65,7 @@ export function kindOf(field: Field): 'quantity' | 'angle' | 'count' | 'category
 }
 
 /** FR-61: any other field, shown by schema type alone. */
-export function GenericView({ title, field, rows }: { title: string; field: Field; rows: Row[] }) {
+export function GenericView({ field, rows }: { field: Field; rows: Row[] }) {
   const kind = kindOf(field);
   const last = rows[rows.length - 1];
   const v = last?.[field.name];
@@ -76,8 +76,8 @@ export function GenericView({ title, field, rows }: { title: string; field: Fiel
     : v == null ? '—' : typeof v === 'object' ? JSON.stringify(v) : String(v);
   return (
     <tr className="gview" data-view={kind} data-field={field.name} data-testid={`field-${field.name}`}>
-      <th>{field.label ?? field.name}<small> · {title}</small></th>
-      <td className="value">{String(value)}</td>
+      <th>{field.label ?? field.name}</th>
+      <td className="value" title={String(value)}>{String(value)}</td>
       <td className="mono">{time(last)}</td>
       <td className="mono">{rows.length.toLocaleString()} <small>{kind}</small></td>
     </tr>
