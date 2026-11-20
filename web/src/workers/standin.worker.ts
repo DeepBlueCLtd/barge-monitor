@@ -28,11 +28,12 @@ async function start(seed: number, historyUrl: string | null) {
   if (!historyUrl) throw new Error('no pre-calculated history: the stand-in cannot generate one (the world generator is Python)');
   const base = `${historyUrl}seed-${seed}/`;
   post({ stage: 'history', detail: 'loading the pre-calculated history', pct: 5 });
-  const r = await fetch(base + 'manifest.json');
+  // A stalled download fails with a message rather than hanging the loading screen.
+  const r = await fetch(base + 'manifest.json', { cache: 'no-cache', signal: AbortSignal.timeout(30_000) });
   if (!r.ok) throw new Error(`no pre-calculated history for seed ${seed} (HTTP ${r.status})`);
   const manifest = await r.json();
   const history = await loadHistory(manifest, async (name) => {
-    const res = await fetch(`${base}${name}.gz`);
+    const res = await fetch(`${base}${name}.gz`, { signal: AbortSignal.timeout(60_000) });
     if (!res.ok) throw new Error(`history file ${name}: HTTP ${res.status}`);
     return gunzip(res);
   }, post);

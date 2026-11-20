@@ -6,8 +6,8 @@
 // Under reduced motion they show a still sparkle. Animated with SVG SMIL, not CSS.
 import { useEffect, useId, useState } from 'react';
 
-const PERIOD_S = 3.6;
-const STEP_S = 0.7;
+const PERIOD_S = 2;
+const STEP_S = 0.45;
 let mounted = 0;
 
 export function Diamond({ size = 24, className = '', label = 'value-add diamond' }: { size?: number; className?: string; label?: string }) {
@@ -20,7 +20,7 @@ export function Diamond({ size = 24, className = '', label = 'value-add diamond'
   // SMIL animation, inside the graphic itself: it runs wherever SVG renders, independent of
   // the page's CSS. One cycle every PERIOD_S; the glint occupies the last third of it.
   const anim = { begin: `${delay}s`, dur: `${PERIOD_S}s`, repeatCount: 'indefinite', calcMode: 'spline' as const };
-  const kt = '0;0.6;0.78;0.92;1';
+  const kt = '0;0.35;0.6;0.85;1';
   const ks = '0 0 1 1;0.4 0 0.2 1;0.4 0 0.2 1;0 0 1 1';
   return (
     <svg className={`diamond ${className}`} width={size} height={size} viewBox="-4 -4 32 32" role="img" aria-label={label} data-testid="diamond">

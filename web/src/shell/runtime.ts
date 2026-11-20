@@ -108,7 +108,7 @@ class Runtime {
     let historyUrl: string | null = null;
     let seed = requested ?? 0;
     try {
-      const h = await (await fetch(resolve('py/history.json'))).json();
+      const h = await (await fetch(resolve('py/history.json'), { cache: 'no-cache' })).json();
       historyUrl = resolve(`${HISTORY_PATH}${h.code_hash}/days-${h.days}/`);
       if (requested == null) seed = h.seeds[Math.floor(Math.random() * h.seeds.length)];
       this.history = { days: h.days, source: 'pre-calculated' };
