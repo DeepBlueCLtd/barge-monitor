@@ -11,7 +11,7 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
-GENERATING = ["config.py", "world.py", "truth.py", "sensors.py", "logger.py", "tap.py", "clock.py"]
+GENERATING = ["config.py", "world.py", "truth.py", "sensors.py", "logger.py", "clock.py"]  # not tap.py: capture never changes the bytes (AT-18)
 
 
 def code_hash() -> str:
