@@ -32,17 +32,21 @@ pandoc "$ROOT/srd-barge.md" \
   "${banner_args[@]}" \
   --output "$OUT_DIR/index.html"
 
-# Annex A (visual style), as a page of its own beside the SRD.
-pandoc "$ROOT/srd-barge-annex-a-visual-style.md" \
+# The implementation contract, as a page of its own beside the SRD.
+pandoc "$ROOT/docs/v4-interfaces.md" \
   --standalone \
   --from gfm \
   --to html5 \
   --toc --toc-depth=2 \
   --template "$ROOT/scripts/site.html" \
   --css site.css \
-  --metadata title="SRD Annex A: Visual style" \
+  --metadata title="Version 4 interfaces" \
   "${banner_args[@]}" \
-  --output "$OUT_DIR/annex-a.html"
+  --output "$OUT_DIR/interfaces.html"
+
+# The SRD's companion mockups (non-normative).
+mkdir -p "$OUT_DIR/mockups"
+cp "$ROOT"/docs/mockups/*.png "$OUT_DIR/mockups/"
 
 # GitHub Pages: serve files as-is, without Jekyll processing.
 touch "$OUT_DIR/.nojekyll"

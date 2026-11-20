@@ -73,3 +73,19 @@ def test_prebuilt_history_loads_identically_and_continues_exactly():
     wrong = Runtime(seed=21, clock=ManualClock(days * 86400), pregen_days=days,
                     history={"manifest": dict(manifest, code_hash="other"), "files": files})
     assert wrong.history_source == "generated"  # refused: made by different code
+
+
+def test_at28_regenerating_history_from_the_seeds_reproduces_it_exactly(tmp_path):
+    """FR-15a: the shipped history is reproducible from the recorded seeds."""
+    import importlib.util
+    from pathlib import Path
+
+    spec = importlib.util.spec_from_file_location("build_history", Path(__file__).resolve().parents[2] / "scripts" / "build_history.py")
+    bh = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(bh)
+    a = bh.build(tmp_path / "a", 7, 0.1)
+    b = bh.build(tmp_path / "b", 7, 0.1)
+    assert a == b
+    da, db = (next((tmp_path / x).rglob("seed-7")) for x in ("a", "b"))
+    for f in a["files"]:
+        assert (da / f"{f['name']}.gz").read_bytes() == (db / f"{f['name']}.gz").read_bytes()

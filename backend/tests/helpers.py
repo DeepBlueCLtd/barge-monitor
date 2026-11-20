@@ -12,19 +12,22 @@ class Rig:
 
     def __init__(self, seed=5, days=2.0, capture=True):
         self.clock = ManualClock(days * 86400.0)
-        self.rt = Runtime(seed=seed, clock=self.clock, pregen_days=days, capture=capture)
+        self.rt = Runtime(seed=seed, clock=self.clock, pregen_days=days, capture=capture, local_models=True)
         self.app = create_app(self.rt)
         self.ready()
 
     def ready(self):
-        while self.rt.server and not self.rt.server.ready:
+        for _ in range(10000):
+            if self.rt.server and self.rt.server.ready and self.rt.local.live:
+                return
             self.rt.tick()
+        raise AssertionError("the server and models never became ready")
 
     def advance(self, seconds):
         self.clock.play()
         self.clock.advance(seconds)
-        self.rt.tick()
         self.rt.server and self.rt.server.adapter.refresh()
+        self.rt.tick()
 
     def request(self, method, path, params=None, json=None, headers=None):
         async def go():

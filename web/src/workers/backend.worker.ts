@@ -1,7 +1,8 @@
 /// <reference lib="webworker" />
-// The backend worker: Pyodide running the simulated world, the logger store,
-// the store adapter, the Connected Systems server (FastAPI) and the analysis
-// service. It answers requests the relay forwards, and ticks the system.
+// The back-end worker (Python): Pyodide running the collection platform, the
+// logger store, the store adapter and the data server on FastAPI. It answers
+// requests the relay forwards, answers each model worker's calls on that
+// model's own port (docs/v4-interfaces.md §7), and ticks the system.
 import { loadRuntime, Progress } from './common';
 
 declare const self: DedicatedWorkerGlobalScope;
@@ -57,9 +58,12 @@ _hist = None
 `);
   bridge = py.globals.get('bridge');
   self.postMessage({ type: 'state', state: JSON.parse(bridge.control('state')) });
+  let n = 0;
   setInterval(() => {
     try {
       self.postMessage({ type: 'tick', ...JSON.parse(bridge.tick()) });
+      // The control state, including each model's phase, once a second (docs/v4-interfaces.md §8).
+      if (++n % 10 === 0) self.postMessage({ type: 'state', state: JSON.parse(bridge.control('state')) });
     } catch (e) {
       console.error(e);
     }
@@ -88,12 +92,41 @@ async function serve(req: any, reply: MessagePort) {
   }
 }
 
+/** One call from a model worker to the data server's internal interface. */
+function modelCall(model: string, port: MessagePort, req: any) {
+  if (req.type === 'phase') {
+    bridge.set_model_phase(model, req.phase, req.detail ?? '', req.label ?? model);
+    return;
+  }
+  let reply: any;
+  try {
+    const args = py.toPy(req.args ?? {});
+    const res = bridge.model_call(model, req.op, args, !!req.quiet);
+    reply = res.toJs({ dict_converter: Object.fromEntries, create_pyproxies: false });
+    res.destroy();
+    args.destroy?.();
+  } catch (err) {
+    reply = { ok: false, status: 'refused', error: String(err) };
+  }
+  port.postMessage({ id: req.id, reply });
+}
+
 self.onmessage = (e: MessageEvent) => {
   const d = e.data;
   if (d.type === 'start') start(d.pyodideUrl, d.pyZipUrl, d.seed, d.pregenDays ?? null, d.historyUrl ?? null).catch((err) => post({ stage: 'error', detail: String(err), pct: 0 }));
   else if (d.type === 'connect') {
     const port: MessagePort = e.ports[0];
     port.onmessage = (m) => serve(m.data, m.ports[0]);
+  } else if (d.type === 'model-connect') {
+    const port: MessagePort = e.ports[0];
+    const model: string = d.model;
+    const attach = () => {
+      // The data server reaches the model (server → models): commands.
+      bridge.set_listener(model, (json: string) => port.postMessage({ notify: JSON.parse(json) }));
+      port.onmessage = (m) => modelCall(model, port, m.data);
+    };
+    if (bridge) attach();
+    else queue.push(attach);
   } else if (d.type === 'control' && bridge) {
     try {
       self.postMessage({ type: 'state', state: JSON.parse(bridge.control(d.action, py.toPy(d.arg ?? null))) });

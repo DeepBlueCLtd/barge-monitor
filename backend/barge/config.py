@@ -1,10 +1,10 @@
-"""Declared constants of the demonstrator (SRD Version 3.2).
+"""Declared constants of the demonstrator (SRD Version 4).
 
 Bounds, limits and budgets are declared here once. Clients never hold bounds of
 their own: they read them from the server's schemas.
 """
 
-GENERATOR_VERSION = "3.2.0"
+GENERATOR_VERSION = "4.0.0"
 
 # --- Declared fictional location (FR-01) ---------------------------------
 # Open ocean in the equatorial Atlantic. Used only to place the diurnal cycle
@@ -24,7 +24,7 @@ RUN_DAYS = 35  # the timetable is declared beyond the pre-generated history
 # The top rate is the fastest at which every icon stays legible; it was set by
 # eye on a 1920x1080 display (decision log D-12) and is to be confirmed on the
 # target presentation display.
-CLOCK_RATES = [0.1, 0.25, 0.5, 1.0, 2.0]
+CLOCK_RATES = [0.25, 0.5, 1.0]  # FR-78: the fastest rate is to be measured on the target display
 CLOCK_DEFAULT_RATE = 0.5
 
 # --- Boat ------------------------------------------------------------------
@@ -36,16 +36,13 @@ SLOW_SPEED_MS = 0.9
 # --- Connected Systems server (FR-25, FR-29, FR-30, FR-44) -------------------
 DEFAULT_LIMIT = 1000  # observations per page when no limit is given
 MAX_LIMIT = 100_000  # FR-30: a larger page is refused, naming the limit
-QUERY_BUDGET_MS = {  # FR-29 declared queries, per page, over four weeks
-    "last-hour-each-sensor": 1500,
-    "one-parameter-across-a-week": 30000,  # all pages of a week, one sensor
+QUERY_BUDGET_MS = {  # FR-31 declared queries over four weeks of history
+    "last-hour-each-sensor": 1500,  # raw records, both sensors (store queries)
+    "one-field-four-weeks-summary": 1000,  # one field from an hourly summary datastream
 }
 RETRY_AFTER_S = 2  # FR-44: Retry-After while the index rebuilds (seconds)
 INDEX_CHUNK_RECORDS = 200_000  # records indexed per rebuild step
 
-# --- Analysis bounds (FR-26): published as SWE Common constraints -------------
-ANALYSIS_BOUNDS = {
-    "window_hours": {"min": 0.25, "max": 168.0, "default": 12.0},
-    "clusters": {"min": 2, "max": 8, "default": 4},
-    "sensitivity": {"min": 1.0, "max": 10.0, "default": 5.0},
-}
+# --- Models (FR-33..FR-37) ------------------------------------------------------
+CLEANED_RETENTION_S = 86400  # Data cleanse's 1 s output is kept for a day; summaries for ever
+MODEL_RPC_TIMEOUT_S = 30

@@ -50,9 +50,9 @@
   }
  },
  "info": {
-  "description": "A declared subset of OGC API \u2013 Connected Systems Parts 1 and 2 over a deliberately awkward logger store. Everything is fictional. The facade is shown working over an awkward store, to be confirmed against a real one (FR-21).",
+  "description": "A declared subset of OGC API \u2013 Connected Systems Parts 1 and 2 over a deliberately awkward logger store. Everything is fictional. The facade is shown working over an awkward store, to be confirmed against a real one (FR-19).",
   "title": "Canal barge weather demonstrator: Connected Systems server",
-  "version": "3.2.0"
+  "version": "4.0.0"
  },
  "openapi": "3.1.0",
  "paths": {
@@ -561,22 +561,6 @@
        "title": "Csid",
        "type": "string"
       }
-     },
-     {
-      "in": "query",
-      "name": "obsFormat",
-      "required": false,
-      "schema": {
-       "anyOf": [
-        {
-         "type": "string"
-        },
-        {
-         "type": "null"
-        }
-       ],
-       "title": "Obsformat"
-      }
      }
     ],
     "responses": {
@@ -667,36 +651,6 @@
    }
   },
   "/datastreams/{dsId}": {
-   "delete": {
-    "operationId": "delete_datastream_datastreams__dsId__delete",
-    "parameters": [
-     {
-      "in": "path",
-      "name": "dsId",
-      "required": true,
-      "schema": {
-       "title": "Dsid",
-       "type": "string"
-      }
-     }
-    ],
-    "responses": {
-     "204": {
-      "description": "Successful Response"
-     },
-     "422": {
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/HTTPValidationError"
-        }
-       }
-      },
-      "description": "Validation Error"
-     }
-    },
-    "summary": "Delete a created datastream"
-   },
    "get": {
     "operationId": "datastream_datastreams__dsId__get",
     "parameters": [
@@ -836,41 +790,6 @@
      }
     },
     "summary": "Observations (FR-25)"
-   },
-   "post": {
-    "operationId": "create_observations_datastreams__dsId__observations_post",
-    "parameters": [
-     {
-      "in": "path",
-      "name": "dsId",
-      "required": true,
-      "schema": {
-       "title": "Dsid",
-       "type": "string"
-      }
-     }
-    ],
-    "responses": {
-     "201": {
-      "content": {
-       "application/json": {
-        "schema": {}
-       }
-      },
-      "description": "Successful Response"
-     },
-     "422": {
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/HTTPValidationError"
-        }
-       }
-      },
-      "description": "Validation Error"
-     }
-    },
-    "summary": "Create observations (promotion)"
    }
   },
   "/datastreams/{dsId}/schema": {
@@ -1089,53 +1008,9 @@
      }
     },
     "summary": "Systems"
-   },
-   "post": {
-    "operationId": "create_system_systems_post",
-    "responses": {
-     "201": {
-      "content": {
-       "application/json": {
-        "schema": {}
-       }
-      },
-      "description": "Successful Response"
-     }
-    },
-    "summary": "Create a system (promotion, FR-36)"
    }
   },
   "/systems/{systemId}": {
-   "delete": {
-    "operationId": "delete_system_systems__systemId__delete",
-    "parameters": [
-     {
-      "in": "path",
-      "name": "systemId",
-      "required": true,
-      "schema": {
-       "title": "Systemid",
-       "type": "string"
-      }
-     }
-    ],
-    "responses": {
-     "204": {
-      "description": "Successful Response"
-     },
-     "422": {
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/HTTPValidationError"
-        }
-       }
-      },
-      "description": "Validation Error"
-     }
-    },
-    "summary": "Delete a created system"
-   },
    "get": {
     "operationId": "system_systems__systemId__get",
     "parameters": [
@@ -1199,6 +1074,26 @@
       "schema": {
        "title": "Systemid",
        "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "default": 1000,
+       "title": "Limit",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "offset",
+      "required": false,
+      "schema": {
+       "default": 0,
+       "title": "Offset",
+       "type": "integer"
       }
      }
     ],
@@ -1280,41 +1175,6 @@
      }
     },
     "summary": "A system's datastreams"
-   },
-   "post": {
-    "operationId": "create_datastream_systems__systemId__datastreams_post",
-    "parameters": [
-     {
-      "in": "path",
-      "name": "systemId",
-      "required": true,
-      "schema": {
-       "title": "Systemid",
-       "type": "string"
-      }
-     }
-    ],
-    "responses": {
-     "201": {
-      "content": {
-       "application/json": {
-        "schema": {}
-       }
-      },
-      "description": "Successful Response"
-     },
-     "422": {
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/HTTPValidationError"
-        }
-       }
-      },
-      "description": "Validation Error"
-     }
-    },
-    "summary": "Create a datastream (promotion)"
    }
   },
   "/systems/{systemId}/subsystems": {

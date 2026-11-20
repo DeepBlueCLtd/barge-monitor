@@ -1,8 +1,7 @@
-"""Analysis service (B-C09): a *process* system (FR-32).
+"""Numerical methods shared by the core models (numpy only).
 
-Inputs are only what the server serves: readings and their QC flags, by
-time. The analysis never sees position or the manifest (FR-34); scoring
-happens afterwards, in ``scoring``.
+Inputs are only what the data server serves. No method sees the position or
+the manifest (FR-37); scoring is done by the demonstrator's referee.
 """
 from __future__ import annotations
 
@@ -52,7 +51,7 @@ def _step_stat(t, y, half_s, grid):
     """Standardised step at each grid time, with any local linear trend removed."""
     ok = ~np.isnan(y)
     tt, yy = t[ok], y[ok]
-    if len(yy) < 10:
+    if len(yy) < 6:
         return np.zeros(len(grid))
     c = np.concatenate([[0.0], np.cumsum(yy)])
     edges = [np.searchsorted(tt, grid + k * half_s) for k in (-2, -1, 0, 1, 2)]
@@ -65,7 +64,7 @@ def _step_stat(t, y, half_s, grid):
     step = (af - bf) - 0.5 * ((bf - fb) + (fa - af))
     n_min = np.min(counts, axis=0)
     z = np.abs(step) / (_noise(yy) * np.sqrt(5.0 / np.maximum(n_min, 1)))
-    return np.where(n_min > 5, z, 0.0)
+    return np.where(n_min >= 3, z, 0.0)
 
 
 def _peaks(grid, score, threshold, min_gap_s):
@@ -112,6 +111,26 @@ def detect_changes(d: dict, sensitivity: float) -> dict:
             out["t"].append(g2[i]); out["scale"].append(1); out["strength"].append(float(zl[i]))
     order = np.argsort(out["t"])
     return {k: np.asarray(v)[order] for k, v in out.items()}
+
+
+def detect_changes_coarse(t, cols: list, sensitivity: float, step_s: float) -> dict:
+    """Hour-scale changes in summary data (one row a minute or an hour): steps in the
+    standardised fields that last, never a single odd interval."""
+    out = {"t": np.empty(0), "scale": np.empty(0, int), "strength": np.empty(0)}
+    if len(t) < 24:
+        return out
+    half = 2700.0 if step_s <= 60 else 8 * 3600.0
+    grid = np.arange(t[0] + 2 * half, t[-1] - 2 * half, step_s)
+    if not len(grid):
+        return out
+    parts = []
+    for y in cols:
+        ys = moving_mean_time(t, y, max(600.0, 2 * step_s))
+        z = _step_stat(t, ys, half, grid)
+        parts.append(z / (np.median(z) + 1e-9))
+    zl = np.mean(parts, axis=0)
+    picked = _peaks(grid, zl, 16.0 / sensitivity, 3 * half)
+    return {"t": grid[picked], "scale": np.ones(len(picked), int), "strength": zl[picked]}
 
 
 def correlation(d: dict, names: list[str]):

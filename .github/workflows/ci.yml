@@ -25,14 +25,14 @@ jobs:
         run: python scripts/vocab_gate.py .
 
   independent-clients:
-    # AT-16, in an environment of its own: OSHConnect pins its own library versions.
+    # AT-05, in an environment of its own: OSHConnect pins its own library versions.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
-      - run: pip install numpy==2.2.5 fastapi==0.116.1 uvicorn==0.32.1 "oshconnect==0.5.5a1"
+      - run: pip install numpy==2.2.5 scipy==1.14.1 scikit-learn==1.7.0 fastapi==0.116.1 uvicorn==0.32.1 "oshconnect==0.5.5a1"
       - run: python backend/independent/oshconnect_browse.py
 
   web:

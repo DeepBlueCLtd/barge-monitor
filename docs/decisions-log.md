@@ -1,8 +1,38 @@
-# Decision log: implementing SRD Version 3.2 (now 3.3)
+# Decision log
 
-Every choice made while implementing the SRD that it did not settle. Per your
-instruction, each takes my recommended option; all are open for your review.
-**Bold** rows most need your judgement.
+Every choice made while implementing the SRD that it did not settle. Each takes the
+recommended option; all are open for review. **Bold** rows most need your judgement.
+
+## Version 4: the fresh start
+
+The front end was rewritten from scratch to SRD Version 4; the Python back end was kept
+where Version 4 did not change it (world, store, adapter, server on FastAPI) and
+restructured where it did. Decisions D-01 to D-54 below are kept as history; those
+superseded by Version 4 are marked so in this table.
+
+| # | Question | Options considered | Decision | Why |
+|---|---|---|---|---|
+| D-55 | How fresh is the fresh start | everything from scratch; new front end, adapt back end; front end only | **New front end; adapt the back end** (at your choice) | The world, the store, its adapter and the Connected Systems server were tested against Version 3 and Version 4 does not change them. |
+| D-56 | Component ids in captured messages | — | `platform`, `store`, `adapter`, `server`, `models`, `fastapi`, `scilibs`, `client` (docs/v4-interfaces.md) | One-to-one with SRD §3. The relay and the per-second world messages are gone (FR-03; World is one component). |
+| D-57 | Letter S | — | `server → adapter` S is the store query (sensors, fields, period, source); `adapter → store` S is each file read with its offset, found through the index; `store → adapter` L the records | As SRD §3.1. A selection that reads summaries causes no S, and the message strip says so. |
+| **D-58** | **How a model in its own worker reaches the data server "directly, not through FastAPI"** | HTTP through the relay; an internal interface over a MessagePort | **An internal interface over a MessagePort** (ADR 0003) whose operations mirror Connected Systems resource creation | §3.1 forbids FastAPI for models; FR-33 demands separate workers. HTTP creation endpoints are therefore not offered: `POST /systems` and the like are refused naming the method, and `create-replace-delete` is no longer claimed (supersedes D-26 in part). |
+| **D-59** | **The split between Model A and Model B (FR-34, §15)** | — | **Data cleanse: 1 s cleaning. Model A: 1-minute and hourly summaries and derived values. Model B: change detection, correlation, clustering on demand** (ADR 0003) | Continuous work apart from episodic work; only B loads scikit-learn. |
+| D-60 | Three clustering algorithms | — | A k-means (numpy, seeded), B Gaussian mixture, C agglomerative Ward (scikit-learn) | Distinct families, so switching shows a visible difference. Unnamed on screen (FR-55). |
+| D-61 | Letter for the response to a command | K; D | **D**, like every other resource; K only on the request | §3.1 lists D, P, O, H for FastAPI → client. |
+| D-62 | Commands: synchronous or not | — | Asynchronous: 201 PENDING; the model reports ACCEPTED and COMPLETED or FAILED (supersedes D-15) | The model is in another worker; Connected Systems commands are asynchronous anyway. |
+| D-63 | How the server passes a command to a model | model polls; server notifies | The server notifies the model's worker (server → models I) | Polling would send messages every tick, also while paused (AT-19). |
+| D-64 | Scores (FR-37) | model computes; server computes; a referee | A referee in the back end, the only code that reads the manifest; Model B asks it and publishes the score | Models never see the manifest. The referee is scaffolding. |
+| D-65 | What the profile says about resolution | client convention; profile | Each essential names its datastream's `resolution` (`raw`, `PT1M`, `PT1H`, `run`); a datastream not in the profile is read at its native resolution | FR-29 makes the client choose a source by period; the profile is the only standard-shaped place to declare it. |
+| D-66 | Which sensor a property chip plots | bow; stern; both | **Bow**; "Bow − stern" is its own derived field | Keeps the graphs readable; the stern stays essential for the profile and for the derived difference. |
+| D-67 | Derived values at 1 h | from 1 s; from 1-minute | From the 1-minute datastream (60 points) | No 1 s derived stream needs keeping. |
+| D-68 | Data cleanse output kept | all; a day | A day, and never before every reader has read it | Memory: four weeks at 1 s would be ~140 MB. |
+| D-69 | Clock rates | — | ¼×, ½× (default), 1× (supersedes D-12) | FR-78. 1× still to be measured on the target display. |
+| D-70 | Extra fields (FR-50) | — | Category: precipitation type (raw); Quantity: pressure tendency (Model A); Count: readings removed (Model A) | One per generic view type, each from a different component. |
+| D-71 | When the display client starts its handshake | at once; when the models are live | When all three core models report live | Before then their datastreams do not exist and the client would rightly start degraded. |
+| D-72 | The store adapter's index while running | rebuilt only at start; followed incrementally | Followed incrementally every tick once the server is ready | Found while rewriting: in 3.3 the live index only grew during waiting mode. |
+| D-73 | AT-28 | build twice and compare in CI; a unit test | A unit test builds a short history twice and compares the bytes; the published history is built at deploy time from the seeds | The shipped files are always regenerated, so reproducibility is what needs testing. |
+
+## Version 3 (history)
 
 | # | Question | Options considered | Decision | Why |
 |---|---|---|---|---|
