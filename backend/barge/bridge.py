@@ -55,15 +55,16 @@ class Bridge:
         """Messages seen by the page or the relay are captured through the same tap."""
         self.rt.tap.emit(src, dst, letter, summary, content, failed)
 
-    async def handle(self, method, path, query, body, root_path, headers=None):
+    async def handle(self, method, path, query, body, root_path, headers=None, origin="https://localhost"):
         if self.rt.down:
             return None  # no answer at all: the relay reports a network failure
         scope = {
             "type": "http", "asgi": {"version": "3.0"}, "http_version": "1.1", "method": method.upper(),
-            "scheme": "https", "path": root_path + path, "raw_path": (root_path + path).encode(),
+            "scheme": origin.split(":")[0], "path": root_path + path, "raw_path": (root_path + path).encode(),
             "root_path": root_path, "query_string": (query or "").encode("latin-1"),
-            "headers": [(k.lower().encode(), v.encode()) for k, v in (headers or [])],
-            "client": None, "server": ("pyodide", 443),
+            "headers": [(k.lower().encode(), v.encode()) for k, v in (headers or []) if k.lower() != "host"]
+                       + [(b"host", origin.split("://", 1)[-1].encode())],
+            "client": None, "server": None,
         }
         sent = {"status": 500, "headers": [], "body": b""}
         delivered = False

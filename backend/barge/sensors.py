@@ -27,7 +27,8 @@ class Sensors:
         self.sigma = m["noise"]["sigma"]
         self.p_spike = m["noise"]["spike_probability"]
         self.spike_scale = m["noise"]["spike_scale"]
-        self.rng = {s: np.random.default_rng(m["seeds"]["streams"][f"noise-{s}"]) for s in SENSORS}
+        self.seeds = {s: m["seeds"]["streams"][f"noise-{s}"] for s in SENSORS}
+        self._block: dict[str, tuple] = {}
         self.next_t = 0
         self._last_file: dict[str, str] = {}
 
@@ -49,6 +50,32 @@ class Sensors:
             self.next_t = stop
         return n_total
 
+    def _noise(self, sensor: str, t: np.ndarray) -> dict:
+        """Noise and spikes for whole seconds t, drawn in hour-aligned blocks.
+
+        Each block comes from the sensor's named stream keyed by the block's
+        number, so a reading never depends on how time was chunked: pausing
+        and resuming gives the same readings as running straight through.
+        """
+        out = {p: np.empty(len(t)) for p in PARAMS}
+        blocks = (t // CHUNK_S).astype(int)
+        for b in np.unique(blocks):
+            cached = self._block.get(sensor)
+            if not cached or cached[0] != b:
+                rng = np.random.default_rng([self.seeds[sensor], int(b)])
+                arr = {}
+                for p in PARAMS:
+                    x = rng.normal(0.0, self.sigma[p], CHUNK_S)
+                    spikes = rng.random(CHUNK_S) < self.p_spike
+                    mag = rng.uniform(*self.spike_scale, CHUNK_S) * self.sigma[p] * rng.choice([-1.0, 1.0], CHUNK_S)
+                    arr[p] = x + np.where(spikes, mag, 0.0)
+                cached = self._block[sensor] = (b, arr)
+            sel = blocks == b
+            idx = (t[sel] - b * CHUNK_S).astype(int)
+            for p in PARAMS:
+                out[p][sel] = cached[1][p][idx]
+        return out
+
     def _announce(self, t: float) -> None:
         b = self.w.boat(np.array([t]))
         self.tap.emit("clock", "barge", "I", f"tick {int(t)}", {"t": t})
@@ -59,16 +86,9 @@ class Sensors:
 
     def _write(self, sensor: str, t: np.ndarray) -> None:
         tr = self.w.sensor_truth(t, sensor)
-        rng = self.rng[sensor]
         n = len(t)
-        vals = {}
-        for p in PARAMS:
-            x = tr[p] + rng.normal(0.0, self.sigma[p], n)
-            spikes = rng.random(n) < self.p_spike
-            if spikes.any():
-                k = int(spikes.sum())
-                x[spikes] += rng.uniform(*self.spike_scale, k) * self.sigma[p] * rng.choice([-1.0, 1.0], k)
-            vals[p] = x
+        noise = self._noise(sensor, t)
+        vals = {p: tr[p] + noise[p] for p in PARAMS}
         vals["relative_humidity"] = np.clip(vals["relative_humidity"], 0, 100)
         vals["solar_irradiance"] = np.clip(vals["solar_irradiance"], 0, None)
         vals["apparent_wind_speed"] = np.clip(vals["apparent_wind_speed"], 0, None)

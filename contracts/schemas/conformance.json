@@ -1,0 +1,17 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://deepbluecltd.github.io/barge-monitor/contracts/schemas/conformance.json",
+ "type": "object",
+ "required": [
+  "conformsTo"
+ ],
+ "properties": {
+  "conformsTo": {
+   "type": "array",
+   "items": {
+    "type": "string",
+    "format": "uri"
+   }
+  }
+ }
+}

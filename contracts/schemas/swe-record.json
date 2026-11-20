@@ -1,0 +1,147 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://deepbluecltd.github.io/barge-monitor/contracts/schemas/swe-record.json",
+ "description": "The subset of SWE Common 3.0 JSON the server uses for record schemas",
+ "type": "object",
+ "required": [
+  "type",
+  "fields"
+ ],
+ "properties": {
+  "type": {
+   "const": "DataRecord"
+  },
+  "label": {
+   "type": "string"
+  },
+  "fields": {
+   "type": "array",
+   "minItems": 1,
+   "items": {
+    "$ref": "#/$defs/component"
+   }
+  }
+ },
+ "$defs": {
+  "component": {
+   "type": "object",
+   "required": [
+    "type",
+    "name"
+   ],
+   "properties": {
+    "type": {
+     "enum": [
+      "Time",
+      "Quantity",
+      "Count",
+      "Category",
+      "Boolean",
+      "Text",
+      "Matrix",
+      "DataArray"
+     ]
+    },
+    "name": {
+     "type": "string",
+     "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+    },
+    "label": {
+     "type": "string"
+    },
+    "definition": {
+     "type": "string"
+    },
+    "uom": {
+     "type": "object"
+    },
+    "quality": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "required": [
+       "href"
+      ]
+     }
+    },
+    "codeSpace": {
+     "type": "string"
+    },
+    "constraint": {
+     "type": "object",
+     "oneOf": [
+      {
+       "properties": {
+        "type": {
+         "const": "AllowedTokens"
+        },
+        "values": {
+         "type": "array",
+         "items": {
+          "type": "string"
+         }
+        }
+       },
+       "required": [
+        "type",
+        "values"
+       ]
+      },
+      {
+       "properties": {
+        "type": {
+         "const": "AllowedValues"
+        },
+        "intervals": {
+         "type": "array",
+         "items": {
+          "type": "array",
+          "items": {
+           "type": "number"
+          },
+          "minItems": 2,
+          "maxItems": 2
+         }
+        }
+       },
+       "required": [
+        "type",
+        "intervals"
+       ]
+      }
+     ]
+    }
+   },
+   "allOf": [
+    {
+     "if": {
+      "properties": {
+       "type": {
+        "const": "Quantity"
+       }
+      }
+     },
+     "then": {
+      "required": [
+       "uom"
+      ]
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "type": {
+        "const": "Category"
+       }
+      }
+     },
+     "then": {
+      "required": [
+       "constraint"
+      ]
+     }
+    }
+   ]
+  }
+ }
+}

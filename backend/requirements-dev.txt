@@ -1,0 +1,9 @@
+# CPython test environment, pinned to the versions Pyodide 0.29.5 ships where both exist.
+numpy==2.2.5
+fastapi==0.116.1
+starlette==0.47.2
+pydantic==2.12.5
+jsonschema==4.23.0
+uvicorn==0.32.1
+httpx==0.28.1
+pytest==8.3.5

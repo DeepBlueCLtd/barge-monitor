@@ -1,0 +1,23 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://deepbluecltd.github.io/barge-monitor/contracts/schemas/exception.json",
+ "type": "object",
+ "required": [
+  "code",
+  "description"
+ ],
+ "properties": {
+  "code": {
+   "type": "string"
+  },
+  "description": {
+   "type": "string"
+  },
+  "refused": {
+   "type": "string"
+  },
+  "maximum": {
+   "type": "integer"
+  }
+ }
+}

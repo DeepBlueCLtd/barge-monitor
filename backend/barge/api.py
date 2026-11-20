@@ -158,7 +158,7 @@ def create_app(rt) -> FastAPI:
 
     # --- helpers ---------------------------------------------------------------
     def base(request: Request) -> str:
-        return (request.scope.get("root_path", "") or "").rstrip("/")
+        return _base(request)
 
     def link(request, href, rel, type_="application/json", title=None):
         lk = {"href": base(request) + href, "rel": rel, "type": type_}
@@ -239,6 +239,7 @@ def create_app(rt) -> FastAPI:
         return {
             "id": d["id"], "name": d["name"], "outputName": d["outputName"],
             "system@id": d["system"], "system@link": {"href": base(request) + f"/systems/{d['system']}"},
+            "validTime": [iso(pt[0]) if pt else iso(0), iso(max(rt.now(), pt[1] if pt else 0))],
             "phenomenonTime": [iso(pt[0]), iso(pt[1])] if pt else None,
             "resultTime": [iso(pt[0]), iso(pt[1])] if pt else None,
             "resultType": "record", "live": d.get("kind") != "promoted",
@@ -606,6 +607,11 @@ def create_app(rt) -> FastAPI:
 
 # --- module helpers -----------------------------------------------------------------
 
+def _base(request: Request) -> str:
+    """Absolute base URL of the API, from the request itself (links are absolute, RFC 8288)."""
+    return str(request.base_url).rstrip("/")
+
+
 def _limit(limit: int) -> int:
     if limit < 1:
         raise Refusal(400, "InvalidParameterValue", "limit must be at least 1", "limit")
@@ -748,7 +754,7 @@ def _obs_response(request, d, cols, of, lim, offset, total, path):
             pv = np.asarray(cols["precipitation_type"], dtype=float)
             columns = [(n, [None if x != x else tokens[int(x)] for x in pv.tolist()]) if n == "precipitation_type" else (n, c)
                        for n, c in columns]
-    root = (request.scope.get("root_path", "") or "").rstrip("/")
+    root = _base(request)
     nxt = None
     if offset + lim < total:
         q = dict(request.query_params)

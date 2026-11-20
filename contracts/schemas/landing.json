@@ -1,0 +1,23 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://deepbluecltd.github.io/barge-monitor/contracts/schemas/landing.json",
+ "type": "object",
+ "required": [
+  "title",
+  "links"
+ ],
+ "properties": {
+  "title": {
+   "type": "string"
+  },
+  "description": {
+   "type": "string"
+  },
+  "links": {
+   "type": "array",
+   "items": {
+    "$ref": "link.json"
+   }
+  }
+ }
+}

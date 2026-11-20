@@ -1,0 +1,71 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://deepbluecltd.github.io/barge-monitor/contracts/schemas/system.json",
+ "type": "object",
+ "required": [
+  "type",
+  "id",
+  "uniqueId",
+  "label",
+  "definition",
+  "systemType",
+  "links"
+ ],
+ "not": {
+  "anyOf": [
+   {
+    "required": [
+     "location"
+    ]
+   },
+   {
+    "required": [
+     "geometry"
+    ]
+   }
+  ]
+ },
+ "properties": {
+  "type": {
+   "enum": [
+    "PhysicalSystem",
+    "SimpleProcess",
+    "AggregateProcess",
+    "PhysicalComponent"
+   ]
+  },
+  "id": {
+   "type": "string"
+  },
+  "uniqueId": {
+   "type": "string"
+  },
+  "label": {
+   "type": "string"
+  },
+  "description": {
+   "type": "string"
+  },
+  "definition": {
+   "type": "string"
+  },
+  "systemType": {
+   "enum": [
+    "http://www.w3.org/ns/sosa/Sensor",
+    "http://www.w3.org/ns/sosa/Actuator",
+    "http://www.w3.org/ns/sosa/Sampler",
+    "http://www.w3.org/ns/sosa/Platform",
+    "http://www.w3.org/ns/sosa/System"
+   ]
+  },
+  "assetType": {
+   "type": "string"
+  },
+  "links": {
+   "type": "array",
+   "items": {
+    "$ref": "link.json"
+   }
+  }
+ }
+}
