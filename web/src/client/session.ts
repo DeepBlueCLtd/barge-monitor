@@ -13,7 +13,7 @@ import { runtime } from '../shell/runtime';
 import { Store } from '../shell/store';
 import { Configuration, Datastream, handshake, SweField } from './handshake';
 import { Closed, ClientHttp, HttpError, InstanceChanged, NetworkFailure } from './http';
-import { PeriodId, periodOf, properties, Property, Read, readingPlan, runStream } from './plan';
+import { PeriodId, periodOf, properties, Property, Read, readingPlan, RES_S, runStream } from './plan';
 
 export type Row = Record<string, any> & { time: string; _t: number };
 export type Phase = 'waiting-play' | 'waiting-models' | 'handshake' | 'configured' | 'degraded' | 'rejected' | 'waiting' | 'unreachable' | 'error';
@@ -50,7 +50,11 @@ function toRow(x: any): Row {
 const isoMs = (t: number) => new Date((SIM_EPOCH_UNIX + t) * 1000).toISOString();
 const isoS = (t: number) => new Date(Math.round(SIM_EPOCH_UNIX + t) * 1000).toISOString().replace('.000Z', 'Z');
 
-const RUN_POLL_S = 5;
+// Model B re-runs every ten simulated minutes; a minute's lag in noticing is fine. While a
+// command's run is awaited, the client looks every second.
+const RUN_POLL_S = 60;
+// A datastream the profile gives no resolution is polled once a simulated minute.
+const NATIVE_POLL_S = 60;
 
 export class ClientSession {
   readonly http = new ClientHttp();
@@ -80,6 +84,7 @@ export class ClientSession {
   private loadedGen = 0;
   private commandDirty = true;
   private lastRunPoll = -Infinity;
+  private lastPoll = new Map<string, number>(); // datastream id -> simulated time of its last poll
   private awaitingRun = false;
   /** The id of the last accepted command: the run that answers it carries it as command_id. */
   private commandId: string | null = null;
@@ -245,6 +250,7 @@ export class ClientSession {
       if (gen !== this.gen) return; // the selection changed meanwhile: start again
     }
     this.plan = plan;
+    this.lastPoll = new Map(plan.map((r) => [r.ds.id, now]));
     this.data = data;
     this.loadedGen = gen;
     this.planSeq = seq;
@@ -275,6 +281,12 @@ export class ClientSession {
     const cut = now - periodOf(sel.period).seconds;
     let changed = false;
     for (const r of this.plan) {
+      // Poll each datastream only as often as it can change: raw records every simulated
+      // second (FR-63), 1-minute means every minute, hourly means every hour.
+      const every = RES_S[r.ds.resolution] ?? NATIVE_POLL_S;
+      const polled = this.lastPoll.get(r.ds.id) ?? -Infinity;
+      if (now - polled < every) continue;
+      this.lastPoll.set(r.ds.id, now);
       const have = this.data.get(r.ds.id) ?? [];
       const last = have.length ? have[have.length - 1]._t : now - 1;
       const rows = await this.read(r.ds, `${isoMs(last + 0.001)}/..`, r.raw);
