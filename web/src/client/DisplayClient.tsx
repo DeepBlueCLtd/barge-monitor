@@ -9,14 +9,9 @@ import { WorkspacePanel } from '../workspace/WorkspacePanel';
 import { LiveData, Row } from './data';
 import { Configuration, Field, handshake } from './handshake';
 import { ClientHttp, InstanceChanged, NetworkFailure } from './http';
-import { BandChart, GenericView, Heatmap, LineChart, Mark, PairChart } from './views/views';
+import { CorrelationTable, GenericView, Reading, ReadoutTable } from './views/views';
 
 type Phase = { kind: 'handshake'; note: string } | { kind: 'unreachable' } | { kind: 'rejected'; reason: string } | { kind: 'running' };
-const VIEWS = [
-  ['temperature', 'Air temperature'], ['wind', 'Apparent wind speed'], ['derived', 'Derived values'],
-  ['changes', 'Change detector'], ['clusters', 'Clustering'], ['correlation', 'Correlation matrix'],
-] as const;
-type ViewId = (typeof VIEWS)[number][0];
 
 export function DisplayClient({ onRestart }: { onRestart: () => void }) {
   const http = useMemo(() => new ClientHttp(), []);
@@ -24,7 +19,6 @@ export function DisplayClient({ onRestart }: { onRestart: () => void }) {
   const [config, setConfig] = useState<Configuration | null>(null);
   const [live, setLive] = useState<LiveData | null>(null);
   const [popup, setPopup] = useState(false);
-  const [shown, setShown] = useState<Record<string, boolean>>({ temperature: true, wind: true, derived: true, changes: true, clusters: true, correlation: true });
 
   useEffect(() => {
     let alive = true;
@@ -85,7 +79,7 @@ export function DisplayClient({ onRestart }: { onRestart: () => void }) {
   if (phase.kind !== 'running' || !config || !live) {
     return (
       <>
-        <section className="panel charts-panel" aria-label="Time-series charts">
+        <section className="panel charts-panel" aria-label="Latest readings">
           <ClientStatus phase={phase} />
         </section>
         <section className="panel analysis-panel" aria-label="Analysis views" />
@@ -98,32 +92,21 @@ export function DisplayClient({ onRestart }: { onRestart: () => void }) {
   for (const p of config.problems) for (const v of p.essential.views) unavailable.set(v, [...(unavailable.get(v) ?? []), `${p.essential.label}: ${p.reason}`]);
   const b = (id: string) => config.bindings[id];
   const rows = (id?: string) => (id ? live.get(id) : []);
-  const changesB = b('change-detector');
-  const marks: Mark[] = shown.changes && changesB ? rows(changesB.ds.id).map((r) => ({ time: r.time, label: `${r.scale} ${r.strength}` })) : [];
   const runsDs = config.datastreams.find((d) => d.systemUid === 'urn:x-barge:process:analysis' && d.outputName === 'runs');
   const run: Row | undefined = runsDs ? rows(runsDs.id)[0] : undefined;
   const score = (k: string) => (run && typeof run[k] === 'number' ? run[k].toFixed(2) : '—');
-
-  const toggle = (id: ViewId, label: string) => {
-    const why = unavailable.get(id);
-    return (
-      <button key={id} className={shown[id] && !why ? 'on' : ''} disabled={!!why} title={why ? `Unavailable: ${why.join('; ')}` : `Show or hide ${label}`}
-        onClick={() => setShown({ ...shown, [id]: !shown[id] })} data-testid={`view-${id}`}>
-        {label}
-      </button>
-    );
-  };
-  const unavailableCard = (id: ViewId, label: string) => (
-    <div className="unavailable" data-testid={`unavailable-${id}`}>{label} is unavailable: {unavailable.get(id)!.join('; ')}</div>
-  );
-  const view = (id: ViewId, label: string, body: () => JSX.Element | null) =>
-    unavailable.has(id) ? unavailableCard(id, label) : shown[id] ? body() : null;
-
-  const pair = (bowId: string, sternId: string, field: string, title: string, unit: string, testid: string) => {
-    const bb = b(bowId), sb = b(sternId);
-    return <PairChart title={title} unit={unit} bow={rows(bb?.ds.id)} stern={rows(sb?.ds.id)} field={field} marks={marks} testid={testid} />;
+  // A view whose essential source is missing says why instead (FR-41).
+  const view = (id: string, label: string, body: () => JSX.Element | null) =>
+    unavailable.has(id)
+      ? <tr key={id} data-testid={`unavailable-${id}`}><th>{label}</th><td colSpan={3} className="unavailable-cell">unavailable: {unavailable.get(id)!.join('; ')}</td></tr>
+      : body();
+  const reading = (id: string, label: string, field: string, unit: string, testid: string, digits = 1) => {
+    const ds = b(id)?.ds.id;
+    return <Reading key={id} label={label} rows={rows(ds)} field={field} unit={unit} digits={digits} testid={testid} />;
   };
 
+  const changesB = b('change-detector');
+  const lastChange = changesB ? rows(changesB.ds.id).slice(-1)[0] : undefined;
   const corrB = b('correlation-matrix');
   const corrRow = corrB ? rows(corrB.ds.id)[0] : undefined;
   const clusterB = b('clustering');
@@ -146,40 +129,37 @@ export function DisplayClient({ onRestart }: { onRestart: () => void }) {
           </div>
         </div>
       )}
-      <section className="panel charts-panel" aria-label="Time-series charts">
+      <section className="panel charts-panel" aria-label="Latest readings">
         <header className="panel-head">
-          <h2>Time series <small data-testid="client-instance" title="The server instance this client handshook with">instance {config.instance}</small></h2>
-          <span className="toggles">{VIEWS.filter(([id]) => id !== 'correlation').map(([id, l]) => toggle(id, l))}</span>
+          <h2>Latest readings <small data-testid="client-instance" title="The server instance this client handshook with">instance {config.instance}</small></h2>
         </header>
         {stale && <div className="banner" role="status" data-testid="unreachable">Server unreachable: showing the last data received (stale). Retrying every simulated second.</div>}
-        <div className={stale ? 'stale' : ''}>
-          {view('temperature', 'Air temperature', () => pair('bow-air-temperature', 'stern-air-temperature', 'air_temperature', 'Air temperature, bow and stern', '°C', 'chart-temperature'))}
-          {view('wind', 'Apparent wind speed', () => pair('bow-wind-speed', 'stern-wind-speed', 'apparent_wind_speed', 'Apparent wind speed, bow and stern', 'm/s', 'chart-wind'))}
-          {view('derived', 'Derived values', () => <LineChart title="Dew point (bow)" unit="°C" rows={rows(b('derived-values')?.ds.id)} field="dew_point" marks={marks} testid="chart-derived" />)}
+        <div className={stale ? 'stale' : ''} data-testid="readings">
+          <ReadoutTable>
+            {view('temperature', 'Air temperature', () => <>{reading('bow-air-temperature', 'Air temperature, bow', 'air_temperature', '°C', 'reading-temperature')}{reading('stern-air-temperature', 'Air temperature, stern', 'air_temperature', '°C', 'reading-temperature-stern')}</>)}
+            {view('wind', 'Apparent wind speed', () => <>{reading('bow-wind-speed', 'Apparent wind, bow', 'apparent_wind_speed', 'm/s', 'reading-wind')}{reading('stern-wind-speed', 'Apparent wind, stern', 'apparent_wind_speed', 'm/s', 'reading-wind-stern')}</>)}
+            {view('derived', 'Derived values', () => reading('derived-values', 'Dew point (bow, derived)', 'dew_point', '°C', 'reading-derived'))}
+            {view('clusters', 'Clustering', () => <Reading key="clusters" label="Regime (cluster)" rows={rows(clusterB?.ds.id)} field="regime" testid="reading-clusters" />)}
+          </ReadoutTable>
           {view('changes', 'Change detector', () => (
-            <p className="score" data-testid="changes-score">Change detector: {changesB ? rows(changesB.ds.id).length : 0} changes in the run window (dashed lines). Score against the manifest: reach boundaries found {score('score_boundary_recall')}, precision {score('score_boundary_precision')}, fronts found {score('score_front_recall')}.</p>
+            <p className="score" data-testid="changes-score">Change detector: {changesB ? rows(changesB.ds.id).length : 0} changes in the run window{lastChange ? `, latest at ${String(lastChange.time).replace('T', ' ').replace('Z', '')} (${lastChange.scale}, strength ${Number(lastChange.strength).toFixed(2)})` : ''}. Score against the manifest: reach boundaries found {score('score_boundary_recall')}, precision {score('score_boundary_precision')}, fronts found {score('score_front_recall')}.</p>
           ))}
-          {view('clusters', 'Clustering', () => (
-            <>
-              <BandChart title={`Regimes (clusters) · score against air masses ${score('score_ari_air_mass')} ARI, reach kinds ${score('score_ari_reach_kind')}`} rows={rows(clusterB?.ds.id)} field="regime" tokens={clusterB?.field.constraint?.values ?? []} testid="chart-clusters" />
-            </>
-          ))}
-          <h3 className="other-head">Other sources <small>drawn by schema type alone</small></h3>
+          {!unavailable.has('clusters') && <p className="score">Clustering score against air masses {score('score_ari_air_mass')} ARI, reach kinds {score('score_ari_reach_kind')}.</p>}
+          <h3 className="other-head">Other sources <small>shown by schema type alone</small></h3>
           <div className="generic" data-testid="generic-views">
-            {[...groups.entries()].map(([key, g]) => (
-              <div key={key} className="generic-group" data-testid={`generic-${key}`}>
-                {g.items.map(({ field, dsId }) => <GenericView key={field.name} title={g.title} field={field} rows={rows(dsId)} />)}
-              </div>
-            ))}
+            <ReadoutTable>
+              {[...groups.entries()].flatMap(([key, g]) => g.items.map(({ field, dsId }) => <GenericView key={`${key}:${field.name}`} title={g.title} field={field} rows={rows(dsId)} />))}
+            </ReadoutTable>
           </div>
         </div>
       </section>
-      <section className="panel analysis-panel" aria-label="Analysis views">
-        <header className="panel-head"><h2>Analysis</h2><span className="toggles">{toggle('correlation', 'Correlation matrix')}</span></header>
-        {view('correlation', 'Correlation matrix', () =>
-          corrRow ? <Heatmap names={String(corrRow.parameters).split(',')} matrix={corrRow.matrix}
-            subtitle={`Window ${run ? `${run.window_start} to ${run.window_end}` : ''} · ${run?.records ?? '?'} records`} testid="chart-correlation" />
-            : <p>No correlation yet.</p>)}
+      <section className="panel analysis-panel" aria-label="Analysis">
+        <header className="panel-head"><h2>Analysis</h2></header>
+        {unavailable.has('correlation')
+          ? <div className="unavailable" data-testid="unavailable-correlation">Correlation matrix is unavailable: {unavailable.get('correlation')!.join('; ')}</div>
+          : corrRow ? <CorrelationTable names={String(corrRow.parameters).split(',')} matrix={corrRow.matrix}
+            subtitle={`Correlation · window ${run ? `${run.window_start} to ${run.window_end}` : ''} · ${run?.records ?? '?'} records`} testid="correlation" />
+            : <p>No correlation yet.</p>}
         {config.control && <Commands http={http} control={config.control} onDone={() => live.poll()} />}
       </section>
       <section className="panel workspace-panel" aria-label="Python workspace"><WorkspacePanel /></section>

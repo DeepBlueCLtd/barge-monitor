@@ -163,3 +163,18 @@ input[type=number] { font-family: var(--mono); font-size: 0.9rem; }
 .console .ok { color: var(--ok); }
 .console .info { color: #1e40af; }
 footer { margin-top: 12px; }
+
+/* --- text readouts (D-53: no charts) ---------------------------------------- */
+.readouts { width: 100%; border-collapse: collapse; font-size: 0.9rem; margin: 4px 0 8px; }
+.readouts th, .readouts td { text-align: left; padding: 3px 8px; border-bottom: 1px solid var(--line); vertical-align: baseline; }
+.readouts thead th { font: 0.95rem var(--hand); color: var(--muted); font-weight: 400; }
+.readouts tbody th { font-weight: 400; }
+.readouts td.value { font: 600 0.95rem var(--mono); white-space: nowrap; }
+.readouts td.mono { font: 0.8rem var(--mono); color: var(--muted); white-space: nowrap; }
+.readouts .flags { color: var(--warn); }
+.readouts .unavailable-cell { color: var(--warn); font-family: var(--hand); font-size: 1rem; }
+.matrix { border-collapse: collapse; font: 0.78rem var(--mono); }
+.matrix th { font: 0.9rem var(--hand); font-weight: 400; color: var(--muted); padding: 2px 6px; text-align: right; }
+.matrix thead th { writing-mode: vertical-rl; transform: rotate(180deg); text-align: left; height: 7.5rem; }
+.matrix td { padding: 3px 6px; text-align: right; border: 1px solid var(--line); }
+.matrix td.strong { background: #eef4ff; font-weight: 600; }

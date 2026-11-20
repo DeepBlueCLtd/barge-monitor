@@ -18,7 +18,7 @@ Everything is fictional: the canal, its places and the weather.
 | `backend/contract_suite/` | Contract tests run in CPython under uvicorn and in the browser through the relay (AT-02) |
 | `backend/tests/` | pytest acceptance tests |
 | `backend/independent/` | AT-16: OSHConnect-Python browses the server |
-| `web/` | TypeScript and React: the shell (hand-drawn flowchart per Annex A, controls, side column, tour; `?sketch=off` for plain outlines), the display client and its panels, the relay (Service Worker), the two Pyodide workers, the illustrative JS simulation used when WebAssembly is blocked, Playwright tests |
+| `web/` | TypeScript and React: the shell (hand-drawn flowchart per Annex A, controls, side column, tour; `?sketch=off` for plain outlines), the display client and its text readouts (no charts, D-53), the relay (Service Worker), the two Pyodide workers, the illustrative JS simulation used when WebAssembly is blocked, Playwright tests |
 | `scripts/build_history.py` | Pre-built history: the logger files for seeds 1–3 (SRD §13) |
 | `docs/decisions-log.md` | Every decision taken while implementing, for review |
 | `docs/adr/`, `docs/findings/` | Decision records and measured findings |
