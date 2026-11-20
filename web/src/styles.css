@@ -160,7 +160,7 @@ h1, h2, h3, h4 { margin: 0; font-weight: 400; }
 .spacer { flex: 1; }
 .dc select { font-family: var(--sans); font-size: 12.5px; padding: 3px 6px; border: 1px solid #9ca3af; border-radius: 5px; background: #fff; color: #1f2937; }
 .dc-graphs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 8px; }
-.dc-view { position: relative; border: 1px solid #e3cf8d; background: #fffdf5; border-radius: 6px; padding: 6px 8px 4px; min-height: 196px; }
+.dc-view { position: relative; border: 1.6px solid var(--gold-outline); background: var(--gold-fill); /* value-add, as the Models cards (VS-09) */ border-radius: 6px; padding: 6px 8px 4px; min-height: 196px; }
 .dc-view header h4 { font-family: var(--sans); font-weight: 600; font-size: 12.5px; color: #1f2937; }
 .dc-view header p { margin: 0; font-size: 11.5px; color: #4b5563; }
 .view-diamond { position: absolute; top: 4px; right: 4px; }

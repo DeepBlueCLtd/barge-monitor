@@ -16,7 +16,7 @@ const CLIENT_PHASE: Record<string, string> = {
 export function historyLabel(days: number | null): string {
   if (days == null) return 'none';
   if (days % 7 === 0) return days === 7 ? '1 week' : `${days / 7} weeks`;
-  return `${days} days`;
+  return days === 1 ? '24 hours' : `${days} days`;
 }
 
 type Box = [number, number, number, number];
