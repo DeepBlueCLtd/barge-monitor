@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SRD Annex A: Visual style</title>
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<div class="banner">Preview of pull request #5 (88d5e61). Not the published document.</div>
+<main>
+<p class="demo-link"><a href="demo/"><strong>Open the working demonstrator →</strong></a> It runs whole in your browser. · <a href="index.html">Requirements</a> · <a href="annex-a.html">Annex A: visual style</a></p>
+<nav id="TOC" aria-label="Contents">
+<ul>
+<li><a href="#annex-a-visual-style" id="toc-annex-a-visual-style">Annex
+A: Visual style</a>
+<ul>
+<li><a href="#canal-barge-weather-demonstrator-srd-version-33"
+id="toc-canal-barge-weather-demonstrator-srd-version-33">Canal barge
+weather demonstrator SRD, Version 3.3</a></li>
+<li><a href="#a1-intent" id="toc-a1-intent">A.1 Intent</a></li>
+<li><a href="#a2-typography" id="toc-a2-typography">A.2
+Typography</a></li>
+<li><a href="#a3-palette" id="toc-a3-palette">A.3 Palette</a></li>
+<li><a href="#a4-components-on-the-flowchart"
+id="toc-a4-components-on-the-flowchart">A.4 Components on the
+flowchart</a></li>
+<li><a href="#a5-flows-and-message-icons"
+id="toc-a5-flows-and-message-icons">A.5 Flows and message icons</a></li>
+<li><a href="#a6-sketch-rendering" id="toc-a6-sketch-rendering">A.6
+Sketch rendering</a></li>
+<li><a href="#a7-popups-panels-and-controls"
+id="toc-a7-popups-panels-and-controls">A.7 Popups, panels and
+controls</a></li>
+<li><a href="#a8-layout-regions" id="toc-a8-layout-regions">A.8 Layout
+regions</a></li>
+<li><a href="#a9-motion" id="toc-a9-motion">A.9 Motion</a></li>
+<li><a href="#a10-acceptance-criteria"
+id="toc-a10-acceptance-criteria">A.10 Acceptance criteria</a></li>
+</ul></li>
+</ul>
+</nav>
+<h1 id="annex-a-visual-style">Annex A: Visual style</h1>
+<h2 id="canal-barge-weather-demonstrator-srd-version-33">Canal barge
+weather demonstrator SRD, Version 3.3</h2>
+<p><strong>Status:</strong> Draft for review <strong>Author:</strong>
+Doc <strong>Refines:</strong> NFR-05 (large presentation display) and
+NFR-06 (light, document-like style) in the main SRD.</p>
+<hr />
+<h2 id="a1-intent">A.1 Intent</h2>
+<p>The demonstrator looks like a <strong>hand-drawn architecture
+explainer</strong>: ink on paper, hand-lettered labels, sketch-edged
+boxes, coloured zones and labelled flows. The style invites a
+stakeholder audience to read the architecture as a story, while the
+message popups stay crisp and exact, so the evidence still looks
+rigorous.</p>
+<p><strong>Status of the reference material.</strong> Two references
+inform this annex: an externally supplied hand-drawn system diagram, and
+the published mockup <em>Barge architecture flowchart mockup</em>. Both
+are <strong>illustrations of styling only</strong>. Neither is a user
+interface design to reproduce. Where either conflicts with the main SRD
+or this annex, the SRD and this annex win. In particular:</p>
+<ul>
+<li>the fixed flowchart layout is the committed layout file (FR-51), not
+the mockup's placement;</li>
+<li>the reference diagram's pictures of hardware and characters are
+<strong>not</strong> part of the style (A.4).</li>
+</ul>
+<hr />
+<h2 id="a2-typography">A.2 Typography</h2>
+<ul>
+<li><strong>VS-01</strong> A <strong>hand-lettered display face</strong>
+is used for component names, zone labels, panel titles, button labels,
+the tour and the key. The mockup uses Patrick Hand and Patrick Hand SC
+(small capitals for headings and zone labels); any comparably legible,
+openly licensed hand-lettered face is acceptable.</li>
+<li><strong>VS-02</strong> A <strong>monospace face</strong> is used for
+message contents in popups and for code in the workspace. Message
+contents are never shown in the hand-lettered face.</li>
+<li><strong>VS-03</strong> All fonts are <strong>served from the site
+itself</strong> (NFR-08), never from a font CDN. (The mockup loads
+Google Fonts for convenience only.)</li>
+<li><strong>VS-04</strong> Minimum sizes on the target display (NFR-05),
+measured at its native resolution: component names 20 px, other labels
+and key entries 16 px, message letters 17 px, popup message contents 13
+px. Where the target display needs larger sizes to stay legible from the
+viewing distance, sizes scale up together; they never shrink to
+fit.</li>
+</ul>
+<h2 id="a3-palette">A.3 Palette</h2>
+<ul>
+<li><p><strong>VS-05</strong> <strong>Paper and ink.</strong> A warm
+off-white ground (mockup: <code>#fbfaf6</code>) and a near-black ink
+(mockup: <code>#23262d</code>) for outlines, arrows and body
+text.</p></li>
+<li><p><strong>VS-06</strong> <strong>Zones</strong> each have a pale
+fill and a stronger outline of one hue:</p>
+<table>
+<thead>
+<tr>
+<th>Zone</th>
+<th>Hue (mockup)</th>
+<th>Outline</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Simulated</td>
+<td>warm grey</td>
+<td>dashed, marking it as standing in for the world</td>
+</tr>
+<tr>
+<td>Legacy</td>
+<td>burnt orange</td>
+<td>solid</td>
+</tr>
+<tr>
+<td>New build</td>
+<td>blue</td>
+<td>solid</td>
+</tr>
+<tr>
+<td>Third-party</td>
+<td>violet</td>
+<td>solid</td>
+</tr>
+</tbody>
+</table>
+<p>A zone may be drawn as more than one region where the flow demands it
+(the mockup places third-party between two new-build regions); each
+region carries its label.</p></li>
+<li><p><strong>VS-07</strong> <strong>Message letters</strong> each have
+one colour, shared by the icon, the key and the popup header. Mockup
+values: Q blue <code>#1d4ed8</code>, D teal <code>#0f766e</code>, O
+green <code>#15803d</code>, K purple <code>#7e22ce</code>, P navy
+<code>#1e3a8a</code>, H red <code>#b91c1c</code>, L brown
+<code>#9a3412</code>, I grey <code>#4b5563</code>.</p></li>
+<li><p><strong>VS-08</strong> Colour never carries meaning alone: every
+message icon shows its <strong>letter</strong>, every zone shows its
+<strong>label</strong>, and every status shows
+<strong>words</strong>.</p></li>
+<li><p><strong>VS-09</strong> Every text and icon colour meets
+<strong>4.5:1 contrast</strong> against the surface it sits on (3:1 for
+text at 24 px and above).</p></li>
+</ul>
+<h2 id="a4-components-on-the-flowchart">A.4 Components on the
+flowchart</h2>
+<ul>
+<li><strong>VS-10</strong> Each component is a <strong>card</strong>:
+white fill, ink outline with slightly uneven corners, a light offset
+shadow, its <strong>name</strong> and a <strong>one-line role</strong>
+of a few words. <strong>Cards carry text labels only.</strong> There are
+no illustrations, photographs or drawn pictures of hardware, people or
+characters anywhere in the demonstrator.</li>
+<li><strong>VS-11</strong> A component with no message flows of its own
+(the Pyodide runtime, which only hosts others) is drawn with a
+<strong>dashed outline</strong> in its zone's colour, and its role says
+what it hosts.</li>
+<li><strong>VS-12</strong> A component that exists only when a scientist
+creates it (a promoted product) is drawn with a <strong>dashed
+outline</strong> until it is registered, then solid.</li>
+</ul>
+<h2 id="a5-flows-and-message-icons">A.5 Flows and message icons</h2>
+<ul>
+<li><strong>VS-13</strong> Flows are <strong>ink arrows</strong> with
+filled heads, horizontal or vertical segments only, never crossing a
+card. A two-way exchange is two arrows on the thirds of the facing
+edges.</li>
+<li><strong>VS-14</strong> Protocol labels on flows (for example "HTTP")
+are used <strong>sparingly</strong>, only where the boundary type is not
+obvious from the zones, in small grey hand lettering clear of every line
+and icon.</li>
+<li><strong>VS-15</strong> A message is a <strong>circle bearing its
+letter</strong>: white fill, a ring and letter in the letter's colour.
+It moves along its arrow from tail to head.</li>
+<li><strong>VS-16</strong> A <strong>selected</strong> message (its
+popup open) gains a tinted fill and a soft halo in its colour, and a
+dashed leader line in its colour joins it to its popup.</li>
+<li><strong>VS-17</strong> A <strong>failed</strong> request (server
+down, FR-46a) stops at the relay and is shown with its ring broken and a
+cross, in the same letter colour.</li>
+</ul>
+<h2 id="a6-sketch-rendering">A.6 Sketch rendering</h2>
+<ul>
+<li><strong>VS-18</strong> Card outlines, zone outlines and arrows are
+drawn with a <strong>sketch renderer</strong> (Rough.js, MIT licence,
+served from the site) to give a hand-drawn line.</li>
+<li><strong>VS-19</strong> <strong>Every sketched shape is
+seeded</strong> from a stable identifier (its component, zone or flow
+name), so it draws identically on every render, every pause and every
+client restart. A shape that changes its wobble between renders is a
+defect: it reads as flicker and competes with the moving messages.</li>
+<li><strong>VS-20</strong> The sketch effect is <strong>gentle</strong>:
+low roughness, single stroke, no hatching or fills drawn by the
+renderer. Legibility of labels and arrows outranks the effect.</li>
+<li><strong>VS-21</strong> If the sketch renderer is unavailable, the
+same shapes fall back to plain CSS outlines with uneven corner radii, as
+in the mockup. The demonstrator is never blocked on the effect.</li>
+</ul>
+<h2 id="a7-popups-panels-and-controls">A.7 Popups, panels and
+controls</h2>
+<ul>
+<li><strong>VS-22</strong> <strong>Message popups are crisp</strong>:
+plain rectangle with a coloured outline in the message's letter colour,
+a hand-lettered title, the message contents in monospace on a pale
+panel, and the standard in plain words beneath. The popup is the
+evidence; it is never sketched or decorated.</li>
+<li><strong>VS-23</strong> <strong>Docked panels</strong> (time series,
+analysis views, Python workspace) use the same card language as the
+flowchart: white, ink outline, hand-lettered title. Charts inside them
+are drawn plainly by ECharts in the palette's colours, with no sketch
+effect on data.</li>
+<li><strong>VS-24</strong> <strong>Controls</strong> are real buttons
+with hand-lettered labels and ink outlines. The play/pause button is
+filled ink when the simulation is off or paused, inviting a press. The
+speed control is a segmented group with the current speed visibly
+pressed.</li>
+<li><strong>VS-25</strong> The <strong>guided tour</strong> strip names
+its steps in order, each with a number, a short title and a one-line
+description, joined by light arrows.</li>
+</ul>
+<h2 id="a8-layout-regions">A.8 Layout regions</h2>
+<p>The mockup shows one arrangement of these regions; it is
+illustrative, and the fixed layout file governs the flowchart
+itself.</p>
+<ul>
+<li><strong>VS-26</strong> <strong>Top bar</strong>: the title and a
+one-line subtitle on the left; the controls on the right.</li>
+<li><strong>VS-27</strong> <strong>Main area</strong>: the flowchart,
+its zones and its frozen or moving messages.</li>
+<li><strong>VS-28</strong> <strong>Side column</strong>: the message
+key, the zone legend and a status summary (simulation state, speed,
+simulated time, server state and instance, client state, essential and
+optional sources).</li>
+<li><strong>VS-29</strong> <strong>Lower area</strong>: the tour strip
+and the three docked panels.</li>
+</ul>
+<h2 id="a9-motion">A.9 Motion</h2>
+<ul>
+<li><strong>VS-30</strong> The only motion is <strong>messages
+travelling along flows</strong>, at the speed the clock sets. There is
+no decorative animation: no bouncing, pulsing, wobbling lines or
+transitions on the diagram.</li>
+<li><strong>VS-31</strong> When paused, nothing moves (FR-52), including
+any hover effects that move shapes.</li>
+</ul>
+<hr />
+<h2 id="a10-acceptance-criteria">A.10 Acceptance criteria</h2>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Test</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>AT-V1</td>
+<td>Rendering the flowchart twice, and again after a client restart,
+produces identical outlines for every card, zone and arrow (VS-19)</td>
+</tr>
+<tr>
+<td>AT-V2</td>
+<td>An automated contrast check passes for every text and icon colour
+against its surface (VS-09)</td>
+</tr>
+<tr>
+<td>AT-V3</td>
+<td>On the target display, at its native resolution, every text size
+meets VS-04</td>
+</tr>
+<tr>
+<td>AT-V4</td>
+<td>The built site contains no raster or vector illustrations other than
+icons for controls (VS-10)</td>
+</tr>
+<tr>
+<td>AT-V5</td>
+<td>All fonts and the sketch renderer are fetched from the site's own
+origin (VS-03, VS-18)</td>
+</tr>
+<tr>
+<td>AT-V6</td>
+<td>With the sketch renderer disabled, the flowchart still renders
+completely with CSS outlines (VS-21)</td>
+</tr>
+</tbody>
+</table>
+<footer>Rendered from <code>srd-barge.md</code>.</footer>
+</main>
+</body>
+</html>
