@@ -87,7 +87,7 @@ function Icons({ onSelect }: { onSelect: (m: Message) => void }) {
     let raf = 0;
     let last = 0;
     const loop = (ts: number) => {
-      if (ts - last > 40) {
+      if (ts - last > 16) { // every frame: the icons glide rather than jump
         last = ts;
         bus.tick();
         setFrame((f) => f + 1);
@@ -104,8 +104,8 @@ function Icons({ onSelect }: { onSelect: (m: Message) => void }) {
         const a = pos.get(m.src), b = pos.get(m.dst);
         if (!a || !b) return null;
         const f = (now - (m.start ?? m.t)) / HOP_S;
-        if (f < 0 || f > 1.5) return null;
-        const g = m.failed ? Math.min(f, 0.5) : Math.min(f, 1);
+        if (f < 0 || f > 1) return null; // gone on arrival: nothing piles up at the cards
+        const g = m.failed ? Math.min(f, 0.5) : f;
         const x = a.x + (b.x - a.x) * g, y = a.y + (b.y - a.y) * g;
         return (
           <button key={m.id} className={`icon ${m.failed ? 'failed' : ''}`} data-letter={m.letter}
