@@ -94,6 +94,11 @@ class Tap:
         return _chain.set(Chain(chain_id or f"c{next(_ids)}", hop))
 
     @staticmethod
+    def chain_id():
+        ch = _chain.get()
+        return ch.id if ch else None
+
+    @staticmethod
     def end_chain(token) -> int:
         ch = _chain.get()
         _chain.reset(token)

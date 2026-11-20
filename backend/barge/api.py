@@ -111,7 +111,9 @@ def create_app(rt) -> FastAPI:
         path = request.url.path
         root = request.scope.get("root_path", "") or ""
         rel = path[len(root):] if root and path.startswith(root) else path
-        token = tap.begin_chain(request.headers.get("x-tap-chain"), int(request.headers.get("x-tap-hop", "1")))
+        hop = request.headers.get("x-tap-hop", "1")
+        token = tap.begin_chain(request.headers.get("x-tap-chain"), int(hop) if hop.isdigit() else 1)
+        chain_id = tap.chain_id()
         body = await request.body()
         letter = _letter_for_request(request.method, rel)
         tap.emit("client", "fastapi", letter, f"{request.method} {rel}{'?' + request.url.query if request.url.query else ''}",
@@ -139,7 +141,7 @@ def create_app(rt) -> FastAPI:
         hops = tap.end_chain(token)
         headers["x-tap-hops"] = str(hops + 1)
         out = Response(content=payload, status_code=resp.status_code, headers=headers, media_type=resp.media_type)
-        token2 = tap.begin_chain(request.headers.get("x-tap-chain"), hops)
+        token2 = tap.begin_chain(chain_id, hops)
         tap.emit("fastapi", "client", _letter_for_response(resp.status_code, rel, headers.get("content-type", "")),
                  f"{resp.status_code} {rel}", payload.decode("utf-8", "replace"))
         tap.end_chain(token2)
@@ -177,11 +179,12 @@ def create_app(rt) -> FastAPI:
     def fmt(request: Request, f: str | None, default: str, allowed: tuple) -> str:
         want = f
         if want is None:
-            accept = request.headers.get("accept", "")
-            for a in [x.split(";")[0].strip() for x in accept.split(",")]:
-                if a in allowed or a in UNSUPPORTED_FORMATS:
-                    want = a
-                    break
+            # Accept is a preference, not a demand: the default when acceptable, else the first offered type.
+            # An Accept naming nothing offered (a browser's text/html) gets the default (RFC 9110 §12.5.1).
+            accepted = [x.split(";")[0].strip() for x in request.headers.get("accept", "").split(",")]
+            if default in accepted or "*/*" in accepted:
+                return default
+            want = next((a for a in accepted if a in allowed), None)
         if want is None:
             return default
         if want in UNSUPPORTED_FORMATS:
@@ -193,6 +196,7 @@ def create_app(rt) -> FastAPI:
 
     def page(items: list, request: Request, path: str, limit: int, offset: int, extra_links=None):
         lim = _limit(limit)
+        _offset(offset)
         chunk = items[offset:offset + lim]
         links = [link(request, path, "self")]
         if offset + lim < len(items):
@@ -215,7 +219,7 @@ def create_app(rt) -> FastAPI:
 
     def system_json(request, s):
         sid = s["id"]
-        out = {k: v for k, v in s.items() if k != "parent"}
+        out = {k: v for k, v in s.items() if k not in ("parent", "createdBy")}  # internal fields stay internal
         out["links"] = [link(request, f"/systems/{sid}", "self", "application/sml+json"),
                         link(request, f"/systems/{sid}/datastreams", "datastreams"),
                         link(request, f"/systems/{sid}/subsystems", "subsystems"),
@@ -386,6 +390,7 @@ def create_app(rt) -> FastAPI:
         d = get_ds(dsId)
         of = fmt(request, f, swe.SWE_JSON, swe.OBS_FORMATS)
         lim = _limit(limit)
+        _offset(offset)
         s = srv()
         now = rt.now()
         latest = resultTime == "latest"
@@ -481,11 +486,13 @@ def create_app(rt) -> FastAPI:
                 "links": [link(request, f"/commands/{c['id']}/status", "status")]}
 
     # --- everything else is refused by name (FR-27) -------------------------------
-    @app.api_route("/{rest:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"], include_in_schema=False)
+    @app.api_route("/{rest:path}", methods=["GET", "HEAD", "OPTIONS", "POST", "PUT", "PATCH", "DELETE"], include_in_schema=False)
     async def refuse(request: Request, rest: str):
         first = rest.split("/")[0]
         if request.method == "PATCH":
             raise Refusal(405, "OperationNotSupported", "PATCH is not supported (Part 1 and 2 Update classes)", "PATCH")
+        if request.method in ("HEAD", "OPTIONS"):
+            raise Refusal(405, "OperationNotSupported", f"{request.method} is not supported", request.method)
         if request.method in ("POST", "PUT", "DELETE"):
             raise Refusal(405, "OperationNotSupported",
                           f"{request.method} /{rest} is not supported (Create/Replace/Delete classes): models register "
@@ -503,6 +510,12 @@ def create_app(rt) -> FastAPI:
 def _base(request: Request) -> str:
     """Absolute base URL of the API, from the request itself (links are absolute, RFC 8288)."""
     return str(request.base_url).rstrip("/")
+
+
+def _offset(offset: int) -> int:
+    if offset < 0:
+        raise Refusal(400, "InvalidParameterValue", "offset must be zero or more", "offset")
+    return offset
 
 
 def _limit(limit: int) -> int:

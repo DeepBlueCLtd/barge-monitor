@@ -127,7 +127,7 @@ class ModelB(Model):
         return t1
 
     async def _key(self, api, system, output):
-        if (system, output) not in self.src:
+        if self.src.get((system, output)) is None:  # never cache a miss: the other model may not have registered yet
             self.src[(system, output)] = await api.find(f"urn:x-barge:process:{system}", output, since=api.now() - 3600)
         return self.src[(system, output)]
 
@@ -197,7 +197,7 @@ class ModelB(Model):
         await api.publish(self.out["clusters"], {"t": t, "run_id": [run_id] * len(t), "cluster": relabel(labels)},
                           replace=True)
         await api.publish(self.out["correlation"], {"t": np.array([t1]), "run_id": [run_id], "fields": [",".join(names)],
-                                                    "matrix": [np.round(np.atleast_2d(R), 3).tolist()]}, replace=True)
+                                                    "matrix": [[[None if not np.isfinite(x) else round(float(x), 3) for x in row] for row in np.atleast_2d(R)]]}, replace=True)
         rec = {"t": np.array([t1]), "run_id": [run_id], "command_id": [self.last_command], "algorithm": [s["algorithm"]],
                "fields": [",".join(names)], "period": [s["period"]], "window_start": np.array([t[0]]),
                "window_end": np.array([t[-1]]), "records": np.array([len(t)]), "clusters": np.array([k]),
