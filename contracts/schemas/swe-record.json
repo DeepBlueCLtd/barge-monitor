@@ -1,6 +1,7 @@
 {
  "$schema": "https://json-schema.org/draft/2020-12/schema",
  "$id": "https://deepbluecltd.github.io/barge-monitor/contracts/schemas/swe-record.json",
+ "title": "SweRecord",
  "description": "The subset of SWE Common 3.0 JSON the server uses for record schemas",
  "type": "object",
  "required": [

@@ -261,7 +261,7 @@ def create_app(rt) -> FastAPI:
 
     # --- discovery: landing, conformance, collections (FR-22) ----------------------
     @app.get("/", summary="Landing page")
-    def landing(request: Request, f: str | None = Query(None)):
+    async def landing(request: Request, f: str | None = Query(None)):
         only(request, {"f"})
         s = srv()
         return {
@@ -276,7 +276,7 @@ def create_app(rt) -> FastAPI:
         }
 
     @app.get("/conformance", summary="Conformance declaration")
-    def conformance(request: Request, f: str | None = Query(None)):
+    async def conformance(request: Request, f: str | None = Query(None)):
         only(request, {"f"})
         claims = list(CONFORMANCE)
         if srv().claims_profile():
@@ -284,7 +284,7 @@ def create_app(rt) -> FastAPI:
         return {"conformsTo": claims}
 
     @app.get("/profile", summary="Declared profile (FR-38)")
-    def profile(request: Request):
+    async def profile(request: Request):
         only(request, set())
         return srv().profile
 
@@ -300,31 +300,31 @@ def create_app(rt) -> FastAPI:
                                              link(request, f"/collections/{cid}/items", "items")]}
 
     @app.get("/collections", summary="Collections")
-    def collections(request: Request, f: str | None = Query(None)):
+    async def collections(request: Request, f: str | None = Query(None)):
         only(request, {"f"})
         return {"links": [link(request, "/collections", "self")],
                 "collections": [collection_json(request, c) for c in COLLECTIONS]}
 
     @app.get("/collections/{collectionId}", summary="A collection")
-    def collection(request: Request, collectionId: str = Path(...)):
+    async def collection(request: Request, collectionId: str = Path(...)):
         only(request, {"f"})
         if collectionId not in COLLECTIONS:
             raise Refusal(404, "NotFound", f"collection {collectionId} does not exist", f"collection:{collectionId}")
         return collection_json(request, collectionId)
 
     @app.get("/collections/{collectionId}/items", summary="Items of a collection")
-    def collection_items(request: Request, collectionId: str = Path(...), limit: int = Query(C.DEFAULT_LIMIT),
+    async def collection_items(request: Request, collectionId: str = Path(...), limit: int = Query(C.DEFAULT_LIMIT),
                          offset: int = Query(0), datetime: str | None = Query(None)):
         only(request, {"limit", "offset", "datetime", "f"})
         if collectionId == "all_systems":
-            return systems(request, limit, offset, datetime)
+            return await systems(request, limit, offset, datetime)
         if collectionId == "all_datastreams":
-            return datastreams(request, limit, offset, datetime)
+            return await datastreams(request, limit, offset, datetime)
         raise Refusal(404, "NotFound", f"collection {collectionId} does not exist", f"collection:{collectionId}")
 
     # --- Part 1: systems, subsystems, properties --------------------------------
     @app.get("/systems", summary="Systems")
-    def systems(request: Request, limit: int = Query(C.DEFAULT_LIMIT), offset: int = Query(0),
+    async def systems(request: Request, limit: int = Query(C.DEFAULT_LIMIT), offset: int = Query(0),
                 datetime: str | None = Query(None)):
         only(request, {"limit", "offset", "datetime", "f"})
         items = [system_json(request, s) for s in srv().all_systems().values() if not s.get("parent")]
@@ -354,13 +354,13 @@ def create_app(rt) -> FastAPI:
                             headers={"Location": base(request) + f"/systems/{sid}"})
 
     @app.get("/systems/{systemId}", summary="A system")
-    def system(request: Request, systemId: str = Path(...), f: str | None = Query(None)):
+    async def system(request: Request, systemId: str = Path(...), f: str | None = Query(None)):
         only(request, {"f"})
         fmt(request, f, swe.JSON, (swe.JSON, "application/sml+json"))
         return system_json(request, get_system(systemId))
 
     @app.delete("/systems/{systemId}", status_code=204, summary="Delete a created system")
-    def delete_system(request: Request, systemId: str = Path(...)):
+    async def delete_system(request: Request, systemId: str = Path(...)):
         only(request, set())
         get_system(systemId)
         reg = srv().registry
@@ -373,20 +373,20 @@ def create_app(rt) -> FastAPI:
         return Response(status_code=204)
 
     @app.get("/systems/{systemId}/subsystems", summary="Subsystems")
-    def subsystems(request: Request, systemId: str = Path(...), limit: int = Query(C.DEFAULT_LIMIT), offset: int = Query(0)):
+    async def subsystems(request: Request, systemId: str = Path(...), limit: int = Query(C.DEFAULT_LIMIT), offset: int = Query(0)):
         only(request, {"limit", "offset", "f"})
         get_system(systemId)
         items = [system_json(request, s) for s in srv().all_systems().values() if s.get("parent") == systemId]
         return page(items, request, f"/systems/{systemId}/subsystems", limit, offset)
 
     @app.get("/properties", summary="Property definitions")
-    def properties(request: Request, limit: int = Query(C.DEFAULT_LIMIT), offset: int = Query(0)):
+    async def properties(request: Request, limit: int = Query(C.DEFAULT_LIMIT), offset: int = Query(0)):
         only(request, {"limit", "offset", "f"})
         items = [_property(f) for f in CATALOGUE.values()]
         return page(items, request, "/properties", limit, offset)
 
     @app.get("/properties/{propId}", summary="A property definition")
-    def property_(request: Request, propId: str = Path(...)):
+    async def property_(request: Request, propId: str = Path(...)):
         only(request, {"f"})
         if propId not in CATALOGUE:
             raise Refusal(404, "NotFound", f"property {propId} does not exist", f"property:{propId}")
@@ -394,14 +394,14 @@ def create_app(rt) -> FastAPI:
 
     # --- Part 2: datastreams, schema, observations -----------------------------------
     @app.get("/datastreams", summary="Datastreams")
-    def datastreams(request: Request, limit: int = Query(C.DEFAULT_LIMIT), offset: int = Query(0),
+    async def datastreams(request: Request, limit: int = Query(C.DEFAULT_LIMIT), offset: int = Query(0),
                     datetime: str | None = Query(None)):
         only(request, {"limit", "offset", "datetime", "f"})
         items = [ds_json(request, d) for d in srv().all_datastreams().values()]
         return page(items, request, "/datastreams", limit, offset)
 
     @app.get("/systems/{systemId}/datastreams", summary="A system's datastreams")
-    def system_datastreams(request: Request, systemId: str = Path(...), limit: int = Query(C.DEFAULT_LIMIT),
+    async def system_datastreams(request: Request, systemId: str = Path(...), limit: int = Query(C.DEFAULT_LIMIT),
                            offset: int = Query(0)):
         only(request, {"limit", "offset", "f"})
         get_system(systemId)
@@ -432,12 +432,12 @@ def create_app(rt) -> FastAPI:
                             headers={"Location": base(request) + f"/datastreams/{dsid}"})
 
     @app.get("/datastreams/{dsId}", summary="A datastream")
-    def datastream(request: Request, dsId: str = Path(...)):
+    async def datastream(request: Request, dsId: str = Path(...)):
         only(request, {"f"})
         return ds_json(request, get_ds(dsId))
 
     @app.delete("/datastreams/{dsId}", status_code=204, summary="Delete a created datastream")
-    def delete_datastream(request: Request, dsId: str = Path(...)):
+    async def delete_datastream(request: Request, dsId: str = Path(...)):
         only(request, set())
         get_ds(dsId)
         reg = srv().registry
@@ -448,7 +448,7 @@ def create_app(rt) -> FastAPI:
         return Response(status_code=204)
 
     @app.get("/datastreams/{dsId}/schema", summary="A datastream's schema (FR-24)")
-    def ds_schema(request: Request, dsId: str = Path(...), obsFormat: str | None = Query(None)):
+    async def ds_schema(request: Request, dsId: str = Path(...), obsFormat: str | None = Query(None)):
         only(request, {"obsFormat", "f"})
         d = get_ds(dsId)
         if obsFormat is None:
@@ -457,7 +457,7 @@ def create_app(rt) -> FastAPI:
         return swe.schema_response(d["schema"], of)
 
     @app.get("/datastreams/{dsId}/observations", summary="Observations (FR-25)")
-    def observations(request: Request, dsId: str = Path(...), phenomenonTime: str | None = Query(None),
+    async def observations(request: Request, dsId: str = Path(...), phenomenonTime: str | None = Query(None),
                      resultTime: str | None = Query(None), limit: int = Query(C.DEFAULT_LIMIT),
                      offset: int = Query(0), f: str | None = Query(None)):
         only(request, {"phenomenonTime", "resultTime", "limit", "offset", "f"})
@@ -508,12 +508,12 @@ def create_app(rt) -> FastAPI:
 
     # --- Part 2: control streams and commands (FR-26) ---------------------------
     @app.get("/controlstreams", summary="Control streams")
-    def controlstreams(request: Request, limit: int = Query(C.DEFAULT_LIMIT), offset: int = Query(0)):
+    async def controlstreams(request: Request, limit: int = Query(C.DEFAULT_LIMIT), offset: int = Query(0)):
         only(request, {"limit", "offset", "f"})
         return page([cs_json(request)], request, "/controlstreams", limit, offset)
 
     @app.get("/systems/{systemId}/controlstreams", summary="A system's control streams")
-    def system_controlstreams(request: Request, systemId: str = Path(...)):
+    async def system_controlstreams(request: Request, systemId: str = Path(...)):
         only(request, {"limit", "offset", "f"})
         get_system(systemId)
         return {"items": [cs_json(request)] if systemId == "analysis" else [],
@@ -524,13 +524,13 @@ def create_app(rt) -> FastAPI:
             raise Refusal(404, "NotFound", f"control stream {csId} does not exist", f"controlstream:{csId}")
 
     @app.get("/controlstreams/{csId}", summary="A control stream")
-    def controlstream(request: Request, csId: str = Path(...)):
+    async def controlstream(request: Request, csId: str = Path(...)):
         only(request, {"f"})
         get_cs(csId)
         return cs_json(request)
 
     @app.get("/controlstreams/{csId}/schema", summary="A control stream's schema, with its bounds")
-    def controlstream_schema(request: Request, csId: str = Path(...), obsFormat: str | None = Query(None)):
+    async def controlstream_schema(request: Request, csId: str = Path(...), obsFormat: str | None = Query(None)):
         only(request, {"obsFormat", "f"})
         get_cs(csId)
         return {"commandFormat": swe.JSON, "parametersSchema": srv().control_schema}
@@ -565,7 +565,7 @@ def create_app(rt) -> FastAPI:
                             headers={"Location": base(request) + f"/commands/{cid}"})
 
     @app.get("/controlstreams/{csId}/commands", summary="Commands sent to a control stream")
-    def commands(request: Request, csId: str = Path(...), limit: int = Query(C.DEFAULT_LIMIT), offset: int = Query(0)):
+    async def commands(request: Request, csId: str = Path(...), limit: int = Query(C.DEFAULT_LIMIT), offset: int = Query(0)):
         only(request, {"limit", "offset", "f"})
         get_cs(csId)
         items = [_command_json(request, c) for c in srv().commands.values()]
@@ -578,12 +578,12 @@ def create_app(rt) -> FastAPI:
         return c
 
     @app.get("/commands/{cmdId}", summary="A command")
-    def command(request: Request, cmdId: str = Path(...)):
+    async def command(request: Request, cmdId: str = Path(...)):
         only(request, {"f"})
         return _command_json(request, get_cmd(cmdId))
 
     @app.get("/commands/{cmdId}/status", summary="A command's status reports")
-    def command_status(request: Request, cmdId: str = Path(...)):
+    async def command_status(request: Request, cmdId: str = Path(...)):
         only(request, {"f"})
         return {"items": get_cmd(cmdId)["status"]}
 
@@ -594,7 +594,7 @@ def create_app(rt) -> FastAPI:
 
     # --- everything else is refused by name (FR-27) -------------------------------
     @app.api_route("/{rest:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"], include_in_schema=False)
-    def refuse(request: Request, rest: str):
+    async def refuse(request: Request, rest: str):
         first = rest.split("/")[0]
         if request.method == "PATCH":
             raise Refusal(405, "OperationNotSupported", "PATCH is not supported (Part 1 and 2 Update classes)", "PATCH")

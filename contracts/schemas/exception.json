@@ -1,6 +1,7 @@
 {
  "$schema": "https://json-schema.org/draft/2020-12/schema",
  "$id": "https://deepbluecltd.github.io/barge-monitor/contracts/schemas/exception.json",
+ "title": "ExceptionBody",
  "type": "object",
  "required": [
   "code",
