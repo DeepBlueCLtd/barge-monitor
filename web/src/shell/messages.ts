@@ -1,80 +1,104 @@
-// Captured messages (FR-47, FR-48) and their place on the flowchart.
-// Every message is kept until it has crossed its edge; none is sampled.
+// Captured messages (FR-66..FR-68) and their place on the flowchart.
+// Every message is drawn: none is sampled or merged (FR-67). Each directed
+// line has its own queue, so icons on one line travel one behind another,
+// and a message's next hop sets off when its previous hop arrives.
 import { HOP_S } from '../config';
 import { simClock } from './clock';
+import type { ComponentId } from './components';
 import { LETTER_COLOURS } from './palette';
 import { Store } from './store';
 
-export interface Message {
-  id: string;
-  t: number; // simulated time of capture
-  src: string;
-  dst: string;
-  letter: string;
+export type Letter = 'Q' | 'D' | 'O' | 'K' | 'P' | 'H' | 'S' | 'L' | 'I';
+
+/** A captured message (docs/v4-interfaces.md §3), as the back end and the model workers post it. */
+export interface Captured {
+  id?: number | string;
+  t: number; // simulated seconds since the simulation epoch
+  src: ComponentId;
+  dst: ComponentId;
+  letter: Letter;
   summary: string;
   content: string;
   failed?: boolean;
   chain?: string | null;
   hop?: number;
-  start?: number; // when it sets off on the flowchart (simulated seconds)
+  model?: string;
 }
 
-export const LETTERS: Record<string, { standard: string; colour: string }> = {
-  Q: { standard: 'OGC API – Connected Systems request', colour: LETTER_COLOURS.Q },
-  D: { standard: 'Discovery resource: landing page, conformance, SensorML system and datastream descriptions, SWE Common schema', colour: LETTER_COLOURS.D },
-  O: { standard: 'Observations, SWE Common JSON', colour: LETTER_COLOURS.O },
-  K: { standard: 'Command on a Connected Systems control stream', colour: LETTER_COLOURS.K },
-  P: { standard: 'Declared profile, validated by JSON Schema', colour: LETTER_COLOURS.P },
-  H: { standard: 'Plain HTTP status (RFC 9110)', colour: LETTER_COLOURS.H },
-  L: { standard: "Legacy fixed-width record (the logger's own format)", colour: LETTER_COLOURS.L },
-  I: { standard: 'Internal typed object, no public standard', colour: LETTER_COLOURS.I },
+/** A message as the page holds it: a page-wide key and when it sets off on the flowchart. */
+export interface Message extends Captured {
+  key: string;
+  start: number; // simulated seconds
+}
+
+/** SRD §5: the nine letters, what each is and the standard it meets (FR-16: internal ones say so). */
+export const LETTERS: Record<Letter, { name: string; key: string; standard: string; isPublic: boolean; colour: string }> = {
+  Q: { name: 'Connected Systems request', key: 'Connected Systems request', standard: 'OGC API – Connected Systems', isPublic: true, colour: LETTER_COLOURS.Q },
+  D: { name: 'Discovery resource', key: 'Discovery resource', standard: 'OGC API – Connected Systems, Features, Common; SensorML; SWE Common 3.0', isPublic: true, colour: LETTER_COLOURS.D },
+  O: { name: 'Observations', key: 'Observations, SWE JSON', standard: 'SWE Common JSON (application/swe+json)', isPublic: true, colour: LETTER_COLOURS.O },
+  K: { name: 'Command', key: 'Command', standard: 'OGC API – Connected Systems Part 2', isPublic: true, colour: LETTER_COLOURS.K },
+  P: { name: 'Declared profile', key: 'Declared profile', standard: 'JSON Schema', isPublic: true, colour: LETTER_COLOURS.P },
+  H: { name: 'HTTP status', key: 'HTTP status, 503', standard: 'RFC 9110', isPublic: true, colour: LETTER_COLOURS.H },
+  S: { name: 'Store query', key: 'Store query, internal', standard: 'internal, no public standard', isPublic: false, colour: LETTER_COLOURS.S },
+  L: { name: 'Legacy record', key: 'Legacy record', standard: "the logger's own format, no public standard", isPublic: false, colour: LETTER_COLOURS.L },
+  I: { name: 'Internal object', key: 'Internal object', standard: 'internal typed object, no public standard', isPublic: false, colour: LETTER_COLOURS.I },
 };
+export const LETTER_ORDER: Letter[] = ['Q', 'D', 'O', 'K', 'P', 'H', 'S', 'L', 'I'];
+
+// Scheduling on the flowchart, in simulated seconds. If a line falls far
+// behind, spacing is relaxed rather than letting the drawing lag ever
+// further behind the system: every message is still drawn.
+const GAP_S = HOP_S * 0.34;
+const MAX_LAG_S = 6;
+/** How many recent messages are kept for the message strip and chains (not for drawing). */
+const RECENT = 4000;
 
 let seq = 0;
-// Scheduling on the flowchart, in simulated seconds. Each line has a queue per
-// direction so messages on the same line travel one behind another, never on
-// top of each other; a message's next hop sets off when its previous hop
-// arrives. If a line falls far behind, spacing is relaxed rather than letting
-// the drawing lag ever further behind the system (every message is still drawn).
-const GAP_S = HOP_S * 0.22;
-const MAX_LAG_S = 6;
-const laneFree = new Map<string, number>(); // "src>dst" -> earliest start for the next icon
-const chainEnd = new Map<string, number>(); // chain -> when its latest hop arrives
 
 class MessageBus {
+  /** Messages on the flowchart now (until they arrive). */
   live = new Store<Message[]>([]);
+  /** Messages drawn so far, per "src>dst:letter" (FR-73 live counters). */
   counts = new Store<Record<string, number>>({});
+  /** Bumped whenever messages arrive; the message strip follows it. */
+  version = new Store(0);
   total = 0;
+  private recent: Message[] = [];
+  private laneFree = new Map<string, number>();
+  private chainEnd = new Map<string, number>();
 
-  private schedule(m: Omit<Message, 'id'>): number {
+  private schedule(m: Captured): number {
     const lane = `${m.src}>${m.dst}`;
     let start = m.t;
-    if (m.chain && chainEnd.has(m.chain)) start = Math.max(start, chainEnd.get(m.chain)!);
-    const free = laneFree.get(lane) ?? -Infinity;
+    if (m.chain && this.chainEnd.has(m.chain)) start = Math.max(start, this.chainEnd.get(m.chain)!);
+    const free = this.laneFree.get(lane) ?? -Infinity;
     const queued = Math.max(start, free);
-    if (queued - m.t > MAX_LAG_S) start = Math.max(start, m.t + MAX_LAG_S); // relieve a backlog
-    else start = queued;
-    laneFree.set(lane, Math.max(free, start + GAP_S));
-    if (m.chain) chainEnd.set(m.chain, start + HOP_S);
-    if (chainEnd.size > 5000) chainEnd.clear();
+    start = queued - m.t > MAX_LAG_S ? Math.max(start, m.t + MAX_LAG_S) : queued;
+    this.laneFree.set(lane, Math.max(free, start + GAP_S));
+    if (m.chain) this.chainEnd.set(m.chain, start + HOP_S);
+    if (this.chainEnd.size > 5000) this.chainEnd.clear();
     return start;
   }
 
-  add(list: Omit<Message, 'id'>[]) {
-    if (!list.length) return;
-    const ordered = [...list].sort((a, b) => (a.chain ?? '').localeCompare(b.chain ?? '') || (a.hop ?? 0) - (b.hop ?? 0) || a.t - b.t);
-    const added: Message[] = ordered.map((m) => ({ ...m, id: `m${++seq}`, start: this.schedule(m) }));
+  add(list: Captured[]) {
+    if (!list?.length) return;
+    // Within a chain, hops play in order; otherwise in order of capture.
+    const ordered = [...list].sort((a, b) => a.t - b.t || (a.chain ?? '').localeCompare(b.chain ?? '') || (a.hop ?? 0) - (b.hop ?? 0));
+    const added: Message[] = ordered.map((m) => ({ ...m, key: `m${++seq}`, start: this.schedule(m) }));
     const counts = { ...this.counts.value };
-    added.forEach((m) => (counts[`${m.src}>${m.dst}:${m.letter}`] = (counts[`${m.src}>${m.dst}:${m.letter}`] ?? 0) + 1));
+    for (const m of added) counts[`${m.src}>${m.dst}:${m.letter}`] = (counts[`${m.src}>${m.dst}:${m.letter}`] ?? 0) + 1;
     this.total += added.length;
     this.counts.set(counts);
+    this.recent.push(...added);
+    if (this.recent.length > RECENT) this.recent.splice(0, this.recent.length - RECENT);
     this.live.set(this.prune([...this.live.value, ...added]));
+    this.version.set(this.version.value + 1);
   }
 
-  /** Drop messages that have arrived (kept while paused: they stay clickable where they are). */
-  prune(list = this.live.value): Message[] {
+  /** Drop messages that have arrived. While paused nothing arrives: icons stay where they are, clickable (FR-77). */
+  private prune(list = this.live.value): Message[] {
     const now = simClock.displayNow();
-    return list.filter((m) => (m.start ?? 0) + HOP_S > now);
+    return list.filter((m) => m.start + HOP_S > now);
   }
 
   tick() {
@@ -83,8 +107,20 @@ class MessageBus {
     if (after.length !== before) this.live.set(after);
   }
 
-  setCounts(c: Record<string, number>) {
-    this.counts.set({ ...c });
+  /** Recent messages, oldest first, optionally filtered. */
+  find(pred: (m: Message) => boolean): Message[] {
+    return this.recent.filter(pred);
+  }
+
+  /** The most recent message matching, or null. */
+  last(pred: (m: Message) => boolean): Message | null {
+    for (let i = this.recent.length - 1; i >= 0; i--) if (pred(this.recent[i])) return this.recent[i];
+    return null;
+  }
+
+  /** Every recent message of one chain, in hop order. */
+  chain(id: string): Message[] {
+    return this.recent.filter((m) => m.chain === id).sort((a, b) => (a.hop ?? 0) - (b.hop ?? 0) || a.t - b.t);
   }
 }
 

@@ -1,18 +1,39 @@
-// The Annex A palette (VS-05..VS-09). Every text and icon colour here is
-// checked for contrast against the surface it sits on (AT-V2).
-export const PAPER = '#fbfaf6';
+// The palette (SRD §11.2, VS-06..VS-11). Every text and icon colour here is
+// paired with the surface it sits on in contrastPairs(), and the e2e suite
+// checks each pair (AT-22).
+export const PAPER = '#fbfaf6'; // VS-06 warm off-white ground
 export const CARD = '#ffffff';
-export const INK = '#23262d';
+export const INK = '#23262d'; // VS-06 near-black ink
 export const MUTED = '#57534e';
+
+/** VS-08: one colour per letter, shared by icon, key and message strip. */
 export const LETTER_COLOURS: Record<string, string> = {
-  Q: '#1d4ed8', D: '#0f766e', O: '#15803d', K: '#7e22ce', P: '#1e3a8a', H: '#b91c1c', L: '#9a3412', I: '#4b5563',
+  Q: '#1d4ed8', // blue
+  D: '#0f766e', // teal
+  O: '#11703a', // green
+  K: '#7e22ce', // purple
+  P: '#1e3a8a', // navy
+  H: '#b91c1c', // red
+  S: '#a24b06', // amber
+  L: '#7c4a1e', // brown
+  I: '#4b5563', // grey
 };
-export const ZONES: Record<string, { hue: string; fill: string; text: string; dashed?: boolean }> = {
-  simulated: { hue: '#78716c', fill: '#f3f2ef', text: '#57534e', dashed: true },
-  legacy: { hue: '#c2410c', fill: '#fff4ea', text: '#9a3412' },
-  new: { hue: '#1d4ed8', fill: '#eef4ff', text: '#1e40af' },
-  third: { hue: '#7e22ce', fill: '#f7f0fd', text: '#6b21a8' },
+
+export type ZoneId = 'front' | 'third' | 'back' | 'legacy' | 'world';
+
+/** VS-07: each zone a pale fill with a stronger outline of one hue. */
+export const ZONES: Record<ZoneId, { label: string; hue: string; fill: string; text: string; dashed?: boolean }> = {
+  front: { label: 'New build · front end', hue: '#15803d', fill: '#edf7ef', text: '#166534' },
+  third: { label: 'Third-party libraries', hue: '#7e22ce', fill: '#f6effc', text: '#6b21a8' },
+  back: { label: 'New build · back end', hue: '#1d4ed8', fill: '#edf3fe', text: '#1e40af' },
+  legacy: { label: 'Legacy', hue: '#c2410c', fill: '#fff3e8', text: '#9a3412' },
+  world: { label: 'World', hue: '#78716c', fill: '#f2f1ee', text: '#57534e', dashed: true },
 };
+
+/** VS-09: value-add gold, used only for revealed value-add components and their parts. */
+export const GOLD = { fill: '#fbe6a2', outline: '#a16207', text: '#6f4500', pale: '#fdf6dc' };
+/** The ring around the selected component (FR-69). */
+export const SELECT_RING = '#1d4ed8';
 export const FLOW_LABEL = '#57534e';
 
 /** WCAG relative luminance and contrast ratio. */
@@ -25,16 +46,23 @@ export function contrast(a: string, b: string) {
   return (x + 0.05) / (y + 0.05);
 }
 
-/** Every text or icon colour paired with the surface it is drawn on (VS-09). */
+/** Every text or icon colour paired with the surface it is drawn on (VS-11, AT-22). */
 export function contrastPairs(): { what: string; fg: string; bg: string }[] {
   const pairs = [
     { what: 'ink on paper', fg: INK, bg: PAPER }, { what: 'ink on card', fg: INK, bg: CARD },
     { what: 'muted on paper', fg: MUTED, bg: PAPER }, { what: 'muted on card', fg: MUTED, bg: CARD },
     { what: 'flow label on paper', fg: FLOW_LABEL, bg: PAPER },
+    { what: 'ink on gold', fg: INK, bg: GOLD.fill }, { what: 'gold text on gold', fg: GOLD.text, bg: GOLD.fill },
+    { what: 'gold text on pale gold', fg: GOLD.text, bg: GOLD.pale }, { what: 'gold text on paper', fg: GOLD.text, bg: PAPER },
+    { what: 'gold outline on card (icon)', fg: GOLD.outline, bg: CARD },
   ];
   for (const [l, c] of Object.entries(LETTER_COLOURS)) {
-    pairs.push({ what: `letter ${l} on its icon`, fg: c, bg: CARD }, { what: `letter ${l} in the key`, fg: c, bg: CARD });
+    pairs.push({ what: `letter ${l} on its icon`, fg: c, bg: CARD }, { what: `letter ${l} on paper`, fg: c, bg: PAPER });
+    for (const [z, s] of Object.entries(ZONES)) pairs.push({ what: `letter ${l} over ${z} zone`, fg: c, bg: s.fill });
   }
-  for (const [z, s] of Object.entries(ZONES)) pairs.push({ what: `${z} zone label`, fg: s.text, bg: s.fill }, { what: `ink on ${z} zone`, fg: INK, bg: s.fill });
+  for (const [z, s] of Object.entries(ZONES)) {
+    pairs.push({ what: `${z} zone label`, fg: s.text, bg: s.fill }, { what: `ink on ${z} zone`, fg: INK, bg: s.fill },
+      { what: `muted on ${z} zone`, fg: MUTED, bg: s.fill });
+  }
   return pairs;
 }

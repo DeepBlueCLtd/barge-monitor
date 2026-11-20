@@ -1,115 +1,160 @@
-// The architecture view (FR-47..FR-51, Annex A). React Flow lays out the
-// cards and zones from the committed layout file and provides pan and zoom;
-// the routed arrows and the moving messages are drawn in its viewport.
-import { Background, Edge, Handle, Node, NodeProps, Position, ReactFlow, useViewport, ViewportPortal } from '@xyflow/react';
+// The stacked flowchart (FR-64..FR-68, §11.3, §11.4). React Flow places the
+// component cards and zone bands from the committed layout file; the arrows,
+// the travelling messages, the status box and the message key are drawn in its
+// viewport. The view is fixed: no panning or zooming, only scaling to the column.
+import { Node, NodeProps, ReactFlow, useReactFlow, ViewportPortal } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { HOP_S } from '../config';
 import { simClock } from './clock';
-import { arrowhead, arrows, laneFor, Pt, pointAt } from './geometry';
+import { COMPONENT_IDS, COMPONENTS, ComponentId } from './components';
+import { Diamond } from './Diamond';
+import { allLanes, arrowhead, cardRect, laneFor, LAYOUT_SIZE, Pt, pointAt } from './geometry';
 import layout from './layout.json';
 import { bus, LETTERS, Message } from './messages';
-import { INK, MUTED, ZONES } from './palette';
+import { GOLD, INK, ZoneId, ZONES } from './palette';
+import { runtime } from './runtime';
+import { revealed, selectComponent, selectedComponent, selectedMessage } from './selection';
 import { sketchLine, sketchRect } from './sketch';
+import { Glyph } from './Glyph';
+import { MessageKey, StatusBox } from './StatusBox';
 import { useStore } from './store';
 
-const [W, H] = layout.card;
-const NO_EDGES: Edge[] = [];
+interface CardData {
+  id: ComponentId;
+  gold: boolean;
+  selected: boolean;
+  standin: boolean;
+  role: string;
+  [k: string]: unknown;
+}
+interface ZoneData {
+  zone: ZoneId;
+  w: number;
+  h: number;
+  labelAt: string;
+  [k: string]: unknown;
+}
 
-// What really runs when the illustrative JS simulation stands in (D-41).
-const SIMULATED_LABELS: Record<string, string> = {
-  logger: 'Logger store (sim)', adapter: 'Store adapter (sim)', server: 'CS server (JS sim)', fastapi: 'Router (JS sim)',
-  analysis: 'Analysis (JS sim)', scilibs: 'Arithmetic (JS sim)', runtime: 'Browser', workspace: 'Workspace', products: 'Promoted products',
-};
-
-interface CardData { label: string; role: string; status: string; dashed: boolean; hue: string; hl: boolean; [k: string]: unknown }
-interface ZoneData { label: string; zone: string; w: number; h: number; [k: string]: unknown }
-
-const Outline = ({ id, w, h, stroke, width, dashed, className }: { id: string; w: number; h: number; stroke: string; width?: number; dashed?: boolean; className: string }) => {
+/** A seeded sketch outline (VS-15, VS-16); null without the renderer, and CSS draws the outline (VS-17). */
+export const Outline = memo(function Outline({ id, w, h, stroke, width = 1.7, dashed = false }: { id: string; w: number; h: number; stroke: string; width?: number; dashed?: boolean }) {
   const p = useMemo(() => sketchRect(id, w, h, stroke, width, dashed), [id, w, h, stroke, width, dashed]);
   if (!p) return null;
   return (
-    <svg className={className} width={w} height={h} aria-hidden="true" data-sketch={id}>
+    <svg className="sketch" width={w} height={h} aria-hidden="true" data-sketch={id}>
       {p.map((s, i) => <path key={i} d={s.d} stroke={s.stroke} strokeWidth={s.strokeWidth} fill="none" />)}
     </svg>
   );
-};
+});
 
-/** A component card (VS-10..VS-12): name, one-line role, live status. Text only. */
-const Card = memo(({ id, data }: NodeProps<Node<CardData>>) => (
-  <div className={`card ${data.dashed ? 'dashed' : ''} ${data.hl ? 'hl' : ''}`} style={{ width: W, height: H, ['--hue' as string]: data.hue }}>
-    <Handle type="target" position={Position.Top} className="handle" isConnectable={false} />
-    <Outline id={`card:${id}`} w={W} h={H} stroke={data.dashed ? data.hue : INK} width={data.dashed ? 1.4 : 1.7} dashed={data.dashed} className="sketch" />
-    <div className="card-name">{data.label}</div>
-    <div className="card-role">{data.role}</div>
-    <div className="card-status" data-testid={`status-${id}`}>{data.status}</div>
-  </div>
-));
+/** A component card (VS-12): its name and a one-line role, text only. Gold once revealed (FR-75). */
+const Card = memo(function Card({ data }: NodeProps<Node<CardData>>) {
+  const c = COMPONENTS[data.id];
+  const [, , w, h] = cardRect(data.id);
+  return (
+    <div className={`card${data.gold ? ' gold' : ''}${data.selected ? ' selected' : ''}`} style={{ width: w, height: h }}
+      data-testid={`card-${data.id}`} data-revealed={data.gold ? 'true' : 'false'} role="button" aria-pressed={data.selected} aria-label={c.name}>
+      {/* The outline is seeded by the component's name: identical whether gold or not (AT-21). */}
+      <Outline id={`card:${data.id}`} w={w} h={h} stroke={data.gold ? GOLD.outline : INK} width={data.gold ? 2 : 1.7} />
+      <div className="card-name">{data.gold ? '★ ' : ''}{c.name}</div>
+      <div className="card-role" data-testid={`role-${data.id}`}>{data.gold ? 'our value-add · ' : ''}{data.role}</div>
+      {data.standin && <span className="standin-tag" data-testid="standin-tag">stand-in</span>}
+      {data.gold && <Diamond className="card-diamond" size={26} />}
+    </div>
+  );
+});
 
-/** A zone region (VS-06): pale fill, outline in its hue, its label. */
-const Zone = memo(({ id, data }: NodeProps<Node<ZoneData>>) => {
+/** A zone band (VS-07): pale fill, an outline in its hue, its label (VS-10). */
+const Zone = memo(function Zone({ data }: NodeProps<Node<ZoneData>>) {
   const z = ZONES[data.zone];
   return (
-    <div className={`zone-region ${z.dashed ? 'dashed' : ''}`} style={{ width: data.w, height: data.h, background: z.fill, ['--hue' as string]: z.hue }}>
-      <Outline id={id} w={data.w} h={data.h} stroke={z.hue} width={1.5} dashed={z.dashed} className="sketch" />
-      <div className="zone-label" style={{ color: z.text }}>{data.label}</div>
+    <div className={`zone-band${z.dashed ? ' dashed' : ''}`} style={{ width: data.w, height: data.h, background: z.fill, ['--hue' as string]: z.hue }} data-zone={data.zone}>
+      <Outline id={`zone:${data.zone}`} w={data.w} h={data.h} stroke={z.hue} width={1.5} dashed={z.dashed} />
+      <div className={`zone-label ${data.labelAt}`} style={{ color: z.text }}>{z.label}</div>
     </div>
   );
 });
 
 const NODE_TYPES = { card: Card, zone: Zone };
 
-export const Flowchart = memo(function Flowchart({ highlight, simulated = false, status }: { highlight: string; simulated?: boolean; status: Record<string, string> }) {
-  const [info, setInfo] = useState<string | null>(null);
-  const [selected, setSelected] = useState<{ m: Message; at: Pt } | null>(null);
-  const counts = useStore(bus.counts);
-  const productsRegistered = (counts['products>relay:Q'] ?? 0) > 0;
+/** One-line live roles: the collection platform shows simulated time (mockups). */
+function useRoles(): Record<ComponentId, string> {
+  useStore(simClock.state);
+  const roles = Object.fromEntries(COMPONENT_IDS.map((id) => [id, COMPONENTS[id].role])) as Record<ComponentId, string>;
+  roles.platform = simClock.state.value ? `sim time ${simClock.hms()}` : 'sim time';
+  return roles;
+}
+
+function FixedView({ box }: { box: { w: number; h: number } }) {
+  const rf = useReactFlow();
+  useEffect(() => {
+    // Scale the fixed layout to the column; on the 1920×1080 target this is 1 (VS-05).
+    const zoom = Math.max(0.4, Math.min(1.6, box.w / LAYOUT_SIZE[0], box.h / LAYOUT_SIZE[1]));
+    void rf.setViewport({ x: 0, y: 0, zoom });
+  }, [box.w, box.h, rf]);
+  return null;
+}
+
+export function Flowchart() {
+  const sel = useStore(selectedComponent);
+  const rev = useStore(revealed);
+  const roles = useRoles();
+  const ref = useRef<HTMLDivElement>(null);
+  const [box, setBox] = useState({ w: LAYOUT_SIZE[0], h: LAYOUT_SIZE[1] });
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setBox({ w: el.clientWidth, h: el.clientHeight }));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const standin = runtime.kind === 'standin';
 
   const nodes: Node[] = useMemo(() => [
-    ...layout.zones.flatMap((z) => z.rects.map((r, i) => ({
-      id: `zone-${z.id}-${i}`, type: 'zone', position: { x: r[0], y: r[1] }, width: r[2], height: r[3],
-      data: { label: z.label, zone: z.id, w: r[2], h: r[3] }, selectable: false, draggable: false, connectable: false, zIndex: -1,
-    }))),
-    ...layout.nodes.map((n) => {
-      const zone = n.zone ? ZONES[n.zone] : null;
-      const dashed = !!(n as any).hostOnly || (!!(n as any).createdOnly && !productsRegistered) || (simulated && !!SIMULATED_LABELS[n.id]);
+    ...layout.zones.map((z) => ({
+      id: `zone-${z.id}`, type: 'zone', position: { x: z.rect[0], y: z.rect[1] }, width: z.rect[2], height: z.rect[3],
+      data: { zone: z.id as ZoneId, w: z.rect[2], h: z.rect[3], labelAt: z.labelAt }, selectable: false, draggable: false, connectable: false, focusable: false, zIndex: -1,
+    })),
+    ...COMPONENT_IDS.map((id) => {
+      const [x, y, w, h] = cardRect(id);
       return {
-        id: n.id, type: 'card', position: { x: n.x, y: n.y }, width: W, height: H, draggable: false, connectable: false,
-        data: { label: simulated ? SIMULATED_LABELS[n.id] ?? n.label : n.label, role: n.role, status: status[n.id] ?? '', dashed,
-          hue: zone?.hue ?? MUTED, hl: highlight.split(',').includes(n.id) },
+        id, type: 'card', position: { x, y }, width: w, height: h, draggable: false, connectable: false, selectable: false,
+        // FR-06h: in stand-in mode every component behind the seam runs in the stand-in worker.
+        data: { id, gold: rev.has(id), selected: sel === id, standin: standin && id !== 'client', role: roles[id] },
       };
     }),
-  ], [highlight, simulated, status, productsRegistered]);
+  ], [rev, sel, standin, roles]);
 
   return (
-    <div className="flowchart" data-testid="flowchart">
-      <ReactFlow nodes={nodes} edges={NO_EDGES} nodeTypes={NODE_TYPES} fitView fitViewOptions={{ padding: 0.02 }} minZoom={0.3} maxZoom={2}
-        nodesConnectable={false} nodesDraggable={false} onNodeClick={(_, n) => n.type === 'card' && setInfo(n.id)} proOptions={{ hideAttribution: true }}>
-        <Background gap={36} size={1} color="#e7e5e0" />
+    <div className="flowchart" data-testid="flowchart" ref={ref}>
+      <ReactFlow nodes={nodes} edges={[]} nodeTypes={NODE_TYPES} defaultViewport={{ x: 0, y: 0, zoom: 1 }} minZoom={0.4} maxZoom={1.6}
+        panOnDrag={false} zoomOnScroll={false} zoomOnPinch={false} zoomOnDoubleClick={false} panOnScroll={false} preventScrolling={false}
+        nodesConnectable={false} nodesDraggable={false} elementsSelectable={false} nodesFocusable={false} edgesFocusable={false}
+        onNodeClick={(_, n) => n.type === 'card' && selectComponent(n.id as ComponentId)} proOptions={{ hideAttribution: true }}>
+        <FixedView box={box} />
         <ViewportPortal>
           <Arrows />
-          <Icons selected={selected?.m.id ?? null} onSelect={(m, at) => setSelected({ m, at })} />
-          {selected && <SelectedIcon m={selected.m} at={selected.at} />}
+          <Icons />
+          <SelectedIcon />
+          <StatusBox rect={layout.status as [number, number, number, number]} />
+          <MessageKey rect={layout.key as [number, number, number, number]} />
         </ViewportPortal>
-        {selected && <Leader at={selected.at} colour={LETTERS[selected.m.letter].colour} />}
       </ReactFlow>
-      {info && <NodeInfo id={info} counts={counts} onClose={() => setInfo(null)} />}
-      {selected && <MessagePopup m={selected.m} onClose={() => setSelected(null)} />}
     </div>
   );
-});
+}
 
-/** Ink arrows with filled heads; two-way flows as two arrows side by side (VS-13, VS-14). */
+/** Ink arrows with filled heads, one per direction (FR-65, VS-13), sketched and seeded (VS-15, VS-16). */
 const Arrows = memo(function Arrows() {
-  const all = useMemo(() => arrows(), []);
+  const lanes = useMemo(() => allLanes(), []);
   return (
-    <svg className="arrows" width={layout.size[0]} height={layout.size[1]} aria-hidden="true">
-      {all.map((a) => {
-        const sk = sketchLine(`flow:${a.id}`, a.points, INK, 1.5);
+    <svg className="arrows" width={LAYOUT_SIZE[0]} height={LAYOUT_SIZE[1]} aria-hidden="true">
+      {lanes.map((a) => {
+        const sk = sketchLine(`flow:${a.id}`, a.points, INK, 1.6);
         return (
-          <g key={a.id} data-sketch={`flow:${a.id}`}>
+          <g key={a.id} data-sketch={sk ? `flow:${a.id}` : undefined} data-flow={a.id}>
             {sk ? sk.map((p, i) => <path key={i} d={p.d} stroke={p.stroke} strokeWidth={p.strokeWidth} fill="none" />)
-              : <polyline points={a.points.map((p) => p.join(',')).join(' ')} stroke={INK} strokeWidth={1.5} fill="none" />}
+              : <polyline points={a.points.map((p) => p.join(',')).join(' ')} stroke={INK} strokeWidth={1.6} fill="none" />}
             <path d={arrowhead(a.points)} fill={INK} />
             {a.label && a.labelAt && <text x={a.labelAt[0]} y={a.labelAt[1]} className="flow-label">{a.label}</text>}
           </g>
@@ -119,36 +164,25 @@ const Arrows = memo(function Arrows() {
   );
 });
 
-function position(m: Message, now: number): { at: Pt; f: number } | null {
+function position(m: Message, now: number): Pt | null {
   const lane = laneFor(m.src, m.dst);
   if (!lane) return null;
-  const f = (now - (m.start ?? m.t)) / HOP_S;
+  const f = (now - m.start) / HOP_S;
   if (f < 0 || f > 1) return null;
-  return { at: pointAt(lane, m.failed ? Math.min(f, 0.5) : f), f };
+  // A failed request stops at the boundary (VS-14).
+  return pointAt(lane, m.failed ? Math.min(f, 0.55) : f);
 }
 
-/** A message: a white circle with a ring and its letter in its colour (VS-15); a failed one has a broken ring and a cross (VS-17). */
-function Glyph({ m, selected }: { m: Message; selected?: boolean }) {
-  const c = LETTERS[m.letter].colour;
-  return (
-    <svg width={34} height={34} viewBox="-17 -17 34 34" aria-hidden="true">
-      {selected && <circle r={16} fill={c} opacity={0.18} />}
-      <circle r={12.5} fill={selected ? `${c}26` : '#fff'} stroke={c} strokeWidth={2.4} strokeDasharray={m.failed ? '5 4' : undefined} />
-      <text y={6} textAnchor="middle" fill={c} fontSize={17} fontWeight={700} fontFamily="'Patrick Hand', system-ui, sans-serif">{m.letter}</text>
-      {m.failed && <path d="M7,-13 L13,-7 M13,-13 L7,-7" stroke={c} strokeWidth={2.2} />}
-    </svg>
-  );
-}
-
-/** Messages move on the simulation clock: paused, they freeze in place and stay clickable. */
-function Icons({ onSelect, selected }: { onSelect: (m: Message, at: Pt) => void; selected: string | null }) {
+/** Messages move on the simulation clock: paused, they freeze in place and stay clickable (FR-77). */
+function Icons() {
   const live = useStore(bus.live);
+  const picked = useStore(selectedMessage);
   const [, setFrame] = useState(0);
   useEffect(() => {
     let raf = 0;
     const loop = () => {
       bus.tick();
-      setFrame((f) => f + 1);
+      setFrame((f) => (f + 1) % 1e6);
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
@@ -158,13 +192,18 @@ function Icons({ onSelect, selected }: { onSelect: (m: Message, at: Pt) => void;
   return (
     <>
       {live.map((m) => {
-        if (m.id === selected) return null;
-        const p = position(m, now);
-        if (!p) return null;
+        if (m.key === picked?.m.key) return null;
+        const at = position(m, now);
+        if (!at) return null;
         return (
-          <button key={m.id} className={`icon ${m.failed ? 'failed' : ''}`} data-letter={m.letter} title={`${m.letter}: ${m.summary}`}
-            style={{ transform: `translate(${p.at[0] - 17}px, ${p.at[1] - 17}px)` }} onClick={() => onSelect(m, p.at)}>
-            <Glyph m={m} />
+          <button key={m.key} className={`icon${m.failed ? ' failed' : ''}`} data-letter={m.letter} data-testid="message-icon"
+            aria-label={`${m.letter} message: ${m.summary}`} title={`${m.letter}: ${m.summary}`}
+            style={{ transform: `translate(${at[0] - 19}px, ${at[1] - 19}px)` }}
+            onClick={(e) => {
+              e.stopPropagation();
+              selectedMessage.set({ m, at });
+            }}>
+            <Glyph letter={m.letter} failed={m.failed} />
           </button>
         );
       })}
@@ -172,79 +211,14 @@ function Icons({ onSelect, selected }: { onSelect: (m: Message, at: Pt) => void;
   );
 }
 
-/** A selected message stays where it was picked, tinted and haloed (VS-16). */
-function SelectedIcon({ m, at }: { m: Message; at: Pt }) {
+/** A selected message stays where it was picked, tinted and haloed (VS-14). */
+function SelectedIcon() {
+  const picked = useStore(selectedMessage);
+  if (!picked) return null;
+  const { m, at } = picked;
   return (
-    <div className="icon selected" data-letter={m.letter} style={{ transform: `translate(${at[0] - 17}px, ${at[1] - 17}px)` }}>
-      <Glyph m={m} selected />
-    </div>
-  );
-}
-
-/** A dashed leader line in the message's colour from the icon to its popup (VS-16). */
-function Leader({ at, colour }: { at: Pt; colour: string }) {
-  const { x, y, zoom } = useViewport();
-  const ref = useRef<SVGSVGElement>(null);
-  const [box, setBox] = useState<{ w: number; h: number } | null>(null);
-  useEffect(() => {
-    const el = ref.current?.parentElement;
-    if (el) setBox({ w: el.clientWidth, h: el.clientHeight });
-  }, []);
-  const sx = at[0] * zoom + x, sy = at[1] * zoom + y;
-  const tx = box ? box.w - 470 : sx, ty = 60;
-  return (
-    <svg ref={ref} className="leader" aria-hidden="true">
-      <line x1={sx} y1={sy} x2={tx} y2={ty} stroke={colour} strokeWidth={2} strokeDasharray="6 5" />
-    </svg>
-  );
-}
-
-/** Message popups are crisp: they are the evidence (VS-22, FR-50). */
-function MessagePopup({ m, onClose }: { m: Message; onClose: () => void }) {
-  const c = LETTERS[m.letter].colour;
-  return (
-    <div className="message-popup" role="dialog" aria-label="Message" style={{ borderColor: c }}>
-      <h2 style={{ color: c }}><span className="ring" style={{ borderColor: c, color: c }}>{m.letter}</span> {label(m.src)} → {label(m.dst)}</h2>
-      <p className="summary">{m.summary}{m.failed ? ' (failed: no answer)' : ''}</p>
-      <pre data-testid="message-content">{pretty(m.content)}</pre>
-      <p className="standard">{LETTERS[m.letter].standard}</p>
-      <button onClick={onClose}>Close</button>
-    </div>
-  );
-}
-
-const label = (id: string) => layout.nodes.find((n) => n.id === id)?.label ?? id;
-
-function pretty(s: string) {
-  try {
-    return JSON.stringify(JSON.parse(s), null, 2);
-  } catch {
-    return s;
-  }
-}
-
-function NodeInfo({ id, counts, onClose }: { id: string; counts: Record<string, number>; onClose: () => void }) {
-  const n = layout.nodes.find((x) => x.id === id)!;
-  const flows = layout.flows.filter((f) => f.a === id || f.b === id);
-  const seen = (src: string, dst: string) => Object.entries(counts).filter(([k]) => k.startsWith(`${src}>${dst}:`))
-    .map(([k, v]) => `${k.split(':')[1]} ×${v}`).join(', ') || 'none yet';
-  return (
-    <div className="modal" role="dialog" aria-label={n.label}>
-      <div className="modal-body">
-        <h2>{n.label} <small>{n.code}{n.zone ? ` · ${layout.zones.find((z) => z.id === n.zone)?.label}` : ' · outside the system'}</small></h2>
-        <p>{n.does}</p>
-        <table className="interfaces">
-          <thead><tr><th>Flow</th><th>Letters</th><th>Emits (seen)</th><th>Accepts (seen)</th></tr></thead>
-          <tbody>
-            {flows.map((f) => {
-              const other = f.a === id ? f.b : f.a;
-              return <tr key={other}><td>{label(other)}</td><td>{f.letters.join(' ')}</td><td>{seen(id, other)}</td><td>{seen(other, id)}</td></tr>;
-            })}
-            {!flows.length && <tr><td colSpan={4}>No message flows of its own: it hosts others.</td></tr>}
-          </tbody>
-        </table>
-        <button onClick={onClose}>Close</button>
-      </div>
+    <div className="icon selected" data-letter={m.letter} data-testid="selected-icon" style={{ transform: `translate(${at[0] - 19}px, ${at[1] - 19}px)` }}>
+      <Glyph letter={m.letter} failed={m.failed} selected />
     </div>
   );
 }
