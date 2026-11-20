@@ -9,6 +9,7 @@ import { simClock } from '../shell/clock';
 import { Glyph } from '../shell/Glyph';
 import { bus, LETTERS, type Message } from '../shell/messages';
 import { useStore } from '../shell/store';
+import { ModelInner } from './ModelInner';
 
 const SHOWN = 6;
 const ARROW: Record<string, string> = {
@@ -21,13 +22,16 @@ export function ModelActivity({ model }: { model: string }) {
   const playing = !!clock?.playing;
   const tokens = bus.find((m) => m.model === model).slice(-SHOWN);
   return (
-    <div className="model-activity" data-testid={`activity-${model}`}>
-      <Busy on={playing} />
-      <div className="model-tokens" aria-label="recent messages">
-        {tokens.length ? tokens.map((m) => <Token key={m.key} m={m} />)
-          : <span className="model-quiet">{playing ? 'waiting for its next step' : 'paused'}</span>}
+    <>
+      <ModelInner model={model} playing={playing} />
+      <div className="model-activity" data-testid={`activity-${model}`}>
+        <Busy on={playing} />
+        <div className="model-tokens" aria-label="recent messages">
+          {tokens.length ? tokens.map((m) => <Token key={m.key} m={m} />)
+            : <span className="model-quiet">{playing ? 'waiting for its next step' : 'paused'}</span>}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
