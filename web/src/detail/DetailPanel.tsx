@@ -20,7 +20,7 @@ export function DetailPanel() {
           {!msg && (
             <>
               <p className="invite">Click a component on the flowchart to see it here.</p>
-              <p className="hint">Click a moving message to read it. <b className="gold-text">★</b> marks where we add value.</p>
+              <p className="hint">Click a moving message to read it.</p>
             </>
           )}
           <MessageStrip selectionDefault={false} />

@@ -46,7 +46,7 @@ async function start(pyodideUrl: string, pyZipUrl: string, seed: number, pregenD
   py = await loadRuntime(pyodideUrl, pyZipUrl, ['numpy', 'fastapi', 'jsonschema'], post);
   const prebuilt = await loadHistory(historyUrl, seed).catch((e) => { console.warn(e); return false; });
   if (prebuilt) pregenDays = historyDays;
-  if (!prebuilt) post({ stage: 'pregen', detail: 'no pre-built history for this seed: generating four weeks here', pct: 10 });
+  if (!prebuilt) post({ stage: 'pregen', detail: 'no pre-built history for this seed: generating its history here', pct: 10 });
   py.globals.set('_progress', (f: number) => post({ stage: 'pregen', detail: `generating history: ${Math.round(f * 100)}%`, pct: 10 + Math.round(85 * f) }));
   py.runPython(`
 from barge.bridge import Bridge

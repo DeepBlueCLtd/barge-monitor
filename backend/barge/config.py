@@ -16,7 +16,7 @@ ORIGIN_LON = -24.75
 SIM_EPOCH_ISO = "2031-04-07T00:00:00Z"
 SIM_EPOCH_UNIX = 1933286400
 
-PREGEN_DAYS = 28  # FR-16: four weeks of history before the viewer arrives
+PREGEN_DAYS = 1  # 24 hours of history before the viewer arrives (D-79; FR-15 says four weeks)
 RUN_DAYS = 35  # the timetable is declared beyond the pre-generated history
 
 # --- Clock (FR-52, FR-53) ----------------------------------------------------

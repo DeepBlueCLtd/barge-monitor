@@ -65,7 +65,7 @@ function Shell() {
       <header className="topbar">
         <div className="brand">
           <h1>{TITLE}</h1>
-          <p className="subtitle">Architecture view · click a component or a message to see it on the right · <b className="gold-text">★ marks where we add value</b></p>
+          <p className="subtitle">Architecture view · click a component or a message to see it on the right</p>
           {runtime.kind === 'standin' && <p className="standin-notice" data-testid="standin-notice">{STANDIN_NOTICE}</p>}
         </div>
         <nav className="controls" aria-label="Controls">

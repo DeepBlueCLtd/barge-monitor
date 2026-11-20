@@ -34,7 +34,7 @@ Everything is fictional: the canal, its places and the weather.
 pip install -r backend/requirements-dev.txt
 (cd backend && python -m pytest -q)                      # Python tests
 
-python scripts/build_history.py --days 7 .cache/history 1 2 3   # one week, as the tests use
+python scripts/build_history.py --days 1 .cache/history 1 2 3   # 24 hours, as published
 cd web
 npm ci
 npm run pyodide          # Pyodide 0.29.5 and packages into ../.cache (once)
@@ -46,7 +46,7 @@ npm run e2e              # Playwright tests
 
 `?backend=standin` forces the JavaScript stand-in (used automatically where WebAssembly is
 blocked); `?backend=python` forces Pyodide; `?sketch=off` draws plain outlines. The
-published site uses `--days 28` (four weeks).
+published site pre-loads 24 hours (`--days 1`).
 
 The server also runs under an ordinary ASGI server, with the core models in-process:
 `cd backend && python -c "import uvicorn; from barge.runtime import Runtime; from barge.api import create_app; rt = Runtime(pregen_days=1, local_models=True); [rt.tick() for _ in range(200)]; uvicorn.run(create_app(rt))"`.

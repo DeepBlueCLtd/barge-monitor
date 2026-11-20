@@ -3,7 +3,7 @@
 The stand-in runs in Node behind a tiny HTTP server (web/scripts/standin-server.mjs),
 over the same pre-calculated history the Python back end loads (FR-06d). Skipped,
 with the reason, when Node, the web dependencies or the history are missing:
-build the history with ``python scripts/build_history.py --days 7 .cache/history 1 2 3``
+build the history with ``python scripts/build_history.py --days 1 .cache/history 1 2 3``
 and install the web dependencies with ``cd web && npm ci``.
 """
 import asyncio
@@ -126,7 +126,7 @@ def test_contract_suite_against_the_standin(standin):
     results = asyncio.run(suite.run(Client(standin.base)))
     failed = [r for r in results if r["outcome"] != "passed"]
     assert not failed, failed
-    print(f"stand-in startup with 7 days of history: {standin.startup_ms} ms")
+    print(f"stand-in startup with the pre-built history: {standin.startup_ms} ms")
 
 
 def test_history_observations_match_the_python_back_end(standin):
@@ -151,9 +151,12 @@ def test_history_observations_match_the_python_back_end(standin):
         ds_js = next(x for x in js.get(f"systems/{sensor}/datastreams").json()["items"] if x["outputName"] == "weather")
         assert ds_py["id"] == ds_js["id"]  # same schema, same identifier (FR-51)
         assert ds_py["phenomenonTime"] == ds_js["phenomenonTime"]
-        for params in ({"phenomenonTime": "2031-04-09T11:58:00Z/2031-04-09T12:08:00Z"},
-                       {"phenomenonTime": "2031-04-13T23:59:00Z/..", "limit": "500"},  # across a day file boundary
-                       {"limit": "50", "offset": "86390"},
+        from barge.server import iso
+
+        end = manifest["days"] * 86400.0
+        for params in ({"phenomenonTime": f"{iso(end / 2 - 120)}/{iso(end / 2 + 480)}"},
+                       {"phenomenonTime": f"{iso(end - 60)}/..", "limit": "500"},  # the end of history
+                       {"limit": "50", "offset": str(int(end) - 10)},
                        {"resultTime": "latest"}):
             a = py.get(f"/datastreams/{ds_py['id']}/observations", params=params)
             b = js.get(f"datastreams/{ds_js['id']}/observations", params=params)

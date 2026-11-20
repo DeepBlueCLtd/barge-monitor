@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
-"""Build the pre-built history: four weeks of logger files per seed (SRD §13).
+"""Build the pre-calculated history: logger files per seed (FR-15).
 
 Writes OUT/<code hash>/days-<d>/seed-<n>/manifest.json and one gzipped file per logger
 file, and web/public/py/history.json pointing the demonstrator at them.
 
 Usage: scripts/build_history.py [--days D] OUT SEED [SEED ...]
 
-D is 28 (four weeks, FR-16) for the published demonstrator and 7 for tests
-(decision D-37): CI and the browser tests load one week.
+D is 1 (24 hours, decision D-79) for the published demonstrator and the tests
 """
 import gzip
 import json
