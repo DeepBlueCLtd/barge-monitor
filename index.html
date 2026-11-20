@@ -14,9 +14,9 @@
 id="toc-software-requirements-document">Software Requirements
 Document</a>
 <ul>
-<li><a href="#canal-barge-weather-demonstrator-version-1"
-id="toc-canal-barge-weather-demonstrator-version-1">Canal barge weather
-demonstrator, Version 1</a></li>
+<li><a href="#canal-barge-weather-demonstrator-version-32"
+id="toc-canal-barge-weather-demonstrator-version-32">Canal barge weather
+demonstrator, Version 3.2</a></li>
 <li><a href="#1-purpose" id="toc-1-purpose">1. Purpose</a></li>
 <li><a href="#2-architecture" id="toc-2-architecture">2.
 Architecture</a></li>
@@ -24,31 +24,91 @@ Architecture</a></li>
 id="toc-3-simulated-world-time-and-randomness">3. Simulated world, time
 and randomness</a></li>
 <li><a href="#4-components" id="toc-4-components">4. Components</a></li>
-<li><a href="#5-functional-requirements"
-id="toc-5-functional-requirements">5. Functional requirements</a></li>
-<li><a href="#6-interfaces-and-shared-types"
-id="toc-6-interfaces-and-shared-types">6. Interfaces and shared
-types</a></li>
-<li><a href="#7-delivery" id="toc-7-delivery">7. Delivery</a></li>
-<li><a href="#8-development-process" id="toc-8-development-process">8.
-Development process</a></li>
-<li><a href="#9-acceptance-criteria" id="toc-9-acceptance-criteria">9.
-Acceptance criteria</a></li>
-<li><a href="#10-open-questions" id="toc-10-open-questions">10. Open
+<li><a href="#5-functional-requirements-the-system"
+id="toc-5-functional-requirements-the-system">5. Functional
+requirements: the system</a></li>
+<li><a href="#6-functional-requirements-client-and-server-lifecycle"
+id="toc-6-functional-requirements-client-and-server-lifecycle">6.
+Functional requirements: client and server lifecycle</a></li>
+<li><a href="#7-functional-requirements-the-architecture-view"
+id="toc-7-functional-requirements-the-architecture-view">7. Functional
+requirements: the architecture view</a></li>
+<li><a href="#8-functional-requirements-docked-panels"
+id="toc-8-functional-requirements-docked-panels">8. Functional
+requirements: docked panels</a></li>
+<li><a href="#9-implementation-direction"
+id="toc-9-implementation-direction">9. Implementation direction</a></li>
+<li><a href="#10-guided-tour" id="toc-10-guided-tour">10. Guided
+tour</a></li>
+<li><a href="#11-presentation-delivery-and-process"
+id="toc-11-presentation-delivery-and-process">11. Presentation, delivery
+and process</a></li>
+<li><a href="#12-acceptance-criteria"
+id="toc-12-acceptance-criteria">12. Acceptance criteria</a></li>
+<li><a href="#13-open-questions" id="toc-13-open-questions">13. Open
 questions</a></li>
-<li><a href="#11-deliberate-exclusions-from-version-1"
-id="toc-11-deliberate-exclusions-from-version-1">11. Deliberate
-exclusions from Version 1</a></li>
+<li><a href="#14-deliberate-exclusions-from-version-3"
+id="toc-14-deliberate-exclusions-from-version-3">14. Deliberate
+exclusions from Version 3</a></li>
 </ul></li>
 </ul>
 </nav>
 <h1 id="software-requirements-document">Software Requirements
 Document</h1>
-<h2 id="canal-barge-weather-demonstrator-version-1">Canal barge weather
-demonstrator, Version 1</h2>
+<h2 id="canal-barge-weather-demonstrator-version-32">Canal barge weather
+demonstrator, Version 3.2</h2>
 <p><strong>Status:</strong> Draft for review <strong>Author:</strong>
-Doc <strong>Working name:</strong> to be chosen (see §10). This document
+Doc <strong>Working name:</strong> to be chosen (see §13). This document
 says <em>the demonstrator</em>.</p>
+<p><strong>Changes from Version 3.1</strong> (from Spike 0,
+<code>FINDING-2026-11-20-connected-systems.md</code>):</p>
+<ul>
+<li>System types corrected: Platform, Sensor, and System with asset type
+Process (FR-23).</li>
+<li>QC flags are separate Category fields in each record (FR-24).</li>
+<li>Media types, the <code>obsFormat</code> schema parameter and polling
+by <code>phenomenonTime</code> fixed (FR-25, FR-63).</li>
+<li>Commands are POSTed; bounds live in the control stream's schema
+(FR-26).</li>
+<li>Promotion uses standard resource creation (FR-36).</li>
+<li>A field toggle yields a new datastream identifier (FR-46c).</li>
+<li>OGC API – Features and Common prerequisites added (FR-22); the
+subset is declared (FR-22a).</li>
+<li>Independent Connected Systems clients must browse the server
+(AT-16).</li>
+</ul>
+<p><strong>Changes from Version 3:</strong></p>
+<ul>
+<li>A missing essential source no longer blocks the client. The client
+starts in <strong>degraded mode</strong>, warns once after the
+handshake, and disables the controls for the affected views
+(FR-41).</li>
+<li>A <strong>control panel</strong> takes the server down and up, and
+adds or removes a handful of measured and calculated fields, applied at
+the next server start (§6.5).</li>
+<li>Calculated fields declare their inputs; a field whose inputs are off
+is not published (FR-32a).</li>
+</ul>
+<p><strong>Changes from Version 2:</strong></p>
+<ul>
+<li>The real system measures <strong>no position</strong>, so the GPS
+receiver, the map and every position-dependent analysis are
+removed.</li>
+<li><strong>OGC API – Connected Systems</strong> (Parts 1 and 2)
+replaces OGC API-EDR and CoverageJSON as the query standard (§5.2).</li>
+<li>The display client and the server are <strong>decoupled</strong>:
+the client discovers what the server offers, checks it against a
+<strong>declared profile</strong>, and configures itself (§6).</li>
+<li>Sources are <strong>essential</strong> (missing means an error) or
+<strong>optional</strong> (rendered by schema type, with no specific
+knowledge) (§6.2, §8).</li>
+<li><strong>Restart client</strong> and <strong>restart server</strong>
+buttons; the server's waiting mode uses standard HTTP (§6.4).</li>
+<li>The simulation <strong>starts off</strong>, with a
+<strong>play/pause</strong> button and a <strong>½× default</strong>
+speed (§7.4).</li>
+<li>The message key is redone for the new standards (§7.2).</li>
+</ul>
 <hr />
 <h2 id="1-purpose">1. Purpose</h2>
 <p>The demonstrator is a <strong>system and architecture
@@ -57,195 +117,207 @@ barge</strong> shuttling freight between two wharves on a fictional
 canal, around the clock, for weeks at a time. The barge carries a
 weather sensor at the <strong>bow</strong> and another at the
 <strong>stern</strong>, about twenty metres apart, logging to an old
-data logger in its equipment locker. The demonstrator runs whole in one
-browser session and shows a standards-based display and analysis
-architecture working over that data.</p>
-<p>Its audience is <strong>people deciding whether to adopt this
-architecture</strong> for a small, long-lived system with an old store.
-It exists to make two claims, in this order:</p>
+data logger in its equipment locker. It records <strong>no
+position</strong>. The demonstrator runs whole in one browser
+session.</p>
+<p>Its intention is to show that <strong>the author's understanding of
+the software architecture is complete</strong>, and therefore that
+<strong>the software need not be a risk to the project and does not need
+a large contingency</strong>. It does this by making the architecture
+itself the thing on screen: every component, every interaction, and
+every real message, each labelled with the standard it meets.</p>
+<p>Its audience is <strong>stakeholders deciding whether to adopt this
+architecture</strong>. It makes three claims:</p>
 <ol type="1">
 <li><strong>C1. A standards facade over an awkward legacy store
-works.</strong> An OGC API-EDR server can sit in front of a store it
-does not control, while that store grows, and serve a modern display and
-analysis code without changing the store.</li>
-<li><strong>C2. The architecture transfers to small, old
+works.</strong> An OGC API – Connected Systems server can sit in front
+of a store it does not control, while that store grows, and serve a
+modern display and analysis code without changing the store.</li>
+<li><strong>C2. A client can configure itself from the server.</strong>
+The display discovers what is on offer through standard discovery, fails
+clearly when an essential source is missing, and handles sources it has
+never seen without new code.</li>
+<li><strong>C3. The architecture transfers to small, old
 systems.</strong> A standards seam, a clock and RNG as ports, scored
 ground truth, and Python analysis as an ordinary client are worth their
 cost at small scale.</li>
 </ol>
-<p>Both claims are supported by acceptance tests (§9), never asserted by
+<p>The claims are supported by acceptance tests (§12), never asserted by
 the display.</p>
 <ul>
 <li><strong>NFR-01 (One browser session.)</strong> Every component runs
 in the browser. No step of building, testing or demonstrating requires a
 server, a container or a daemon.</li>
 <li><strong>NFR-02 (Two languages, by design.)</strong> The front end is
-TypeScript; the backend and all analysis are Python running in Pyodide.
-The second language is the point: it is the language the backend and an
-analyst's code would be written in for real.</li>
+TypeScript; the backend and all analysis are Python running in
+Pyodide.</li>
 <li><strong>NFR-03 (The backend is deployable.)</strong> The Python
-backend is a standard ASGI application. The code that runs in the
-demonstrator runs unchanged under an ordinary ASGI server, and a test
-proves it (AT-02).</li>
+backend is a standard ASGI application that runs unchanged under an
+ordinary ASGI server (AT-02).</li>
 </ul>
 <h3 id="11-what-this-is-not">1.1 What this is not</h3>
 <ul>
 <li><strong>FR-01</strong> The demonstrator models no real canal, boat,
-person or place. The canal, its towns, locks and tunnels are fictional
-and sit at a <strong>declared fictional location</strong>; no coordinate
-in the repository is a real place someone lives. The weather is
-synthetic. The landing page states this plainly.</li>
-<li>It is not a weather or navigation product. Its numbers are
-plausible, not accurate.</li>
+person or place. The canal, its towns, locks and tunnel are fictional.
+The weather is synthetic. The landing page states this plainly.</li>
+<li>It is not a mock of any real application's user interface, and not a
+weather or navigation product.</li>
 </ul>
 <hr />
 <h2 id="2-architecture">2. Architecture</h2>
-<p>One browser application in three parts, with one seam between
+<p>One browser application in three runtimes, with one seam between
 them:</p>
 <ul>
-<li><strong>The display</strong>: TypeScript and React, rendering
-everything a reader sees.</li>
+<li><strong>The display client</strong>: TypeScript and React, on the
+main thread. It holds no knowledge of the server beyond a base URL and
+the declared profile.</li>
 <li><strong>The backend</strong>: Python in a Pyodide Web Worker,
-holding the simulation, the boat, the sensors, the logger stand-in, the
-store adapter, the EDR server and the analysis service.</li>
+holding the simulated world, the logger store, the store adapter, the
+Connected Systems server and the analysis service.</li>
 <li><strong>The analyst's workspace</strong>: Python in a second,
-separate Pyodide Web Worker, running code a reader edits in the
-browser.</li>
+separate Pyodide Web Worker, running code a reader edits in the browser,
+including promoted products.</li>
 </ul>
 <h3 id="21-the-seam">2.1 The seam</h3>
 <ul>
-<li><strong>FR-02</strong> All traffic between the display, the backend
-and the workspace crosses as HTTP and nowhere else. Requests are
-relative URLs, intercepted by a <strong>Service Worker</strong> and
-passed to the backend worker, which calls the ASGI application directly.
-The Service Worker contains no application logic.</li>
-<li><strong>FR-03</strong> The display and the workspace are clients of
-the same interface. Requests from the workspace worker pass through the
-same Service Worker as requests from the display; neither has a private
-route into the backend.</li>
+<li><strong>FR-02</strong> All traffic between the display client, the
+backend and the workspace crosses as HTTP and nowhere else. Requests are
+relative URLs, intercepted by a <strong>Service Worker relay</strong>
+and passed to the worker that serves the path. The relay contains no
+application logic.</li>
+<li><strong>FR-03</strong> The display client and the workspace are
+clients of the same interface; neither has a private route into the
+backend.</li>
 <li><strong>FR-04</strong> No client code or configuration carries an
-absolute URL. Pointing the display at a real server is a change of base
-URL alone.</li>
+absolute URL.</li>
 <li><strong>FR-05</strong> Every shape crossing the seam is governed by
-a committed master: OpenAPI for the HTTP interface, CoverageJSON for
-coverage responses, JSON Schema for request parameters and results. Seam
-traffic is validated against the masters in tests.</li>
+a committed master under <code>contracts/</code>: OpenAPI for the HTTP
+interface, SWE Common schemas for observation records, the declared
+profile (§6.1), and JSON Schema for anything else. Seam traffic is
+validated against the masters in tests.</li>
+<li><strong>FR-06</strong> The server is <strong>stateless with respect
+to clients</strong>. It holds no sessions and does not know which
+clients exist. Everything a client does to connect, reconnect or reset
+is client behaviour, checked by tests.</li>
 </ul>
 <h3 id="22-honest-ports">2.2 Honest ports</h3>
 <p>Genuine ports, each with more than one real implementation planned:
-the <strong>seam transport</strong> (Service Worker today, network
-later), the <strong>clock</strong>, the <strong>RNG</strong>, and the
-<strong>store adapter</strong> (the stand-in today, other formats
-later). Nothing else is presented as pluggable.</p>
+the <strong>seam transport</strong>, the <strong>clock</strong>, the
+<strong>RNG</strong>, and the <strong>store adapter</strong>. Nothing
+else is presented as pluggable.</p>
 <hr />
 <h2 id="3-simulated-world-time-and-randomness">3. Simulated world, time
 and randomness</h2>
 <ul>
-<li><p><strong>FR-06</strong> The barge shuttles <strong>continuously,
-day and night</strong>, between two wharves on a fictional canal
-declared as a <strong>centreline with chainage</strong> (distance along
-the canal). It turns at each wharf after a declared dwell for loading.
-It moves at canal speed within a declared limit, stops at
-<strong>locks</strong> where its elevation changes, and slows through
-<strong>bridges and the tunnel</strong>. Its position, heading and speed
-are a pure function of the clock, the declared timetable and its seed
-stream. A run lasts <strong>weeks</strong> of simulated time.</p></li>
-<li><p><strong>FR-06a</strong> Because every place on the route is
-passed <strong>many times a day, in both directions and at every
-hour</strong>, the data contains <strong>revisits</strong>: the same
-place at different times and times of day, and the same weather at
-different places. Revisits are what let the analysis separate the effect
-of place from the effect of weather and of the diurnal cycle (FR-22).
-The timetable is declared so that every reach is passed in every hour of
-the day within the first week, and the timetable's period does not
-divide a day evenly, so passes drift through the clock rather than
-repeating at the same hours.</p></li>
-<li><p><strong>FR-06b</strong> The timetable declares occasional
-<strong>stoppages</strong> (a lock closed for repair, a wharf delay), so
-the record contains long stationary periods at one place, as a real
-long-running vessel's would.</p></li>
-<li><p><strong>FR-07</strong> Two sensors, <strong>bow</strong> and
-<strong>stern</strong>, separated by a declared distance along the boat,
-each report seven parameters once per simulated second:</p>
+<li><p><strong>FR-07</strong> The barge shuttles <strong>continuously,
+day and night</strong>, between two wharves. It turns at each wharf
+after a declared dwell, stops at <strong>locks</strong>, and slows
+through <strong>bridges and the tunnel</strong>. Its movement is a pure
+function of the clock, the declared timetable and its seed stream. The
+timetable's period does not divide a day evenly, so the barge meets
+every part of the canal at every hour over a week.</p></li>
+<li><p><strong>FR-08</strong> The timetable declares occasional
+<strong>stoppages</strong> (a lock closed, a wharf delay), giving long
+stationary periods.</p></li>
+<li><p><strong>FR-09</strong> Two sensors, <strong>bow</strong> and
+<strong>stern</strong>, separated by a declared distance, each report
+seven parameters once per simulated second:</p>
 <table>
 <thead>
 <tr>
 <th>Parameter</th>
 <th>Unit</th>
-<th>Note</th>
+<th>Essential (§6.2)</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td>Air temperature</td>
 <td>°C</td>
-<td></td>
-</tr>
-<tr>
-<td>Relative humidity</td>
-<td>%</td>
-<td></td>
-</tr>
-<tr>
-<td>Barometric pressure</td>
-<td>hPa</td>
-<td>Station pressure; changes with elevation at locks</td>
+<td><strong>Yes</strong></td>
 </tr>
 <tr>
 <td>Apparent wind speed</td>
 <td>m s⁻¹</td>
-<td>Relative to the moving boat</td>
+<td><strong>Yes</strong></td>
+</tr>
+<tr>
+<td>Relative humidity</td>
+<td>%</td>
+<td>Optional</td>
+</tr>
+<tr>
+<td>Barometric pressure</td>
+<td>hPa</td>
+<td>Optional</td>
 </tr>
 <tr>
 <td>Apparent wind direction</td>
 <td>degrees relative to the bow</td>
-<td>Relative to the moving boat</td>
+<td>Optional</td>
 </tr>
 <tr>
 <td>Solar irradiance</td>
 <td>W m⁻²</td>
-<td></td>
+<td>Optional</td>
 </tr>
 <tr>
 <td>Water temperature</td>
 <td>°C</td>
-<td>Canal surface water</td>
+<td>Optional</td>
 </tr>
 </tbody>
 </table></li>
-<li><p><strong>FR-08</strong> The canal passes through declared
+<li><p><strong>FR-10</strong> The barge carries <strong>no position
+measurement</strong>. Its position exists only in the simulated world
+and the manifest, for generating conditions and for scoring. Nothing in
+the logger store records it, and no analysis may use it.</p></li>
+<li><p><strong>FR-11</strong> The canal passes through declared
 <strong>reaches</strong>, each with its own microclimate: open
-embankment, sheltered cutting, woodland, town (urban heat), an aqueduct
-over a valley, and a <strong>tunnel</strong> (dark, still, cool and
-damp). Each reach declares how it modifies the weather. These are the
-demonstrator's equivalent of crossing into a new body of water.</p></li>
-<li><p><strong>FR-09</strong> Over the reaches, the weather passes
-through <strong>several air masses separated by fronts</strong>. Each
-air mass declares a mean and a covariance over the parameters; each
-front declares an arrival time, a passage duration and the change it
-brings. A diurnal cycle drives temperature and irradiance. Readings
-carry declared noise and occasional spikes.</p></li>
-<li><p><strong>FR-10</strong> Every run writes a
-<strong>manifest</strong> recording the canal, its reaches and locks,
-the voyage plan, the air masses, fronts, diurnal cycle, noise model,
-seeds and generator version. The manifest is the ground truth that
-detection, clustering and correction are scored against.</p></li>
-<li><p><strong>FR-11</strong> All components read time from the
-simulation clock; no host clock is used for any operational purpose. The
-clock runs in real time or <strong>accelerated</strong>, with rate
-controlled from the display within declared bounds, because a run takes
-weeks and a demonstration takes minutes. At the highest declared rate, a
-week of simulated time passes in under an hour.</p></li>
-<li><p><strong>FR-12</strong> All randomness comes from named, seeded
+embankment, sheltered cutting, woodland, town, an aqueduct, and a
+<strong>tunnel</strong>.</p></li>
+<li><p><strong>FR-12</strong> The weather passes through <strong>several
+air masses separated by fronts</strong>, each declared with a mean and
+covariance, arrival, duration and effect. A diurnal cycle drives
+temperature and irradiance. Readings carry declared noise and occasional
+spikes.</p></li>
+<li><p><strong>FR-13</strong> Every run writes a
+<strong>manifest</strong> recording the canal, reaches, timetable, air
+masses, fronts, diurnal cycle, noise model, seeds and generator version.
+It is the ground truth that analysis is scored against.</p></li>
+<li><p><strong>FR-14</strong> All components, including the display
+client's polling and every workspace script, read time from the
+<strong>simulation clock</strong>. No host clock is used for any
+operational purpose.</p></li>
+<li><p><strong>FR-15</strong> All randomness comes from named, seeded
 streams recorded in the manifest.</p></li>
+</ul>
+<h3 id="31-history-pre-generated-at-startup">3.1 History pre-generated
+at startup</h3>
+<ul>
+<li><strong>FR-16</strong> At startup the demonstrator
+<strong>pre-generates four weeks of history</strong> (about five million
+records per sensor) through the same sensor-to-logger path on a fast
+clock. Message capture records counts only during this phase; no icons
+are drawn.</li>
+<li><strong>FR-17</strong> Pre-generation shows its progress honestly.
+The flowchart and panels become available only when it has
+finished.</li>
+<li><strong>FR-18</strong> After pre-generation the simulation is
+<strong>off</strong> until the viewer presses play (FR-52).</li>
 </ul>
 <hr />
 <h2 id="4-components">4. Components</h2>
+<p>Each component is drawn as one node on the flowchart and belongs to
+exactly one <strong>zone</strong>. The node list corresponds
+<strong>one-to-one</strong> with the real system's architecture, under
+neutral names.</p>
 <table>
 <thead>
 <tr>
 <th>ID</th>
 <th>Component</th>
+<th>Zone</th>
 <th>Responsibility</th>
 </tr>
 </thead>
@@ -253,239 +325,614 @@ streams recorded in the manifest.</p></li>
 <tr>
 <td>B-C01</td>
 <td>Simulation clock</td>
-<td>Single source of time; real time or accelerated; a port for later
-replay</td>
+<td>Simulated</td>
+<td>Single source of time; off at start; play/pause; legible rates</td>
 </tr>
 <tr>
 <td>B-C02</td>
 <td>World generator</td>
-<td>Canal, reaches, air masses, fronts, diurnal cycle, noise; writes the
-manifest</td>
+<td>Simulated</td>
+<td>Canal, reaches, air masses, fronts, noise; writes the manifest</td>
 </tr>
 <tr>
 <td>B-C03</td>
-<td>Boat</td>
-<td>Moves along the canal under the voyage plan; locks, tunnels,
-moorings</td>
+<td>Barge</td>
+<td>Simulated</td>
+<td>Moves along the canal under the timetable</td>
 </tr>
 <tr>
 <td>B-C04</td>
 <td>Sensors</td>
-<td>Bow and stern; sample the world at the boat's positions at 1 Hz</td>
+<td>Simulated</td>
+<td>Bow and stern; sample the world at 1 Hz</td>
 </tr>
 <tr>
 <td>B-C05</td>
-<td>Logger stand-in</td>
-<td>Deliberately awkward, append-only storage (FR-13)</td>
+<td>Logger store</td>
+<td>Legacy</td>
+<td>Deliberately awkward, append-only storage (FR-19)</td>
 </tr>
 <tr>
 <td>B-C06</td>
 <td>Store adapter</td>
+<td>New build</td>
 <td>The only code that understands the logger's format</td>
 </tr>
 <tr>
 <td>B-C07</td>
-<td>EDR server</td>
-<td>OGC API-EDR over the adapter, as an ASGI application</td>
+<td>Connected Systems server</td>
+<td>New build</td>
+<td>Discovery, datastreams, observations, control streams; waiting
+mode</td>
 </tr>
 <tr>
 <td>B-C08</td>
-<td>Analysis service</td>
-<td>Derived values, correlation, detection and clustering, served in EDR
-shape</td>
+<td>ASGI framework</td>
+<td>Third-party</td>
+<td>FastAPI and Starlette: routing, validation, OpenAPI</td>
 </tr>
 <tr>
 <td>B-C09</td>
-<td>Analyst's workspace</td>
-<td>In-browser Python editor and its own Pyodide worker</td>
+<td>Analysis service</td>
+<td>New build</td>
+<td>A <em>process</em> system: derived values, change detection,
+correlation, clustering</td>
 </tr>
 <tr>
 <td>B-C10</td>
-<td>Display</td>
-<td>Linked charts, the canal map, analysis views and their controls</td>
+<td>Scientific libraries</td>
+<td>Third-party</td>
+<td>numpy, pandas, scipy, scikit-learn</td>
+</tr>
+<tr>
+<td>B-C11</td>
+<td>Seam relay</td>
+<td>New build</td>
+<td>Service Worker passing HTTP to the right worker; no logic</td>
+</tr>
+<tr>
+<td>B-C12</td>
+<td>Analyst's workspace</td>
+<td>New build</td>
+<td>CodeMirror editor and its own Pyodide worker</td>
+</tr>
+<tr>
+<td>B-C13</td>
+<td>Promoted products</td>
+<td>New build (scientist-authored)</td>
+<td>Scientists' scripts registered as process systems with their own
+datastreams</td>
+</tr>
+<tr>
+<td>B-C14</td>
+<td>Display client</td>
+<td>New build</td>
+<td>Handshake, profile check, self-configuration, panels</td>
+</tr>
+<tr>
+<td>B-C15</td>
+<td>Demonstrator shell</td>
+<td>New build</td>
+<td>Flowchart, controls, key, tour; not part of the real system</td>
+</tr>
+<tr>
+<td>B-C16</td>
+<td>Browser and Pyodide runtime</td>
+<td>Third-party</td>
+<td>Hosts the workers and the relay</td>
 </tr>
 </tbody>
 </table>
-<hr />
-<h2 id="5-functional-requirements">5. Functional requirements</h2>
-<h3 id="51-the-logger-stand-in">5.1 The logger stand-in</h3>
 <ul>
-<li><strong>FR-13</strong> The stand-in shall be <strong>deliberately
-awkward</strong>, the way an old logger's archive is: fixed-width text
-records, bow and stern in separate files rolling over daily, position
-held as a GPS sentence string rather than numbers, time in a
-non-standard unit and epoch, coded values for some fields, no index, and
-records appended while they are being read. It is not a tidy modern
-store wearing an old label.</li>
-<li><strong>FR-14</strong> The stand-in is written only by the sensors
-and read only by the store adapter. Nothing else knows its format.</li>
-<li><strong>FR-15</strong> The claim C1 is stated as <em>the facade
-works over an awkward store, to be confirmed against a real one</em>.
-The landing page and the documentation say so.</li>
+<li><strong>FR-19a</strong> The <strong>display client</strong> (B-C14)
+stands for the real system's user interface and is restartable on its
+own. The <strong>demonstrator shell</strong> (B-C15) is the frame around
+everything, exists only to demonstrate, and is drawn outside the four
+zones.</li>
 </ul>
-<h3 id="52-the-edr-server">5.2 The EDR server</h3>
+<hr />
+<h2 id="5-functional-requirements-the-system">5. Functional
+requirements: the system</h2>
+<h3 id="51-the-logger-store">5.1 The logger store</h3>
 <ul>
-<li><strong>FR-16</strong> The EDR server shall serve the sensor data as
-an honest subset of OGC API-EDR: collection discovery,
-<strong>trajectory</strong> queries along the boat's track carrying a
-time at each vertex, and <strong>corridor</strong> queries along a
-stretch of canal, both returning CoverageJSON.</li>
-<li><strong>FR-17</strong> Every unsupported query type, option or
-parameter is refused with the thing refused named. The served
-conformance statement matches the code, held by a test.</li>
-<li><strong>FR-18</strong> Responses reflect the store as it stands at
-the moment of the request, including records appended during the
-run.</li>
-<li><strong>FR-18a</strong> The facade shall stay responsive as the
-store grows over a <strong>multi-week run</strong>: two sensors at 1 Hz
-write about 1.2 million records a week. A declared query, such as the
-last hour along the route or one reach across all passes, shall answer
-within a declared time budget at any point in the run, and the facade
-may build <strong>its own index</strong> over the store to meet it. The
-store itself is never altered, and the index is rebuilt from the store
-if lost, never the other way round.</li>
-<li><strong>FR-18b</strong> A query whose result would exceed a declared
-size is refused with the limit named, and the refusal states how to
-narrow it. The facade never times out silently or returns a truncated
-result as though it were complete.</li>
-<li><strong>FR-19</strong> Quality control (spike and range flagging,
-and GPS dropout inside the tunnel) is applied in the facade as
-<strong>flags</strong>, never by altering stored records. Raw values
-remain retrievable.</li>
+<li><strong>FR-19</strong> The store is <strong>deliberately
+awkward</strong>: fixed-width text records, bow and stern in separate
+files rolling over daily, time in a non-standard unit and epoch, coded
+values for some fields, no index, and records appended while being
+read.</li>
+<li><strong>FR-20</strong> The store is written only by the sensors and
+read only by the store adapter. It is <strong>independent of the
+server</strong>: it keeps receiving records while the server is
+restarting (FR-40).</li>
+<li><strong>FR-21</strong> C1 is stated as <em>the facade works over an
+awkward store, to be confirmed against a real one</em>.</li>
+</ul>
+<h3 id="52-the-connected-systems-server">5.2 The Connected Systems
+server</h3>
+<p>The server implements an honest, declared subset of <strong>OGC API –
+Connected Systems Part 1 (Feature Resources)</strong> and <strong>Part 2
+(Dynamic Data)</strong>.</p>
+<ul>
+<li><strong>FR-22</strong> <strong>Discovery</strong>, including the
+prerequisites Connected Systems inherits from OGC API – Features Part 1
+(Core) and OGC API – Common Part 1: the landing page, the conformance
+declaration, the API definition, <code>/collections</code>, paging
+links, and the <code>limit</code> and <code>datetime</code> parameters;
+plus a link to the declared profile (§6.1).</li>
+<li><strong>FR-22a</strong> The implemented subset is the one declared
+in the Spike 0 finding (§4 there) and recorded in an ADR: Part 1 Common,
+System Features, Subsystems, Property Definitions, Create/Replace/Delete
+for systems, and the SensorML encoding; Part 2 Common, Datastreams and
+Observations, Control Streams and Commands, Create/Replace/ Delete for
+datastreams, observations and commands, and the JSON and SWE Common JSON
+encodings. Everything else is refused by name (FR-27).</li>
+<li><strong>FR-23</strong> <strong>Systems</strong> (Part 1), with the
+standard <code>systemType</code> values: the barge is a
+<strong>Platform</strong>; bow and stern are <strong>Sensors</strong>,
+as its subsystems; the analysis service and each promoted product are
+<code>systemType</code> <strong>System</strong> with
+<code>assetType</code> <strong>Process</strong>. No system carries a
+location.</li>
+<li><strong>FR-24</strong> <strong>Datastreams</strong> (Part 2): one
+<strong>record datastream per sensor</strong>, whose SWE Common 3.0
+schema declares the seven parameters as Quantity fields with units, and,
+for each parameter, a <strong>separate Category field carrying its QC
+flag</strong> in the QARTOD vocabulary. Each measurement's
+<code>quality</code> attribute refers to its flag field, as SWE Common
+3.0 prescribes for quality that varies per value. Each analysis output
+and each promoted product is a datastream of its own process system. A
+datastream's schema is fetched from
+<code>/datastreams/{id}/schema?obsFormat=…</code>.</li>
+<li><strong>FR-25</strong> <strong>Observations</strong> (Part 2),
+filtered by <code>phenomenonTime</code> (and <code>resultTime</code>,
+including <code>latest</code>) with <code>limit</code> and paging.
+Discovery resources are served as <code>application/json</code>;
+observations as <strong>SWE Common JSON</strong>
+(<code>application/swe+json</code>). There is no per-field filter: a
+client fetches whole records and selects fields.</li>
+<li><strong>FR-26</strong> <strong>Control streams and commands</strong>
+(Part 2) on the analysis service, carrying the reader's analysis
+settings (window, parameters, number of clusters, detector sensitivity).
+Commands are <strong>POSTed</strong> to
+<code>/controlstreams/{id}/commands</code>. The <strong>bounds live in
+the control stream's schema</strong> as SWE Common constraints; a
+command outside them is rejected with <strong>HTTP 400</strong> naming
+the bound. Each accepted command carries a status (pending through
+completed or failed).</li>
+<li><strong>FR-27</strong> Every unsupported resource, query parameter
+or encoding is refused with the thing refused named. The served
+conformance declaration matches the code, held by a test.</li>
+<li><strong>FR-28</strong> Responses reflect the store at the moment of
+the request.</li>
+<li><strong>FR-29</strong> Declared queries (the last hour from each
+sensor; one parameter across a week) answer within a declared time
+budget over four weeks of history. The server may build <strong>its own
+index</strong>; the store is never altered, and the index is rebuilt
+from the store when lost, including on every server restart.</li>
+<li><strong>FR-30</strong> A query whose result would exceed a declared
+size is refused with the limit named and how to narrow it. Nothing is
+silently truncated.</li>
+<li><strong>FR-31</strong> QC flags are computed by the server and
+carried in the quality fields, never by altering stored records.</li>
 </ul>
 <h3 id="53-the-analysis-service">5.3 The analysis service</h3>
 <ul>
-<li><strong>FR-20</strong> The analysis service computes <strong>derived
-values</strong>:
+<li><strong>FR-32</strong> The analysis service is a <strong>process
+system</strong> publishing these datastreams:
 <ul>
-<li><strong>true wind</strong> from apparent wind, the boat's heading
-and its speed;</li>
-<li><strong>pressure reduced to a common datum</strong>, removing the
-steps the locks introduce;</li>
-<li><strong>dew point</strong> and the air-minus-water temperature
-difference;</li>
-<li>the <strong>bow-minus-stern difference</strong>, after <strong>lag
-correction</strong>: the stern's reading aligned to the moment it
-reached the bow's position, using the boat's speed. Without this, every
-change looks like a gradient along the boat.</li>
+<li><strong>Derived values</strong>: dew point, air-minus-water
+temperature difference, and the bow-minus-stern difference for each
+parameter (unaligned; no lag correction is possible without speed).</li>
+<li><strong>Change detector</strong>: flags a sustained change of
+regime, never a single spike.</li>
+<li><strong>Correlation matrix</strong> over the commanded window and
+parameter set.</li>
+<li><strong>Clustering</strong> of readings into regimes.</li>
 </ul></li>
-<li><strong>FR-21</strong> It also computes a <strong>correlation
-matrix</strong> over a chosen window, sensor and parameter set; a
-<strong>reach detector</strong> flagging a sustained change of
-conditions, never a single spike; and a <strong>clustering</strong> of
-readings into regimes.</li>
-<li><strong>FR-22</strong> The analysis must separate <strong>where the
-boat is</strong> (its reach) from <strong>what the weather is
-doing</strong> (fronts and the diurnal cycle). The detector reports
-which of the two it believes caused each change. The service also
-estimates each reach's <strong>standing offset</strong> from the
-revisits: what that reach does to each parameter, after the weather
-common to all passes is removed. Each offset carries the number of
-passes it rests on.</li>
-<li><strong>FR-23</strong> Analysis parameters (window, sensor,
-parameters included, number of clusters, detector sensitivity) come from
-the reader through the display. The service owns the bounds and refuses
-an out-of-range value by naming the bound.</li>
-<li><strong>FR-24</strong> Every analysis result carries the parameters
-and data range it was computed from.</li>
-<li><strong>FR-25</strong> Results are served in the <strong>same EDR
-and CoverageJSON shape as the sensor data</strong>, so the display
-renders them with no code specific to the analysis. This is the
-<em>promotion contract</em>, and the analysis service is its first
-user.</li>
-<li><strong>FR-26</strong> Results are <strong>scored against the
-manifest</strong>: each detected change against the reach boundaries and
-fronts that caused it, each cluster against the reaches and air masses,
-true wind against the declared wind, the lag correction against the
-declared sensor separation. A result is never presented as correct
-merely because it looks plausible.</li>
+<li><strong>FR-32a</strong> Every calculated field <strong>declares its
+inputs</strong> (dew point needs air temperature and humidity;
+air-minus-water needs air and water temperature; and so on). The server
+does not publish a calculated field whose inputs are not all published,
+so switching off an input also removes everything calculated from
+it.</li>
+<li><strong>FR-33</strong> Every result carries the settings and data
+range it was computed from.</li>
+<li><strong>FR-34</strong> Results are <strong>scored against the
+manifest</strong> (fronts, air masses, reach boundaries) and the score
+is published with them. The analysis itself never sees the manifest or
+the position.</li>
 </ul>
-<h3 id="54-the-analysts-workspace">5.4 The analyst's workspace</h3>
+<h3 id="54-the-analysts-workspace-and-promoted-products">5.4 The
+analyst's workspace and promoted products</h3>
 <ul>
-<li><strong>FR-27</strong> The display offers an <strong>in-browser
-Python editor</strong>. Code written there runs in its own Pyodide
-worker, separate from the backend, and reaches the backend only through
-the seam, as an ordinary EDR client.</li>
-<li><strong>FR-28</strong> A broken, slow or failing script shall never
-affect the backend. Errors are shown in the workspace; the display and
-the EDR server keep running.</li>
-<li><strong>FR-29</strong> A script may <strong>promote</strong> its
-output by serving it in the promotion contract's shape (FR-25) at a
-configured path prefix. The display then renders it as it renders any
-other series, with no new display code.</li>
-<li><strong>FR-30</strong> The workspace ships with worked examples
-using the libraries available in Pyodide (numpy, pandas, scipy,
-scikit-learn), among them a tunnel detector and a comparison of bow and
-stern before and after lag correction.</li>
-</ul>
-<h3 id="55-the-display">5.5 The display</h3>
-<ul>
-<li><strong>FR-31</strong> The display shows the seven parameters as
-<strong>linked time-series charts</strong>, bow and stern overlaid, with
-a shared cursor and zoom across all seven. Wind direction is drawn as a
-direction, never as a line jumping between 359 and 0 degrees.</li>
-<li><strong>FR-32</strong> The display shows a <strong>map of the
-canal</strong> with its reaches, locks and tunnel, the boat's track so
-far coloured by any parameter or by cluster, and the boat's current
-position and heading. Moving the shared cursor on the charts moves a
-marker on the map.</li>
-<li><strong>FR-33</strong> The display shows the analysis outputs:
-derived series, the correlation matrix, a scatter of any two parameters,
-detected changes as marks on the time axis and the map, and cluster
-assignments, each with its score against the manifest (FR-26).</li>
-<li><strong>FR-34</strong> Analysis controls (FR-23) and clock controls
-(FR-11) are drawn from the backend's own statement of what it accepts.
-The display holds no bounds of its own.</li>
-<li><strong>FR-35</strong> Live data reaches the display by
-<strong>polling the EDR server at 1 Hz</strong>. This is a recorded
-placeholder, not a tested design for live delivery, and the
-documentation says so (see §11).</li>
-<li><strong>FR-36</strong> While Pyodide loads, the display shows its
-progress honestly. It never shows an empty chart as though the logger
-were empty.</li>
+<li><strong>FR-35</strong> Code written in the workspace runs in its own
+Pyodide worker and reaches the backend only through the seam, as an
+ordinary Connected Systems client. A broken or slow script never affects
+the backend.</li>
+<li><strong>FR-36</strong> A script may <strong>promote</strong> its
+output using standard resource creation only: it POSTs a
+<strong>System</strong> (<code>assetType</code> Process), then a
+<strong>datastream</strong> under it with a SWE Common schema, then its
+<strong>observations</strong>. No promotion-specific endpoint exists.
+From then on the product appears in discovery like any other
+source.</li>
+<li><strong>FR-37</strong> A promoted product reaches the display client
+only at its <strong>next handshake</strong> (FR-41). The viewer triggers
+this with <strong>restart client</strong> (FR-42).</li>
 </ul>
 <hr />
-<h2 id="6-interfaces-and-shared-types">6. Interfaces and shared
-types</h2>
+<h2 id="6-functional-requirements-client-and-server-lifecycle">6.
+Functional requirements: client and server lifecycle</h2>
+<h3 id="61-the-declared-profile">6.1 The declared profile</h3>
 <ul>
-<li><strong>NFR-04</strong> Masters under <code>contracts/</code> are
-the single authority for seam shapes. TypeScript types are generated
-from them for the display; the Python backend validates against the same
-masters.</li>
+<li><strong>FR-38</strong> A <strong>declared profile</strong> is a
+committed document, validated by JSON Schema, listing the
+<strong>essential sources</strong>: for each, the system, the
+datastream, the field, its SWE Common type and its unit. In Version 3
+the essentials are:
+<ul>
+<li>bow and stern <strong>air temperature</strong> (°C);</li>
+<li>bow and stern <strong>apparent wind speed</strong> (m s⁻¹);</li>
+<li>the analysis service's <strong>derived values</strong>,
+<strong>change detector</strong>, <strong>correlation matrix</strong>
+and <strong>clustering</strong> datastreams.</li>
+</ul></li>
+<li><strong>FR-39</strong> The server publishes the profile and links it
+from its landing page. The client checks <strong>both</strong> that the
+server claims the profile <strong>and</strong> that discovery actually
+satisfies it. A claim that discovery contradicts is an error, never a
+pass.</li>
 </ul>
-<h2 id="7-delivery">7. Delivery</h2>
+<h3 id="62-the-handshake">6.2 The handshake</h3>
 <ul>
-<li><strong>NFR-05</strong> The demonstrator builds to static assets and
-is published as a public site on gh-pages. Each visit starts a fresh
-seeded run; nothing persists between visits.</li>
-<li><strong>NFR-06</strong> Pyodide and every Python package are served
-from the site itself, never from a third-party CDN, so every request is
-same-origin.</li>
-<li><strong>NFR-07</strong> The site is served over HTTPS, which the
-Service Worker requires.</li>
-<li><strong>NFR-08</strong> A startup time budget is declared and
-measured (see §10).</li>
+<li><strong>FR-40</strong> On starting, the display client performs a
+<strong>handshake</strong> made only of standard discovery: landing
+page, conformance, profile, systems, datastreams and their schemas. No
+bespoke handshake message exists.</li>
+<li><strong>FR-41</strong> From the handshake the client
+<strong>configures itself</strong>:
+<ul>
+<li>each <strong>essential</strong> source is bound to its specific view
+(§8.1);</li>
+<li>every <strong>other</strong> datastream field, whether a raw
+optional parameter or a promoted product, is treated as an
+<strong>abstract measurement</strong> and given a generic view chosen
+from its schema (§8.2);</li>
+<li>if any essential source is <strong>missing, or has the wrong type or
+unit</strong>, the client still starts, in <strong>degraded
+mode</strong>:
+<ul>
+<li>immediately after the handshake it shows <strong>one warning popup
+listing every unavailable essential source</strong> and why (missing,
+wrong type, wrong unit);</li>
+<li>each view that depends on an unavailable source is shown as
+<strong>unavailable</strong>, never as an empty chart;</li>
+<li>the <strong>control that opens that view is disabled</strong>, and
+hovering over it names the missing source;</li>
+<li>every view whose sources are present works normally.</li>
+</ul></li>
+<li>a missing <strong>optional</strong> source produces no warning; it
+simply does not appear.</li>
+</ul></li>
+<li><strong>FR-41a</strong> Discovery happens <strong>only at
+handshake</strong>. A client never adds or removes sources while
+running.</li>
 </ul>
-<h2 id="8-development-process">8. Development process</h2>
+<h3 id="63-restart-client">6.3 Restart client</h3>
 <ul>
-<li><strong>PR-01</strong> The repository is public. It contains no
+<li><strong>FR-42</strong> A <strong>restart client</strong> button
+discards the display client's entire state and starts it afresh,
+beginning with a new handshake. The backend, its history and the
+workspace carry on undisturbed. This stands for reloading the real user
+interface.</li>
+</ul>
+<h3 id="64-restart-server-and-waiting-mode">6.4 Restart server and
+waiting mode</h3>
+<ul>
+<li><strong>FR-43</strong> A <strong>restart server</strong> button
+restarts the Connected Systems server. The logger store and sensors
+carry on (FR-20).</li>
+<li><strong>FR-44</strong> On starting, the server enters
+<strong>waiting mode</strong> while it rebuilds its index: every request
+is answered with <strong>HTTP 503 Service Unavailable and a
+<code>Retry-After</code> header</strong> (RFC 9110). It leaves waiting
+mode when ready.</li>
+<li><strong>FR-45</strong> Each server start creates a fresh
+<strong>instance identifier</strong>, sent as the <code>ETag</code> of
+the landing page and as a response header on every reply.</li>
+<li><strong>FR-46</strong> A client that receives 503 waits for the
+period given in <code>Retry-After</code> and retries. A client that sees
+the <strong>instance identifier change</strong> clears its state and
+repeats the handshake. These are client behaviours; the server enforces
+nothing.</li>
+</ul>
+<h3 id="65-control-panel">6.5 Control panel</h3>
+<p>The control panel belongs to the demonstrator shell (B-C15), not to
+the real system. It stands in for the things that happen to a real
+deployment: a server taken down, a sensor not fitted, a product
+withdrawn or added.</p>
+<ul>
+<li><strong>FR-46a</strong> <strong>Take server down / bring server
+up.</strong> While down, the server does not answer at all: the seam
+relay returns a <strong>network failure</strong>, not an HTTP status, as
+a real unreachable server would. On the flowchart the request icon stops
+at the relay and is marked as failed. The client shows a <strong>server
+unreachable</strong> banner, keeps its last data on screen marked as
+stale, and retries on the simulation clock. Bringing the server up is an
+ordinary server start (FR-44, FR-45). The logger store and sensors carry
+on throughout (FR-20).</li>
+<li><strong>FR-46b</strong> <strong>Field toggles.</strong> A short list
+of fields can be switched on or off:
+<ul>
+<li>every <strong>raw parameter</strong> (applied to both sensors
+together), including the essential air temperature and wind speed, so
+degraded mode can be shown;</li>
+<li>every <strong>calculated field</strong> of the analysis
+service;</li>
+<li>three <strong>extra fields</strong> that are off by default and that
+the display client has never seen, one for each generic view (FR-61):
+<strong>precipitation type</strong> (measured, a Category),
+<strong>pressure tendency over three hours</strong> (calculated, a
+Quantity), and <strong>spikes flagged in the last hour</strong>
+(calculated, a Count).</li>
+</ul></li>
+<li><strong>FR-46c</strong> A toggle changes <strong>what the server
+publishes</strong>, never what the sensors measure or what the logger
+stores. Stored history is unchanged, so switching a field back on
+restores its full history. Because changing a datastream's schema is a
+breaking change in Connected Systems, a datastream whose schema changes
+is published under a <strong>new identifier</strong>, never the old
+identifier with a new schema.</li>
+<li><strong>FR-46d</strong> A toggle takes effect <strong>only at the
+next server start</strong>. Until then it is shown as a <strong>pending
+change</strong>, with a prompt to restart the server. The restart gives
+a new instance identifier, so every client repeats its handshake and
+sees the new offering. The server's offering never changes while it is
+running.</li>
+<li><strong>FR-46e</strong> The control panel shows, for each field,
+whether it is <strong>published now</strong> and whether a change is
+<strong>pending</strong>, and states each calculated field's inputs
+(FR-32a), so the viewer can predict what a toggle will remove.</li>
+</ul>
+<hr />
+<h2 id="7-functional-requirements-the-architecture-view">7. Functional
+requirements: the architecture view</h2>
+<p>The flowchart is the <strong>main view</strong>. Everything else is
+docked around it (§8).</p>
+<h3 id="71-message-capture">7.1 Message capture</h3>
+<ul>
+<li><strong>FR-47</strong> Messages on the flowchart are <strong>real
+messages captured at every component boundary</strong> in §4, including
+in-process calls. Nothing is scripted. Capture uses one tap mechanism,
+never alters a message or the behaviour of either side, and is tested by
+running the system with capture on and off and comparing results.</li>
+<li><strong>FR-48</strong> <strong>Every</strong> message is shown. None
+is sampled or merged.</li>
+</ul>
+<h3 id="72-the-letter-key">7.2 The letter key</h3>
+<ul>
+<li><p><strong>FR-49</strong> Each message is drawn as an icon with a
+<strong>colour-coded letter</strong> for the standard it meets. A key on
+screen lists every letter:</p>
+<table>
+<thead>
+<tr>
+<th>Letter</th>
+<th>Standard</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Q</td>
+<td>OGC API – Connected Systems request</td>
+</tr>
+<tr>
+<td>D</td>
+<td>Discovery resource: landing page, conformance, SensorML or GeoJSON
+system and datastream descriptions, SWE Common schema</td>
+</tr>
+<tr>
+<td>O</td>
+<td>Observations, SWE Common JSON</td>
+</tr>
+<tr>
+<td>K</td>
+<td>Command on a Connected Systems control stream</td>
+</tr>
+<tr>
+<td>P</td>
+<td>Declared profile, validated by JSON Schema</td>
+</tr>
+<tr>
+<td>H</td>
+<td>Plain HTTP status: 503 with <code>Retry-After</code> (RFC 9110)</td>
+</tr>
+<tr>
+<td>L</td>
+<td>Legacy fixed-width record (the logger's own format)</td>
+</tr>
+<tr>
+<td>I</td>
+<td>Internal typed object, no public standard</td>
+</tr>
+</tbody>
+</table>
+<p>Messages that meet no public standard are named honestly as
+<strong>L</strong> or <strong>I</strong>.</p></li>
+<li><p><strong>FR-50</strong> Clicking a message icon opens a
+<strong>popup showing the message contents and the standard it
+meets</strong>. Nothing else is shown.</p></li>
+</ul>
+<h3 id="73-layout-zones-and-nodes">7.3 Layout, zones and nodes</h3>
+<ul>
+<li><strong>FR-51</strong> The flowchart is drawn with <strong>React
+Flow (xyflow)</strong> from a <strong>fixed, hand-designed
+layout</strong> held in a committed file. The four
+<strong>zones</strong> (simulated, legacy, new build, third-party) are
+drawn as labelled, shaded regions. Clicking a node shows its
+<strong>responsibility and interfaces</strong>: what it does, and which
+letters it accepts and emits on which flows.</li>
+</ul>
+<h3 id="74-time-controls">7.4 Time controls</h3>
+<ul>
+<li><strong>FR-52</strong> The simulation <strong>starts off</strong>. A
+single <strong>play/pause</strong> button starts and stops the
+<strong>simulation clock</strong>, which starts and stops the whole
+system. When paused, icons freeze in place and remain clickable.</li>
+<li><strong>FR-53</strong> A <strong>speed control</strong> runs from
+0.1× up to the <strong>fastest rate at which every icon remains
+legible</strong>, verified on the target display. The <strong>default is
+½×</strong>.</li>
+<li><strong>FR-54</strong> Restart client, restart server and the
+control panel (FR-42, FR-43, §6.5) work whether the simulation is
+playing or paused. While paused, their messages are drawn and frozen, so
+a handshake can be inspected step by step.</li>
+</ul>
+<hr />
+<h2 id="8-functional-requirements-docked-panels">8. Functional
+requirements: docked panels</h2>
+<p>Three panels dock around the flowchart: <strong>time-series
+charts</strong>, the <strong>Python workspace</strong>, and
+<strong>analysis views</strong>. Every panel is built by the display
+client from its handshake.</p>
+<h3 id="81-specific-views-for-essential-sources">8.1 Specific views for
+essential sources</h3>
+<ul>
+<li><strong>FR-55</strong> <strong>Air temperature</strong> and
+<strong>apparent wind speed</strong>, bow and stern overlaid, as linked
+time-series charts with a shared cursor and zoom.</li>
+<li><strong>FR-56</strong> <strong>Derived values</strong> as linked
+time series alongside them.</li>
+<li><strong>FR-57</strong> The <strong>change detector</strong>'s flags
+as marks on the shared time axis, with its score.</li>
+<li><strong>FR-58</strong> The <strong>correlation matrix</strong> as a
+heatmap, with its window and parameter set.</li>
+<li><strong>FR-59</strong> <strong>Clustering</strong> as a regime band
+along the time axis, with its score.</li>
+<li><strong>FR-60</strong> Analysis settings are sent as
+<strong>commands</strong> (FR-26). The controls are drawn from the
+control stream's own schema; the client holds no bounds of its own.</li>
+</ul>
+<h3 id="82-generic-views-for-abstract-measurements">8.2 Generic views
+for abstract measurements</h3>
+<ul>
+<li><p><strong>FR-61</strong> Any other field is rendered <strong>by its
+SWE Common type alone</strong>, with no knowledge of what it
+measures:</p>
+<table>
+<thead>
+<tr>
+<th>Schema type</th>
+<th>Generic view</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Quantity</td>
+<td>Line chart labelled with the field's name and unit</td>
+</tr>
+<tr>
+<td>Quantity with an angular unit</td>
+<td>Points, not joined lines, so a value wrapping past 360° never draws
+a false jump</td>
+</tr>
+<tr>
+<td>Category</td>
+<td>Coloured band along the time axis, with a legend from the schema's
+allowed values</td>
+</tr>
+<tr>
+<td>Count</td>
+<td>Step chart</td>
+</tr>
+<tr>
+<td>Anything else</td>
+<td>A table of recent values</td>
+</tr>
+</tbody>
+</table></li>
+<li><p><strong>FR-62</strong> A generic view never carries code specific
+to one measurement. A new promoted product appears through these rules
+alone.</p></li>
+</ul>
+<h3 id="83-polling">8.3 Polling</h3>
+<ul>
+<li><strong>FR-63</strong> Live data reaches the panels by
+<strong>polling observations once per simulated second</strong>, asking
+for <code>phenomenonTime</code> from the last reading received onwards.
+This is a recorded placeholder, not a tested design for live
+delivery.</li>
+</ul>
+<hr />
+<h2 id="9-implementation-direction">9. Implementation direction</h2>
+<ul>
+<li><strong>FR-64</strong> Front end: <strong>TypeScript and
+React</strong>. Flowchart: <strong>React Flow (xyflow)</strong>. Charts:
+<strong>ECharts</strong>. Editor: <strong>CodeMirror 6</strong> with
+Python mode.</li>
+<li><strong>FR-65</strong> Backend: <strong>FastAPI</strong> on Pyodide,
+implementing the Connected Systems subset directly. The
+<strong>committed OpenAPI master is the source of truth</strong>; a test
+asserts that the OpenAPI FastAPI serves matches it.</li>
+<li><strong>NFR-04</strong> TypeScript types are generated from the
+masters; the Python backend validates against the same masters.</li>
+</ul>
+<hr />
+<h2 id="10-guided-tour">10. Guided tour</h2>
+<ul>
+<li><strong>FR-66</strong> A built-in <strong>guided tour</strong> walks
+through, in order:
+<ol type="1">
+<li><strong>The zones</strong>: simulated, legacy, new build,
+third-party.</li>
+<li><strong>One reading end to end</strong>: from a sensor as
+<strong>L</strong> into the logger store, through the store adapter and
+server, out as <strong>O</strong> to the display client.</li>
+<li><strong>The handshake</strong>: restart client, then follow the
+<strong>D</strong> and <strong>P</strong> messages as the client
+configures itself.</li>
+<li><strong>A scientist's product promoted</strong>: written in the
+workspace, registered as a process system, then picked up at the next
+client restart and drawn by a generic view.</li>
+<li><strong>A server restart</strong>: the <strong>H</strong> answers in
+waiting mode, the changed instance identifier, and the client starting
+afresh.</li>
+<li><strong>Degraded mode</strong>: switch off an essential field,
+restart the server, and see the warning popup and the disabled view
+control.</li>
+</ol></li>
+<li><strong>FR-67</strong> The tour <strong>highlights only</strong>.
+Its text tells the viewer when to pause or press a restart button to
+follow a message.</li>
+</ul>
+<hr />
+<h2 id="11-presentation-delivery-and-process">11. Presentation, delivery
+and process</h2>
+<ul>
+<li><strong>NFR-05</strong> Designed for a <strong>large presentation
+display</strong> viewed from a distance.</li>
+<li><strong>NFR-06</strong> <strong>Light and document-like</strong>
+style.</li>
+<li><strong>NFR-07</strong> Builds to static assets on a public gh-pages
+site. Each visit starts a fresh seeded run; nothing persists between
+visits.</li>
+<li><strong>NFR-08</strong> Pyodide and every Python package are served
+from the site itself, over HTTPS.</li>
+<li><strong>NFR-09</strong> A startup time budget, including four-week
+pre-generation, is declared and measured.</li>
+<li><strong>PR-01</strong> The repository is public and contains no
 material about any other project, customer or system, and no real place.
-A vocabulary gate enforces a list of forbidden terms, which is held
-privately rather than committed.</li>
+A vocabulary gate enforces a privately held list of forbidden
+terms.</li>
 <li><strong>PR-02</strong> Spec-kit carries: constitution, specify,
-plan, tasks, analyze, implement. ADRs record contested or
-hard-to-reverse decisions; spikes write a dated
+plan, tasks, analyze, implement. ADRs record contested decisions,
+including the choice of Connected Systems; spikes write a dated
 <code>FINDING.md</code>.</li>
 <li><strong>PR-03</strong> Every gate and every refusal test is watched
 failing before it is trusted.</li>
-<li><strong>PR-04 (Persistent previews.)</strong> Every pull request
-publishes a rendered preview of its documents and site to gh-pages under
-<code>pr/&lt;number&gt;/</code>, refreshed on each push and left in
-place after the pull request closes, so that review links stay live. The
-published root always reflects <code>main</code>. A preview from a fork
-is built but not published.</li>
 </ul>
-<h2 id="9-acceptance-criteria">9. Acceptance criteria</h2>
+<hr />
+<h2 id="12-acceptance-criteria">12. Acceptance criteria</h2>
 <table>
 <thead>
 <tr>
@@ -497,92 +944,159 @@ is built but not published.</li>
 <tbody>
 <tr>
 <td>AT-01</td>
-<td>A trajectory query through the seam returns values matching the
-manifest's ground truth at the boat's positions and times, while the
-logger is growing</td>
+<td>Observations fetched through the seam match the manifest's ground
+truth at each time, while the store is growing</td>
 <td>C1</td>
 </tr>
 <tr>
 <td>AT-02</td>
-<td>The same ASGI application passes the same contract test suite in
-Pyodide behind the Service Worker and in CPython under an ordinary ASGI
-server</td>
-<td>C2</td>
+<td>The same ASGI application passes the same contract suite in Pyodide
+behind the relay and in CPython under an ordinary ASGI server</td>
+<td>C3</td>
 </tr>
 <tr>
 <td>AT-03</td>
-<td>Replacing the logger stand-in with a second, differently awkward
-format requires changes to the store adapter only, and AT-01 still
-passes</td>
+<td>Replacing the logger store with a second, differently awkward format
+changes the store adapter only, and AT-01 still passes</td>
 <td>C1</td>
 </tr>
 <tr>
 <td>AT-04</td>
-<td>The reach detector and the clustering recover the manifest's reach
-boundaries, fronts and air masses with known and reported scores, and
-the detector attributes each change to place or weather correctly at a
-reported rate</td>
-<td>C2</td>
+<td>The change detector and clustering recover the manifest's fronts,
+air masses and reach boundaries with reported scores, without access to
+position</td>
+<td>C3</td>
 </tr>
 <tr>
 <td>AT-05</td>
-<td>Lag correction reduces the bow-minus-stern difference across a reach
-boundary to within a bound derived from the declared noise, never typed
-into the test</td>
-<td>C2</td>
+<td>With four weeks of history, in the demonstrator and in CI, the
+declared queries of FR-29 meet their time budget, and rebuilding the
+index reproduces identical results</td>
+<td>C1</td>
 </tr>
 <tr>
 <td>AT-06</td>
-<td>The reach offsets estimated from revisits recover the manifest's
-declared reach effects within a bound derived from the declared noise
-and the number of passes, and the bound tightens as passes
-accumulate</td>
+<td>Removing any one essential source, or changing its type or unit,
+makes the client start in degraded mode: one warning popup naming
+exactly the unavailable sources, those views shown as unavailable with
+their controls disabled, all other views working. Removing an optional
+source produces no warning</td>
 <td>C2</td>
 </tr>
 <tr>
 <td>AT-07</td>
-<td>After four simulated weeks, the declared queries of FR-18a still
-meet their time budget in the browser, and deleting the facade's index
-and rebuilding it from the store reproduces identical query results</td>
-<td>C1</td>
+<td>A server whose profile claim is contradicted by its discovery is
+rejected by the client</td>
+<td>C2</td>
 </tr>
 <tr>
 <td>AT-08</td>
-<td>An edit to a workspace script changes what the display shows without
-a page reload; a deliberately broken script leaves the EDR server
-answering</td>
+<td>A newly promoted product, of each schema type in FR-61, appears
+after restart client with its generic view and no new display code</td>
 <td>C2</td>
+</tr>
+<tr>
+<td>AT-09</td>
+<td>Restart server: requests during waiting mode receive 503 with
+<code>Retry-After</code>; the instance identifier changes; every client
+clears its state and repeats the handshake; no records written during
+the restart are lost</td>
+<td>C1, C2</td>
+</tr>
+<tr>
+<td>AT-10</td>
+<td>Every boundary in §4 that carries traffic produces captured
+messages, each with a letter from the key; system outputs are identical
+with capture on and off</td>
+<td>Architecture view</td>
+</tr>
+<tr>
+<td>AT-11</td>
+<td>Before play is pressed, and while paused, no component sends a
+message and the clock does not advance; on play, the run continues as if
+never paused</td>
+<td>Architecture view</td>
+</tr>
+<tr>
+<td>AT-12</td>
+<td>The OpenAPI served by FastAPI matches the committed master, and the
+conformance declaration matches the implemented subset</td>
+<td>C1</td>
+</tr>
+<tr>
+<td>AT-13</td>
+<td>A broken workspace script leaves the server answering</td>
+<td>C3</td>
+</tr>
+<tr>
+<td>AT-14</td>
+<td>A field toggle changes nothing until the next server start; after
+it, discovery offers exactly the configured fields, calculated fields
+whose inputs are off are absent, and switching a field back on restores
+its full history</td>
+<td>C1, C2</td>
+</tr>
+<tr>
+<td>AT-16</td>
+<td>The CPython build of the server (AT-02) is browsed successfully by
+at least two independent Connected Systems clients, the OGC CSAPI
+Explorer and OSHConnect-Python: systems, datastreams, schemas and
+observations are all listed and read</td>
+<td>C1</td>
+</tr>
+<tr>
+<td>AT-15</td>
+<td>With the server down, requests fail as network failures, the client
+shows the unreachable banner with stale data marked, and no sensor
+record is lost; on bringing it up, the client re-handshakes</td>
+<td>C1, C2</td>
 </tr>
 </tbody>
 </table>
-<h2 id="10-open-questions">10. Open questions</h2>
+<hr />
+<h2 id="13-open-questions">13. Open questions</h2>
 <ul>
 <li><strong>Name.</strong> A coined working name with no
 association.</li>
-<li><strong>Collection layout.</strong> One collection per sensor, or
-one collection with bow and stern as parameter groups (FR-16). Decided
-by the first spike.</li>
-<li><strong>Browser memory.</strong> Weeks of records, a facade index
-and two Pyodide workers in one tab may press on browser memory limits.
-Whether the stand-in lives in memory or in the browser's Origin Private
-File System is decided by measurement, and the answer is itself a
-finding worth recording.</li>
-<li><strong>Startup budget.</strong> Two Pyodide workers with scientific
-packages is a large first load. The budget, and whether the workspace
-worker loads lazily, are decided by measurement.</li>
-<li><strong>Second stand-in format.</strong> What the second format for
-AT-03 looks like.</li>
+<li><strong>Connected Systems subset.</strong> Spike 0 is done
+(<code>FINDING-2026-11-20-connected-systems.md</code>) and its
+corrections are applied. Still open: the exact conformance class URIs
+for the ADR, and whether an OGC executable test suite exists for
+Connected Systems.</li>
+<li><strong>Pub/sub.</strong> Connected Systems Part 3 (MQTT and AMQP
+bindings) is unpublished. Polling stays; revisit when Part 3 is
+published.</li>
+<li><strong>System events.</strong> Whether server starts and field
+changes are also published as ConfigurationChange system events.</li>
+<li><strong>Startup and memory.</strong> Four weeks per sensor in
+Pyodide, plus an index and two workers, may exceed a reasonable startup
+time or a tab's memory. Fallback: ship the history as a pre-built file
+in the logger's own format.</li>
+<li><strong>Legible rate.</strong> The fastest legible speed is set by
+measurement on the target display.</li>
+<li><strong>Promoted products' zone.</strong> New build, or a zone of
+their own.</li>
+<li><strong>Second store format</strong> for AT-03.</li>
 </ul>
-<h2 id="11-deliberate-exclusions-from-version-1">11. Deliberate
-exclusions from Version 1</h2>
+<h2 id="14-deliberate-exclusions-from-version-3">14. Deliberate
+exclusions from Version 3</h2>
 <ul>
-<li><strong>Replay of recorded trips.</strong> The clock is a port so
-that replay can follow without a second code path.</li>
-<li><strong>Push delivery.</strong> Polling stands in (FR-35),
-deliberately.</li>
-<li><strong>Real weather, real waterways and real places.</strong></li>
-<li><strong>Persistence, authentication and a release
-boundary.</strong></li>
+<li><strong>Position, the map, and every analysis that needs
+position</strong>: true wind, lag correction, pressure correction across
+locks, per-reach offsets, and attributing a change to place or
+weather.</li>
+<li><strong>OGC API-EDR and CoverageJSON.</strong></li>
+<li><strong>Evidence of low risk</strong> (risk register on nodes, live
+test results, size of new-build code, share of off-the-shelf code).
+Deferred, not rejected.</li>
+<li><strong>Message popup extras, a message log, and a tour that drives
+the system.</strong></li>
+<li><strong>Discovery while running.</strong> Sources change only at
+handshake.</li>
+<li><strong>Server-side sessions.</strong> The server never tracks
+clients (FR-06).</li>
+<li><strong>Replay of recorded trips, push delivery, persistence and
+authentication.</strong></li>
 </ul>
 <footer>Rendered from <code>srd-barge.md</code>.</footer>
 </main>
