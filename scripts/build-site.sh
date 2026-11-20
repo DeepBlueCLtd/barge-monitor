@@ -32,6 +32,18 @@ pandoc "$ROOT/srd-barge.md" \
   "${banner_args[@]}" \
   --output "$OUT_DIR/index.html"
 
+# Annex A (visual style), as a page of its own beside the SRD.
+pandoc "$ROOT/srd-barge-annex-a-visual-style.md" \
+  --standalone \
+  --from gfm \
+  --to html5 \
+  --toc --toc-depth=2 \
+  --template "$ROOT/scripts/site.html" \
+  --css site.css \
+  --metadata title="SRD Annex A: Visual style" \
+  "${banner_args[@]}" \
+  --output "$OUT_DIR/annex-a.html"
+
 # GitHub Pages: serve files as-is, without Jekyll processing.
 touch "$OUT_DIR/.nojekyll"
 

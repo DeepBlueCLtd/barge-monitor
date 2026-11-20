@@ -1,9 +1,13 @@
 # Software Requirements Document
-## Canal barge weather demonstrator, Version 3.2
+## Canal barge weather demonstrator, Version 3.3
 
 **Status:** Draft for review
 **Author:** Doc
 **Working name:** to be chosen (see §13). This document says *the demonstrator*.
+
+**Changes from Version 3.2:**
+- Visual style specified in **Annex A** (NFR-06): hand-drawn explainer, labels only, no
+  illustrations, seeded sketch rendering, crisp message popups.
 
 **Changes from Version 3.1** (from Spike 0, `FINDING-2026-11-20-connected-systems.md`):
 - System types corrected: Platform, Sensor, and System with asset type Process (FR-23).
@@ -521,7 +525,10 @@ and **analysis views**. Every panel is built by the display client from its hand
 ## 11. Presentation, delivery and process
 
 - **NFR-05** Designed for a **large presentation display** viewed from a distance.
-- **NFR-06** **Light and document-like** style.
+- **NFR-06** **Light and document-like** style, as a hand-drawn architecture explainer.
+  Detailed in **Annex A: Visual style** (`srd-barge-annex-a-visual-style.md`). The
+  reference diagram and the published mockup illustrate styling only; they are not UI
+  designs to reproduce.
 - **NFR-07** Builds to static assets on a public gh-pages site. Each visit starts a fresh
   seeded run; nothing persists between visits.
 - **NFR-08** Pyodide and every Python package are served from the site itself, over HTTPS.
