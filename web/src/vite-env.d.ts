@@ -1,4 +1,4 @@
 /// <reference types="vite/client" />
 interface ImportMetaEnv {
-  readonly VITE_PYODIDE_PATH?: string;
+  readonly VITE_SHARED_PATH?: string;
 }

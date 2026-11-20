@@ -7,18 +7,53 @@ import { loadRuntime, Progress } from './common';
 declare const self: DedicatedWorkerGlobalScope;
 let bridge: any = null;
 let py: any = null;
+let historyDays: number | null = null;
 const queue: Array<() => void> = [];
 
 const post = (p: Progress) => self.postMessage({ type: 'progress', ...p });
 
-async function start(pyodideUrl: string, pyZipUrl: string, seed: number, pregenDays: number | null) {
+/** Fetch the pre-built history for this seed, if there is one (SRD §13). Files arrive in parallel. */
+async function loadHistory(historyUrl: string | null, seed: number): Promise<boolean> {
+  if (!historyUrl) return false;
+  const base = `${historyUrl}seed-${seed}/`; // historyUrl names the code hash and the length
+  const r = await fetch(base + 'manifest.json');
+  if (!r.ok) return false;
+  const manifest = await r.json();
+  const total = manifest.files.reduce((a: number, f: any) => a + f.gz, 0);
+  let got = 0;
+  py.runPython('_hist = {}\ndef _add(name, buf):\n    _hist[name] = bytearray(buf.to_bytes())');
+  const add = py.globals.get('_add');
+  const queue = [...manifest.files];
+  const workers = Array.from({ length: 8 }, async () => {
+    for (let f = queue.shift(); f; f = queue.shift()) {
+      const res = await fetch(base + f.name + '.gz');
+      if (!res.ok || !res.body) throw new Error(`history file ${f.name}: HTTP ${res.status}`);
+      const raw = new Uint8Array(await new Response(res.body.pipeThrough(new DecompressionStream('gzip'))).arrayBuffer());
+      add(f.name, raw);
+      got += f.gz;
+      post({ stage: 'history', detail: `loading pre-built history: ${(got / 1e6).toFixed(0)} of ${(total / 1e6).toFixed(0)} MB`, pct: 10 + Math.round((80 * got) / total) });
+    }
+  });
+  await Promise.all(workers);
+  py.globals.set('_manifest_json', JSON.stringify(manifest));
+  historyDays = manifest.days;
+  add.destroy();
+  return true;
+}
+
+async function start(pyodideUrl: string, pyZipUrl: string, seed: number, pregenDays: number | null, historyUrl: string | null) {
   py = await loadRuntime(pyodideUrl, pyZipUrl, ['numpy', 'fastapi', 'jsonschema'], post);
-  post({ stage: 'pregen', detail: 'pre-generating four weeks of history', pct: 10 });
-  self.postMessage({ type: 'progress', stage: 'pregen', detail: 'pre-generating four weeks of history', pct: 10 });
-  py.globals.set('_progress', (f: number) => post({ stage: 'pregen', detail: `pre-generating history: day ${Math.round(f * 28)} of 28`, pct: 10 + Math.round(85 * f) }));
+  const prebuilt = await loadHistory(historyUrl, seed).catch((e) => { console.warn(e); return false; });
+  if (prebuilt) pregenDays = historyDays;
+  if (!prebuilt) post({ stage: 'pregen', detail: 'no pre-built history for this seed: generating four weeks here', pct: 10 });
+  py.globals.set('_progress', (f: number) => post({ stage: 'pregen', detail: `generating history: ${Math.round(f * 100)}%`, pct: 10 + Math.round(85 * f) }));
   py.runPython(`
 from barge.bridge import Bridge
-bridge = Bridge(${seed}, progress=_progress${pregenDays == null ? '' : `, pregen_days=${pregenDays}`})
+import json
+_h = {"manifest": json.loads(_manifest_json), "files": _hist} if ${prebuilt ? 'True' : 'False'} else None
+bridge = Bridge(${seed}, progress=_progress${pregenDays == null ? '' : `, pregen_days=${pregenDays}`}, history=_h)
+del _h
+_hist = None
 `);
   bridge = py.globals.get('bridge');
   self.postMessage({ type: 'state', state: JSON.parse(bridge.control('state')) });
@@ -55,7 +90,7 @@ async function serve(req: any, reply: MessagePort) {
 
 self.onmessage = (e: MessageEvent) => {
   const d = e.data;
-  if (d.type === 'start') start(d.pyodideUrl, d.pyZipUrl, d.seed, d.pregenDays ?? null).catch((err) => post({ stage: 'error', detail: String(err), pct: 0 }));
+  if (d.type === 'start') start(d.pyodideUrl, d.pyZipUrl, d.seed, d.pregenDays ?? null, d.historyUrl ?? null).catch((err) => post({ stage: 'error', detail: String(err), pct: 0 }));
   else if (d.type === 'connect') {
     const port: MessagePort = e.ports[0];
     port.onmessage = (m) => serve(m.data, m.ports[0]);

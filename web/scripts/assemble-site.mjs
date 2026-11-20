@@ -18,5 +18,7 @@ if (!process.argv.includes('--no-pyodide')) {
   const cache = join(here, '..', '..', '.cache', 'pyodide', VERSION);
   if (!existsSync(cache)) throw new Error('fetch Pyodide first: npm run pyodide');
   cpSync(cache, join(out, 'pyodide', VERSION), { recursive: true });
+  const hist = join(here, '..', '..', '.cache', 'history');
+  if (existsSync(hist)) cpSync(hist, join(out, 'history'), { recursive: true });
 }
 console.log(`site assembled in ${out}`);

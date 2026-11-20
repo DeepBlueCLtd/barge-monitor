@@ -2,7 +2,7 @@
 // flowchart is the main view; the display client's panels dock around it.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DisplayClient } from '../client/DisplayClient';
-import { STARTUP_BUDGET_MS } from '../config';
+import { HOP_S, STARTUP_BUDGET_MS } from '../config';
 import { simClock } from './clock';
 import { ControlPanel } from './ControlPanel';
 import { Flowchart } from './Flowchart';
@@ -16,7 +16,7 @@ function params() {
   const q = new URLSearchParams(location.search);
   const seed = q.get('seed');
   const days = q.get('pregen');
-  return { seed: seed && /^\d+$/.test(seed) ? Number(seed) : Math.floor(Math.random() * 1e6), pregen: days ? Number(days) : null };
+  return { seed: seed && /^\d+$/.test(seed) ? Number(seed) : null, pregen: days ? Number(days) : null };
 }
 
 export function Shell() {
@@ -53,7 +53,7 @@ export function Shell() {
           <>
             <progress max={100} value={progress.pct} />
             <p data-testid="progress">{progress.detail}</p>
-            <p className="hint">Everything runs in this tab. The backend first pre-generates four weeks of history through the sensors and the logger (budget {STARTUP_BUDGET_MS / 1000} s). Messages are only counted during this phase; the flowchart opens when it ends.</p>
+            <p className="hint">Everything runs in this tab. The logger store first receives its history (four weeks when published), made by the same sensors-to-logger path at build time and shipped in the logger's own format (budget {STARTUP_BUDGET_MS / 1000} s). Messages are only counted during this phase; the flowchart opens when it ends.</p>
           </>
         )}
       </div>
@@ -85,7 +85,7 @@ export function Shell() {
         </section>
         <DisplayClient key={clientKey} onRestart={restartClient} />
       </div>
-      <footer className="hint">Started in {((runtime.readyMs ?? 0) / 1000).toFixed(1)} s · seed {seed} · <a href="../">requirements</a> · {bus.total.toLocaleString()} messages drawn</footer>
+      <footer className="hint">Started in {((runtime.readyMs ?? 0) / 1000).toFixed(1)} s · seed {runtime.seed} · history {runtime.historySource} · <a href="../">requirements</a> · {bus.total.toLocaleString()} messages drawn</footer>
     </div>
   );
 }

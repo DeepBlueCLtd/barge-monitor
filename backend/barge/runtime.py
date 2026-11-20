@@ -20,7 +20,7 @@ from .world import generate
 
 class Runtime:
     def __init__(self, seed: int = 1, clock=None, pregen_days: float = C.PREGEN_DAYS, capture: bool = True,
-                 progress=None):
+                 progress=None, history: dict | None = None):
         self.seed = seed
         self.manifest = generate(seed)
         self.world = World(self.manifest)
@@ -35,7 +35,11 @@ class Runtime:
         self.server: Server | None = None
         self.server_starts = 0
         self.down = False
-        self.pregenerate(pregen_days, progress)
+        self.history_source = "generated"
+        if history is not None and self.load_history(history, pregen_days):
+            self.history_source = "pre-built"
+        else:
+            self.pregenerate(pregen_days, progress)
         self.start_server()
 
     def now(self) -> float:
@@ -50,6 +54,25 @@ class Runtime:
             if progress:
                 progress(self.sensors.next_t / end)
         self.tap.recording = True
+
+    def load_history(self, history: dict, days: float) -> bool:
+        """Load pre-built logger files instead of generating them (SRD §13).
+
+        `history` is {"manifest": {...}, "files": {name: bytes}}. Refused, and
+        False returned, unless it was made from this seed by this exact code.
+        """
+        from .history import code_hash
+
+        m = history["manifest"]
+        if m.get("seed") != self.seed or m.get("code_hash") != code_hash() or m.get("days") != days:
+            return False
+        for name in sorted(history["files"]):
+            data = history["files"][name]
+            self.logger._files[name] = data if isinstance(data, bytearray) else bytearray(data)
+        self.sensors.next_t = int(m["end_t"])
+        for k, v in m.get("capture_counts", {}).items():
+            self.tap.counts[k] = self.tap.counts.get(k, 0) + v
+        return True
 
     # --- the running system ---------------------------------------------------------
     def tick(self) -> None:

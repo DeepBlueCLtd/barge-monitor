@@ -40,7 +40,9 @@ export class LiveData {
       if (d.outputName === 'runs' && r.body?.length) this.runId = r.body[0].run_id;
     }
     this.version.set(this.version.value + 1);
-    // Poll on the simulation clock: once for every simulated second that passes.
+    // Poll on the simulation clock: once for every simulated second that passes,
+    // and never while it stands still (AT-11).
+    this.lastSecond = Math.floor(simClock.now());
     const timer = setInterval(() => {
       const s = Math.floor(simClock.now());
       if (s !== this.lastSecond) {

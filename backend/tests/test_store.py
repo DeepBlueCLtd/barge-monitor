@@ -47,3 +47,29 @@ def test_partial_appends_and_index_rebuild():
         assert np.array_equal(a[k], b[k], equal_nan=True), k
     assert before == {n: lg.read(n) for n, _ in lg.list_files()}  # the store is never altered
     assert np.all(np.diff(a["t"]) == 1.0)
+
+
+def test_prebuilt_history_loads_identically_and_continues_exactly():
+    """SRD §13: a pre-built history is the same store, and the run continues as if generated here."""
+    from barge.clock import ManualClock
+    from barge.history import code_hash
+    from barge.runtime import Runtime
+
+    days = 0.2
+    a = Runtime(seed=21, clock=ManualClock(days * 86400), pregen_days=days)
+    for n, _ in a.logger.list_files():
+        a.logger.close(n)
+    files = {n: a.logger.read(n) for n, _ in a.logger.list_files()}
+    manifest = {"seed": 21, "code_hash": code_hash(), "days": days, "end_t": a.sensors.next_t,
+                "capture_counts": a.tap.counts}
+    b = Runtime(seed=21, clock=ManualClock(days * 86400), pregen_days=days, history={"manifest": manifest, "files": files})
+    assert b.history_source == "pre-built"
+    assert b.tap.counts == a.tap.counts
+    for rt in (a, b):
+        rt.clock.play(); rt.clock.advance(300); rt.tick()
+        for n, _ in rt.logger.list_files():
+            rt.logger.close(n)
+    assert {n: a.logger.read(n) for n, _ in a.logger.list_files()} == {n: b.logger.read(n) for n, _ in b.logger.list_files()}
+    wrong = Runtime(seed=21, clock=ManualClock(days * 86400), pregen_days=days,
+                    history={"manifest": dict(manifest, code_hash="other"), "files": files})
+    assert wrong.history_source == "generated"  # refused: made by different code

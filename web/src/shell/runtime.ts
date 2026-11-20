@@ -2,7 +2,7 @@
 // backend and workspace workers, and hands the relay a port to the backend.
 // The shell's controls (play, restart server, control panel) reach the
 // backend worker directly: they belong to the demonstrator, not the system.
-import { API_BASE, PY_ZIP, PYODIDE_PATH, resolve } from '../config';
+import { API_BASE, HISTORY_PATH, PY_ZIP, PYODIDE_PATH, resolve } from '../config';
 import type { Progress } from '../workers/common';
 import { simClock } from './clock';
 import { bus } from './messages';
@@ -31,7 +31,22 @@ class Runtime {
   startedAt = performance.now();
   readyMs: number | null = null;
 
-  async start(seed: number, pregenDays: number | null) {
+  seed = 0;
+  historySource = 'generated';
+
+  async start(requested: number | null, pregenDays: number | null) {
+    // A seed with pre-built history starts in seconds; any other seed generates its own (SRD §13).
+    let historyUrl: string | null = null;
+    let seed = requested ?? 0;
+    try {
+      const h = await (await fetch(resolve('py/history.json'))).json();
+      if (pregenDays == null) historyUrl = resolve(`${HISTORY_PATH}${h.code_hash}/days-${h.days}/`);
+      if (requested == null) seed = h.seeds[Math.floor(Math.random() * h.seeds.length)];
+      this.historySource = h.seeds.includes(seed) && pregenDays == null ? `pre-built, ${h.days} days` : 'generated';
+    } catch {
+      if (requested == null) seed = Math.floor(Math.random() * 1e6);
+    }
+    this.seed = seed;
     if (!('serviceWorker' in navigator)) throw new Error('this browser has no Service Worker support');
     this.progress.set({ stage: 'seam', detail: 'registering the seam relay (Service Worker)', pct: 1 });
     await navigator.serviceWorker.register(resolve('sw.js'), { scope: './' });
@@ -42,7 +57,7 @@ class Runtime {
     navigator.serviceWorker.addEventListener('message', (e) => e.data?.type === 'need-port' && this.connect());
     this.backend = new Worker(new URL('../workers/backend.worker.ts', import.meta.url), { type: 'module' });
     this.backend.onmessage = (e) => this.onBackend(e.data);
-    this.backend.postMessage({ type: 'start', pyodideUrl: resolve(PYODIDE_PATH), pyZipUrl: resolve(PY_ZIP), seed, pregenDays });
+    this.backend.postMessage({ type: 'start', pyodideUrl: resolve(PYODIDE_PATH), pyZipUrl: resolve(PY_ZIP), seed, pregenDays, historyUrl });
     this.connect();
   }
 

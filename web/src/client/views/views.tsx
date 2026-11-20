@@ -82,7 +82,17 @@ export function Heatmap({ names, matrix, subtitle, testid }: { names: string[]; 
 }
 
 /** FR-61: rendered by schema type alone. */
-export function GenericView({ title, field, rows }: { title: string; field: Field; rows: Row[] }) {
+export function GenericView(props: { title: string; field: Field; rows: Row[] }) {
+  const { field } = props;
+  const kind = field.type === 'Quantity' ? (ANGULAR.has(unitOf(field)) ? 'points' : 'line') : field.type === 'Count' ? 'step' : field.type === 'Category' ? 'band' : 'table';
+  return (
+    <div className="gview" data-view={kind} data-field={field.name} data-testid={`field-${field.name}`}>
+      <GenericBody {...props} />
+    </div>
+  );
+}
+
+function GenericBody({ title, field, rows }: { title: string; field: Field; rows: Row[] }) {
   const unit = unitOf(field);
   const label = `${field.label ?? field.name}`;
   if (field.type === 'Quantity' && ANGULAR.has(unit)) {

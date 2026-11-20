@@ -163,9 +163,9 @@ def test_at15_server_down_is_no_answer_and_store_carries_on():
     assert st == 200
 
 
-@pytest.mark.slow
-def test_at05_four_weeks_declared_queries_meet_budget_and_rebuild_identically():
-    r = Rig(seed=14, days=C.PREGEN_DAYS)
+def test_at05_a_week_of_history_declared_queries_meet_budget_and_rebuild_identically():
+    """AT-05 at one week: CI loads a week of history (decision D-37); four weeks is published."""
+    r = Rig(seed=14, days=7)
     d = {s: r.ds(s, "weather")["id"] for s in ("bow", "stern")}
     now = r.clock.now()
     hour = f"{_iso(now - 3600)}/.."

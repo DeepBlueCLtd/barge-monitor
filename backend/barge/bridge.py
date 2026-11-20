@@ -15,9 +15,9 @@ from .runtime import Runtime
 
 
 class Bridge:
-    def __init__(self, seed: int, progress=None, pregen_days: float | None = None):
+    def __init__(self, seed: int, progress=None, pregen_days: float | None = None, history: dict | None = None):
         kw = {} if pregen_days is None else {"pregen_days": pregen_days}
-        self.rt = Runtime(seed=seed, progress=progress, **kw)
+        self.rt = Runtime(seed=seed, progress=progress, history=history, **kw)
         self.app = create_app(self.rt)
 
     def tick(self) -> str:
