@@ -8,6 +8,7 @@
 |---|---|---|---|
 | Four weeks | generated in the browser | 29.3 s | — |
 | One week | pre-built, 9.7 MB gzipped | 5.6 s | 9.7 s |
+| Four weeks | pre-built, 38.7 MB gzipped | 5.7 s | 11.7 s |
 
 Most of the gap between flowchart and charts is the server's waiting mode
 while it indexes the store, then the first analysis run.
@@ -20,5 +21,7 @@ into the store, as they arrive.
 
 ## Still to measure
 
-Four weeks pre-built over the real network from GitHub Pages (≈39 MB), and the
+Four weeks pre-built over the real network from GitHub Pages: locally the
+39 MB arrive in under a second, so the published figure depends on the
+connection. Also the
 fastest legible speed on the target presentation display (D-12).
