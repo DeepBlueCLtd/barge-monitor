@@ -251,7 +251,7 @@ test('no illustration images; fonts and the sketch renderer are same-origin (AT-
 test('with the sketch renderer off, every card still renders with a plain outline (AT-V6)', async ({ page }) => {
   await open(page, `${QUICK}?sketch=off`);
   await expect(page.locator('html')).toHaveClass(/sketch-off/);
-  expect(await page.locator('[data-sketch] path').count()).toBe(0);
+  expect(await page.locator('.card [data-sketch], .zone-region [data-sketch]').count()).toBe(0); // arrows stay, as plain lines
   const cards = page.locator('.card');
   expect(await cards.count()).toBeGreaterThanOrEqual(15);
   for (const c of await cards.all()) {

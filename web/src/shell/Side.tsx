@@ -18,10 +18,10 @@ export function Side() {
   const server = useStore(runtime.server);
   const client = useStore(clientStatus);
   const kind = useStore(runtime.backendKind);
-  const rows: [string, string, string?][] = [
+  const rows: [string, string, string?, string?][] = [
     ['Simulation', clock?.playing ? 'Playing' : 'Paused'],
     ['Speed', `${clock?.rate ?? ''}×`],
-    ['Sim time', simClock.iso().replace('T', ' ').replace('Z', '')],
+    ['Sim time', simClock.iso().replace('T', ' ').replace('Z', ''), undefined, 'sim-now'],
     ['Backend', kind === 'simulation' ? 'JS simulation' : 'Python (Pyodide)', kind === 'simulation' ? 'warn' : undefined],
     ['History', runtime.historySource],
     ['Server', `${server === 'running' ? 'Ready' : server === 'waiting' ? 'Waiting (503)' : 'Down'}${control?.instance ? ` · ${control.instance}` : ''}`, server === 'running' ? undefined : 'warn'],
@@ -48,7 +48,7 @@ export function Side() {
       <section className="side-card" aria-label="Status" data-testid="status-summary">
         <h3>Status</h3>
         <table className="status">
-          <tbody>{rows.map(([k, v, tone]) => <tr key={k}><th>{k}</th><td className={tone}>{v}</td></tr>)}</tbody>
+          <tbody>{rows.map(([k, v, tone, id]) => <tr key={k}><th>{k}</th><td className={tone} data-testid={id}>{v}</td></tr>)}</tbody>
         </table>
         {control?.pending && <p className="pending" role="status" data-testid="pending">Changes pending: restart the server to apply them.</p>}
       </section>
