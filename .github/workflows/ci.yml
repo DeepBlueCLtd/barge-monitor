@@ -1,0 +1,68 @@
+# Tests: the backend in CPython (contract suite under uvicorn, acceptance
+# tests including four weeks of history), the vocabulary gate, independent
+# Connected Systems clients (AT-16), the web build and the browser tests.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: pip install -r backend/requirements-dev.txt
+      - run: python -m pytest -q
+        working-directory: backend
+      - name: Vocabulary gate (PR-01)
+        env:
+          VOCABULARY_TERMS: ${{ secrets.VOCABULARY_TERMS }}
+        run: python scripts/vocab_gate.py .
+
+  independent-clients:
+    # AT-16, in an environment of its own: OSHConnect pins its own library versions.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: pip install numpy==2.2.5 fastapi==0.116.1 uvicorn==0.32.1 "oshconnect==0.5.5a1"
+      - run: python backend/independent/oshconnect_browse.py
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: pip install -r backend/requirements-dev.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      - uses: actions/cache@v4
+        with:
+          path: .cache
+          key: shared-${{ hashFiles('web/scripts/fetch-pyodide.mjs', 'backend/barge/*.py') }}
+      - run: python scripts/build_history.py --days 7 .cache/history 1 2 3  # tests load one week (D-37)
+      - run: npm run pyodide && npm run build && npm run site
+        working-directory: web
+      - run: npx playwright install --with-deps chromium
+        working-directory: web
+      - run: npx playwright test --trace off
+        working-directory: web
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-results
+          path: web/e2e-results.json

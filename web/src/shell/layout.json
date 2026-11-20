@@ -1,0 +1,47 @@
+{
+  "comment": "Fixed, hand-designed flowchart layout (FR-51). One node per component in SRD §4, under neutral names.",
+  "size": [1560, 1000],
+  "zones": [
+    {"id": "simulated", "label": "Simulated", "colour": "#ecfccb", "rects": [[20, 20, 250, 560]]},
+    {"id": "legacy", "label": "Legacy", "colour": "#fef3c7", "rects": [[300, 380, 200, 150]]},
+    {"id": "new", "label": "New build", "colour": "#dbeafe", "rects": [[530, 260, 980, 560]]},
+    {"id": "third", "label": "Third-party", "colour": "#f3e8ff", "rects": [[700, 90, 560, 130], [530, 850, 480, 120]]}
+  ],
+  "nodes": [
+    {"id": "clock", "code": "B-C01", "label": "Simulation clock", "zone": "simulated", "x": 55, "y": 60, "does": "Single source of time; off at start; play and pause; legible rates."},
+    {"id": "barge", "code": "B-C03", "label": "Barge", "zone": "simulated", "x": 55, "y": 180, "does": "Moves along the canal under the timetable. Its position is never recorded."},
+    {"id": "world", "code": "B-C02", "label": "World generator", "zone": "simulated", "x": 55, "y": 300, "does": "Canal, reaches, air masses, fronts and noise; writes the manifest (ground truth)."},
+    {"id": "sensors", "code": "B-C04", "label": "Sensors (bow, stern)", "zone": "simulated", "x": 55, "y": 420, "does": "Sample the world at 1 Hz and write fixed-width records to the logger."},
+    {"id": "logger", "code": "B-C05", "label": "Logger store", "zone": "legacy", "x": 325, "y": 430, "does": "Deliberately awkward, append-only fixed-width files; independent of the server."},
+    {"id": "adapter", "code": "B-C06", "label": "Store adapter", "zone": "new", "x": 560, "y": 430, "does": "The only code that understands the logger's format; keeps the server's own index."},
+    {"id": "server", "code": "B-C07", "label": "Connected Systems server", "zone": "new", "x": 800, "y": 430, "does": "Discovery, datastreams, observations, control streams; waiting mode; instance identifier."},
+    {"id": "analysis", "code": "B-C09", "label": "Analysis service", "zone": "new", "x": 800, "y": 640, "does": "A process system: derived values, change detection, correlation, clustering."},
+    {"id": "relay", "code": "B-C11", "label": "Seam relay", "zone": "new", "x": 1040, "y": 430, "does": "Service Worker passing HTTP to the backend worker; no logic. Down: a network failure."},
+    {"id": "client", "code": "B-C14", "label": "Display client", "zone": "new", "x": 1290, "y": 300, "does": "Handshake, profile check, self-configuration, panels. Restartable on its own."},
+    {"id": "workspace", "code": "B-C12", "label": "Analyst's workspace", "zone": "new", "x": 1290, "y": 520, "does": "CodeMirror editor and its own Pyodide worker; an ordinary client."},
+    {"id": "products", "code": "B-C13", "label": "Promoted products", "zone": "new", "x": 1290, "y": 700, "does": "Scientists' scripts registered as process systems with their own datastreams."},
+    {"id": "fastapi", "code": "B-C08", "label": "ASGI framework", "zone": "third", "x": 800, "y": 125, "does": "FastAPI and Starlette: routing, validation, OpenAPI."},
+    {"id": "runtime", "code": "B-C16", "label": "Browser and Pyodide", "zone": "third", "x": 1040, "y": 125, "does": "Hosts the workers and the relay."},
+    {"id": "scilibs", "code": "B-C10", "label": "Scientific libraries", "zone": "third", "x": 560, "y": 885, "does": "numpy, pandas, scipy, scikit-learn."},
+    {"id": "shell", "code": "B-C15", "label": "Demonstrator shell", "zone": null, "x": 1290, "y": 60, "does": "Flowchart, controls, key, tour. Not part of the real system."}
+  ],
+  "flows": [
+    {"a": "clock", "b": "barge", "letters": ["I"]},
+    {"a": "barge", "b": "sensors", "letters": ["I"]},
+    {"a": "world", "b": "sensors", "letters": ["I"]},
+    {"a": "sensors", "b": "logger", "letters": ["L"]},
+    {"a": "adapter", "b": "logger", "letters": ["I", "L"]},
+    {"a": "server", "b": "adapter", "letters": ["I"]},
+    {"a": "fastapi", "b": "server", "letters": ["I"]},
+    {"a": "relay", "b": "fastapi", "letters": ["Q", "K", "D", "O", "P", "H"]},
+    {"a": "client", "b": "relay", "letters": ["Q", "K", "D", "O", "P", "H"]},
+    {"a": "workspace", "b": "relay", "letters": ["Q", "D", "O", "H"]},
+    {"a": "workspace", "b": "products", "letters": ["I"]},
+    {"a": "products", "b": "relay", "letters": ["Q", "D", "H"]},
+    {"a": "server", "b": "analysis", "letters": ["I"]},
+    {"a": "analysis", "b": "scilibs", "letters": ["I"]},
+    {"a": "shell", "b": "clock", "letters": ["I"]},
+    {"a": "shell", "b": "server", "letters": ["I"]},
+    {"a": "shell", "b": "client", "letters": ["I"]}
+  ]
+}

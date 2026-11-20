@@ -1,0 +1,46 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://deepbluecltd.github.io/barge-monitor/contracts/schemas/command.json",
+ "title": "Command",
+ "type": "object",
+ "required": [
+  "id",
+  "controlstream@id",
+  "issueTime",
+  "parameters",
+  "currentStatus"
+ ],
+ "properties": {
+  "id": {
+   "type": "string"
+  },
+  "controlstream@id": {
+   "type": "string"
+  },
+  "issueTime": {
+   "type": "string"
+  },
+  "parameters": {
+   "type": "object"
+  },
+  "currentStatus": {
+   "enum": [
+    "PENDING",
+    "ACCEPTED",
+    "REJECTED",
+    "SCHEDULED",
+    "UPDATED",
+    "CANCELED",
+    "EXECUTING",
+    "FAILED",
+    "COMPLETED"
+   ]
+  },
+  "links": {
+   "type": "array",
+   "items": {
+    "$ref": "link.json"
+   }
+  }
+ }
+}

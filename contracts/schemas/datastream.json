@@ -1,0 +1,70 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://deepbluecltd.github.io/barge-monitor/contracts/schemas/datastream.json",
+ "title": "DatastreamResource",
+ "type": "object",
+ "required": [
+  "id",
+  "name",
+  "outputName",
+  "system@id",
+  "resultType",
+  "formats",
+  "links"
+ ],
+ "properties": {
+  "id": {
+   "type": "string"
+  },
+  "name": {
+   "type": "string"
+  },
+  "outputName": {
+   "type": "string"
+  },
+  "system@id": {
+   "type": "string"
+  },
+  "phenomenonTime": {
+   "type": [
+    "array",
+    "null"
+   ],
+   "items": {
+    "type": "string"
+   },
+   "minItems": 2,
+   "maxItems": 2
+  },
+  "resultTime": {
+   "type": [
+    "array",
+    "null"
+   ]
+  },
+  "resultType": {
+   "const": "record"
+  },
+  "live": {
+   "type": "boolean"
+  },
+  "formats": {
+   "type": "array",
+   "items": {
+    "enum": [
+     "application/swe+json",
+     "application/json"
+    ]
+   }
+  },
+  "observedProperties": {
+   "type": "array"
+  },
+  "links": {
+   "type": "array",
+   "items": {
+    "$ref": "link.json"
+   }
+  }
+ }
+}

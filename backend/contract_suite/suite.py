@@ -1,0 +1,278 @@
+"""The contract suite for the HTTP seam (AT-02, AT-12).
+
+Written against a minimal async client, so the *same* tests run in CPython
+against the application under uvicorn, and in the browser from the
+workspace worker through the relay to the application in Pyodide.
+
+A client provides ``async request(method, path, params=None, body=None,
+headers=None)`` returning ``(status, headers, body)``, where body is parsed
+JSON when the response is JSON and text otherwise. Paths are relative to the
+API base.
+"""
+from __future__ import annotations
+
+import json
+import traceback
+from pathlib import Path
+
+TESTS = []
+SOSA = "http://www.w3.org/ns/sosa/"
+CS1 = "http://www.opengis.net/spec/ogcapi-connectedsystems-1/1.0/conf/"
+CS2 = "http://www.opengis.net/spec/ogcapi-connectedsystems-2/1.0/conf/"
+
+
+def test(fn):
+    TESTS.append(fn)
+    return fn
+
+
+class Skip(Exception):
+    pass
+
+
+def contracts_dir() -> Path:
+    here = Path(__file__).resolve().parent
+    for cand in (here.parent / "contracts", here.parent.parent / "contracts"):
+        if cand.is_dir():
+            return cand
+    raise FileNotFoundError("contracts")
+
+
+class Ctx:
+    def __init__(self, client):
+        self.c = client
+        self.dir = contracts_dir()
+        import jsonschema
+        from referencing import Registry, Resource
+
+        self._js = jsonschema
+        resources = []
+        for p in sorted((self.dir / "schemas").glob("*.json")):
+            doc = json.loads(p.read_text())
+            resources.append((doc["$id"], Resource.from_contents(doc)))
+        prof = json.loads((self.dir / "profile.schema.json").read_text())
+        resources.append((prof["$id"], Resource.from_contents(prof)))
+        self.registry = Registry().with_resources(resources)
+        self.base = "https://deepbluecltd.github.io/barge-monitor/contracts/"
+
+    def validate(self, instance, name):
+        uri = self.base + ("profile.schema.json" if name == "profile" else f"schemas/{name}.json")
+        v = self._js.Draft202012Validator({"$ref": uri}, registry=self.registry)
+        v.validate(instance)
+
+    async def get(self, path, params=None, headers=None):
+        return await self.c.request("GET", path, params=params, headers=headers)
+
+    async def ds(self, system_id, output):
+        st, _, body = await self.get(f"systems/{system_id}/datastreams")
+        assert st == 200, body
+        for d in body["items"]:
+            if d["outputName"] == output:
+                return d
+        raise AssertionError(f"no {output} datastream on {system_id}")
+
+
+def refused(st, body, status, name):
+    assert st == status, f"expected {status}, got {st}: {body}"
+    assert isinstance(body, dict) and body.get("refused") == name, f"refusal should name {name!r}: {body}"
+
+
+@test
+async def landing_links_profile_and_carries_instance(ctx):
+    st, h, body = await ctx.get("")
+    assert st == 200
+    ctx.validate(body, "landing")
+    rels = {lk["rel"] for lk in body["links"]}
+    assert {"self", "service-desc", "conformance", "data", "systems", "datastreams", "profile"} <= rels
+    inst = h.get("x-server-instance")
+    assert inst and h.get("etag", "").strip('"') == inst
+
+
+@test
+async def conformance_declares_the_subset(ctx):
+    st, _, body = await ctx.get("conformance")
+    assert st == 200
+    ctx.validate(body, "conformance")
+    c = set(body["conformsTo"])
+    for need in ("system", "subsystem", "property", "create-replace-delete", "sensorml"):
+        assert CS1 + need in c, need
+    for need in ("datastream", "controlstream", "create-replace-delete", "json", "swecommon-json"):
+        assert CS2 + need in c, need
+    for absent in ("deployment", "procedure", "sf", "advanced-filtering", "update", "system-event", "swecommon-text", "swecommon-binary"):
+        assert CS1 + absent not in c and CS2 + absent not in c, absent
+
+
+@test
+async def profile_is_served_valid_and_claimed(ctx):
+    st, _, prof = await ctx.get("profile")
+    assert st == 200
+    ctx.validate(prof, "profile")
+    _, _, conf = await ctx.get("conformance")
+    assert prof["id"] in conf["conformsTo"]
+
+
+@test
+async def systems_have_the_standard_types_and_no_location(ctx):
+    st, _, body = await ctx.get("systems")
+    assert st == 200
+    ctx.validate(body, "page")
+    by = {s["id"]: s for s in body["items"]}
+    for s in by.values():
+        ctx.validate(s, "system")
+    assert by["barge"]["systemType"] == SOSA + "Platform"
+    assert by["analysis"]["systemType"] == SOSA + "System" and by["analysis"]["assetType"] == "Process"
+    _, _, subs = await ctx.get("systems/barge/subsystems")
+    types = {s["id"]: s["systemType"] for s in subs["items"]}
+    assert types == {"bow": SOSA + "Sensor", "stern": SOSA + "Sensor"}
+
+
+@test
+async def sensor_schema_has_qc_category_per_quantity(ctx):
+    d = await ctx.ds("bow", "weather")
+    ctx.validate(d, "datastream")
+    st, _, body = await ctx.get(f"datastreams/{d['id']}/schema")
+    refused(st, body, 400, "obsFormat")
+    st, _, body = await ctx.get(f"datastreams/{d['id']}/schema", {"obsFormat": "application/swe+json"})
+    assert st == 200 and body["obsFormat"] == "application/swe+json"
+    rec = body["recordSchema"]
+    ctx.validate(rec, "swe-record")
+    names = {f["name"]: f for f in rec["fields"]}
+    for f in rec["fields"]:
+        if f["type"] == "Quantity":
+            q = names[f["name"] + "_qc"]
+            assert q["type"] == "Category" and f["quality"] == [{"href": f"#{f['name']}_qc"}]
+    st, _, body = await ctx.get(f"datastreams/{d['id']}/schema", {"obsFormat": "application/json"})
+    assert st == 200 and "resultSchema" in body
+
+
+@test
+async def observations_are_swe_json_and_poll_by_phenomenon_time(ctx):
+    d = await ctx.ds("stern", "weather")
+    st, h, latest = await ctx.get(f"datastreams/{d['id']}/observations", {"resultTime": "latest"})
+    assert st == 200 and h.get("content-type", "").startswith("application/swe+json"), h
+    assert isinstance(latest, list) and len(latest) == 1
+    last = latest[0]["time"]
+    st, _, body = await ctx.get(f"datastreams/{d['id']}/observations", {"phenomenonTime": f"{last}/..", "limit": "5"})
+    assert st == 200 and body and body[0]["time"] >= last
+    st, _, body = await ctx.get(f"datastreams/{d['id']}/observations", {"resultTime": "latest", "f": "application/json"})
+    assert st == 200
+    ctx.validate(body, "page")
+    ctx.validate(body["items"][0], "observation")
+
+
+@test
+async def observations_page_and_refuse_oversize(ctx):
+    d = await ctx.ds("bow", "weather")
+    st, h, body = await ctx.get(f"datastreams/{d['id']}/observations", {"limit": "3"})
+    assert st == 200 and len(body) == 3 and 'rel="next"' in h.get("link", "")
+    st, _, body = await ctx.get(f"datastreams/{d['id']}/observations", {"limit": "100000000"})
+    refused(st, body, 400, "limit")
+    assert "maximum" in body["description"]
+
+
+@test
+async def refuses_what_is_not_implemented_by_name(ctx):
+    st, _, body = await ctx.get("deployments")
+    refused(st, body, 404, "deployments")
+    st, _, body = await ctx.get("systems", {"q": "barge"})
+    refused(st, body, 400, "q")
+    st, _, body = await ctx.get("systems", {"colour": "red"})
+    refused(st, body, 400, "colour")
+    d = await ctx.ds("bow", "weather")
+    st, _, body = await ctx.get(f"datastreams/{d['id']}/observations", {"f": "application/swe+text"})
+    refused(st, body, 400, "f:application/swe+text")
+    st, _, body = await ctx.c.request("PATCH", "systems/barge", body={})
+    refused(st, body, 405, "PATCH")
+    ctx.validate(body, "exception")
+
+
+@test
+async def control_stream_bounds_live_in_its_schema(ctx):
+    st, _, body = await ctx.get("controlstreams")
+    cs = body["items"][0]
+    st, _, sch = await ctx.get(f"controlstreams/{cs['id']}/schema")
+    fields = {f["name"]: f for f in sch["parametersSchema"]["fields"]}
+    lo, hi = fields["clusters"]["constraint"]["intervals"][0]
+    st, _, body = await ctx.c.request("POST", f"controlstreams/{cs['id']}/commands", body={"parameters": {"clusters": hi + 1}})
+    refused(st, body, 400, "clusters")
+    assert str(hi) in body["description"]
+    st, h, body = await ctx.c.request("POST", f"controlstreams/{cs['id']}/commands", body={"parameters": {"clusters": lo}})
+    assert st == 201, body
+    ctx.validate(body, "command")
+    assert body["currentStatus"] == "COMPLETED"
+    st, _, status = await ctx.get(f"commands/{body['id']}/status")
+    assert [s["statusCode"] for s in status["items"]][0] == "PENDING"
+
+
+@test
+async def analysis_results_carry_settings_range_and_scores(ctx):
+    d = await ctx.ds("analysis", "runs")
+    st, _, body = await ctx.get(f"datastreams/{d['id']}/observations", {"resultTime": "latest"})
+    assert st == 200 and body
+    r = body[0]
+    for k in ("window_start", "window_end", "records", "window_hours", "clusters", "sensitivity", "parameters",
+              "score_boundary_recall", "score_ari_air_mass"):
+        assert k in r, k
+    for out in ("changes", "clusters", "correlation"):
+        dd = await ctx.ds("analysis", out)
+        st, _, obs = await ctx.get(f"datastreams/{dd['id']}/observations", {"limit": "1"})
+        assert st == 200
+        if obs:
+            assert obs[0]["run_id"].startswith("run-")
+
+
+@test
+async def promotion_is_standard_resource_creation(ctx):
+    req = ctx.c.request
+    st, h, sysm = await req("POST", "systems", body={
+        "type": "SimpleProcess", "uniqueId": "urn:x-barge:process:contract-test", "label": "Contract test product",
+        "systemType": SOSA + "System", "assetType": "Process"})
+    assert st == 201, sysm
+    try:
+        rec = {"type": "DataRecord", "fields": [
+            {"type": "Time", "name": "time", "definition": "http://www.opengis.net/def/property/OGC/0/SamplingTime", "uom": {"href": "x"}},
+            {"type": "Quantity", "name": "value", "label": "Value", "definition": "x", "uom": {"code": "1"}}]}
+        st, _, ds = await req("POST", f"systems/{sysm['id']}/datastreams", body={
+            "name": "Contract test series", "outputName": "series", "schema": {"obsFormat": "application/swe+json", "recordSchema": rec}})
+        assert st == 201, ds
+        st, _, body = await req("POST", f"datastreams/{ds['id']}/observations",
+                                body=[{"time": "2031-04-07T00:00:00Z", "value": 1.5}, {"time": "2031-04-07T00:00:01Z", "value": 2.5}])
+        assert st == 201, body
+        st, _, body = await req("POST", f"datastreams/{ds['id']}/observations", body=[{"time": "2031-04-07T00:00:02Z", "value": "x"}])
+        refused(st, body, 400, "field:value")
+        st, _, obs = await ctx.get(f"datastreams/{ds['id']}/observations")
+        assert [o["value"] for o in obs] == [1.5, 2.5]
+        _, _, all_sys = await ctx.get("systems")
+        assert sysm["id"] in {s["id"] for s in all_sys["items"]}
+    finally:
+        await req("DELETE", f"systems/{sysm['id']}")
+    st, _, _ = await ctx.get(f"systems/{sysm['id']}")
+    assert st == 404
+
+
+@test
+async def openapi_is_served(ctx):
+    st, _, body = await ctx.get("api")
+    assert st == 200 and body["openapi"].startswith("3.1")
+    master = json.loads((ctx.dir / "openapi.json").read_text())
+    body.pop("servers", None)  # FastAPI adds the mount point, which differs between hosts
+    master.pop("servers", None)
+    assert body == master, "the served OpenAPI differs from contracts/openapi.json"
+
+
+async def run(client, only=None) -> list[dict]:
+    """Run every test; never raises. One result per test."""
+    ctx = Ctx(client)
+    results = []
+    for fn in TESTS:
+        if only and fn.__name__ not in only:
+            continue
+        try:
+            await fn(ctx)
+            results.append({"test": fn.__name__, "outcome": "passed"})
+        except Skip as s:
+            results.append({"test": fn.__name__, "outcome": "skipped", "detail": str(s)})
+        except Exception as e:  # noqa: BLE001
+            results.append({"test": fn.__name__, "outcome": "failed", "detail": f"{type(e).__name__}: {e}",
+                            "trace": traceback.format_exc(limit=3)})
+    return results

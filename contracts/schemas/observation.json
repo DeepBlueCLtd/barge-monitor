@@ -1,0 +1,30 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://deepbluecltd.github.io/barge-monitor/contracts/schemas/observation.json",
+ "title": "Observation",
+ "type": "object",
+ "required": [
+  "id",
+  "datastream@id",
+  "phenomenonTime",
+  "resultTime",
+  "result"
+ ],
+ "properties": {
+  "id": {
+   "type": "string"
+  },
+  "datastream@id": {
+   "type": "string"
+  },
+  "phenomenonTime": {
+   "type": "string"
+  },
+  "resultTime": {
+   "type": "string"
+  },
+  "result": {
+   "type": "object"
+  }
+ }
+}

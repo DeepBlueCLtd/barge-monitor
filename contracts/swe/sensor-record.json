@@ -1,0 +1,248 @@
+{
+ "type": "DataRecord",
+ "name": "record",
+ "label": "Bow weather record",
+ "fields": [
+  {
+   "type": "Time",
+   "name": "time",
+   "label": "Sampling time",
+   "definition": "http://www.opengis.net/def/property/OGC/0/SamplingTime",
+   "referenceFrame": "http://www.opengis.net/def/trs/BIPM/0/UTC",
+   "uom": {
+    "href": "http://www.opengis.net/def/uom/ISO-8601/0/Gregorian"
+   }
+  },
+  {
+   "type": "Quantity",
+   "name": "air_temperature",
+   "label": "Air temperature",
+   "definition": "https://deepbluecltd.github.io/barge-monitor/def/air_temperature",
+   "uom": {
+    "code": "Cel"
+   },
+   "quality": [
+    {
+     "href": "#air_temperature_qc"
+    }
+   ]
+  },
+  {
+   "type": "Category",
+   "name": "air_temperature_qc",
+   "id": "air_temperature_qc",
+   "label": "QC flag: Air temperature",
+   "definition": "https://ioos.github.io/qartod/flag",
+   "codeSpace": "https://ioos.github.io/qartod/",
+   "constraint": {
+    "type": "AllowedTokens",
+    "values": [
+     "1",
+     "2",
+     "3",
+     "4",
+     "9"
+    ]
+   },
+   "description": "QARTOD: 1 pass, 2 not evaluated, 3 suspect, 4 fail, 9 missing"
+  },
+  {
+   "type": "Quantity",
+   "name": "apparent_wind_speed",
+   "label": "Apparent wind speed",
+   "definition": "https://deepbluecltd.github.io/barge-monitor/def/apparent_wind_speed",
+   "uom": {
+    "code": "m/s"
+   },
+   "quality": [
+    {
+     "href": "#apparent_wind_speed_qc"
+    }
+   ]
+  },
+  {
+   "type": "Category",
+   "name": "apparent_wind_speed_qc",
+   "id": "apparent_wind_speed_qc",
+   "label": "QC flag: Apparent wind speed",
+   "definition": "https://ioos.github.io/qartod/flag",
+   "codeSpace": "https://ioos.github.io/qartod/",
+   "constraint": {
+    "type": "AllowedTokens",
+    "values": [
+     "1",
+     "2",
+     "3",
+     "4",
+     "9"
+    ]
+   },
+   "description": "QARTOD: 1 pass, 2 not evaluated, 3 suspect, 4 fail, 9 missing"
+  },
+  {
+   "type": "Quantity",
+   "name": "relative_humidity",
+   "label": "Relative humidity",
+   "definition": "https://deepbluecltd.github.io/barge-monitor/def/relative_humidity",
+   "uom": {
+    "code": "%"
+   },
+   "quality": [
+    {
+     "href": "#relative_humidity_qc"
+    }
+   ]
+  },
+  {
+   "type": "Category",
+   "name": "relative_humidity_qc",
+   "id": "relative_humidity_qc",
+   "label": "QC flag: Relative humidity",
+   "definition": "https://ioos.github.io/qartod/flag",
+   "codeSpace": "https://ioos.github.io/qartod/",
+   "constraint": {
+    "type": "AllowedTokens",
+    "values": [
+     "1",
+     "2",
+     "3",
+     "4",
+     "9"
+    ]
+   },
+   "description": "QARTOD: 1 pass, 2 not evaluated, 3 suspect, 4 fail, 9 missing"
+  },
+  {
+   "type": "Quantity",
+   "name": "pressure",
+   "label": "Barometric pressure (station)",
+   "definition": "https://deepbluecltd.github.io/barge-monitor/def/pressure",
+   "uom": {
+    "code": "hPa"
+   },
+   "quality": [
+    {
+     "href": "#pressure_qc"
+    }
+   ]
+  },
+  {
+   "type": "Category",
+   "name": "pressure_qc",
+   "id": "pressure_qc",
+   "label": "QC flag: Barometric pressure (station)",
+   "definition": "https://ioos.github.io/qartod/flag",
+   "codeSpace": "https://ioos.github.io/qartod/",
+   "constraint": {
+    "type": "AllowedTokens",
+    "values": [
+     "1",
+     "2",
+     "3",
+     "4",
+     "9"
+    ]
+   },
+   "description": "QARTOD: 1 pass, 2 not evaluated, 3 suspect, 4 fail, 9 missing"
+  },
+  {
+   "type": "Quantity",
+   "name": "apparent_wind_direction",
+   "label": "Apparent wind direction, relative to the bow",
+   "definition": "https://deepbluecltd.github.io/barge-monitor/def/apparent_wind_direction",
+   "uom": {
+    "code": "deg"
+   },
+   "quality": [
+    {
+     "href": "#apparent_wind_direction_qc"
+    }
+   ]
+  },
+  {
+   "type": "Category",
+   "name": "apparent_wind_direction_qc",
+   "id": "apparent_wind_direction_qc",
+   "label": "QC flag: Apparent wind direction, relative to the bow",
+   "definition": "https://ioos.github.io/qartod/flag",
+   "codeSpace": "https://ioos.github.io/qartod/",
+   "constraint": {
+    "type": "AllowedTokens",
+    "values": [
+     "1",
+     "2",
+     "3",
+     "4",
+     "9"
+    ]
+   },
+   "description": "QARTOD: 1 pass, 2 not evaluated, 3 suspect, 4 fail, 9 missing"
+  },
+  {
+   "type": "Quantity",
+   "name": "solar_irradiance",
+   "label": "Solar irradiance",
+   "definition": "https://deepbluecltd.github.io/barge-monitor/def/solar_irradiance",
+   "uom": {
+    "code": "W/m2"
+   },
+   "quality": [
+    {
+     "href": "#solar_irradiance_qc"
+    }
+   ]
+  },
+  {
+   "type": "Category",
+   "name": "solar_irradiance_qc",
+   "id": "solar_irradiance_qc",
+   "label": "QC flag: Solar irradiance",
+   "definition": "https://ioos.github.io/qartod/flag",
+   "codeSpace": "https://ioos.github.io/qartod/",
+   "constraint": {
+    "type": "AllowedTokens",
+    "values": [
+     "1",
+     "2",
+     "3",
+     "4",
+     "9"
+    ]
+   },
+   "description": "QARTOD: 1 pass, 2 not evaluated, 3 suspect, 4 fail, 9 missing"
+  },
+  {
+   "type": "Quantity",
+   "name": "water_temperature",
+   "label": "Water temperature",
+   "definition": "https://deepbluecltd.github.io/barge-monitor/def/water_temperature",
+   "uom": {
+    "code": "Cel"
+   },
+   "quality": [
+    {
+     "href": "#water_temperature_qc"
+    }
+   ]
+  },
+  {
+   "type": "Category",
+   "name": "water_temperature_qc",
+   "id": "water_temperature_qc",
+   "label": "QC flag: Water temperature",
+   "definition": "https://ioos.github.io/qartod/flag",
+   "codeSpace": "https://ioos.github.io/qartod/",
+   "constraint": {
+    "type": "AllowedTokens",
+    "values": [
+     "1",
+     "2",
+     "3",
+     "4",
+     "9"
+    ]
+   },
+   "description": "QARTOD: 1 pass, 2 not evaluated, 3 suspect, 4 fail, 9 missing"
+  }
+ ]
+}

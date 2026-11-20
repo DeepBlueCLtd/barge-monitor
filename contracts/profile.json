@@ -1,0 +1,15 @@
+{
+  "id": "https://deepbluecltd.github.io/barge-monitor/profile/v3",
+  "title": "Canal barge weather display: declared profile, Version 3",
+  "description": "The essential sources the display client needs (SRD FR-38). A server claims this profile by listing its id in its conformance declaration; a client checks the claim against discovery (FR-39).",
+  "essentials": [
+    {"id": "bow-air-temperature", "label": "Bow air temperature", "system": "urn:x-barge:sensor:bow", "datastream": "weather", "field": "air_temperature", "type": "Quantity", "uom": "Cel", "views": ["temperature"]},
+    {"id": "stern-air-temperature", "label": "Stern air temperature", "system": "urn:x-barge:sensor:stern", "datastream": "weather", "field": "air_temperature", "type": "Quantity", "uom": "Cel", "views": ["temperature"]},
+    {"id": "bow-wind-speed", "label": "Bow apparent wind speed", "system": "urn:x-barge:sensor:bow", "datastream": "weather", "field": "apparent_wind_speed", "type": "Quantity", "uom": "m/s", "views": ["wind"]},
+    {"id": "stern-wind-speed", "label": "Stern apparent wind speed", "system": "urn:x-barge:sensor:stern", "datastream": "weather", "field": "apparent_wind_speed", "type": "Quantity", "uom": "m/s", "views": ["wind"]},
+    {"id": "derived-values", "label": "Derived values (dew point)", "system": "urn:x-barge:process:analysis", "datastream": "derived", "field": "dew_point", "type": "Quantity", "uom": "Cel", "views": ["derived"]},
+    {"id": "change-detector", "label": "Change detector", "system": "urn:x-barge:process:analysis", "datastream": "changes", "field": "strength", "type": "Quantity", "uom": "1", "views": ["changes"]},
+    {"id": "correlation-matrix", "label": "Correlation matrix", "system": "urn:x-barge:process:analysis", "datastream": "correlation", "field": "matrix", "type": "Matrix", "uom": null, "views": ["correlation"]},
+    {"id": "clustering", "label": "Clustering into regimes", "system": "urn:x-barge:process:analysis", "datastream": "clusters", "field": "regime", "type": "Category", "uom": null, "views": ["clusters"]}
+  ]
+}
