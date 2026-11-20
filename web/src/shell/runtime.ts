@@ -48,7 +48,7 @@ class Runtime {
       if (requested == null) seed = Math.floor(Math.random() * 1e6);
     }
     this.seed = seed;
-    // Without WebAssembly, Pyodide cannot run: an illustrative TypeScript simulation answers instead (D-41).
+    // Without WebAssembly, Pyodide cannot run: an illustrative JS simulation answers instead (D-41).
     this.backendKind.set(typeof WebAssembly === 'undefined' ? 'simulation' : 'python');
     if (!('serviceWorker' in navigator)) throw new Error('this browser has no Service Worker support');
     this.progress.set({ stage: 'seam', detail: 'registering the seam relay (Service Worker)', pct: 1 });

@@ -15,10 +15,10 @@ const W = 170;
 const H = 58;
 const pos = new Map(layout.nodes.map((n) => [n.id, { x: n.x + W / 2, y: n.y + H / 2 }]));
 
-// What really runs when the illustrative TypeScript simulation stands in (D-41).
+// What really runs when the illustrative JS simulation stands in (D-41).
 const SIMULATED_LABELS: Record<string, string> = {
-  logger: 'Logger store (simulated)', adapter: 'Store adapter (simulated)', server: 'CS server (TS simulation)',
-  fastapi: 'Router (TS simulation)', analysis: 'Analysis (TS simulation)', scilibs: 'Arithmetic (TS simulation)',
+  logger: 'Logger store (simulated)', adapter: 'Store adapter (simulated)', server: 'CS server (JS simulation)',
+  fastapi: 'Router (JS simulation)', analysis: 'Analysis (JS simulation)', scilibs: 'Arithmetic (JS simulation)',
   runtime: 'Browser (WebAssembly blocked)', workspace: 'Workspace (unavailable)', products: 'Products (unavailable)',
 };
 

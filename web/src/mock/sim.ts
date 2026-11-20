@@ -267,7 +267,7 @@ export class SimBackend {
     const now = Math.floor(this.clock.now());
     const t0 = Math.max(0, now - settings.window_hours * 3600);
     this.tap.emit('server', 'analysis', 'I', 'run with settings', settings);
-    this.tap.emit('analysis', 'scilibs', 'I', 'illustrative arithmetic (TypeScript)', {});
+    this.tap.emit('analysis', 'scilibs', 'I', 'illustrative arithmetic (JS)', {});
     const params = PARAMS.filter((p) => this.server!.pub.has(p) && (settings[`include_${p}`] ?? true)).slice(0, 6);
     const ts: number[] = [];
     for (let t = t0; t <= now; t += 60) ts.push(t);
@@ -327,7 +327,7 @@ export class SimBackend {
     const page = (items: any[]) => ({ items, links: [link(path, 'self')] });
     const getDs = (id: string) => { const d = s.ds[id]; if (!d) throw refusal(404, 'NotFound', `datastream ${id} does not exist`, `datastream:${id}`); return d; };
     if (method === 'GET') {
-      if (!parts.length) return json(200, { title: 'Canal barge weather demonstrator (illustrative TypeScript simulation)', description: 'WebAssembly is blocked in this browser, so an illustrative TypeScript simulation answers in place of the Python server.',
+      if (!parts.length) return json(200, { title: 'Canal barge weather demonstrator (illustrative JS simulation)', description: 'WebAssembly is blocked in this browser, so an illustrative JS simulation answers in place of the Python server.',
         links: [link('/', 'self'), link('/conformance', 'conformance'), link('/systems', 'systems'), link('/datastreams', 'datastreams'), link('/profile', 'profile')] });
       if (path === '/conformance') return json(200, { conformsTo: (s.lie || s.satisfies()) ? [profile.id] : [] });
       if (path === '/profile') return json(200, profile);

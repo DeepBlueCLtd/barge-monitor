@@ -80,7 +80,7 @@ export function Shell() {
       </header>
       <p className={`backend ${simulated ? 'simulated' : ''}`} data-testid="backend" role="status">
         {simulated ? (
-          <><b>Backend: illustrative TypeScript simulation.</b> WebAssembly is blocked in this browser, so the Python backend (Pyodide) cannot run.
+          <><b>Backend: illustrative JS simulation.</b> WebAssembly is blocked in this browser, so the Python backend (Pyodide) cannot run.
             A simplified simulation answers the same Connected Systems interface instead: its readings and analysis are illustrative and unscored,
             and the Python workspace is unavailable. To see the real system, allow WebAssembly for this site (in Microsoft Edge: Settings → Privacy,
             search and services → Security → "Enhance your security on the web": add an exception or choose Balanced) and reload.</>
@@ -96,7 +96,7 @@ export function Shell() {
         </section>
         <DisplayClient key={clientKey} onRestart={restartClient} />
       </div>
-      <footer className="hint">Started in {((runtime.readyMs ?? 0) / 1000).toFixed(1)} s · seed {runtime.seed} · backend {simulated ? 'TypeScript simulation' : 'Python'} · history {runtime.historySource} · <a href="../">requirements</a> · {bus.total.toLocaleString()} messages drawn</footer>
+      <footer className="hint">Started in {((runtime.readyMs ?? 0) / 1000).toFixed(1)} s · seed {runtime.seed} · backend {simulated ? 'JS simulation' : 'Python'} · history {runtime.historySource} · <a href="../">requirements</a> · {bus.total.toLocaleString()} messages drawn</footer>
     </div>
   );
 }

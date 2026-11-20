@@ -1,5 +1,5 @@
 /// <reference lib="webworker" />
-// Hosts the illustrative TypeScript simulation (decision D-41) when the
+// Hosts the illustrative JS simulation (decision D-41) when the
 // browser has WebAssembly switched off. Same protocol as backend.worker.ts,
 // so the relay, the shell and the display client are unchanged.
 import { SimBackend } from '../mock/sim';

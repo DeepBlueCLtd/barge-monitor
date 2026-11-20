@@ -178,10 +178,10 @@ test('analysis settings are commands; the server refuses an out-of-range value b
   await expect(page.getByTestId('command-status')).toContainText('COMPLETED', { timeout: 60_000 });
 });
 
-test('with WebAssembly blocked, an illustrative TypeScript simulation answers, and the UI says so (D-41)', async ({ page }) => {
+test('with WebAssembly blocked, an illustrative JS simulation answers, and the UI says so (D-41)', async ({ page }) => {
   await page.addInitScript(() => { delete (globalThis as any).WebAssembly; });
   await page.goto(QUICK);
-  await expect(page.getByTestId('backend')).toContainText('illustrative TypeScript simulation', { timeout: 20_000 });
+  await expect(page.getByTestId('backend')).toContainText('illustrative JS simulation', { timeout: 20_000 });
   await expect(page.getByTestId('backend')).toContainText('WebAssembly is blocked');
   await expect(page.getByTestId('chart-temperature')).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId('workspace-unavailable')).toBeVisible();
