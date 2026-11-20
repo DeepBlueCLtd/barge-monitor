@@ -138,7 +138,7 @@ export function DisplayClient({ onRestart }: { onRestart: () => void }) {
       )}
       <section className="panel charts-panel" aria-label="Time-series charts">
         <header className="panel-head">
-          <h2>Time series</h2>
+          <h2>Time series <small data-testid="client-instance" title="The server instance this client handshook with">instance {config.instance}</small></h2>
           <span className="toggles">{VIEWS.filter(([id]) => id !== 'correlation').map(([id, l]) => toggle(id, l))}</span>
         </header>
         {stale && <div className="banner" role="status" data-testid="unreachable">Server unreachable: showing the last data received (stale). Retrying every simulated second.</div>}

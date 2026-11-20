@@ -147,9 +147,12 @@ test('restart server: waiting mode, a new instance, a fresh handshake (AT-09)', 
   await page.getByTestId('restart-server').click();
   await expect(page.getByTestId('server-state')).toContainText('waiting', { timeout: 10_000 });
   await expect(page.getByTestId('server-state')).toContainText('running', { timeout: 120_000 });
-  expect(await page.getByTestId('server-state').innerText()).not.toBe(inst);
-  await page.getByTestId('play').click();
-  await expect(page.getByTestId('handshake')).toBeVisible({ timeout: 20_000 });
+  const state = await page.getByTestId('server-state').innerText();
+  expect(state).not.toBe(inst);
+  const instance = state.match(/instance (\S+)/)![1];
+  await page.getByTestId('play').click(); // the client notices on its next poll, which needs the clock running
+  // A fresh handshake: the client is now configured from the new instance (a transient "handshake" state is too brief to test).
+  await expect(page.getByTestId('client-instance')).toHaveText(`instance ${instance}`, { timeout: 60_000 });
   await expect(page.getByTestId('chart-temperature')).toBeVisible({ timeout: 60_000 });
 });
 
