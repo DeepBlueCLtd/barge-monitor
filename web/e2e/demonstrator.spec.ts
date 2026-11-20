@@ -5,7 +5,7 @@ import { contrast, contrastPairs } from '../src/shell/palette';
 // assembled static site. They load the pre-calculated history the build provides.
 const STARTUP_BUDGET_MS = 30_000; // NFR-10, as declared in src/config.ts
 const SLOW_MS = 180_000;
-const URL_PY = 'demo/?seed=1';
+const URL_PY = 'demo/?seed=1&backend=python'; // explicit: the stand-in is the default for now (D-80)
 
 test.describe.configure({ mode: 'serial' });
 

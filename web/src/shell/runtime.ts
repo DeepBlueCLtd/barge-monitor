@@ -60,9 +60,15 @@ export interface ModelWorkerStatus {
   progress?: Progress;
 }
 
+// TEMPORARY (decision D-80): while the cosmetics are reviewed, the stand-in is the default so
+// the page reloads in a couple of seconds. `?backend=python` still runs Pyodide. Set this back
+// to true to reinstate FR-06b.
+const PYTHON_BY_DEFAULT = false;
+
 function chooseBackend(): BackendKind {
   const asked = urlParam('backend');
   if (asked === 'python' || asked === 'standin') return asked;
+  if (!PYTHON_BY_DEFAULT) return 'standin';
   // FR-06b: the Python back end needs WebAssembly; without it, the stand-in.
   return typeof WebAssembly === 'undefined' ? 'standin' : 'python';
 }
