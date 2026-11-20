@@ -54,7 +54,7 @@ h1, h2, h3, h4 { margin: 0; font-weight: 400; }
 .segmented .btn:first-child { border-radius: 7px 0 0 7px; margin-left: 0; }
 .segmented .btn:last-child { border-radius: 0 7px 7px 0; }
 .segmented .btn.on { background: #dfe6f7; }
-.main { display: grid; grid-template-columns: 840px minmax(0, 1fr); gap: 24px; padding: 0 24px 12px; min-height: 0; }
+.main { display: grid; grid-template-columns: minmax(480px, 37fr) minmax(0, 63fr); /* right panel wide, as the mockups */ gap: 24px; padding: 0 24px 12px; min-height: 0; }
 .left { position: relative; min-height: 0; }
 
 /* ---------- Flowchart (FR-64..FR-68, §11.3, §11.4) ---------- */
@@ -146,6 +146,7 @@ h1, h2, h3, h4 { margin: 0; font-weight: 400; }
 .dc-banner { background: #eef4ff; border: 1px solid #b6c8f0; color: #1e3a8a; padding: 5px 9px; border-radius: 4px; margin-bottom: 6px; }
 .dc-banner.bad, .dc-rejected { background: #fdecec; border: 1px solid #f0b4b4; color: #8f1d1d; padding: 5px 9px; border-radius: 4px; margin-bottom: 6px; }
 .dc-warning { background: #fff7e0; border: 1px solid #e6c46a; color: #6b4300; padding: 5px 9px; border-radius: 4px; margin-bottom: 6px; }
+.dc-waiting-text { max-width: 60ch; }
 .dc-waiting { display: flex; align-items: center; justify-content: center; text-align: center; min-height: 380px; padding: 0 40px; color: #374151; font-size: 15px; line-height: 1.5; }
 .dc-row { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 7px; }
 .dc-label { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #4b5563; padding-top: 6px; min-width: 52px; }

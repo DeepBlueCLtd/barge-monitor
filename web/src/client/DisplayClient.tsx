@@ -65,10 +65,10 @@ function Screen({ session }: { session: ClientSession }) {
 function NotConfigured({ phase }: { phase: string }) {
   return (
     <div className="dc-waiting" data-testid="dc-waiting">
-      {phase === 'waiting-models' ? <ModelsCatchingUp />
+      <div className="dc-waiting-text">{phase === 'waiting-models' ? <ModelsCatchingUp />
         : phase === 'waiting-play' ? <>Waiting for the simulation clock. Press <b>▶ Play</b>: the display client starts with the rest of the system and makes its handshake.</>
         : phase === 'unreachable' ? <>The server does not answer. Retrying on the simulation clock.</>
-          : <>Handshake: discovering what the server offers (landing page, conformance, profile, systems, datastreams, schemas)…</>}
+          : <>Handshake: discovering what the server offers (landing page, conformance, profile, systems, datastreams, schemas)…</>}</div>
     </div>
   );
 }
