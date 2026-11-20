@@ -47,6 +47,12 @@ class Runtime {
       if (requested == null) seed = Math.floor(Math.random() * 1e6);
     }
     this.seed = seed;
+    if (typeof WebAssembly === 'undefined') {
+      throw new Error('this browser has WebAssembly switched off, and the demonstrator\'s Python (Pyodide) needs it. '
+        + 'In Microsoft Edge, "Enhance your security on the web" set to Strict disables it: add an exception for this site '
+        + 'or choose Balanced (Settings → Privacy, search and services → Security). On a managed PC an organisation policy '
+        + 'may disable it; try another browser or ask for this site to be allowed.');
+    }
     if (!('serviceWorker' in navigator)) throw new Error('this browser has no Service Worker support');
     this.progress.set({ stage: 'seam', detail: 'registering the seam relay (Service Worker)', pct: 1 });
     await navigator.serviceWorker.register(resolve('sw.js'), { scope: './' });

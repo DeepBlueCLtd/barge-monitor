@@ -174,3 +174,9 @@ test('analysis settings are commands; the server refuses an out-of-range value b
   await page.getByRole('button', { name: 'Send command' }).click();
   await expect(page.getByTestId('command-status')).toContainText('COMPLETED', { timeout: 60_000 });
 });
+
+test('a browser with WebAssembly switched off is told why the demonstrator cannot start', async ({ page }) => {
+  await page.addInitScript(() => { delete (globalThis as any).WebAssembly; });
+  await page.goto(QUICK);
+  await expect(page.locator('.startup .error')).toContainText('WebAssembly switched off', { timeout: 20_000 });
+});
