@@ -8,6 +8,7 @@ import { Diamond } from '../shell/Diamond';
 import { runtime } from '../shell/runtime';
 import { openSlot } from '../shell/selection';
 import { useStore } from '../shell/store';
+import { ModelActivity } from './ModelActivity';
 import { ModelEditor } from './ModelEditor';
 
 interface Slot {
@@ -65,6 +66,7 @@ export function ModelsDetail() {
               <b>{registered ? '★ ' : ''}{s.label}</b>
               <small>{registered && !s.core ? 'new model · registered' : s.sub}</small>
               <span className="model-text">{registered && !s.core ? 'Your model, in its own worker.' : s.text}</span>
+              {registered && <ModelActivity model={s.id} />}
               {registered && <span className={`phase${phase === 'live' || (!phase && standin) ? ' live' : ''}`} data-testid={`phase-${s.id}`}>{phase ? `now: ${phase}` : standin ? 'now: running in the stand-in' : 'now: starting'}</span>}
             </Tag>
           );

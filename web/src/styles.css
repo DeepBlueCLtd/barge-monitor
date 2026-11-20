@@ -194,6 +194,17 @@ h1, h2, h3, h4 { margin: 0; font-weight: 400; }
 .model-card b { font-family: var(--hand); font-size: 20px; font-weight: 400; }
 .model-card small { font-size: 13px; color: var(--gold-text); }
 .model-card .model-text { margin-top: 8px; line-height: 1.4; }
+/* A model's live activity: busy for half of each second while playing, and its latest message tokens. */
+.model-activity { display: flex; align-items: flex-start; gap: 6px; margin-top: 8px; min-height: 44px; }
+.model-activity .busy { flex: none; margin-top: 3px; }
+.model-activity .busy.spinning { animation: busy-turn 0.5s linear; transform-origin: 50% 50%; }
+@keyframes busy-turn { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.model-tokens { display: flex; flex-wrap: wrap; gap: 0 2px; }
+.model-token { display: inline-flex; flex-direction: column; align-items: center; animation: token-in 0.4s ease-out; }
+.model-token .glyph { display: block; }
+.model-token-dir { font-size: 9px; line-height: 1; color: var(--gold-text); white-space: nowrap; margin-top: -2px; }
+@keyframes token-in { from { opacity: 0; transform: translateY(-6px) scale(0.6); } to { opacity: 1; transform: none; } }
+.model-quiet { font-size: 12px; color: var(--gold-text); font-style: italic; padding-top: 5px; }
 .model-card .phase { margin-top: auto; font-size: 13px; color: var(--gold-text); font-weight: 600; }
 .model-card .phase.live { color: #11703a; }
 .model-card.empty { background: var(--gold-pale); border: 1.6px dashed var(--gold-outline); border-radius: 8px; cursor: pointer; }
