@@ -2,6 +2,7 @@
 // Every message is kept until it has crossed its edge; none is sampled.
 import { HOP_S } from '../config';
 import { simClock } from './clock';
+import { LETTER_COLOURS } from './palette';
 import { Store } from './store';
 
 export interface Message {
@@ -19,14 +20,14 @@ export interface Message {
 }
 
 export const LETTERS: Record<string, { standard: string; colour: string }> = {
-  Q: { standard: 'OGC API – Connected Systems request', colour: '#2563eb' },
-  D: { standard: 'Discovery resource: landing page, conformance, SensorML system and datastream descriptions, SWE Common schema', colour: '#7c3aed' },
-  O: { standard: 'Observations, SWE Common JSON', colour: '#059669' },
-  K: { standard: 'Command on a Connected Systems control stream', colour: '#d97706' },
-  P: { standard: 'Declared profile, validated by JSON Schema', colour: '#db2777' },
-  H: { standard: 'Plain HTTP status (RFC 9110)', colour: '#dc2626' },
-  L: { standard: "Legacy fixed-width record (the logger's own format)", colour: '#78716c' },
-  I: { standard: 'Internal typed object, no public standard', colour: '#475569' },
+  Q: { standard: 'OGC API – Connected Systems request', colour: LETTER_COLOURS.Q },
+  D: { standard: 'Discovery resource: landing page, conformance, SensorML system and datastream descriptions, SWE Common schema', colour: LETTER_COLOURS.D },
+  O: { standard: 'Observations, SWE Common JSON', colour: LETTER_COLOURS.O },
+  K: { standard: 'Command on a Connected Systems control stream', colour: LETTER_COLOURS.K },
+  P: { standard: 'Declared profile, validated by JSON Schema', colour: LETTER_COLOURS.P },
+  H: { standard: 'Plain HTTP status (RFC 9110)', colour: LETTER_COLOURS.H },
+  L: { standard: "Legacy fixed-width record (the logger's own format)", colour: LETTER_COLOURS.L },
+  I: { standard: 'Internal typed object, no public standard', colour: LETTER_COLOURS.I },
 };
 
 let seq = 0;

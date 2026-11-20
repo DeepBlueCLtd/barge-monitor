@@ -3,6 +3,7 @@
 // profile. Restart client remounts this component: all of its state goes.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { simClock } from '../shell/clock';
+import { clientStatus } from '../shell/status';
 import { useStore } from '../shell/store';
 import { WorkspacePanel } from '../workspace/WorkspacePanel';
 import { LiveData, Row } from './data';
@@ -71,6 +72,15 @@ export function DisplayClient({ onRestart }: { onRestart: () => void }) {
   const version = useStore(live?.version ?? NULL_STORE);
   const stale = useStore(live?.stale ?? NULL_BOOL);
   void version;
+
+  // Report this client's state to the shell's status summary (VS-28).
+  useEffect(() => {
+    const missing = config ? new Set(config.problems.map((p) => p.essential.id)).size : 0;
+    clientStatus.set({
+      phase: phase.kind === 'running' ? (stale ? 'unreachable' : missing ? 'degraded' : 'running') : phase.kind,
+      essentialsMissing: missing, optional: config?.generic.length ?? 0, instance: config?.instance ?? null,
+    });
+  }, [phase, config, stale]);
 
   if (phase.kind !== 'running' || !config || !live) {
     return (

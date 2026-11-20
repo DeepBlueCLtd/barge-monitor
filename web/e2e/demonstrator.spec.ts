@@ -11,6 +11,20 @@ async function open(page: Page, url = QUICK) {
   await page.goto(url);
   await expect(page.getByTestId('sim-now')).toBeVisible({ timeout: SLOW_MS });
   await expect(page.getByTestId('chart-temperature')).toBeVisible({ timeout: 60_000 });
+  await openDrawer(page);
+}
+
+/** The control panel is a drawer under the top bar (Annex A VS-28). */
+async function openDrawer(page: Page) {
+  const t = page.getByTestId('control-panel-toggle');
+  if ((await t.getAttribute('aria-expanded')) !== 'true') await t.click();
+  await expect(page.getByTestId('server-state')).toBeVisible();
+}
+
+/** Every sketched outline's path data, keyed by card. */
+async function outlines(page: Page) {
+  return page.evaluate(() => Array.from(document.querySelectorAll('[data-sketch]')).map(
+    (e) => `${e.getAttribute('data-sketch')}:${Array.from(e.querySelectorAll('path')).map((p) => p.getAttribute('d')).join('|')}`).sort());
 }
 
 /** Control-panel switches follow the backend's state, so click and wait for it. */
@@ -108,7 +122,6 @@ test('a broken script leaves the server answering (AT-13)', async ({ page }) => 
 
 test('switching off an essential source gives degraded mode at the next server start (AT-06, AT-14, FR-41)', async ({ page }) => {
   await open(page);
-  await page.getByText('Fields the server publishes').click();
   await toggle(page, 'air_temperature', false);
   await expect(page.getByTestId('pending')).toBeVisible();
   await expect(page.getByTestId('chart-temperature')).toBeVisible(); // nothing changes until the server restarts
@@ -133,7 +146,6 @@ test('switching off an essential source gives degraded mode at the next server s
 
 test('a server whose claim its discovery contradicts is rejected (AT-07)', async ({ page }) => {
   await open(page);
-  await page.getByText('Fields the server publishes').click();
   await toggle(page, 'apparent_wind_speed', false);
   await page.getByTestId('profile-lie').click();
   await expect(page.getByTestId('profile-lie')).toBeChecked();
@@ -192,4 +204,57 @@ test('with WebAssembly blocked, an illustrative JS simulation answers, and the U
 test('with WebAssembly available, the UI names the Python backend', async ({ page }) => {
   await open(page);
   await expect(page.getByTestId('backend')).toContainText('Backend: Python (Pyodide)');
+});
+
+test('sketch outlines are seeded: identical after restart client and reload (AT-V1)', async ({ page }) => {
+  await open(page);
+  const a = await outlines(page);
+  expect(a.length).toBeGreaterThanOrEqual(16);
+  await page.getByTestId('restart-client').click();
+  await expect(page.getByTestId('chart-temperature')).toBeVisible({ timeout: 60_000 });
+  expect(await outlines(page)).toEqual(a);
+  await page.reload();
+  await expect(page.getByTestId('sim-now')).toBeVisible({ timeout: SLOW_MS });
+  expect(await outlines(page)).toEqual(a);
+});
+
+test('text meets 4.5:1 contrast on its background (AT-V2)', async ({ page }) => {
+  await open(page);
+  // Rendered text colours against the nearest opaque background.
+  const worst = await page.evaluate(() => {
+    const rgb = (c: string) => (c.match(/[\d.]+/g) ?? []).map(Number);
+    const lum = ([r, g, b]: number[]) => { const f = (v: number) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); };
+    const bg = (e: Element | null): number[] => { for (; e; e = e.parentElement) { const c = rgb(getComputedStyle(e).backgroundColor); if (c.length === 3 || c[3] === 1) return c.slice(0, 3); } return [255, 255, 255]; };
+    let min = 21; let at = '';
+    for (const e of document.querySelectorAll('.card-name, .card-role, .card-status, .zone-label, .key-item, .status th, .status td, .step b, .step small, .brand p, .flow-panel ~ * h3')) {
+      if (!(e as HTMLElement).innerText?.trim()) continue;
+      const a = lum(rgb(getComputedStyle(e).color)); const b = lum(bg(e));
+      const r = (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+      if (r < min) { min = r; at = `${e.className}: ${(e as HTMLElement).innerText.slice(0, 30)}`; }
+    }
+    return { min, at };
+  });
+  expect(worst.min, worst.at).toBeGreaterThanOrEqual(4.5);
+});
+
+test('no illustration images; fonts and the sketch renderer are same-origin (AT-V4, AT-V5)', async ({ page }) => {
+  const requests: string[] = [];
+  page.on('request', (r) => requests.push(r.url()));
+  await open(page);
+  const origin = new URL(page.url()).origin;
+  expect(requests.filter((u) => !u.startsWith(origin) && !u.startsWith('data:') && !u.startsWith('blob:'))).toEqual([]);
+  expect(requests.filter((u) => /\.(png|jpe?g|gif|webp|svg)(\?|$)/.test(u))).toEqual([]);
+  expect(requests.some((u) => /patrick-hand.*\.woff2/.test(u))).toBe(true);
+  expect(await page.locator('img').count()).toBe(0);
+});
+
+test('with the sketch renderer off, every card still renders with a plain outline (AT-V6)', async ({ page }) => {
+  await open(page, `${QUICK}?sketch=off`);
+  await expect(page.locator('html')).toHaveClass(/sketch-off/);
+  expect(await page.locator('[data-sketch] path').count()).toBe(0);
+  const cards = page.locator('.card');
+  expect(await cards.count()).toBeGreaterThanOrEqual(15);
+  for (const c of await cards.all()) {
+    expect(await c.evaluate((e) => getComputedStyle(e).borderTopStyle)).not.toBe('none');
+  }
 });
