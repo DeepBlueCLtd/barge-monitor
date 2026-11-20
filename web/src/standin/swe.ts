@@ -86,6 +86,6 @@ export const M = {
     return { type: 'Boolean', name, label, definition: DEF + name };
   },
   record(label: string, fields: Component[]): DataRecord {
-    return { type: 'DataRecord', label, fields };
+    return { type: 'DataRecord', name: 'record', label, fields };
   },
 };

@@ -76,7 +76,7 @@ def boolean(name, label):
 
 
 def record(label, fields):
-    return {"type": "DataRecord", "label": label, "fields": fields}
+    return {"type": "DataRecord", "name": "record", "label": label, "fields": fields}  # SWE Common 3: a bound component carries a name
 
 
 def measurement_fields():
