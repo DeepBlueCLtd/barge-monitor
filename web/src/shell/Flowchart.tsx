@@ -15,7 +15,14 @@ const W = 170;
 const H = 58;
 const pos = new Map(layout.nodes.map((n) => [n.id, { x: n.x + W / 2, y: n.y + H / 2 }]));
 
-export const Flowchart = memo(function Flowchart({ highlight }: { highlight: string }) {
+// What really runs when the illustrative TypeScript simulation stands in (D-41).
+const SIMULATED_LABELS: Record<string, string> = {
+  logger: 'Logger store (simulated)', adapter: 'Store adapter (simulated)', server: 'CS server (TS simulation)',
+  fastapi: 'Router (TS simulation)', analysis: 'Analysis (TS simulation)', scilibs: 'Arithmetic (TS simulation)',
+  runtime: 'Browser (WebAssembly blocked)', workspace: 'Workspace (unavailable)', products: 'Products (unavailable)',
+};
+
+export const Flowchart = memo(function Flowchart({ highlight, simulated = false }: { highlight: string; simulated?: boolean }) {
   const [info, setInfo] = useState<string | null>(null);
   const [selected, setSelected] = useState<Message | null>(null);
   const counts = useStore(bus.counts);
@@ -27,10 +34,10 @@ export const Flowchart = memo(function Flowchart({ highlight }: { highlight: str
     }))),
     ...layout.nodes.map((n) => ({
       id: n.id, position: { x: n.x, y: n.y }, draggable: false,
-      data: { label: n.label }, className: `cnode ${highlight.split(',').includes(n.id) ? 'hl' : ''} ${n.zone ? '' : 'outside'}`,
+      data: { label: simulated ? SIMULATED_LABELS[n.id] ?? n.label : n.label }, className: `cnode${simulated && SIMULATED_LABELS[n.id] ? ' simulated' : ''} ${highlight.split(',').includes(n.id) ? 'hl' : ''} ${n.zone ? '' : 'outside'}`,
       width: W, height: H, style: { width: W, height: H },
     })),
-  ], [highlight]);
+  ], [highlight, simulated]);
 
   return (
     <div className="flowchart" data-testid="flowchart">

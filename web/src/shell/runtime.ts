@@ -33,6 +33,7 @@ class Runtime {
 
   seed = 0;
   historySource = 'generated';
+  backendKind = new Store<'python' | 'simulation'>('python');
 
   async start(requested: number | null, pregenDays: number | null) {
     // A seed with pre-built history starts in seconds; any other seed generates its own (SRD §13).
@@ -47,12 +48,8 @@ class Runtime {
       if (requested == null) seed = Math.floor(Math.random() * 1e6);
     }
     this.seed = seed;
-    if (typeof WebAssembly === 'undefined') {
-      throw new Error('this browser has WebAssembly switched off, and the demonstrator\'s Python (Pyodide) needs it. '
-        + 'In Microsoft Edge, "Enhance your security on the web" set to Strict disables it: add an exception for this site '
-        + 'or choose Balanced (Settings → Privacy, search and services → Security). On a managed PC an organisation policy '
-        + 'may disable it; try another browser or ask for this site to be allowed.');
-    }
+    // Without WebAssembly, Pyodide cannot run: an illustrative TypeScript simulation answers instead (D-41).
+    this.backendKind.set(typeof WebAssembly === 'undefined' ? 'simulation' : 'python');
     if (!('serviceWorker' in navigator)) throw new Error('this browser has no Service Worker support');
     this.progress.set({ stage: 'seam', detail: 'registering the seam relay (Service Worker)', pct: 1 });
     await navigator.serviceWorker.register(resolve('sw.js'), { scope: './' });
@@ -61,7 +58,9 @@ class Runtime {
       await new Promise<void>((r) => navigator.serviceWorker.addEventListener('controllerchange', () => r(), { once: true }));
     }
     navigator.serviceWorker.addEventListener('message', (e) => e.data?.type === 'need-port' && this.connect());
-    this.backend = new Worker(new URL('../workers/backend.worker.ts', import.meta.url), { type: 'module' });
+    this.backend = this.backendKind.value === 'simulation'
+      ? new Worker(new URL('../workers/sim.worker.ts', import.meta.url), { type: 'module' })
+      : new Worker(new URL('../workers/backend.worker.ts', import.meta.url), { type: 'module' });
     this.backend.onmessage = (e) => this.onBackend(e.data);
     this.backend.postMessage({ type: 'start', pyodideUrl: resolve(PYODIDE_PATH), pyZipUrl: resolve(PY_ZIP), seed, pregenDays, historyUrl });
     this.connect();
@@ -72,7 +71,8 @@ class Runtime {
       this.progress.set(d);
       if (d.stage === 'ready') {
         this.readyMs = performance.now() - this.startedAt;
-        this.startWorkspace();
+        if (this.backendKind.value === 'python') this.startWorkspace();
+        else this.historySource = 'none (illustrative simulation)';
       }
     } else if (d.type === 'tick') {
       simClock.update(d.clock);

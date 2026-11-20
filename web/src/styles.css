@@ -106,3 +106,6 @@ button.attention { border-color: var(--warn); background: #fff7ed; }
 .console .ok { color: #8fd19e; }
 .console .info { color: #8aa0b8; }
 footer { margin-top: 10px; }
+.backend { margin: 0 0 8px; padding: 6px 12px; border-radius: 6px; background: #f0fdf4; border: 1px solid #bbf7d0; font-size: 0.9rem; }
+.backend.simulated { background: #fffbeb; border-color: #f59e0b; }
+.flowchart .react-flow__node.cnode.simulated { border-style: dashed; border-color: #b45309; }

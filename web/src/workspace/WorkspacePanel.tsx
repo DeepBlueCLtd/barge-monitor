@@ -67,6 +67,14 @@ export function WorkspacePanel() {
     runtime.workspace?.postMessage({ type: 'contract', id: ++runId });
   };
 
+  if (runtime.backendKind.value === 'simulation') {
+    return (
+      <div className="workspace">
+        <header className="panel-head"><h2>Python workspace</h2></header>
+        <p className="unavailable" data-testid="workspace-unavailable">Unavailable: the workspace runs Python in Pyodide, which needs WebAssembly, and WebAssembly is blocked in this browser.</p>
+      </div>
+    );
+  }
   return (
     <div className="workspace">
       <header className="panel-head">
