@@ -74,7 +74,7 @@ test('starts off; paused means silent; play moves the clock and the messages; a 
   const icon = page.locator('.icon').first();
   await expect(icon).toBeVisible({ timeout: 10_000 });
   const letter = await icon.innerText();
-  await icon.click({ force: true });
+  await icon.dispatchEvent('click'); // icons queue and can overlap: click this one, not whatever lies on top
   await expect(page.getByRole('dialog', { name: 'Message' })).toContainText(letter);
 });
 
