@@ -26,7 +26,7 @@ const SLOTS: Slot[] = [
   { id: 'model-d', label: 'Model D', core: false, sub: 'empty slot', text: 'Room for a new model. Appears at the next handshake.' },
 ];
 
-const PHASE_WORDS: Record<string, string> = { loading: 'loading its worker', running: 'running', ready: 'running', failed: 'failed', waiting: 'waiting for the server' };
+const PHASE_WORDS: Record<string, string> = { loading: 'loading its worker', starting: 'starting its worker', failed: 'failed', waiting: 'waiting for the server' };
 
 export function ModelsDetail() {
   const control = useStore(runtime.control);
@@ -65,7 +65,7 @@ export function ModelsDetail() {
               <b>{registered ? '★ ' : ''}{s.label}</b>
               <small>{registered && !s.core ? 'new model · registered' : s.sub}</small>
               <span className="model-text">{registered && !s.core ? 'Your model, in its own worker.' : s.text}</span>
-              {registered && <span className="phase" data-testid={`phase-${s.id}`}>{phase ? `now: ${phase}` : standin ? 'now: running in the stand-in' : 'now: starting'}</span>}
+              {registered && <span className={`phase${phase === 'live' || (!phase && standin) ? ' live' : ''}`} data-testid={`phase-${s.id}`}>{phase ? `now: ${phase}` : standin ? 'now: running in the stand-in' : 'now: starting'}</span>}
             </Tag>
           );
         })}

@@ -134,6 +134,7 @@ export abstract class Model {
 export class Runner {
   ready = false;
   last: number | null = null;
+  retryAt = -1; // after a step that found nothing new, wait before trying again
   phase = 'starting';
   detail = '';
   errors = 0;
@@ -195,7 +196,12 @@ export class Runner {
           api.commandStatus(cmd.id, 'FAILED', `${errorName(e)}: ${(e as Error)?.message ?? e}`);
         }
       }
-      if (playing && now - this.last! >= m.interval) this.last = Math.max(this.last!, m.step(api, this.last!, now));
+      if (playing && now - this.last! >= m.interval && now >= this.retryAt) {
+        const done = m.step(api, this.last!, now);
+        // Its inputs are not there yet: try again a little later (as backend/models/csmodel.py).
+        if (done <= this.last!) this.retryAt = now + Math.min(m.interval, 10);
+        this.last = Math.max(this.last!, done);
+      }
     } catch (e) {
       if (e instanceof Unavailable) this.detail = `waiting: ${e.message}`;
       else if (e instanceof Refused) {

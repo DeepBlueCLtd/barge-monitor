@@ -30,6 +30,11 @@ superseded by Version 4 are marked so in this table.
 | D-70 | Extra fields (FR-50) | — | Category: precipitation type (raw); Quantity: pressure tendency (Model A); Count: readings removed (Model A) | One per generic view type, each from a different component. |
 | D-71 | When the display client starts its handshake | at once; when the models are live | When all three core models report live | Before then their datastreams do not exist and the client would rightly start degraded. |
 | D-72 | The store adapter's index while running | rebuilt only at start; followed incrementally | Followed incrementally every tick once the server is ready | Found while rewriting: in 3.3 the live index only grew during waiting mode. |
+| **D-74** | **When the display client handshakes, given AT-19** | at load (as the mockups show "Paused · Configured"); on first Play | **On first Play**; Restart client while paused re-handshakes when the clock next runs | AT-19 forbids any message before Play. The mockups contradict it; the SRD wins. |
+| D-75 | Scores in the stand-in (FR-06e) | label stand-in scores; none | None: `score_*` null, `scored_against` "stand-in: not scored", `illustrative` true | The history carries no ground truth, so the stand-in cannot score. Shipping the truth series would allow it. |
+| D-76 | Text size inside the monitor | VS-05 sizes; smaller | 12–13 px inside the monitor | A small, generic screen inside a frame (§8). **Conflicts with VS-05; check on the target display.** |
+| D-77 | "Stand-in" tags (FR-06h) | back-end zone only; every replaced component | Every component except the display client | The stand-in replaces store, platform, FastAPI and the scientific libraries too. |
+| D-78 | A server that does not claim the profile at all | reject; degraded | Degraded | FR-41 covers a contradicted claim only. |
 | D-73 | AT-28 | build twice and compare in CI; a unit test | A unit test builds a short history twice and compares the bytes; the published history is built at deploy time from the seeds | The shipped files are always regenerated, so reproducibility is what needs testing. |
 
 ## Version 3 (history)

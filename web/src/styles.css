@@ -193,7 +193,8 @@ h1, h2, h3, h4 { margin: 0; font-weight: 400; }
 .model-card b { font-family: var(--hand); font-size: 20px; font-weight: 400; }
 .model-card small { font-size: 13px; color: var(--gold-text); }
 .model-card .model-text { margin-top: 8px; line-height: 1.4; }
-.model-card .phase { margin-top: auto; font-size: 13px; color: #11703a; font-weight: 600; }
+.model-card .phase { margin-top: auto; font-size: 13px; color: var(--gold-text); font-weight: 600; }
+.model-card .phase.live { color: #11703a; }
 .model-card.empty { background: var(--gold-pale); border: 1.6px dashed var(--gold-outline); border-radius: 8px; cursor: pointer; }
 .model-card.empty b { color: var(--gold-text); }
 .model-card.empty:hover, .model-card.open { box-shadow: 0 0 0 3px #fff, 0 0 0 5px var(--ring); }
