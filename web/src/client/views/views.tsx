@@ -1,132 +1,85 @@
-// Views. Specific views draw essential sources (FR-55..FR-59); the generic
-// view draws any other field by its SWE Common type alone (FR-61, FR-62).
-import type { EChartsOption } from 'echarts';
+// Views, as plain text readouts: the latest value of each source, how many
+// records the client holds, and which readings were flagged. No charts: the
+// demonstrator's subject is the flowchart, and charts cost too much on slow
+// machines (decision D-53). Specific readouts show essential sources
+// (FR-55..FR-59); the generic readout shows any other field by its SWE Common
+// type alone (FR-61, FR-62).
 import type { Field } from '../handshake';
 import { Row } from '../data';
-import { Chart, timeAxis } from './Chart';
 
-const CAT = ['#4e79a7', '#f28e2b', '#e15759', '#76b7b2', '#59a14f', '#edc948', '#b07aa1', '#9c755f'];
-const ms = (iso: string) => Date.parse(iso);
 const unitOf = (f: Field) => f.uom?.code ?? '';
 const ANGULAR = new Set(['deg', 'rad', '°']);
+const time = (r?: Row) => (r ? r.time.replace('T', ' ').replace(/\.\d+/, '').replace('Z', '') : '—');
+const num = (v: unknown, digits = 1) => (typeof v === 'number' ? v.toFixed(digits) : v == null ? '—' : String(v));
+// QARTOD: '1' is pass; anything else present is a flag.
+const flagged = (rows: Row[], field: string) => rows.filter((r) => r[`${field}_qc`] && r[`${field}_qc`] !== '1').length;
 
-export interface Mark {
-  time: string;
-  label: string;
-}
-
-function marksSeries(marks: Mark[]): any {
-  return {
-    type: 'line', name: 'changes', data: [], silent: true,
-    markLine: { symbol: 'none', label: { show: false }, lineStyle: { color: '#dc2626', type: 'dashed', width: 1.5 },
-      data: marks.map((m) => ({ xAxis: ms(m.time), name: m.label })) },
-  };
-}
-
-/** Bow and stern overlaid, with QC-flagged readings marked (FR-55). */
-export function PairChart({ title, unit, bow, stern, field, marks, testid }: { title: string; unit: string; bow: Row[]; stern: Row[]; field: string; marks: Mark[]; testid?: string }) {
-  const flagged = bow.filter((r) => r[`${field}_qc`] && r[`${field}_qc`] !== '1').map((r) => [ms(r.time), r[field]]);
-  const option: EChartsOption = {
-    ...timeAxis(),
-    title: { text: `${title} (${unit})`, left: 8, top: 4, textStyle: { fontSize: 15 } },
-    legend: { top: 4, right: 8, textStyle: { fontSize: 14 } },
-    series: [
-      { type: 'line', name: 'bow', showSymbol: false, data: bow.map((r) => [ms(r.time), r[field]]), lineStyle: { width: 1.5 }, color: '#e15759' },
-      { type: 'line', name: 'stern', showSymbol: false, data: stern.map((r) => [ms(r.time), r[field]]), lineStyle: { width: 1.5 }, color: '#4e79a7' },
-      { type: 'scatter', name: 'QC flagged (bow)', data: flagged, symbolSize: 7, color: '#f2b701' },
-      marksSeries(marks),
-    ],
-  };
-  return <Chart option={option} group="live" height={200} testid={testid} />;
-}
-
-export function LineChart({ title, unit, rows, field, marks, testid }: { title: string; unit: string; rows: Row[]; field: string; marks?: Mark[]; testid?: string }) {
-  const option: EChartsOption = {
-    ...timeAxis(),
-    title: { text: `${title} (${unit})`, left: 8, top: 4, textStyle: { fontSize: 15 } },
-    series: [{ type: 'line', name: title, showSymbol: false, data: rows.map((r) => [ms(r.time), r[field]]), color: '#59a14f' },
-      ...(marks ? [marksSeries(marks)] : [])],
-  };
-  return <Chart option={option} group="live" height={180} testid={testid} />;
-}
-
-/** A coloured band along the time axis, legend from the allowed values. */
-export function BandChart({ title, rows, field, tokens, testid }: { title: string; rows: Row[]; field: string; tokens: string[]; testid?: string }) {
-  const option: EChartsOption = {
-    ...timeAxis(),
-    grid: { left: 64, right: 24, top: 34, bottom: 52 },
-    title: { text: title, left: 8, top: 4, textStyle: { fontSize: 15 } },
-    yAxis: { type: 'category', data: [''], axisLabel: { show: false } },
-    legend: { bottom: 0, right: 8, textStyle: { fontSize: 13 }, data: tokens },
-    series: tokens.map((tok, i) => ({
-      type: 'scatter', name: tok, symbol: 'rect', symbolSize: [6, 28], color: CAT[i % CAT.length],
-      data: rows.filter((r) => r[field] === tok).map((r) => [ms(r.time), '']),
-    })),
-  };
-  return <Chart option={option} group="live" height={130} testid={testid} />;
-}
-
-export function Heatmap({ names, matrix, subtitle, testid }: { names: string[]; matrix: (number | null)[][]; subtitle: string; testid?: string }) {
-  const data = matrix.flatMap((row, i) => row.map((v, j) => [j, i, v == null ? '-' : v]));
-  const option: EChartsOption = {
-    animation: false,
-    title: { text: 'Correlation matrix', subtext: subtitle, left: 8, textStyle: { fontSize: 15 }, subtextStyle: { fontSize: 13 } },
-    tooltip: { formatter: (p: any) => `${names[p.value[1]]} × ${names[p.value[0]]}: ${p.value[2]}` },
-    grid: { left: 170, right: 70, top: 70, bottom: 140 },
-    xAxis: { type: 'category', data: names, axisLabel: { rotate: 45, fontSize: 12 } },
-    yAxis: { type: 'category', data: names, axisLabel: { fontSize: 12 } },
-    visualMap: { min: -1, max: 1, calculable: true, orient: 'vertical', right: 0, top: 'middle', inRange: { color: ['#2166ac', '#f7f7f7', '#b2182b'] } },
-    series: [{ type: 'heatmap', data, label: { show: names.length <= 8, fontSize: 12, formatter: (p: any) => (typeof p.value[2] === 'number' ? p.value[2].toFixed(2) : '–') } }],
-  };
-  return <Chart option={option} height={420} testid={testid} />;
-}
-
-/** FR-61: rendered by schema type alone. */
-export function GenericView(props: { title: string; field: Field; rows: Row[] }) {
-  const { field } = props;
-  const kind = field.type === 'Quantity' ? (ANGULAR.has(unitOf(field)) ? 'points' : 'line') : field.type === 'Count' ? 'step' : field.type === 'Category' ? 'band' : 'table';
+/** One row of a readout table: a source, its latest value, how many records and flags. */
+export function Reading({ label, rows, field, unit, digits, testid }: { label: string; rows: Row[]; field: string; unit?: string; digits?: number; testid?: string }) {
+  const last = rows[rows.length - 1];
+  const flags = flagged(rows, field);
   return (
-    <div className="gview" data-view={kind} data-field={field.name} data-testid={`field-${field.name}`}>
-      <GenericBody {...props} />
+    <tr data-testid={testid}>
+      <th>{label}</th>
+      <td className="value">{num(last?.[field], digits)}{unit && last ? ` ${unit}` : ''}</td>
+      <td className="mono">{time(last)}</td>
+      <td className="mono">{rows.length.toLocaleString()}{flags ? <span className="flags" title={`${flags} QC-flagged readings`}> · {flags} QC</span> : null}</td>
+    </tr>
+  );
+}
+
+export function ReadoutTable({ children, testid }: { children: React.ReactNode; testid?: string }) {
+  return (
+    <table className="readouts" data-testid={testid}>
+      <thead><tr><th>Source</th><th>Latest</th><th>At</th><th>Records</th></tr></thead>
+      <tbody>{children}</tbody>
+    </table>
+  );
+}
+
+/** The correlation matrix as numbers (FR-58). */
+export function CorrelationTable({ names, matrix, subtitle, testid }: { names: string[]; matrix: (number | null)[][]; subtitle: string; testid?: string }) {
+  return (
+    <div data-testid={testid}>
+      <p className="hint">{subtitle}</p>
+      <table className="matrix">
+        <thead><tr><th />{names.map((n) => <th key={n} title={n}>{n.replace(/_/g, ' ')}</th>)}</tr></thead>
+        <tbody>
+          {names.map((n, i) => (
+            <tr key={n}><th>{n.replace(/_/g, ' ')}</th>
+              {names.map((_, j) => { const v = matrix[i]?.[j]; return <td key={j} className={v == null ? '' : Math.abs(v) >= 0.6 ? 'strong' : ''}>{num(v, 2)}</td>; })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
 
-function GenericBody({ title, field, rows }: { title: string; field: Field; rows: Row[] }) {
-  const unit = unitOf(field);
-  const label = `${field.label ?? field.name}`;
-  if (field.type === 'Quantity' && ANGULAR.has(unit)) {
-    const option: EChartsOption = { ...timeAxis(), title: { text: `${label} (${unit})`, subtext: title, left: 8, textStyle: { fontSize: 14 } },
-      yAxis: { type: 'value', min: 0, max: 360 },
-      series: [{ type: 'scatter', name: label, symbolSize: 3, data: rows.map((r) => [ms(r.time), r[field.name]]), color: '#4e79a7' }] };
-    return <Chart option={option} group="live" height={170} />;
-  }
-  if (field.type === 'Quantity') {
-    const option: EChartsOption = { ...timeAxis(), title: { text: `${label} (${unit})`, subtext: title, left: 8, textStyle: { fontSize: 14 } },
-      series: [{ type: 'line', name: label, showSymbol: rows.length < 50, data: rows.map((r) => [ms(r.time), r[field.name]]), color: '#4e79a7' }] };
-    return <Chart option={option} group="live" height={170} />;
-  }
-  if (field.type === 'Count') {
-    const option: EChartsOption = { ...timeAxis(), title: { text: label, subtext: title, left: 8, textStyle: { fontSize: 14 } },
-      series: [{ type: 'line', step: 'end', name: label, showSymbol: false, data: rows.map((r) => [ms(r.time), r[field.name]]), color: '#76b7b2' }] };
-    return <Chart option={option} group="live" height={170} />;
-  }
-  if (field.type === 'Category') {
-    const tokens: string[] = field.constraint?.values ?? Array.from(new Set(rows.map((r) => r[field.name]).filter(Boolean)));
-    return <BandChart title={`${label} · ${title}`} rows={rows} field={field.name} tokens={tokens} />;
-  }
-  const recent = rows.slice(-5).reverse();
+/** The kind of readout a field gets from its schema type alone (FR-61). */
+export function kindOf(field: Field): 'quantity' | 'angle' | 'count' | 'category' | 'other' {
+  if (field.type === 'Quantity') return ANGULAR.has(unitOf(field)) ? 'angle' : 'quantity';
+  if (field.type === 'Count') return 'count';
+  if (field.type === 'Category') return 'category';
+  return 'other';
+}
+
+/** FR-61: any other field, shown by schema type alone. */
+export function GenericView({ field, rows }: { field: Field; rows: Row[] }) {
+  const kind = kindOf(field);
+  const last = rows[rows.length - 1];
+  const v = last?.[field.name];
+  const value = kind === 'quantity' ? `${num(v, 2)} ${last ? unitOf(field) : ''}`
+    : kind === 'angle' ? `${num(v, 0)}°`
+    : kind === 'count' ? num(v, 0)
+    : kind === 'category' ? (v ?? '—')
+    : v == null ? '—' : typeof v === 'object' ? JSON.stringify(v) : String(v);
   return (
-    <div className="table-view">
-      <div className="view-title">{label} <small>{title}</small></div>
-      <table>
-        <tbody>
-          {recent.map((r, i) => (
-            <tr key={i}><th>{r.time.replace('T', ' ').replace('Z', '')}</th><td>{typeof r[field.name] === 'object' ? JSON.stringify(r[field.name]) : String(r[field.name] ?? '—')}</td></tr>
-          ))}
-          {!recent.length && <tr><td>No values yet.</td></tr>}
-        </tbody>
-      </table>
-    </div>
+    <tr className="gview" data-view={kind} data-field={field.name} data-testid={`field-${field.name}`}>
+      <th>{field.label ?? field.name}</th>
+      <td className="value" title={String(value)}>{String(value)}</td>
+      <td className="mono">{time(last)}</td>
+      <td className="mono">{rows.length.toLocaleString()} <small>{kind}</small></td>
+    </tr>
   );
 }

@@ -31,8 +31,25 @@ class SimClockMirror {
     return s.t + (s.playing ? ((performance.now() - this.at) / 1000) * s.rate : 0);
   }
 
+  private shown = { t: 0, at: 0 };
+
+  /**
+   * Time for drawing (icons on the flowchart). While playing it never runs
+   * backwards and eases toward the backend's time over about half a second,
+   * so a late report from a busy backend worker does not make icons jump
+   * (D-54). Paused, or far out (a restart, Step), it follows exactly.
+   */
   displayNow(): number {
-    return this.now() + this.step;
+    const target = this.now() + this.step;
+    const s = this.state.value;
+    const wall = performance.now();
+    const dt = Math.min((wall - this.shown.at) / 1000, 0.25);
+    if (!s?.playing || Math.abs(target - this.shown.t) > 5) { this.shown.at = wall; return (this.shown.t = target); }
+    if (dt < 0.001) return this.shown.t; // called again in the same frame
+    this.shown.at = wall;
+    const free = this.shown.t + dt * s.rate;
+    const eased = free + (target - free) * Math.min(1, dt / 0.5);
+    return (this.shown.t = Math.max(this.shown.t, eased));
   }
 
   iso(t = this.now()): string {

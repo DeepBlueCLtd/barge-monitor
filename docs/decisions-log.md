@@ -63,3 +63,10 @@ instruction, each takes my recommended option; all are open for your review.
 | D-50 | Side column | — | Message key, zone legend and a status table (simulation, speed, sim time, backend, history, server, client, essentials, optional) | Replaces the old key panel; status that used to be scattered across the page is in one place. |
 | **D-51** | **AT-V3 (looks hand-drawn, reads as an explainer)** | automated; manual | **Manual: judged from the preview** | A visual judgement; AT-V1, V2, V4, V5 and V6 are automated. |
 | D-52 | Contrast check (AT-V2) | palette pairs only; rendered text | Rendered text colours of cards, zones, key, status, tour and brand against their nearest opaque background, ≥ 4.5:1 | Tests what a reader sees rather than the token list. |
+
+## Performance on slower machines
+
+| # | Question | Options considered | Decision | Why |
+|---|---|---|---|---|
+| **D-53** | **Charts in the display client** | keep; collapse by default; redraw less often; remove | **Removed, at your request.** Every view is now a text readout: latest value, time, record count and QC flags for the essential sources; the change detector's count, latest change and scores; the clustering regime and scores; the correlation matrix as a table of numbers; other sources by schema type (quantity, angle, count, category, other). ECharts is no longer a dependency (main bundle 1.93 MB → 0.88 MB). | Screen refreshes were slow on a modest laptop. **Departs from the SRD:** FR-55–FR-59 and FR-61's chart forms and FR-64 ("Charts: ECharts") are not met; the SRD text is unchanged pending your decision. The handshake, degraded mode, self-configuration and polling are unchanged, so C1–C3 are still shown. |
+| D-54 | Icons jumping | snap to each clock report; ease | The flowchart's drawing clock never runs backwards and eases toward the backend's reported time over about half a second; paused, after Step or more than 5 simulated seconds out, it follows exactly | Each report from a busy backend worker used to snap the page's clock, so icons jumped back and forth. Only drawing uses the eased time; polling still uses the backend's time (FR-14). |

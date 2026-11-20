@@ -10,7 +10,7 @@ test.describe.configure({ mode: 'serial' });
 async function open(page: Page, url = QUICK) {
   await page.goto(url);
   await expect(page.getByTestId('sim-now')).toBeVisible({ timeout: SLOW_MS });
-  await expect(page.getByTestId('chart-temperature')).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByTestId('reading-temperature')).toBeVisible({ timeout: 60_000 });
   await openDrawer(page);
 }
 
@@ -55,7 +55,7 @@ test('pre-built history loaded within the start-up budget, progress shown honest
   console.log(`start-up with pre-built history: ${ms} ms`);
   await expect(page.locator('footer')).toContainText('history pre-built');
   expect(ms).toBeLessThan(STARTUP_BUDGET_MS);
-  await expect(page.getByTestId('chart-temperature')).toBeVisible({ timeout: 120_000 });
+  await expect(page.getByTestId('reading-temperature')).toBeVisible({ timeout: 120_000 });
   const origin = new URL(page.url()).origin;
   expect(requests.filter((u) => !u.startsWith(origin) && !u.startsWith('data:') && !u.startsWith('blob:'))).toEqual([]); // NFR-08
 });
@@ -91,7 +91,7 @@ test('the contract suite passes in the browser, through the relay (AT-02)', asyn
   expect(text).toContain('0 skipped');
 });
 
-test('promoted products of every schema type appear after restart client with generic views (AT-08, FR-36, FR-37)', async ({ page }) => {
+test('promoted products of every schema type appear after restart client with generic readouts (AT-08, FR-36, FR-37)', async ({ page }) => {
   await open(page);
   const run = page.getByRole('button', { name: 'Run', exact: true });
   await expect(run).toBeEnabled({ timeout: 120_000 });
@@ -104,10 +104,10 @@ test('promoted products of every schema type appear after restart client with ge
   }
   await expect(page.getByTestId('field-air_temperature_smoothed')).toHaveCount(0); // not until the next handshake (FR-37)
   await page.getByTestId('restart-client').click();
-  await expect(page.getByTestId('field-air_temperature_smoothed')).toHaveAttribute('data-view', 'line', { timeout: 60_000 });
-  await expect(page.getByTestId('field-wind_class')).toHaveAttribute('data-view', 'band');
-  await expect(page.getByTestId('field-suspect_readings')).toHaveAttribute('data-view', 'step');
-  await expect(page.getByTestId('field-wind_direction_median')).toHaveAttribute('data-view', 'points');
+  await expect(page.getByTestId('field-air_temperature_smoothed')).toHaveAttribute('data-view', 'quantity', { timeout: 60_000 });
+  await expect(page.getByTestId('field-wind_class')).toHaveAttribute('data-view', 'category');
+  await expect(page.getByTestId('field-suspect_readings')).toHaveAttribute('data-view', 'count');
+  await expect(page.getByTestId('field-wind_direction_median')).toHaveAttribute('data-view', 'angle');
 });
 
 test('a broken script leaves the server answering (AT-13)', async ({ page }) => {
@@ -124,7 +124,7 @@ test('switching off an essential source gives degraded mode at the next server s
   await open(page);
   await toggle(page, 'air_temperature', false);
   await expect(page.getByTestId('pending')).toBeVisible();
-  await expect(page.getByTestId('chart-temperature')).toBeVisible(); // nothing changes until the server restarts
+  await expect(page.getByTestId('reading-temperature')).toBeVisible(); // nothing changes until the server restarts
   await restartServerAndWait(page);
   const popup = page.getByRole('alertdialog', { name: 'Unavailable essential sources' });
   await expect(popup).toBeVisible({ timeout: 60_000 });
@@ -132,14 +132,13 @@ test('switching off an essential source gives degraded mode at the next server s
   expect(items.map((t) => t.split(':')[0]).sort()).toEqual(['Bow air temperature', 'Derived values (dew point)', 'Stern air temperature']);
   await popup.getByRole('button', { name: 'Continue' }).click();
   await expect(page.getByTestId('unavailable-temperature')).toBeVisible();
-  await expect(page.getByTestId('view-temperature')).toBeDisabled();
-  await expect(page.getByTestId('view-temperature')).toHaveAttribute('title', /Bow air temperature: missing/);
-  await expect(page.getByTestId('chart-wind')).toBeVisible(); // views whose sources are present work normally
+  await expect(page.getByTestId('unavailable-temperature')).toContainText(/Bow air temperature: missing/);
+  await expect(page.getByTestId('reading-wind')).toBeVisible(); // views whose sources are present work normally
   // An optional source removed: no warning.
   await toggle(page, 'air_temperature', true);
   await toggle(page, 'solar_irradiance', false);
   await restartServerAndWait(page);
-  await expect(page.getByTestId('chart-temperature')).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByTestId('reading-temperature')).toBeVisible({ timeout: 60_000 });
   await expect(page.getByRole('alertdialog')).toHaveCount(0);
   await expect(page.getByTestId('field-solar_irradiance')).toHaveCount(0);
 });
@@ -165,7 +164,7 @@ test('restart server: waiting mode, a new instance, a fresh handshake (AT-09)', 
   await page.getByTestId('play').click(); // the client notices on its next poll, which needs the clock running
   // A fresh handshake: the client is now configured from the new instance (a transient "handshake" state is too brief to test).
   await expect(page.getByTestId('client-instance')).toHaveText(`instance ${instance}`, { timeout: 60_000 });
-  await expect(page.getByTestId('chart-temperature')).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByTestId('reading-temperature')).toBeVisible({ timeout: 60_000 });
 });
 
 test('server down: network failures, unreachable banner with stale data, re-handshake when up (AT-15)', async ({ page }) => {
@@ -173,11 +172,11 @@ test('server down: network failures, unreachable banner with stale data, re-hand
   await page.getByTestId('play').click();
   await page.getByTestId('server-down').click();
   await expect(page.getByTestId('unreachable')).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByTestId('chart-temperature')).toBeVisible(); // last data kept, marked stale
+  await expect(page.getByTestId('reading-temperature')).toBeVisible(); // last data kept, marked stale
   expect(await page.evaluate(async () => { try { await fetch('api/'); return 'answered'; } catch { return 'network failure'; } })).toBe('network failure');
   await page.getByTestId('server-up').click();
   await expect(page.getByTestId('unreachable')).toHaveCount(0, { timeout: 120_000 });
-  await expect(page.getByTestId('chart-temperature')).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByTestId('reading-temperature')).toBeVisible({ timeout: 60_000 });
 });
 
 test('analysis settings are commands; the server refuses an out-of-range value by naming the bound (FR-26, FR-60)', async ({ page }) => {
@@ -195,7 +194,7 @@ test('with WebAssembly blocked, an illustrative JS simulation answers, and the U
   await page.goto(QUICK);
   await expect(page.getByTestId('backend')).toContainText('illustrative JS simulation', { timeout: 20_000 });
   await expect(page.getByTestId('backend')).toContainText('WebAssembly is blocked');
-  await expect(page.getByTestId('chart-temperature')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId('reading-temperature')).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId('workspace-unavailable')).toBeVisible();
   await page.getByTestId('play').click();
   await expect(page.locator('.icon').first()).toBeVisible({ timeout: 10_000 });
@@ -211,7 +210,7 @@ test('sketch outlines are seeded: identical after restart client and reload (AT-
   const a = await outlines(page);
   expect(a.length).toBeGreaterThanOrEqual(16);
   await page.getByTestId('restart-client').click();
-  await expect(page.getByTestId('chart-temperature')).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByTestId('reading-temperature')).toBeVisible({ timeout: 60_000 });
   expect(await outlines(page)).toEqual(a);
   await page.reload();
   await expect(page.getByTestId('sim-now')).toBeVisible({ timeout: SLOW_MS });
