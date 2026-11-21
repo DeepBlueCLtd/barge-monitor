@@ -19,14 +19,10 @@ export function ClientDetail() {
           <div className="foot" />
         </div>
         <aside className="notes">
-          <h4>Handshake</h4>
-          <p>Discovers the datastreams registered with the data server and checks them against the declared profile.</p>
-          <h4>Fields</h4>
-          <p>Built from discovery. A new model's stream appears here after a client restart, drawn by its schema type.</p>
-          <h4>Period</h4>
-          <p>Up to an hour reads raw records. Longer periods read summary datastreams.</p>
-          <h4>Clustering</h4>
-          <p>Each choice sends a command to the models.</p>
+          <div><h4>Handshake</h4><p>Discovers the datastreams registered with the data server and checks them against the declared profile.</p></div>
+          <div><h4>Fields</h4><p>Built from discovery. A new model's stream appears here after a client restart, drawn by its schema type.</p></div>
+          <div><h4>Period</h4><p>Up to an hour reads raw records. Longer periods read summary datastreams.</p></div>
+          <div><h4>Clustering</h4><p>Each choice sends a command to the models.</p></div>
         </aside>
       </div>
       <MessageStrip selectionDefault />
