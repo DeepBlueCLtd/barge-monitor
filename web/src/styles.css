@@ -200,7 +200,7 @@ h1, h2, h3, h4 { margin: 0; font-weight: 400; }
 .bit-stream { font-family: var(--mono); font-size: 10px; letter-spacing: 1px; color: #11703a; overflow: hidden; white-space: nowrap; background: #102018; color: #6ee7a0; border-radius: 3px; padding: 1px 4px; }
 .model-inner-note { font-size: 9px; color: var(--gold-text); font-style: italic; text-align: right; }
 /* A model's live activity: busy for half of each second while playing, and its latest message tokens. */
-.model-activity { display: flex; align-items: flex-start; gap: 6px; margin-top: 8px; min-height: 44px; }
+.model-activity { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
 .model-activity .busy { flex: none; margin-top: 3px; }
 .model-activity .busy.spinning { animation: busy-turn 0.5s linear; transform-origin: 50% 50%; }
 @keyframes busy-turn { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
@@ -209,7 +209,7 @@ h1, h2, h3, h4 { margin: 0; font-weight: 400; }
 .model-token .glyph { display: block; }
 .model-token-dir { font-size: 9px; line-height: 1; color: var(--gold-text); white-space: nowrap; margin-top: -2px; }
 @keyframes token-in { from { opacity: 0; transform: translateY(-6px) scale(0.6); } to { opacity: 1; transform: none; } }
-.model-quiet { font-size: 12px; color: var(--gold-text); font-style: italic; padding-top: 5px; }
+.model-quiet { font-size: 12px; color: var(--gold-text); font-style: italic; }
 .model-card .phase { margin-top: auto; font-size: 13px; color: var(--gold-text); font-weight: 600; }
 .model-card .phase.live { color: #11703a; }
 .model-card.empty { background: var(--gold-pale); border: 1.6px dashed var(--gold-outline); border-radius: 8px; cursor: pointer; }

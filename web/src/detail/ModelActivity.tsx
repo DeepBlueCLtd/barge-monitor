@@ -1,47 +1,22 @@
-// A model card's live activity (Models panel): a busy indicator and the model's
-// most recent messages as tokens. Both come from the real captured messages
-// (FR-66): tokens are the last messages whose `model` is this model, pointing
-// the way they travelled (to the data server, from it, to the scientific
-// libraries, back from them). The busy indicator turns for half of each second
-// while the simulation runs, and stands still when it is paused (FR-77).
+// A model card's live activity (Models panel): the illustrative view inside the
+// model and a busy indicator that turns for half of each second while the
+// simulation runs, and stands still when it is paused (FR-77).
 import { useEffect, useState } from 'react';
 import { simClock } from '../shell/clock';
-import { Glyph } from '../shell/Glyph';
-import { bus, LETTERS, type Message } from '../shell/messages';
 import { useStore } from '../shell/store';
 import { ModelInner } from './ModelInner';
 
-const SHOWN = 6;
-const ARROW: Record<string, string> = {
-  'models>server': '→ server', 'server>models': '← server', 'models>scilibs': '→ libs', 'scilibs>models': '← libs',
-};
-
 export function ModelActivity({ model }: { model: string }) {
-  useStore(bus.version);
   const clock = useStore(simClock.state);
   const playing = !!clock?.playing;
-  const tokens = bus.find((m) => m.model === model).slice(-SHOWN);
   return (
     <>
       <ModelInner model={model} playing={playing} />
       <div className="model-activity" data-testid={`activity-${model}`}>
         <Busy on={playing} />
-        <div className="model-tokens" aria-label="recent messages">
-          {tokens.length ? tokens.map((m) => <Token key={m.key} m={m} />)
-            : <span className="model-quiet">{playing ? 'waiting for its next step' : 'paused'}</span>}
-        </div>
+        <span className="model-quiet">{playing ? 'working' : 'paused'}</span>
       </div>
     </>
-  );
-}
-
-function Token({ m }: { m: Message }) {
-  const lane = `${m.src}>${m.dst}`;
-  return (
-    <span className="model-token" title={`${LETTERS[m.letter]?.name ?? m.letter}: ${m.summary}`}>
-      <Glyph letter={m.letter} failed={m.failed} size={18} />
-      <span className="model-token-dir">{ARROW[lane] ?? lane}</span>
-    </span>
   );
 }
 
