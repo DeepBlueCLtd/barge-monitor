@@ -41,6 +41,7 @@ export function EChart({ option, testid, height }: { option: EChartsOption; test
 export function timeLabel(v: number, spanS: number): string {
   const d = new Date(v);
   const hm = d.toISOString().slice(11, 16);
+  if (spanS <= 600) return d.toISOString().slice(11, 19); // a short window: seconds matter
   if (spanS <= 86400) return hm;
   return `${d.toISOString().slice(5, 10)}${spanS <= 7 * 86400 ? ` ${hm}` : ''}`;
 }

@@ -11,7 +11,7 @@ import type { Cols } from '../registry';
 import { M } from '../swe';
 import { Command, interp, Model, ModelApi, NoRun, rng } from './csmodel';
 
-const PERIODS: Record<string, number> = { PT5M: 300, PT1H: 3600, PT6H: 6 * 3600, P1D: 86400, P7D: 7 * 86400, P28D: 28 * 86400 };
+const PERIODS: Record<string, number> = { PT1M: 60, PT1H: 3600, PT6H: 6 * 3600, P1D: 86400, P7D: 7 * 86400, P28D: 28 * 86400 };
 const SENSOR_FIELDS = ['air_temperature', 'apparent_wind_speed', 'relative_humidity', 'pressure',
   'apparent_wind_direction', 'solar_irradiance', 'water_temperature'];
 const DERIVED_FIELDS = ['dew_point', 'bow_minus_stern', 'pressure_tendency_3h'];
@@ -149,7 +149,7 @@ export class ModelB extends Model {
   description = 'Core model: publishes its own datastreams.';
   interval = 600; // re-run the latest settings every ten simulated minutes
   startFrom = 'now' as const;
-  settings: Record<string, any> = { algorithm: 'B', fields: 'air_temperature,apparent_wind_speed', period: 'PT5M', clusters: 4, sensitivity: 5.0 };
+  settings: Record<string, any> = { algorithm: 'B', fields: 'air_temperature,apparent_wind_speed', period: 'PT1M', clusters: 4, sensitivity: 5.0 };
   private src = new Map<string, string>();
   out: Record<string, string> = {};
   runs = 0;
@@ -231,7 +231,7 @@ export class ModelB extends Model {
     let key: string | null;
     let dkey: string | null;
     let step: number;
-    if (period === 'PT5M') [key, dkey, step] = [this.key(api, 'data-cleanse', 'cleaned-bow'), this.key(api, 'model-a', 'derived-1min'), 1];
+    if (period === 'PT1M') [key, dkey, step] = [this.key(api, 'data-cleanse', 'cleaned-bow'), this.key(api, 'model-a', 'derived-1min'), 1];
     else if (period === 'PT1H') [key, dkey, step] = [this.key(api, 'data-cleanse', 'cleaned-bow'), this.key(api, 'model-a', 'derived-1min'), 5];
     else if (period === 'PT6H' || period === 'P1D') [key, dkey, step] = [this.key(api, 'model-a', 'summary-1min-bow'), this.key(api, 'model-a', 'derived-1min'), 1];
     else [key, dkey, step] = [this.key(api, 'model-a', 'summary-1h-bow'), this.key(api, 'model-a', 'derived-1h'), 1];
@@ -246,7 +246,7 @@ export class ModelB extends Model {
       const d = api.read(dkey, t0 - 3600, t1, df);
       for (const f of df) if (f in d && d.t.length) cols[f] = interp(t, d.t, d[f] as Float64Array);
     }
-    return [t, cols, period === 'PT5M' || period === 'PT1H' ? step : period === 'PT6H' || period === 'P1D' ? 60 : 3600];
+    return [t, cols, period === 'PT1M' || period === 'PT1H' ? step : period === 'PT6H' || period === 'P1D' ? 60 : 3600];
   }
 
   run(api: ModelApi): { run_id: string; records: number } {
