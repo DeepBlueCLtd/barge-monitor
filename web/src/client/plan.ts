@@ -4,9 +4,10 @@
 // their definition, so a cleaned value or a summary mean joins its raw quantity.
 import type { Configuration, Datastream, Resolution, SweField } from './handshake';
 
-export type PeriodId = 'PT1H' | 'PT6H' | 'P1D' | 'P7D' | 'P28D';
+export type PeriodId = 'PT5M' | 'PT1H' | 'PT6H' | 'P1D' | 'P7D' | 'P28D';
 export const PERIODS: { id: PeriodId; label: string; seconds: number; want: number; binS: number }[] = [
   // want: the resolution to read (seconds); binS: interval for the error-bar plot (FR-58).
+  { id: 'PT5M', label: '5 min', seconds: 300, want: 1, binS: 30 },
   { id: 'PT1H', label: '1 h', seconds: 3600, want: 1, binS: 300 },
   { id: 'PT6H', label: '6 h', seconds: 6 * 3600, want: 60, binS: 1800 },
   { id: 'P1D', label: 'Day', seconds: 86400, want: 60, binS: 7200 },

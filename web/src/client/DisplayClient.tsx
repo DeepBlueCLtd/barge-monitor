@@ -9,7 +9,7 @@ import { PERIODS, Property } from './plan';
 import { ClientSession, clientSession } from './session';
 import { ClusterBand, Empty, ErrorBars, HeatMap, LinePlot, ViewFrame } from './views/views';
 
-const PERIOD_SUB: Record<string, string> = { PT1H: 'last hour', PT6H: 'last 6 hours', P1D: 'last day', P7D: 'last week', P28D: 'last 4 weeks' };
+const PERIOD_SUB: Record<string, string> = { PT5M: 'last 5 minutes', PT1H: 'last hour', PT6H: 'last 6 hours', P1D: 'last day', P7D: 'last week', P28D: 'last 4 weeks' };
 
 export function DisplayClient() {
   const session = useStore(clientSession);

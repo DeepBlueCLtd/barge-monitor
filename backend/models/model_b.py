@@ -6,6 +6,7 @@ Data cleanse's output and Model A's summaries of it (AT-15):
 
 | period        | reads                                   |
 |---------------|-----------------------------------------|
+| PT5M          | cleaned 1 s records                     |
 | PT1H          | cleaned 1 s records, every 5 s          |
 | PT6H, P1D     | 1-minute means                          |
 | P7D, P28D     | hourly means                            |
@@ -23,7 +24,7 @@ import numpy as np
 import methods
 from csmodel import Model, boolean, category, count, quantity, record, text, time_field
 
-PERIODS = {"PT1H": 3600.0, "PT6H": 6 * 3600.0, "P1D": 86400.0, "P7D": 7 * 86400.0, "P28D": 28 * 86400.0}
+PERIODS = {"PT5M": 300.0, "PT1H": 3600.0, "PT6H": 6 * 3600.0, "P1D": 86400.0, "P7D": 7 * 86400.0, "P28D": 28 * 86400.0}
 SENSOR_FIELDS = ["air_temperature", "apparent_wind_speed", "relative_humidity", "pressure",
                  "apparent_wind_direction", "solar_irradiance", "water_temperature"]
 DERIVED_FIELDS = ["dew_point", "bow_minus_stern", "pressure_tendency_3h"]
@@ -65,7 +66,7 @@ class ModelB(Model):
     start_from = "now"
 
     def __init__(self):
-        self.settings = {"algorithm": "B", "fields": "air_temperature,apparent_wind_speed", "period": "PT1H",
+        self.settings = {"algorithm": "B", "fields": "air_temperature,apparent_wind_speed", "period": "PT5M",
                          "clusters": 4, "sensitivity": 5.0}
         self.src = {}
         self.out = {}
@@ -134,7 +135,9 @@ class ModelB(Model):
     async def _series(self, api, t0, t1, fields):
         """Sample times and one column per field, on the source the period calls for."""
         period = self.settings["period"]
-        if period == "PT1H":
+        if period == "PT5M":
+            key, dkey, step = await self._key(api, "data-cleanse", "cleaned-bow"), await self._key(api, "model-a", "derived-1min"), 1
+        elif period == "PT1H":
             key, dkey, step = await self._key(api, "data-cleanse", "cleaned-bow"), await self._key(api, "model-a", "derived-1min"), 5
         elif period in ("PT6H", "P1D"):
             key, dkey, step = await self._key(api, "model-a", "summary-1min-bow"), await self._key(api, "model-a", "derived-1min"), 1
@@ -151,7 +154,7 @@ class ModelB(Model):
             for f in df:
                 if f in d and len(dt):
                     cols[f] = np.interp(t, dt, np.asarray(d[f], dtype=float), left=np.nan, right=np.nan)
-        return t, cols, (1.0 * step if period == "PT1H" else (60.0 if period in ("PT6H", "P1D") else 3600.0))
+        return t, cols, (1.0 * step if period in ("PT5M", "PT1H") else (60.0 if period in ("PT6H", "P1D") else 3600.0))
 
     async def run(self, api):
         s = self.settings

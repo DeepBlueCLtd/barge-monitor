@@ -62,7 +62,7 @@ export class ClientSession {
   banner = new Store<string | null>(null);
   config = new Store<Configuration | null>(null);
   props = new Store<Property[]>([]);
-  selection = new Store<Selection>({ props: [], period: 'PT1H', algorithm: 'B' });
+  selection = new Store<Selection>({ props: [], period: 'PT5M', algorithm: 'B' });
   /** Bumped when data, the run or the clusters change: views redraw. */
   version = new Store(0);
   stale = new Store(false);

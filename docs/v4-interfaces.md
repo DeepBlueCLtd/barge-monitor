@@ -109,7 +109,7 @@ Control streams (one per model, created by the model): `data-cleanse` `settings`
 |---|---|---|
 | `algorithm` | Category | A, B, C |
 | `fields` | Text | comma-separated property names; each must be a published property |
-| `period` | Category | PT1H, PT6H, P1D, P7D, P28D |
+| `period` | Category | PT5M, PT1H, PT6H, P1D, P7D, P28D |
 | `clusters` | Count | 2–8 (default 4) |
 | `sensitivity` | Quantity | 1–10 (default 5) |
 
@@ -152,7 +152,7 @@ plotted from the **bow** sensor.
 
 | period | sensor property reads | derived property reads |
 |---|---|---|
-| 1 h | bow `weather` (raw: causes S) | `derived-1min` |
+| 5 min (default), 1 h | bow `weather` (raw: causes S) | `derived-1min` |
 | 6 h, day | `summary-1min-bow` | `derived-1min` |
 | week, 4 weeks | `summary-1h-bow` | `derived-1h` |
 
