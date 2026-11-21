@@ -1,7 +1,7 @@
 // The page's runtime (SRD §2, docs/v4-interfaces.md §8): registers the relay,
 // chooses and starts a back end (FR-06a, FR-06b), connects the relay to it,
-// and in the Python back end starts one worker per model (FR-33) joined to the
-// back end by its own MessageChannel. The shell's controls (play, restart
+// and in the Python back end starts one worker per model (FR-33). A model's
+// requests go through the relay, like the display client's. The shell's controls (play, restart
 // server, control panel) reach the back-end worker directly: they belong to
 // the demonstrator, not the system.
 import { CORE_MODELS, HISTORY_PATH, PY_ZIP, PYODIDE_PATH, resolve, urlParam } from '../config';
@@ -148,7 +148,7 @@ class Runtime {
         if (d.server && d.server !== this.server.value) this.server.set(d.server);
         bus.add(d.messages ?? []);
         // Every model reads time from the simulation clock (FR-13).
-        for (const w of this.models.values()) w.postMessage({ type: 'clock', state: d.clock });
+        for (const w of this.models.values()) w.postMessage({ type: 'clock', state: d.clock, pending: d.pending_commands ?? {} });
         break;
       case 'state':
         this.control.set(d.state);
@@ -158,7 +158,7 @@ class Runtime {
       case 'relay-failed': {
         // A request that got no answer (server down) is drawn stopped at the boundary (VS-14).
         const kOrQ = d.method === 'POST' && String(d.path).endsWith('/commands') ? 'K' : 'Q';
-        bus.add([{ t: simClock.now(), src: 'client', dst: 'fastapi', letter: kOrQ, summary: `${d.method} ${d.path}: no answer, the server is down`,
+        bus.add([{ t: simClock.now(), src: d.model ? 'models' : 'client', dst: 'fastapi', letter: kOrQ, ...(d.model ? { model: d.model } : {}), summary: `${d.method} ${d.path}: no answer, the server is down`,
           content: `${d.method} ${d.path}\n\nnetwork failure: the relay found no server to answer`, failed: true, chain: d.chain ?? null, hop: 0 }]);
         break;
       }
@@ -196,8 +196,8 @@ class Runtime {
     w.onmessage = (e) => this.onModel(model, e.data);
     w.onerror = (e) => this.setModel(model, { phase: 'failed', detail: String(e.message ?? e) });
     const ch = new MessageChannel();
-    this.backend.postMessage({ type: 'model-connect', model }, [ch.port1]);
-    w.postMessage({ type: 'start', pyodideUrl: resolve(PYODIDE_PATH), pyZipUrl: resolve(PY_ZIP), model, ...(code ? { code } : {}) }, [ch.port2]);
+    this.backend.postMessage({ type: 'new-model-1onnect', model }, [ch.port1]);
+    w.postMessage({ type: 'start', pyodideUrl: resolve(PYODIDE_PATH), pyZipUrl: resolve(PY_ZIP), model, apiUrl: resolve('api'), ...(code ? { code } : {}) }, [ch.port2]);
     const clock = simClock.state.value;
     if (clock) w.postMessage({ type: 'clock', state: clock });
     return true;

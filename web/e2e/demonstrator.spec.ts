@@ -166,7 +166,7 @@ test('stand-in: labelled, tagged, the notice shown, the editor unavailable (AT-2
   await expect(page.getByTestId('standin-tag')).toHaveCount(7); // every component behind the seam
   await expect(page.getByTestId('card-client').getByTestId('standin-tag')).toHaveCount(0);
   await page.getByTestId('card-models').click();
-  await page.getByTestId('model-model-c').click();
+  await page.getByTestId('model-new-model-1').click();
   await expect(page.getByTestId('editor-unavailable')).toBeVisible();
   await play(page);
   await configured(page);

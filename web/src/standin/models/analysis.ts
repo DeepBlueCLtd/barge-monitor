@@ -1,6 +1,6 @@
-// Model B, stand-in: change detection, correlation and clustering (FR-34,
+// Analysis, stand-in: change detection, correlation and clustering (FR-34,
 // FR-06e). The same datastreams, schemas and control stream as
-// backend/models/model_b.py, and the same reading plan:
+// backend/models/analysis.py, and the same reading plan:
 //   PT1H: cleaned 1 s records, every 5 s; PT6H, P1D: 1-minute means;
 //   P7D, P28D: hourly means.
 // Simpler methods: all three algorithms are k-means, each with its own seed;
@@ -15,7 +15,7 @@ const PERIODS: Record<string, number> = { PT1M: 60, PT1H: 3600, PT6H: 6 * 3600, 
 const SENSOR_FIELDS = ['air_temperature', 'apparent_wind_speed', 'relative_humidity', 'pressure',
   'apparent_wind_direction', 'solar_irradiance', 'water_temperature'];
 const DERIVED_FIELDS = ['dew_point', 'bow_minus_stern', 'pressure_tendency_3h'];
-const KMEANS_SEED = 20310407; // Model B's own named stream (FR-14)
+const KMEANS_SEED = 20310407; // Analysis's own named stream (FR-14)
 const SEEDS: Record<string, number> = { A: KMEANS_SEED, B: KMEANS_SEED + 1, C: KMEANS_SEED + 2 };
 const MAX_CLUSTERS = 8;
 const SCORED_AGAINST = 'stand-in: not scored';
@@ -143,9 +143,9 @@ function corrcoef(X: Float64Array[], m: number): (PyFloat | null)[][] {
   return R;
 }
 
-export class ModelB extends Model {
-  readonly id = 'model-b';
-  readonly label = 'Model B';
+export class Analysis extends Model {
+  readonly id = 'analysis';
+  readonly label = 'Analysis';
   description = 'Core model: publishes its own datastreams.';
   interval = 600; // re-run the latest settings every ten simulated minutes
   startFrom = 'now' as const;
@@ -218,7 +218,7 @@ export class ModelB extends Model {
   private key(api: ModelApi, system: string, output: string): string | null {
     const k = `${system}/${output}`;
     if (!this.src.has(k)) {
-      const found = api.find(`urn:x-barge:process:${system}`, output, api.now() - 3600);
+      const found = api.find(`urn:x-barge:process:${system}`, output);
       if (found) this.src.set(k, found); // a datastream not there yet is looked for again next time
       return found;
     }
@@ -231,10 +231,10 @@ export class ModelB extends Model {
     let key: string | null;
     let dkey: string | null;
     let step: number;
-    if (period === 'PT1M') [key, dkey, step] = [this.key(api, 'data-cleanse', 'cleaned-bow'), this.key(api, 'model-a', 'derived-1min'), 1];
-    else if (period === 'PT1H') [key, dkey, step] = [this.key(api, 'data-cleanse', 'cleaned-bow'), this.key(api, 'model-a', 'derived-1min'), 5];
-    else if (period === 'PT6H' || period === 'P1D') [key, dkey, step] = [this.key(api, 'model-a', 'summary-1min-bow'), this.key(api, 'model-a', 'derived-1min'), 1];
-    else [key, dkey, step] = [this.key(api, 'model-a', 'summary-1h-bow'), this.key(api, 'model-a', 'derived-1h'), 1];
+    if (period === 'PT1M') [key, dkey, step] = [this.key(api, 'data-cleanse', 'cleaned-bow'), this.key(api, 'summaries', 'derived-1min'), 1];
+    else if (period === 'PT1H') [key, dkey, step] = [this.key(api, 'data-cleanse', 'cleaned-bow'), this.key(api, 'summaries', 'derived-1min'), 5];
+    else if (period === 'PT6H' || period === 'P1D') [key, dkey, step] = [this.key(api, 'summaries', 'summary-1min-bow'), this.key(api, 'summaries', 'derived-1min'), 1];
+    else [key, dkey, step] = [this.key(api, 'summaries', 'summary-1h-bow'), this.key(api, 'summaries', 'derived-1h'), 1];
     const sf = fields.filter((f) => SENSOR_FIELDS.includes(f));
     const df = fields.filter((f) => DERIVED_FIELDS.includes(f));
     const base: Cols = key ? api.read(key, t0, t1, sf.length ? sf : ['air_temperature']) : { t: new Float64Array(0) };

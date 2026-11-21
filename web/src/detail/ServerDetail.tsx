@@ -14,7 +14,7 @@ const BOXES: Box[] = [
   { id: 'ds-stern', x: 210, y: 178, w: 170, title: 'Datastream', sub: '7 fields + QC flags' },
   { id: 'obs-s', x: 20, y: 256, w: 360, title: 'Observations', sub: 'one per sensor per second · SWE Common JSON' },
   { id: 'models', x: 560, y: 22, w: 280, title: 'Models', sub: 'System · asset type Process' },
-  { id: 'cores', x: 560, y: 100, w: 280, title: 'Data cleanse · Model A · Model B', sub: 'one process system each' },
+  { id: 'cores', x: 560, y: 100, w: 280, title: 'Data cleanse · Summaries · Analysis', sub: 'one process system each' },
   { id: 'outs', x: 560, y: 178, w: 280, title: 'Output datastreams', sub: 'cleaned values, summaries, clusters' },
   { id: 'obs-m', x: 560, y: 256, w: 280, title: 'Observations', sub: 'published by each model' },
 ];

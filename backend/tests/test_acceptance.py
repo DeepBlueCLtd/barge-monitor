@@ -47,7 +47,7 @@ def test_at04_declared_queries_meet_budget_and_rebuild_identically():
     last = {s: r.get(f"/datastreams/{d[s]}/observations", {"phenomenonTime": hour, "limit": "4000"})[2].content for s in d}
     assert (time.perf_counter() - t0) * 1000 < C.QUERY_BUDGET_MS["last-hour-each-sensor"]
     t0 = time.perf_counter()
-    summary = r.ds("model-a", "summary-1h-bow")["id"]
+    summary = r.ds("summaries", "summary-1h-bow")["id"]
     st, obs, _ = r.get(f"/datastreams/{summary}/observations", {"phenomenonTime": f"{iso(now - 28 * 86400)}/..", "limit": "1000"})
     assert (time.perf_counter() - t0) * 1000 < C.QUERY_BUDGET_MS["one-field-four-weeks-summary"]
     assert st == 200 and len(obs) >= 7 * 24 - 2
@@ -88,7 +88,7 @@ def test_at10_restart_server_waiting_mode_and_no_records_lost():
     obs = r.get(f"/datastreams/{d2['id']}/observations", {"phenomenonTime": "2031-04-07T11:50:00Z/..", "limit": "100000"})[1]
     t = np.array([parse_iso(o["time"]) for o in obs])
     assert np.all(np.diff(t) == 1.0) and t.max() >= 12 * 3600 + 110
-    assert r.ds("model-b", "runs")  # the models' resources outlive the restart (D-11)
+    assert r.ds("analysis", "runs")  # the models' resources outlive the restart (D-11)
 
 
 def test_at11_server_down_is_no_answer_store_and_models_carry_on():
@@ -100,8 +100,10 @@ def test_at11_server_down_is_no_answer_store_and_models_carry_on():
     n = b.rt.sensors.next_t
     b.control("down")
     assert asyncio.run(b.handle("GET", "/", "", None, "")) is None
-    r = b.rt.host.call("model-x", "find", {"system_uid": "urn:x-barge:sensor:bow", "output_name": "weather"})
-    assert r == {"ok": False, "status": "down", "error": "the data server is down"}
+    from barge.local_models import LocalModels, csmodel
+
+    with pytest.raises(csmodel.Unavailable):  # a model gets no answer either, and tries again on its next step
+        asyncio.run(LocalModels(b.rt, classes=())._transport("GET", "/systems", {}, None))
     b.rt.clock.play()
     b.rt.clock._sim += 30
     b.rt.tick()
@@ -126,11 +128,11 @@ def test_at12_field_toggles_apply_only_at_next_start_and_restore_history():
     after = ids(r)
     assert after["weather@bow"] != before["weather@bow"]  # a new schema, a new identifier
     assert "relative_humidity" not in schema(after["weather@bow"])
-    assert "relative_humidity" not in schema(after["summary-1min-bow@model-a"])
-    derived = schema(after["derived-1min@model-a"])
+    assert "relative_humidity" not in schema(after["summary-1min-bow@summaries"])
+    derived = schema(after["derived-1min@summaries"])
     assert "dew_point" not in derived  # its inputs are off (FR-52)
     assert "pressure_tendency_3h" in derived and "bow_minus_stern" in derived
-    assert "readings_removed" in schema(after["summary-1h-bow@model-a"])
+    assert "readings_removed" in schema(after["summary-1h-bow@summaries"])
     assert "precipitation_type" in schema(after["weather@bow"])
     r.rt.set_field("relative_humidity", True)
     for x in ("precipitation_type", "pressure_tendency_3h", "readings_removed"):
@@ -146,7 +148,7 @@ def test_at14_a_failing_or_stuck_model_leaves_the_rest_running():
     import csmodel
 
     class Broken(csmodel.Model):
-        id, label, interval = "model-c", "Model C", 10.0
+        id, label, interval = "new-model-1", "New model 1", 10.0
 
         async def step(self, api, t0, t1):
             raise RuntimeError("a bug in a new model")
@@ -157,7 +159,7 @@ def test_at14_a_failing_or_stuck_model_leaves_the_rest_running():
     assert broken.phase == "failed"
     assert all(x.phase == "live" for x in r.rt.local.runners if x is not broken)
     assert r.get("/")[0] == 200
-    assert "model-c" in {s["id"] for s in r.get("/systems/models/subsystems")[1]["items"]}  # it registered first
+    assert "new-model-1" in {s["id"] for s in r.get("/systems/models/subsystems")[1]["items"]}  # it registered first
 
 
 def test_at15_models_other_than_data_cleanse_read_only_its_output():
@@ -165,37 +167,39 @@ def test_at15_models_other_than_data_cleanse_read_only_its_output():
     r.rt.tap.drain()
     cs = {c["system@id"]: c["id"] for c in r.get("/controlstreams")[1]["items"]}
     for period in ("PT1H", "P1D", "P7D"):
-        r.request("POST", f"/controlstreams/{cs['model-b']}/commands",
+        r.request("POST", f"/controlstreams/{cs['analysis']}/commands",
                   json={"parameters": {"period": period, "fields": "air_temperature,dew_point"}})
     for _ in range(70):
         r.advance(10)
-    reads = [m for m in r.rt.tap.drain() if m["src"] == "models" and '"op": "read"' in m["content"]]
+    owner = {d["id"]: d["system@id"] for d in r.get("/datastreams", {"limit": "1000"})[1]["items"]}
+    reads = [m for m in r.rt.tap.drain() if m["src"] == "models" and m["dst"] == "fastapi" and "/observations?" in m["summary"]
+             and " GET " in m["summary"]]
     by = {}
     for m in reads:
-        key = m["content"].split('"key": "')[1].split('"')[0]
-        by.setdefault(m["model"], set()).add(key.split(":")[0])
+        ds = m["summary"].split("/datastreams/")[1].split("/")[0]
+        by.setdefault(m["model"], set()).add(owner[ds])
     assert by["data-cleanse"] == {"bow", "stern"}
-    assert by["model-a"] == {"data-cleanse"}
-    assert by["model-b"] <= {"data-cleanse", "model-a"} and by["model-b"]
+    assert by["summaries"] == {"data-cleanse"}
+    assert by["analysis"] <= {"data-cleanse", "summaries"} and by["analysis"]
 
 
 def test_at16_change_detection_and_clustering_recover_the_manifest(rig):
     cs = {c["system@id"]: c["id"] for c in rig.get("/controlstreams")[1]["items"]}
-    runs = rig.ds("model-b", "runs")["id"]
-    rig.request("POST", f"/controlstreams/{cs['model-b']}/commands",
+    runs = rig.ds("analysis", "runs")["id"]
+    rig.request("POST", f"/controlstreams/{cs['analysis']}/commands",
                 json={"parameters": {"period": "PT1H", "fields": "air_temperature,relative_humidity,water_temperature",
                                      "algorithm": "A", "sensitivity": 6}})
-    rig.rt.tick()
+    rig.advance(2)  # the model looks at its control stream once a simulated second
     hour = rig.get(f"/datastreams/{runs}/observations", {"resultTime": "latest"})[1][0]
     assert hour["period"] == "PT1H" and hour["scored_against"] == "reach kinds"
     assert hour["score_changes"] is None or hour["score_changes"] >= 0.5, hour
-    rig.request("POST", f"/controlstreams/{cs['model-b']}/commands",
+    rig.request("POST", f"/controlstreams/{cs['analysis']}/commands",
                 json={"parameters": {"period": "P7D", "fields": "air_temperature,pressure,dew_point", "algorithm": "B"}})
-    rig.rt.tick()
+    rig.advance(2)
     week = rig.get(f"/datastreams/{runs}/observations", {"resultTime": "latest"})[1][0]
     assert week["period"] == "P7D" and week["scored_against"] == "air masses"
     assert week["score_clusters"] > 0.2, week  # clusters follow air masses
-    changes = rig.get(f"/datastreams/{rig.ds('model-b', 'changes')['id']}/observations", {"limit": "1000"})[1]
+    changes = rig.get(f"/datastreams/{rig.ds('analysis', 'changes')['id']}/observations", {"limit": "1000"})[1]
     assert all(c["run_id"] == week["run_id"] for c in changes)
 
 
@@ -206,16 +210,16 @@ def test_at18_capture_changes_nothing_and_every_busy_boundary_is_tapped():
         for _ in range(9):
             r.advance(10)
         out = [r.get(f"/datastreams/{r.ds('bow', 'weather')['id']}/observations", {"limit": "50"})[2].content,
-               r.get(f"/datastreams/{r.ds('model-a', 'summary-1min-bow')['id']}/observations", {"limit": "50"})[2].content,
+               r.get(f"/datastreams/{r.ds('summaries', 'summary-1min-bow')['id']}/observations", {"limit": "50"})[2].content,
                bytes(r.rt.logger.read(r.rt.logger.list_files()[0][0]))]
         cs = {c["system@id"]: c["id"] for c in r.get("/controlstreams")[1]["items"]}
-        r.request("POST", f"/controlstreams/{cs['model-b']}/commands", json={"parameters": {"algorithm": "A"}})
-        r.rt.tick()
+        r.request("POST", f"/controlstreams/{cs['analysis']}/commands", json={"parameters": {"algorithm": "A"}})
+        r.advance(2)
         bodies.append(out)
         if capture:
             keys = {k.split(":")[0] for k in r.rt.tap.counts}
             for edge in ("platform>store", "server>adapter", "adapter>store", "store>adapter", "adapter>server",
-                         "models>server", "server>models", "models>scilibs", "scilibs>models",
+                         "models>fastapi", "fastapi>models", "models>scilibs", "scilibs>models",
                          "fastapi>server", "server>fastapi", "client>fastapi", "fastapi>client"):
                 assert edge in keys, edge
             assert all(m["letter"] in "QDOKPHSLI" for m in r.rt.tap.drain())

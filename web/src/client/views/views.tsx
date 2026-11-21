@@ -229,7 +229,7 @@ export function ClusterBand({ session, labelOf }: { session: ClientSession; labe
   const run = session.run.value;
   const rows: Row[] = session.clusters;
   const sel = session.selection.value;
-  if (!run || !rows.length) return <Empty>Waiting for Model B's first clustering run on this selection…</Empty>;
+  if (!run || !rows.length) return <Empty>Waiting for Analysis's first clustering run on this selection…</Empty>;
   const pts = rows.map((r) => ({ t: r._t, v: r.cluster }));
   const t0 = run.window_start ? Date.parse(run.window_start) : ms(pts[0].t);
   const t1 = run.window_end ? Date.parse(run.window_end) : ms(pts[pts.length - 1].t);

@@ -58,13 +58,13 @@ QUANTITIES = [f.name for f in RAW if f.swe_type == "Quantity"]
 
 MODEL_OUTPUTS = [
     Field("dew_point", "Dew point", "Quantity", "Cel", "model", ("air_temperature", "relative_humidity"),
-          essential=True, description="From bow air temperature and humidity (Model A)."),
+          essential=True, description="From bow air temperature and humidity (Summaries)."),
     Field("bow_minus_stern", "Bow − stern", "Quantity", "Cel", "model", ("air_temperature",), essential=True,
-          description="Bow minus stern air temperature (Model A). Unaligned: no lag correction is possible without speed."),
+          description="Bow minus stern air temperature (Summaries). Unaligned: no lag correction is possible without speed."),
     Field("pressure_tendency_3h", "Pressure tendency", "Quantity", "hPa", "model", ("pressure",),
-          default_on=False, extra=True, description="Change in bow pressure over three hours (Model A)."),
+          default_on=False, extra=True, description="Change in bow pressure over three hours (Summaries)."),
     Field("readings_removed", "Readings removed", "Count", None, "model", (),
-          default_on=False, extra=True, description="Readings Data cleanse removed in the interval (Model A)."),
+          default_on=False, extra=True, description="Readings Data cleanse removed in the interval (Summaries)."),
 ]
 CATALOGUE = {f.name: f for f in RAW + MODEL_OUTPUTS}
 

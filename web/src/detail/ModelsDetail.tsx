@@ -1,6 +1,6 @@
 // Models panel (FR-71, mockup 2): the Models component in gold with its
 // description; beneath it, joined by lines, the models as cards in one row
-// (Data cleanse, Model A, Model B registered; Model C, Model D empty slots),
+// (Data cleanse, Summaries, Analysis registered; New model 1, New model 2 empty slots),
 // each with a diamond (FR-76); three steps for adding a model; and the line
 // stating that each model runs in its own worker. Selecting an empty slot opens
 // the Python editor (FR-36), which needs the Python back end (FR-06f).
@@ -21,10 +21,10 @@ interface Slot {
 
 const SLOTS: Slot[] = [
   { id: 'data-cleanse', label: 'Data cleanse', core: true, sub: 'core model · runs first', text: 'Flags and removes noise before any other model sees the data.' },
-  { id: 'model-a', label: 'Model A', core: true, sub: 'core model · registered', text: 'Live. Publishes its own datastreams.' },
-  { id: 'model-b', label: 'Model B', core: true, sub: 'core model · registered', text: 'Live. Publishes its own datastreams.' },
-  { id: 'model-c', label: 'Model C', core: false, sub: 'empty slot', text: 'Room for a new model. Appears at the next handshake.' },
-  { id: 'model-d', label: 'Model D', core: false, sub: 'empty slot', text: 'Room for a new model. Appears at the next handshake.' },
+  { id: 'summaries', label: 'Summaries', core: true, sub: 'core model · registered', text: 'Live. Publishes its own datastreams.' },
+  { id: 'analysis', label: 'Analysis', core: true, sub: 'core model · registered', text: 'Live. Publishes its own datastreams.' },
+  { id: 'new-model-1', label: 'New model 1', core: false, sub: 'empty slot', text: 'Room for a new model. Appears at the next handshake.' },
+  { id: 'new-model-2', label: 'New model 2', core: false, sub: 'empty slot', text: 'Room for a new model. Appears at the next handshake.' },
 ];
 
 const PHASE_WORDS: Record<string, string> = { loading: 'loading its worker', starting: 'starting its worker', failed: 'failed', waiting: 'waiting for the server' };
@@ -58,7 +58,7 @@ export function ModelsDetail() {
           const phase = phaseOf(s.id);
           const Tag = s.core ? 'div' : 'button';
           return (
-            <Tag key={s.id} className={`model-card${registered ? ' gold-box' : ' empty'}${slot === s.id ? ' open' : ''}`} data-testid={`model-${s.id}`}
+            <Tag key={s.id} className={`new-model-1ard${registered ? ' gold-box' : ' empty'}${slot === s.id ? ' open' : ''}`} data-testid={`model-${s.id}`}
               {...(s.core ? {} : { onClick: () => openSlot.set(slot === s.id ? null : s.id), 'aria-expanded': slot === s.id,
                 'aria-label': `${s.label}${registered ? '' : ', empty slot: open the editor'}` })}>
               <span className="tick" />

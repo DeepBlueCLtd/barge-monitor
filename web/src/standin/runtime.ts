@@ -1,7 +1,7 @@
 // The running stand-in back end (FR-06a; runtime.py, bridge.py): the
 // simulation clock, the logger store loaded with the pre-calculated history
-// and continued by the platform, the data server's lifecycle, the models'
-// host and the core models. The store and platform run continuously; the data
+// and continued by the platform, the data server's lifecycle and the
+// core models. The store and platform run continuously; the data
 // server is started, restarted, taken down and brought up around them
 // (FR-18, FR-47, FR-49). Field toggles are pending until the next server
 // start (FR-51). Free of DOM, worker and Node globals: it runs in the
@@ -9,11 +9,10 @@
 import { Api, HttpRequest, HttpResponse } from './api';
 import { CLOCK_DEFAULT_RATE, CLOCK_RATES, SENSORS } from './constants';
 import { CATALOGUE, Offering } from './fields';
-import { ModelHost } from './modelhost';
 import { DataCleanse } from './models/dataCleanse';
 import { Model, ModelApi, Runner } from './models/csmodel';
-import { ModelA } from './models/modelA';
-import { ModelB } from './models/modelB';
+import { Summaries } from './models/summaries';
+import { Analysis } from './models/analysis';
 import { Platform } from './platform';
 import { Registry } from './registry';
 import { Server } from './server';
@@ -90,21 +89,21 @@ class LocalModels {
 
   constructor(private readonly rt: Runtime, models: Model[]) {
     for (const m of models) {
-      const r = new Runner(m, new ModelApi(m.id, rt.host, rt));
-      rt.host.listeners.set(m.id, (msg) => r.notify(msg));
-      this.runners.push(r);
+      // The same HTTP requests as a model in its own worker makes, handed straight to the HTTP layer.
+      this.runners.push(new Runner(m, new ModelApi(m.id, (req) => rt.handle(req), rt)));
     }
   }
 
   tick(): void {
+    const waiting = this.rt.clock.playing ? {} : this.rt.pendingCommands();
     for (const r of this.runners) {
       try {
-        r.tick(this.rt.clock.playing);
+        r.tick(this.rt.clock.playing, !!waiting[r.model.system]);
       } catch (e) { // a broken model never stops the others (FR-33)
         r.phase = 'failed';
         r.detail = `${(e as Error)?.name ?? 'Error'}: ${(e as Error)?.message ?? e}`;
       }
-      this.rt.host.setPhase(r.model.id, r.phase, r.detail, r.model.label);
+      this.rt.phases.set(r.model.id, { label: r.model.label, phase: r.phase, detail: r.detail });
     }
   }
 
@@ -118,7 +117,7 @@ export class Runtime {
   readonly tap: Tap;
   readonly logger = new LoggerStore();
   readonly registry = new Registry();
-  readonly host: ModelHost;
+  readonly phases = new Map<string, { label: string; phase?: string; detail?: string }>(); // what each model says of itself
   readonly platform: Platform;
   readonly api: Api;
   readonly models: LocalModels;
@@ -137,10 +136,9 @@ export class Runtime {
     for (const name of [...history.files.keys()].sort()) this.logger.load(name, history.files.get(name)!);
     for (const [k, v] of Object.entries(m.capture_counts ?? {})) this.tap.counts[k] = (this.tap.counts[k] ?? 0) + v;
     this.platform = new Platform(this.logger, this.tap, seed, m.end_t);
-    this.host = new ModelHost(this);
     this.api = new Api(this);
     this.startServer();
-    this.models = new LocalModels(this, [new DataCleanse(), new ModelA(), new ModelB()]);
+    this.models = new LocalModels(this, [new DataCleanse(), new Summaries(), new Analysis()]);
   }
 
   now(): number {
@@ -182,7 +180,18 @@ export class Runtime {
 
   /** What the page needs every 100 ms (docs/v4-interfaces.md §8). */
   tickMessage() {
-    return { messages: this.tap.drain(), clock: this.clock.state(), server: this.serverStatus() };
+    return { messages: this.tap.drain(), clock: this.clock.state(), server: this.serverStatus(), pending_commands: this.pendingCommands() };
+  }
+
+  /** System id -> commands still PENDING: the shell lets a viewer's click through while paused. */
+  pendingCommands(): Record<string, number> {
+    const out: Record<string, number> = {};
+    for (const c of this.registry.commands.values()) {
+      if (c.status[c.status.length - 1].statusCode !== 'PENDING') continue;
+      const sid = c.cs_key.split(':')[0];
+      out[sid] = (out[sid] ?? 0) + 1;
+    }
+    return out;
   }
 
   /** One request through the seam; null when the server is down (no answer: network failure). */
@@ -234,7 +243,7 @@ export class Runtime {
     const pending = fields.some((r) => r.published_now !== r.published_next_start)
       || (this.server !== null && this.server.lieAboutProfile !== this.lieAboutProfile);
     const models = [...this.registry.systems.entries()].map(([sid, s]) => ({
-      id: sid, label: s.label, ...(this.host.phase.get(s.createdBy ?? '') ?? {}),
+      id: sid, label: s.label, ...(this.phases.get(sid) ?? {}),
       datastreams: [...this.registry.datastreams.values()].filter((d) => d.system === sid).map((d) => d.outputName),
     }));
     return {

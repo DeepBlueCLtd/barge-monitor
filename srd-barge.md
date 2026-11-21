@@ -25,7 +25,7 @@ visual style is §11. Where a mockup and this document disagree, this document w
 - Components cut from 15 to **8**, in five zones: **World**, **Legacy**, **New build ·
   back end**, **Third-party libraries**, **New build · front end** (§3).
 - The scientists' workspace and the analysis service become one component, **Models**:
-  core models (Data cleanse, Model A, Model B) and empty slots, each model in its own
+  core models (Data cleanse, Summaries, Analysis) and empty slots, each model in its own
   worker (§6.4).
 - **Store queries** become visible: a new message letter **S**, and the index moves to
   the store adapter (§6.2, §10.2).
@@ -362,13 +362,13 @@ finding (`FINDING-2026-11-20-connected-systems.md`).
   - **Data cleanse**, which runs first: it flags and removes noise and publishes cleaned
     datastreams. **Every other model reads Data cleanse's output**, not the raw
     datastreams.
-  - **Model A** and **Model B**, which between them provide the derived values, change
+  - **Summaries** and **Analysis**, which between them provide the derived values, change
     detection, correlation, clustering (with three selectable algorithms) and the summary
     datastreams. The split between A and B is an implementation choice recorded in an ADR;
     the demonstrator never names what each does beyond "core model".
 - **FR-35** Each model reads observations from the data server, registers its own
   datastreams there (FR-28), and takes its settings as commands (FR-27).
-- **FR-36** **Empty slots** (Model C, Model D) show where new models go. Selecting an empty
+- **FR-36** **Empty slots** (New model 1, New model 2) show where new models go. Selecting an empty
   slot in the Models panel opens an **in-browser Python editor** (CodeMirror 6). Code
   written there runs in a new worker as a new model, using the scientific libraries, and
   registers like any other. It appears in the display client at the client's next
@@ -543,7 +543,7 @@ Mockups 1 to 3 show the arrangement:
   sends.
 - **FR-71** **Models** (mockup 2): the Models component in gold with its description;
   beneath it, joined by lines, the models as cards in one row: **Data cleanse**, **Model
-  A**, **Model B** (gold, registered) and **Model C**, **Model D** (dashed, empty slots).
+  A**, **Analysis** (gold, registered) and **New model 1**, **New model 2** (dashed, empty slots).
   Each card has a diamond. Below, three steps for adding a model (write it, register it,
   see it) and a line stating that each model runs in its own worker.
 - **FR-72** **Data server** (mockup 3): a diagram of the Connected Systems resources that
@@ -696,7 +696,7 @@ contents. The mockups are plain; they fix layout only.
   of forbidden terms.
 - **PR-02** Spec-kit carries: constitution, specify, plan, tasks, analyze, implement. ADRs
   record contested decisions, including the Connected Systems subset and the split of work
-  between Model A and Model B.
+  between Summaries and Analysis.
 - **PR-03** Every gate and every refusal test is watched failing before it is trusted.
 
 ### 13.1 Keeping the two back ends honest
@@ -748,8 +748,8 @@ contents. The mockups are plain; they fix layout only.
 ## 15. Open questions
 
 - **Name.** A coined working name with no association.
-- **Model A and Model B.** Which core model does what (FR-34); recorded in an ADR.
-- **Naming clash.** "Model A/B" and clustering "Algorithm A/B/C" may be read as the same
+- **Summaries and Analysis.** Which core model does what (FR-34); recorded in an ADR.
+- **Naming clash.** "Summaries/B" and clustering "Algorithm A/B/C" may be read as the same
   thing. Consider renaming the algorithms (for example, Method 1, 2, 3).
 - **History size.** Four weeks of fixed-width records for two sensors is large to
   download. Measure it; if needed, compress the files for transfer (the store still sees

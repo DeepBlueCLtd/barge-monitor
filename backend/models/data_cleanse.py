@@ -7,8 +7,7 @@ smooths what is left over five seconds. It publishes one cleaned datastream
 per sensor. **Every other model reads these, not the raw datastreams** (AT-15).
 
 Cleaned values lag the raw records by two seconds: a reading is judged only
-once both its neighbours have arrived. The 1 s output is kept for a day;
-Model A's summaries keep the long view.
+once both its neighbours have arrived.
 """
 from __future__ import annotations
 
@@ -56,8 +55,7 @@ def clean(cols: dict, threshold: float) -> tuple[dict, int]:
                 v = np.where(ok, (c[hi] - c[lo]) / np.maximum(n[hi] - n[lo], 1), np.nan)
         out[p] = np.round(v, 3)
     if "precipitation_type" in cols:
-        codes = np.asarray(cols["precipitation_type"], dtype=float)
-        out["precipitation_type"] = np.array([PRECIP[int(c)] if np.isfinite(c) else None for c in codes], dtype=object)
+        out["precipitation_type"] = np.asarray(cols["precipitation_type"], dtype=object)
     return out, removed
 
 
@@ -80,7 +78,7 @@ class DataCleanse(Model):
             self.raw[s] = await api.find(f"urn:x-barge:sensor:{s}", "weather")
             self.out[s] = await api.create_datastream(self.system, {
                 "name": f"Cleaned {s} record", "outputName": f"cleaned-{s}",
-                "schema": record(f"Cleaned {s} record", fields), "retention": 86400})
+                "schema": record(f"Cleaned {s} record", fields)})
         self.control_key = await api.create_controlstream(self.system, {
             "name": "Data cleanse settings", "inputName": "settings",
             "schema": record("Data cleanse settings", [

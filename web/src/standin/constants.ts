@@ -28,7 +28,6 @@ export const RETRY_AFTER_S = 2;
 export const INDEX_CHUNK_RECORDS = 200_000;
 
 // --- Models (FR-33..FR-37) ------------------------------------------------------------
-export const CLEANED_RETENTION_S = 86400;
 
 export const SOSA = 'http://www.w3.org/ns/sosa/';
 export const URN = 'urn:x-barge:';

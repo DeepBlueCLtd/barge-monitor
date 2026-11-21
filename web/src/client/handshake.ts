@@ -68,7 +68,7 @@ export interface Configuration {
   rejected: string | null;
   problems: Problem[];
   datastreams: Datastream[];
-  /** Model B's clustering control stream (FR-55), if offered. */
+  /** Analysis's clustering control stream (FR-55), if offered. */
   clustering: ControlStream | null;
 }
 
@@ -125,7 +125,7 @@ export async function handshake(http: ClientHttp, wait?: (s: number) => void): P
     });
   }
 
-  // Model B's clustering control stream: its fields carry the bounds (FR-27, FR-55).
+  // Analysis's clustering control stream: its fields carry the bounds (FR-27, FR-55).
   let clustering: ControlStream | null = null;
   // Control streams are listed under the system that owns them (Connected Systems Part 2).
   const streams: any[] = [];

@@ -176,7 +176,6 @@ export interface SystemRec {
   systemType: string;
   assetType: string;
   parent?: string;
-  createdBy?: string;
 }
 
 export interface DatastreamRec {

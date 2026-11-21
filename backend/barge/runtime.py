@@ -5,17 +5,16 @@ data server is started, restarted, taken down and brought up around them
 (FR-18, FR-47, FR-49). The control panel's field toggles are kept here as
 *pending* until the next server start (FR-51).
 
-Models run elsewhere: each in its own worker in the browser (FR-33), calling
-the data server through ``self.host``. In CPython (tests, an ordinary ASGI
-server) ``local_models=True`` runs the core models in-process instead, through
-the same interface.
+Models run elsewhere: each in its own worker in the browser (FR-33), using the
+data server's HTTP interface like any other client (FR-28). In CPython (tests,
+an ordinary ASGI server) ``local_models=True`` runs the core models in-process
+instead, making the same HTTP requests of the same application.
 """
 from __future__ import annotations
 
 from . import config as C
 from .clock import SimClock
 from .fields import CATALOGUE, Offering
-from .modelhost import ModelHost
 from .registry import Registry
 from .logger import Logger
 from .sensors import Sensors
@@ -37,7 +36,7 @@ class Runtime:
         self.logger = Logger()
         self.sensors = Sensors(self.world, self.logger, self.tap)
         self.registry = Registry()
-        self.host = ModelHost(self)
+        self.phases: dict[str, dict] = {}  # model -> {label, phase, detail}: what each model says of itself, for the shell
         self.local = None
         self.offering = Offering()  # what the next server start will publish
         self.lie_about_profile = False  # a misconfigured server, for AT-07
@@ -125,6 +124,21 @@ class Runtime:
     def bring_up(self) -> None:
         self.start_server()
 
+    def set_phase(self, model: str, phase: str, detail: str = "", label: str | None = None) -> None:
+        cur = self.phases.setdefault(model, {"label": label or model})
+        cur.update(phase=phase, detail=detail)
+        if label:
+            cur["label"] = label
+
+    def pending_commands(self) -> dict:
+        """System id -> commands still PENDING. The shell uses it to let a viewer's click through while paused."""
+        out: dict[str, int] = {}
+        for c in self.registry.commands.values():
+            if c["status"][-1]["statusCode"] == "PENDING":
+                sysid = c["cs_key"].split(":", 1)[0]
+                out[sysid] = out.get(sysid, 0) + 1
+        return out
+
     def set_field(self, name: str, on: bool) -> None:
         if name not in CATALOGUE:
             raise KeyError(name)
@@ -147,7 +161,7 @@ class Runtime:
             })
         pending = any(r["published_now"] != r["published_next_start"] for r in rows) or (
             self.server is not None and self.server.lie_about_profile != self.lie_about_profile)
-        models = [{"id": sid, "label": sysm["label"], **self.host.phase.get(sysm.get("createdBy"), {}),
+        models = [{"id": sid, "label": sysm["label"], **self.phases.get(sid, {}),
                    "datastreams": [d["outputName"] for d in self.registry.datastreams.values() if d["system"] == sid]}
                   for sid, sysm in self.registry.systems.items()]
         return {

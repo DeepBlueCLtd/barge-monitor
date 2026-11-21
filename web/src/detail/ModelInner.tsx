@@ -1,7 +1,7 @@
 // Inside a model (Models panel): an illustrative picture of the work each core
 // model does — a mini flowchart with tokens moving through its stages, and one
-// of a scrolling bit stream (Data cleanse), a changing heat map (Model A) or
-// points gathering into clusters (Model B). It is decoration for the frame,
+// of a scrolling bit stream (Data cleanse), a changing heat map (Summaries) or
+// points gathering into clusters (Analysis). It is decoration for the frame,
 // labelled illustrative: the real traffic is the message tokens above it
 // (FR-66). It moves only while the simulation plays (FR-77) and is deterministic
 // (no Math.random), drawn from a step counter.
@@ -9,8 +9,8 @@ import { useEffect, useState } from 'react';
 
 const STAGES: Record<string, string[]> = {
   'data-cleanse': ['raw', 'flag', 'smooth', 'clean'],
-  'model-a': ['1 s', '1 min', '1 h'],
-  'model-b': ['fields', 'cluster', 'score'],
+  'summaries': ['1 s', '1 min', '1 h'],
+  'analysis': ['fields', 'cluster', 'score'],
 };
 
 /** A counter that steps every `ms` while playing, and stands still while paused. */
@@ -39,8 +39,8 @@ export function ModelInner({ model, playing }: { model: string; playing: boolean
     <div className="model-inner" aria-hidden="true" data-testid={`inner-${model}`}>
       <MiniFlow stages={stages} playing={playing} id={model} />
       {model === 'data-cleanse' && <BitStream playing={playing} />}
-      {model === 'model-a' && <HeatMini playing={playing} />}
-      {model === 'model-b' && <ClusterMini playing={playing} />}
+      {model === 'summaries' && <HeatMini playing={playing} />}
+      {model === 'analysis' && <ClusterMini playing={playing} />}
       <span className="model-inner-note">inside the model · illustrative</span>
     </div>
   );

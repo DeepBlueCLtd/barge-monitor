@@ -139,8 +139,9 @@ class Server:
     def _visible(self, rec: dict) -> dict:
         return dict(rec, fields=[f for f in rec["fields"] if f["name"] == "time" or self.offering.keep(f["name"])])
 
-    def datastreams(self) -> dict:
-        """Public id -> datastream, for this instance's offering."""
+    def datastreams(self, hidden: bool = False) -> dict:
+        """Public id -> datastream, for this instance's offering. ``hidden`` adds those with every output switched
+        off: they are not served, but their model goes on publishing to them (FR-52, AT-12)."""
         out = {}
         for s in SENSORS:
             rec = self._visible(self.sensor_schema[s])
@@ -151,7 +152,7 @@ class Server:
             if d["system"] not in self.registry.systems:
                 continue
             rec = self._visible(d["schema"])
-            if len(rec["fields"]) < 2:
+            if len(rec["fields"]) < 2 and not hidden:
                 continue  # every output switched off: nothing to publish (FR-52)
             ds_id = schema_id(f"{d['system']}-{d['outputName']}", [f["name"] for f in rec["fields"]])
             out[ds_id] = {"id": ds_id, "key": key, "name": d["name"], "outputName": d["outputName"],

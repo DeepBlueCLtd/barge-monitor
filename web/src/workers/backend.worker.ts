@@ -1,8 +1,8 @@
 /// <reference lib="webworker" />
 // The back-end worker (Python): Pyodide running the collection platform, the
 // logger store, the store adapter and the data server on FastAPI. It answers
-// requests the relay forwards, answers each model worker's calls on that
-// model's own port (docs/v4-interfaces.md §7), and ticks the system.
+// requests the relay forwards, from the display client and from each model
+// worker alike (docs/v4-interfaces.md §7), and ticks the system.
 import { loadRuntime, Progress } from './common';
 
 declare const self: DedicatedWorkerGlobalScope;
@@ -78,8 +78,10 @@ async function serve(req: any, reply: MessagePort) {
     const res = await bridge.handle(req.method, req.path, req.query, req.body ? new Uint8Array(req.body) : null,
       req.rootPath, req.headers, req.origin);
     if (res === undefined || res === null) {
-      const chain = (req.headers as [string, string][]).find(([k]) => k === 'x-tap-chain')?.[1] ?? null;
-      self.postMessage({ type: 'relay-failed', chain, path: req.path, method: req.method });
+      const header = (name: string) => (req.headers as [string, string][]).find(([k]) => k === name)?.[1] ?? null;
+      if (header('x-tap-quiet') !== '1') {
+        self.postMessage({ type: 'relay-failed', chain: header('x-tap-chain'), path: req.path, method: req.method, model: header('x-tap-model') });
+      }
       reply.postMessage({ down: true });
       return;
     }
@@ -92,38 +94,18 @@ async function serve(req: any, reply: MessagePort) {
   }
 }
 
-/** One call from a model worker to the data server's internal interface. */
-function modelCall(model: string, port: MessagePort, req: any) {
-  if (req.type === 'phase') {
-    bridge.set_model_phase(model, req.phase, req.detail ?? '', req.label ?? model);
-    return;
-  }
-  let reply: any;
-  try {
-    const args = py.toPy(req.args ?? {});
-    const res = bridge.model_call(model, req.op, args, !!req.quiet);
-    reply = res.toJs({ dict_converter: Object.fromEntries, create_pyproxies: false });
-    res.destroy();
-    args.destroy?.();
-  } catch (err) {
-    reply = { ok: false, status: 'refused', error: String(err) };
-  }
-  port.postMessage({ id: req.id, reply });
-}
-
 self.onmessage = (e: MessageEvent) => {
   const d = e.data;
   if (d.type === 'start') start(d.pyodideUrl, d.pyZipUrl, d.seed, d.pregenDays ?? null, d.historyUrl ?? null).catch((err) => post({ stage: 'error', detail: String(err), pct: 0 }));
   else if (d.type === 'connect') {
     const port: MessagePort = e.ports[0];
     port.onmessage = (m) => serve(m.data, m.ports[0]);
-  } else if (d.type === 'model-connect') {
+  } else if (d.type === 'new-model-1onnect') {
     const port: MessagePort = e.ports[0];
     const model: string = d.model;
+    // For the shell only: each model says which phase it is in. Its requests come through the relay.
     const attach = () => {
-      // The data server reaches the model (server → models): commands.
-      bridge.set_listener(model, (json: string) => port.postMessage({ notify: JSON.parse(json) }));
-      port.onmessage = (m) => modelCall(model, port, m.data);
+      port.onmessage = (m) => m.data?.type === 'phase' && bridge.set_model_phase(model, m.data.phase, m.data.detail ?? '', m.data.label ?? model);
     };
     if (bridge) attach();
     else queue.push(attach);

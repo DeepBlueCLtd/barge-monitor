@@ -126,7 +126,7 @@ async def systems_have_the_standard_types_and_no_location(ctx):
     assert types == {"bow": SOSA + "Sensor", "stern": SOSA + "Sensor"}
     _, _, models = await ctx.get("systems/models/subsystems")
     found = {s["id"]: s for s in models["items"]}
-    for m in ("data-cleanse", "model-a", "model-b"):  # each model registered itself (FR-28)
+    for m in ("data-cleanse", "summaries", "analysis"):  # each model registered itself (FR-28)
         assert found[m]["systemType"] == SOSA + "System" and found[m]["assetType"] == "Process", m
 
 
@@ -193,13 +193,13 @@ async def refuses_what_is_not_implemented_by_name(ctx):
 @test
 async def every_model_publishes_its_datastreams(ctx):
     expect = {"data-cleanse": {"cleaned-bow", "cleaned-stern"},
-              "model-a": {"summary-1min-bow", "summary-1min-stern", "summary-1h-bow", "summary-1h-stern",
+              "summaries": {"summary-1min-bow", "summary-1min-stern", "summary-1h-bow", "summary-1h-stern",
                           "derived-1min", "derived-1h"},
-              "model-b": {"changes", "clusters", "correlation", "runs"}}
+              "analysis": {"changes", "clusters", "correlation", "runs"}}
     for sysid, outs in expect.items():
         st, _, body = await ctx.get(f"systems/{sysid}/datastreams")
         assert st == 200 and outs <= {d["outputName"] for d in body["items"]}, (sysid, body)
-    d = await ctx.ds("model-a", "summary-1min-bow")
+    d = await ctx.ds("summaries", "summary-1min-bow")
     st, _, body = await ctx.get(f"datastreams/{d['id']}/schema", {"obsFormat": "application/swe+json"})
     defs = {f["name"]: f.get("definition") for f in body["recordSchema"]["fields"]}
     assert defs["air_temperature"].endswith("/def/air_temperature")  # a mean keeps its property (FR-29)
@@ -209,7 +209,7 @@ async def every_model_publishes_its_datastreams(ctx):
 
 @test
 async def control_stream_bounds_live_in_its_schema(ctx):
-    st, _, body = await ctx.get("systems/model-b/controlstreams")
+    st, _, body = await ctx.get("systems/analysis/controlstreams")
     cs = body["items"][0]
     st, _, sch = await ctx.get(f"controlstreams/{cs['id']}/schema")
     fields = {f["name"]: f for f in sch["parametersSchema"]["fields"]}
@@ -231,7 +231,7 @@ async def control_stream_bounds_live_in_its_schema(ctx):
 
 @test
 async def model_results_carry_settings_range_and_scores(ctx):
-    d = await ctx.ds("model-b", "runs")
+    d = await ctx.ds("analysis", "runs")
     st, _, body = await ctx.get(f"datastreams/{d['id']}/observations", {"resultTime": "latest"})
     assert st == 200 and body
     r = body[0]
@@ -239,7 +239,7 @@ async def model_results_carry_settings_range_and_scores(ctx):
               "score_changes", "score_clusters", "scored_against", "illustrative"):
         assert k in r, k
     for out in ("changes", "clusters", "correlation"):
-        dd = await ctx.ds("model-b", out)
+        dd = await ctx.ds("analysis", out)
         st, _, obs = await ctx.get(f"datastreams/{dd['id']}/observations", {"limit": "1"})
         assert st == 200
         if obs:

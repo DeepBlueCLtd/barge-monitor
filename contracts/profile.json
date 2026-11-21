@@ -58,7 +58,7 @@
   {
    "id": "bow-air-temperature-1min",
    "label": "Bow air temperature, 1-minute means",
-   "system": "urn:x-barge:process:model-a",
+   "system": "urn:x-barge:process:summaries",
    "datastream": "summary-1min-bow",
    "field": "air_temperature",
    "type": "Quantity",
@@ -71,7 +71,7 @@
   {
    "id": "bow-wind-speed-1min",
    "label": "Bow wind speed, 1-minute means",
-   "system": "urn:x-barge:process:model-a",
+   "system": "urn:x-barge:process:summaries",
    "datastream": "summary-1min-bow",
    "field": "apparent_wind_speed",
    "type": "Quantity",
@@ -84,7 +84,7 @@
   {
    "id": "dew-point-1min",
    "label": "Dew point, 1-minute",
-   "system": "urn:x-barge:process:model-a",
+   "system": "urn:x-barge:process:summaries",
    "datastream": "derived-1min",
    "field": "dew_point",
    "type": "Quantity",
@@ -97,7 +97,7 @@
   {
    "id": "bow-minus-stern-1min",
    "label": "Bow − stern, 1-minute",
-   "system": "urn:x-barge:process:model-a",
+   "system": "urn:x-barge:process:summaries",
    "datastream": "derived-1min",
    "field": "bow_minus_stern",
    "type": "Quantity",
@@ -110,7 +110,7 @@
   {
    "id": "bow-air-temperature-1h",
    "label": "Bow air temperature, hourly means",
-   "system": "urn:x-barge:process:model-a",
+   "system": "urn:x-barge:process:summaries",
    "datastream": "summary-1h-bow",
    "field": "air_temperature",
    "type": "Quantity",
@@ -123,7 +123,7 @@
   {
    "id": "bow-wind-speed-1h",
    "label": "Bow wind speed, hourly means",
-   "system": "urn:x-barge:process:model-a",
+   "system": "urn:x-barge:process:summaries",
    "datastream": "summary-1h-bow",
    "field": "apparent_wind_speed",
    "type": "Quantity",
@@ -136,7 +136,7 @@
   {
    "id": "dew-point-1h",
    "label": "Dew point, hourly",
-   "system": "urn:x-barge:process:model-a",
+   "system": "urn:x-barge:process:summaries",
    "datastream": "derived-1h",
    "field": "dew_point",
    "type": "Quantity",
@@ -149,7 +149,7 @@
   {
    "id": "bow-minus-stern-1h",
    "label": "Bow − stern, hourly",
-   "system": "urn:x-barge:process:model-a",
+   "system": "urn:x-barge:process:summaries",
    "datastream": "derived-1h",
    "field": "bow_minus_stern",
    "type": "Quantity",
@@ -162,7 +162,7 @@
   {
    "id": "changes",
    "label": "Detected changes",
-   "system": "urn:x-barge:process:model-b",
+   "system": "urn:x-barge:process:analysis",
    "datastream": "changes",
    "field": "strength",
    "type": "Quantity",
@@ -175,7 +175,7 @@
   {
    "id": "clusters",
    "label": "Cluster assignments",
-   "system": "urn:x-barge:process:model-b",
+   "system": "urn:x-barge:process:analysis",
    "datastream": "clusters",
    "field": "cluster",
    "type": "Category",
@@ -188,7 +188,7 @@
   {
    "id": "cluster-score",
    "label": "Clustering score",
-   "system": "urn:x-barge:process:model-b",
+   "system": "urn:x-barge:process:analysis",
    "datastream": "runs",
    "field": "score_clusters",
    "type": "Quantity",

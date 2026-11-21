@@ -5,9 +5,17 @@ the Features and Common prerequisites (FR-23). Everything outside the subset
 is refused with the thing refused named (FR-30). The application is an
 ordinary ASGI app: it runs unchanged under uvicorn and in Pyodide (NFR-03).
 
-Resources are read-only over HTTP except commands: models register their
-systems and datastreams through the server's internal interface
-(modelhost.py), not through FastAPI (SRD §3.1).
+Models use this same interface, like any other client (FR-28): a model
+creates its process system under ``/systems/models/subsystems``, then its
+datastreams and control stream, then publishes observations, reads its
+commands and reports their status. Creation is implemented; replacing and
+deleting resources are refused, so the Create/Replace/Delete conformance
+classes are not claimed.
+
+Two things here are not Connected Systems and say so: ``PUT`` on a
+datastream's observations (plain HTTP: replace the collection, for outputs
+that hold the latest run only) and ``/demonstrator/referee`` (scaffolding:
+the only code that reads the manifest, FR-37).
 """
 from __future__ import annotations
 
@@ -22,7 +30,9 @@ from fastapi.responses import JSONResponse, Response
 
 from . import config as C
 from . import swe
+from . import scoring
 from .fields import CATALOGUE
+from .registry import NUMERIC, Series
 from .server import PROFILE_URI, SOSA, iso, iso_many, parse_iso
 from .tap import Tap
 
@@ -76,13 +86,28 @@ class Refusal(Exception):
         return JSONResponse(body, status_code=self.status, headers=self.headers)
 
 
+SWE_TYPES = {"Quantity", "Count", "Category", "Boolean", "Text", "Time", "Matrix", "DataArray"}
+COMMAND_STATUSES = ("PENDING", "ACCEPTED", "EXECUTING", "COMPLETED", "FAILED", "REJECTED")
+REFEREE = "/demonstrator/referee"
+SHOWN_BYTES = 4 * 4000  # what a captured message shows of a body (the tap clips it further)
+
+
 def _letter_for_request(method: str, path: str) -> str:
-    return "K" if method == "POST" and path.rstrip("/").endswith("/commands") else "Q"
+    path = path.rstrip("/")
+    if path.startswith(REFEREE):
+        return "I"  # demonstrator scaffolding: no public standard
+    if method == "POST" and path.endswith("/commands"):
+        return "K"
+    if method in ("POST", "PUT") and path.endswith("/observations"):
+        return "O"
+    return "Q"
 
 
 def _letter_for_response(status: int, path: str, ctype: str) -> str:
     if status >= 400:
         return "H"
+    if path.rstrip("/").startswith(REFEREE):
+        return "I"
     if path.rstrip("/").endswith("/profile"):
         return "P"
     if "swe+json" in ctype or path.rstrip("/").endswith("/observations"):
@@ -116,8 +141,13 @@ def create_app(rt) -> FastAPI:
         chain_id = tap.chain_id()
         body = await request.body()
         letter = _letter_for_request(request.method, rel)
-        tap.emit("client", "fastapi", letter, f"{request.method} {rel}{'?' + request.url.query if request.url.query else ''}",
-                 body.decode("utf-8", "replace") if body else f"{request.method} {rel}?{request.url.query}")
+        # Who is asking: the display client, or a model (which says so). Capture only; nothing is decided by it.
+        model = request.headers.get("x-tap-model") or None
+        who = "models" if model else "client"
+        quiet = request.headers.get("x-tap-quiet") == "1"  # a model catching up on history: counted, not drawn
+        ask = f"{request.method} {rel}{'?' + request.url.query if request.url.query else ''}"
+        tap.emit(who, "fastapi", letter, f"{model}: {ask}" if model else ask,
+                 _shown(body) if body else f"{request.method} {rel}?{request.url.query}", model=model, quiet=quiet)
         s = srv()
         if s is None:
             resp = Refusal(503, "ServiceUnavailable", "the server is down").response()
@@ -127,9 +157,12 @@ def create_app(rt) -> FastAPI:
                            f"waiting mode: rebuilding the index from the store ({p['indexed']} of {p['stored']} records)",
                            headers={"Retry-After": str(C.RETRY_AFTER_S)}).response()
         else:
-            tap.emit("fastapi", "server", "I", f"route {request.method} {rel}", {"path": rel, "query": str(request.url.query)})
+            tap.emit("fastapi", "server", "I", f"route {request.method} {rel}", {"path": rel, "query": str(request.url.query)},
+                     model=model, quiet=quiet)
+            request.state.quiet = quiet
+            request.state.model = model
             resp = await call_next(request)
-            tap.emit("server", "fastapi", "I", f"result {resp.status_code}", {"status": resp.status_code})
+            tap.emit("server", "fastapi", "I", f"result {resp.status_code}", {"status": resp.status_code}, model=model, quiet=quiet)
         chunks = [c async for c in resp.body_iterator] if hasattr(resp, "body_iterator") else [resp.body]
         payload = b"".join(chunks)
         headers = dict(resp.headers)
@@ -142,8 +175,9 @@ def create_app(rt) -> FastAPI:
         headers["x-tap-hops"] = str(hops + 1)
         out = Response(content=payload, status_code=resp.status_code, headers=headers, media_type=resp.media_type)
         token2 = tap.begin_chain(chain_id, hops)
-        tap.emit("fastapi", "client", _letter_for_response(resp.status_code, rel, headers.get("content-type", "")),
-                 f"{resp.status_code} {rel}", payload.decode("utf-8", "replace"))
+        tap.emit("fastapi", who, _letter_for_response(resp.status_code, rel, headers.get("content-type", "")),
+                 f"{model}: {resp.status_code} {rel}" if model else f"{resp.status_code} {rel}", _shown(payload),
+                 model=model, quiet=quiet)
         tap.end_chain(token2)
         return out
 
@@ -219,7 +253,7 @@ def create_app(rt) -> FastAPI:
 
     def system_json(request, s):
         sid = s["id"]
-        out = {k: v for k, v in s.items() if k not in ("parent", "createdBy")}  # internal fields stay internal
+        out = {k: v for k, v in s.items() if k != "parent"}  # the parent is given as a link
         out["links"] = [link(request, f"/systems/{sid}", "self", "application/sml+json"),
                         link(request, f"/systems/{sid}/datastreams", "datastreams"),
                         link(request, f"/systems/{sid}/subsystems", "subsystems"),
@@ -398,7 +432,8 @@ def create_app(rt) -> FastAPI:
         if resultTime and not latest:
             r0, r1 = _interval(resultTime, "resultTime", now)
             t0, t1 = max(t0, r0), min(t1, r1)
-        cols, total = _fetch(s, d, t0, t1, lim, offset, latest)
+        cols, total = _fetch(s, d, t0, t1, lim, offset, latest, quiet=getattr(request.state, "quiet", False),
+                             why=f"{request.state.model} read" if getattr(request.state, "model", None) else "observation request")
         return _obs_response(request, d, cols, of, lim, offset, total, f"/datastreams/{dsId}/observations")
 
     # --- Part 2: control streams and commands (FR-27) ---------------------------
@@ -452,16 +487,22 @@ def create_app(rt) -> FastAPI:
         cmd = {"id": cid, "controlstream@id": csId, "cs_key": c["key"], "issueTime": issued, "parameters": params,
                "status": [{"statusCode": "PENDING", "reportTime": issued}]}
         reg.commands[cid] = cmd
-        owner = reg.systems[c["system"]].get("createdBy")
-        rt.host.notify(owner, {"type": "command", "command": {k: cmd[k] for k in ("id", "issueTime", "parameters")}})
         return JSONResponse(_command_json(request, cmd), status_code=201,
                             headers={"Location": base(request) + f"/commands/{cid}"})
 
     @app.get("/controlstreams/{csId}/commands", summary="Commands sent to a control stream")
-    async def commands(request: Request, csId: str = Path(...), limit: int = Query(C.DEFAULT_LIMIT), offset: int = Query(0)):
-        only(request, {"limit", "offset", "f"})
+    async def commands(request: Request, csId: str = Path(...), limit: int = Query(C.DEFAULT_LIMIT), offset: int = Query(0),
+                       statusCode: str | None = Query(None)):
+        only(request, {"limit", "offset", "f", "statusCode"})
         c = get_cs(csId)
-        items = [_command_json(request, x) for x in srv().registry.commands.values() if x["cs_key"] == c["key"]]
+        want = None
+        if statusCode is not None:
+            want = [x.strip() for x in statusCode.split(",")]
+            bad = [x for x in want if x not in COMMAND_STATUSES]
+            if bad:
+                raise Refusal(400, "InvalidParameterValue", f"statusCode {', '.join(bad)} is not one of {', '.join(COMMAND_STATUSES)}", "statusCode")
+        items = [_command_json(request, x) for x in srv().registry.commands.values()
+                 if x["cs_key"] == c["key"] and (want is None or x["status"][-1]["statusCode"] in want)]
         return page(items, request, f"/controlstreams/{csId}/commands", limit, offset)
 
     def get_cmd(cmdId):
@@ -480,10 +521,169 @@ def create_app(rt) -> FastAPI:
         only(request, {"f"})
         return {"items": get_cmd(cmdId)["status"]}
 
+    @app.post("/commands/{cmdId}/status", status_code=201, summary="Report a command's status (the model that carries it out)")
+    async def create_command_status(request: Request, cmdId: str = Path(...)):
+        only(request, set())
+        c = get_cmd(cmdId)
+        body = await _json_body(request)
+        code = body.get("statusCode") if isinstance(body, dict) else None
+        if code not in COMMAND_STATUSES[1:]:
+            raise Refusal(400, "InvalidParameterValue", f"statusCode must be one of {', '.join(COMMAND_STATUSES[1:])}", "statusCode")
+        report = {"statusCode": code, "reportTime": iso(rt.now())}
+        if body.get("message"):
+            report["message"] = str(body["message"])
+        c["status"].append(report)
+        return JSONResponse(report, status_code=201, headers={"Location": base(request) + f"/commands/{cmdId}/status"})
+
     def _command_json(request, c):
         return {"id": c["id"], "controlstream@id": c["controlstream@id"], "issueTime": c["issueTime"],
                 "parameters": c["parameters"], "currentStatus": c["status"][-1]["statusCode"],
                 "links": [link(request, f"/commands/{c['id']}/status", "status")]}
+
+    # --- creating resources: how a model registers (FR-28) --------------------------
+    def created(request, href: str, body: dict, existing: bool = False):
+        """201 with the new resource's Location; 409 with the Location of the one already there."""
+        loc = {"Location": base(request) + href}
+        if existing:
+            return Refusal(409, "Conflict", f"{href} already exists; its Location is given", "uniqueId", headers=loc).response()
+        return JSONResponse(body, status_code=201, headers=loc)
+
+    def check_record(rec, what):
+        if not isinstance(rec, dict) or rec.get("type") != "DataRecord" or not rec.get("fields"):
+            raise Refusal(400, "InvalidParameterValue", f"{what} must be a SWE Common DataRecord with fields", "schema")
+        for f in rec["fields"]:
+            if f.get("type") not in SWE_TYPES or not isinstance(f.get("name"), str):
+                raise Refusal(400, "InvalidParameterValue",
+                              f"field {f.get('name')}: SWE Common type {f.get('type')} is not supported", "schema")
+
+    def model_system(systemId):
+        s = srv().registry.systems.get(systemId)
+        if s is None:
+            get_system(systemId)
+            raise Refusal(405, "OperationNotSupported",
+                          f"system {systemId} is the server's own: only a system a model created takes new datastreams", "POST")
+        return s
+
+    @app.post("/systems/{systemId}/subsystems", status_code=201, summary="Create a subsystem: a model registers its process system")
+    async def create_subsystem(request: Request, systemId: str = Path(...)):
+        only(request, set())
+        get_system(systemId)
+        if systemId != "models":
+            raise Refusal(405, "OperationNotSupported", "only the Models system takes new subsystems", "POST")
+        body = await _json_body(request)
+        uid = body.get("uniqueId") if isinstance(body, dict) else None
+        if not isinstance(uid, str) or not uid or not isinstance(body.get("label"), str):
+            raise Refusal(400, "InvalidParameterValue", "a system needs a uniqueId and a label", "uniqueId")
+        s = srv()
+        for sid, old in s.all_systems().items():
+            if old["uniqueId"] == uid:
+                return created(request, f"/systems/{sid}", {}, existing=True)
+        reg = s.registry
+        sid = reg.system_id_for(uid)
+        reg.systems[sid] = {"type": "SimpleProcess", "id": sid, "uniqueId": uid, "label": body["label"],
+                            "description": body.get("description", ""), "definition": SOSA + "System",
+                            "systemType": SOSA + "System", "assetType": "Process", "parent": "models"}
+        return created(request, f"/systems/{sid}", system_json(request, reg.systems[sid]))
+
+    @app.post("/systems/{systemId}/datastreams", status_code=201, summary="Create a datastream under a model's system")
+    async def create_datastream(request: Request, systemId: str = Path(...)):
+        only(request, set())
+        model_system(systemId)
+        body = await _json_body(request)
+        sch = body.get("schema") if isinstance(body, dict) else None
+        rec = sch.get("recordSchema") if isinstance(sch, dict) else None
+        check_record(rec, "schema.recordSchema")
+        if rec["fields"][0].get("type") != "Time" or rec["fields"][0].get("name") != "time":
+            raise Refusal(400, "InvalidParameterValue", "the first field must be a Time named time", "schema")
+        if sch.get("obsFormat", swe.SWE_JSON) != swe.SWE_JSON:
+            raise Refusal(400, "OptionNotSupported", f"obsFormat {sch.get('obsFormat')} is not supported; use {swe.SWE_JSON}", "obsFormat")
+        out = body.get("outputName")
+        if not isinstance(out, str) or not out:
+            raise Refusal(400, "InvalidParameterValue", "a datastream needs an outputName", "outputName")
+        s = srv()
+        key = f"{systemId}:{out}"
+        old = s.registry.datastreams.get(key)
+        same = old is not None and [f["name"] for f in old["schema"]["fields"]] == [f["name"] for f in rec["fields"]]
+        if not same:  # new, or the same output with a new schema: a new datastream under a new identifier (FR-51)
+            s.registry.datastreams[key] = {"key": key, "system": systemId, "outputName": out, "name": body.get("name", out),
+                                           "schema": rec, "series": Series(rec["fields"])}
+        d = next(x for x in s.datastreams(hidden=True).values() if x["key"] == key)
+        return created(request, f"/datastreams/{d['id']}", {} if same else ds_json(request, d), existing=same)
+
+    @app.post("/systems/{systemId}/controlstreams", status_code=201, summary="Create a control stream under a model's system")
+    async def create_controlstream(request: Request, systemId: str = Path(...)):
+        only(request, set())
+        model_system(systemId)
+        body = await _json_body(request)
+        sch = body.get("schema") if isinstance(body, dict) else None
+        rec = sch.get("parametersSchema") if isinstance(sch, dict) else None
+        check_record(rec, "schema.parametersSchema")
+        name = body.get("inputName") or "settings"
+        key = f"{systemId}:{name}"
+        s = srv()
+        old = s.registry.controlstreams.get(key)
+        same = old is not None and old["schema"] == rec
+        if not same:
+            s.registry.controlstreams[key] = {"key": key, "system": systemId, "inputName": name,
+                                              "name": body.get("name", name), "schema": rec}
+        c = next(x for x in s.controlstreams().values() if x["key"] == key)
+        return created(request, f"/controlstreams/{c['id']}", {} if same else cs_json(request, c), existing=same)
+
+    async def take_observations(request: Request, dsId: str, replace: bool):
+        only(request, set())
+        s = srv()
+        d = s.datastreams(hidden=True).get(dsId)
+        if d is None:
+            raise Refusal(404, "NotFound", f"datastream {dsId} does not exist", f"datastream:{dsId}")
+        if d["kind"] == "sensor":
+            raise Refusal(405, "OperationNotSupported", "a sensor's observations come from the logger store, not from clients",
+                          request.method)
+        ctype = request.headers.get("content-type", swe.SWE_JSON).split(";")[0].strip()
+        if ctype != swe.SWE_JSON:
+            raise Refusal(415, "OptionNotSupported", f"observations are published as {swe.SWE_JSON}, not {ctype}", f"content-type:{ctype}")
+        rows = await _json_body(request)
+        if isinstance(rows, dict):
+            rows = [rows]
+        if not isinstance(rows, list) or any(not isinstance(r, dict) for r in rows):
+            raise Refusal(400, "InvalidParameterValue", "the body must be a record or an array of records", "body")
+        full = s.registry.datastreams[d["key"]]  # every registered field is stored; the offering applies on the way out
+        cols = _rows_to_cols(rows, full["schema"]["fields"])
+        ser = full["series"]
+        if replace:
+            ser.clear()
+        n = ser.append(cols)
+        return JSONResponse({"created": n}, status_code=200 if replace else 201,
+                            headers={"Location": base(request) + f"/datastreams/{dsId}/observations"})
+
+    @app.post("/datastreams/{dsId}/observations", status_code=201, summary="Publish observations")
+    async def create_observations(request: Request, dsId: str = Path(...)):
+        return await take_observations(request, dsId, replace=False)
+
+    @app.put("/datastreams/{dsId}/observations", summary="Replace a datastream's observations (plain HTTP, not Connected Systems)")
+    async def replace_observations(request: Request, dsId: str = Path(...)):
+        return await take_observations(request, dsId, replace=True)
+
+    # --- the demonstrator's referee: scaffolding, not part of the system (FR-37) -------
+    @app.post(REFEREE + "/{kind}", summary="Score a result against the manifest (demonstrator scaffolding)", tags=["demonstrator"])
+    async def referee(request: Request, kind: str = Path(...)):
+        """Scored here, outside the model: a model never sees the manifest or the position."""
+        only(request, set())
+        payload = await _json_body(request)
+        w = rt.world
+        try:
+            if kind == "changes":
+                det = {"t": np.asarray(payload["t"], dtype=float), "scale": np.asarray(payload["scale"], dtype=int)}
+                r = scoring.score_changes(w, det, float(payload["t0"]), float(payload["t1"]))
+                return {k: (None if v is None else float(v)) for k, v in r.items()}
+            if kind == "clusters":
+                t = np.asarray(payload["t"], dtype=float)
+                if len(t) < 2:
+                    return {"ari_air_mass": None, "ari_reach_kind": None}
+                r = scoring.score_clusters(w, t, np.asarray(payload["labels"]))
+                return {k: (None if not np.isfinite(v) else float(v)) for k, v in r.items()}
+        except (KeyError, TypeError, ValueError) as e:
+            raise Refusal(400, "InvalidParameterValue", f"referee: {e}", "body")
+        raise Refusal(404, "NotFound", f"the referee scores changes and clusters, not {kind}", f"referee:{kind}")
 
     # --- everything else is refused by name (FR-27) -------------------------------
     @app.api_route("/{rest:path}", methods=["GET", "HEAD", "OPTIONS", "POST", "PUT", "PATCH", "DELETE"], include_in_schema=False)
@@ -495,8 +695,8 @@ def create_app(rt) -> FastAPI:
             raise Refusal(405, "OperationNotSupported", f"{request.method} is not supported", request.method)
         if request.method in ("POST", "PUT", "DELETE"):
             raise Refusal(405, "OperationNotSupported",
-                          f"{request.method} /{rest} is not supported (Create/Replace/Delete classes): models register "
-                          "through the data server's internal interface, and only commands are created over HTTP",
+                          f"{request.method} /{rest} is not supported: a model creates its system under /systems/models/subsystems, "
+                          "then its datastreams, control stream, observations and command status; nothing is replaced or deleted",
                           request.method)
         if first in NOT_IMPLEMENTED:
             raise Refusal(404, "OperationNotSupported", f"{first} is not implemented ({NOT_IMPLEMENTED[first]})", first)
@@ -551,6 +751,49 @@ async def _json_body(request: Request):
         raise Refusal(400, "InvalidParameterValue", "the request body must be JSON", "body")
 
 
+def _shown(b: bytes) -> str:
+    """What a captured message shows of a body: its start, never megabytes of it."""
+    if len(b) <= SHOWN_BYTES:
+        return b.decode("utf-8", "replace")
+    return b[:SHOWN_BYTES].decode("utf-8", "replace") + f"… ({len(b)} bytes in all)"
+
+
+def _rows_to_cols(rows: list, fields: list) -> dict:
+    """Published SWE JSON records as columns. Every record needs its time; unknown fields are refused."""
+    known = {f["name"]: f["type"] for f in fields}
+    for r in rows[:1] + rows[-1:]:
+        extra = [k for k in r if k not in known]
+        if extra:
+            raise Refusal(400, "InvalidParameterValue", f"field {extra[0]} is not in the datastream's schema", extra[0])
+    try:
+        cols = {"t": _times([r["time"] for r in rows])}
+    except (KeyError, ValueError, TypeError) as e:
+        raise Refusal(400, "InvalidParameterValue", f"every record needs a time (ISO 8601, UTC): {e}", "time")
+    for name, ty in known.items():
+        if name == "time":
+            continue
+        vals = [r.get(name) for r in rows]
+        try:
+            if ty == "Time":
+                cols[name] = _times(vals)
+            elif ty in NUMERIC:
+                cols[name] = np.array([np.nan if v is None else v for v in vals], dtype=float)
+            else:
+                a = np.empty(len(vals), dtype=object)
+                a[:] = vals
+                cols[name] = a
+        except (ValueError, TypeError) as e:
+            raise Refusal(400, "InvalidParameterValue", f"{name}: {e}", name)
+    return cols
+
+
+def _times(vals: list) -> np.ndarray:
+    if not vals:
+        return np.empty(0)
+    a = np.array([v[:-1] if v.endswith("Z") else v for v in vals], dtype="datetime64[ms]")
+    return a.astype("int64") / 1000.0 - C.SIM_EPOCH_UNIX
+
+
 def _property(f):
     p = {"id": f.name, "label": f.label, "definition": f.definition, "type": f.swe_type, "kind": f.kind}
     if f.uom:
@@ -560,7 +803,7 @@ def _property(f):
     return p
 
 
-def _fetch(s, d, t0, t1, lim, offset, latest):
+def _fetch(s, d, t0, t1, lim, offset, latest, quiet=False, why="observation request"):
     """Columns for one page and the total available."""
     names = [f["name"] for f in d["schema"]["fields"] if f["name"] != "time"]
     if d["kind"] == "sensor":
@@ -571,7 +814,7 @@ def _fetch(s, d, t0, t1, lim, offset, latest):
             t0 = t1 = tr[1]
         total = s.adapter.count(d["sensor"], t0, t1)
         fields = [n for n in names if not n.endswith("_qc")]
-        return s.sensor_records(d["sensor"], t0, t1, lim, offset, fields=fields), total
+        return s.sensor_records(d["sensor"], t0, t1, lim, offset, fields=fields, why=why, quiet=quiet), total
     ser = d["series"]
     i0, i1 = ser.range(t0, t1)
     if latest and len(ser):

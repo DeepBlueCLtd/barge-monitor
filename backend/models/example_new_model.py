@@ -1,7 +1,7 @@
-# Model C: an example new model (FR-36). Edit it, then press Run.
+# New model 1: an example new model (FR-36). Edit it, then press Run.
 #
 # 1. Write it: Python, using the scientific libraries, reading observations
-#    from the data server. Read Data cleanse's or Model A's output, never the
+#    from the data server. Read Data cleanse's or Summaries' output, never the
 #    raw datastreams.
 # 2. Register it: setup() creates a process system and a datastream, using
 #    ordinary resource creation. Nothing else changes.
@@ -13,8 +13,8 @@ from csmodel import Model, quantity, record, time_field
 
 
 class WindChill(Model):
-    id = "model-c"
-    label = "Model C"
+    id = "new-model-1"
+    label = "New model 1"
     description = "Example: wind chill at the bow, every minute."
     interval = 60.0  # simulated seconds between steps
     catch_up_chunk = 86400.0
@@ -22,7 +22,7 @@ class WindChill(Model):
 
     async def setup(self, api):
         await super().setup(api)  # creates the process system under Models
-        self.source = await api.find("urn:x-barge:process:model-a", "summary-1min-bow")
+        self.source = await api.find("urn:x-barge:process:summaries", "summary-1min-bow")
         self.out = await api.create_datastream(self.system, {
             "name": "Wind chill", "outputName": "wind-chill",
             "schema": record("Wind chill", [

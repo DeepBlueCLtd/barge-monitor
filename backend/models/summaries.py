@@ -1,6 +1,6 @@
-"""Model A: summaries and derived values (FR-29, FR-34; the split is ADR 0003).
+"""Summaries: summaries and derived values (FR-29, FR-34; the split is ADR 0003).
 
-From Data cleanse's output only (AT-15), Model A publishes:
+From Data cleanse's output only (AT-15), Summaries publishes:
 
 * **summary datastreams** for each sensor: 1-minute means and hourly means of
   the seven parameters, the number of readings Data cleanse removed, and the
@@ -59,9 +59,9 @@ def bin_means(t, cols: dict, start: float, width: float, n: int) -> dict:
     return out
 
 
-class ModelA(Model):
-    id = "model-a"
-    label = "Model A"
+class Summaries(Model):
+    id = "summaries"
+    label = "Summaries"
     description = "Core model: publishes its own datastreams."
     interval = 60.0
     catch_up_chunk = 86400.0
@@ -90,8 +90,8 @@ class ModelA(Model):
                 "name": f"Derived values, {label}", "outputName": f"derived-{res}",
                 "schema": record(f"Derived values, {label}", derived)})
         self.control_key = await api.create_controlstream(self.system, {
-            "name": "Model A settings", "inputName": "settings",
-            "schema": record("Model A settings", [quantity("tendency_hours", "Pressure tendency span", "h", lo=1, hi=6)])})
+            "name": "Summaries settings", "inputName": "settings",
+            "schema": record("Summaries settings", [quantity("tendency_hours", "Pressure tendency span", "h", lo=1, hi=6)])})
 
     async def on_command(self, api, cmd):
         self.settings.update(cmd["parameters"])
@@ -180,4 +180,4 @@ class ModelA(Model):
         self.hour_done = hours[-1]
 
 
-MODEL = ModelA
+MODEL = Summaries

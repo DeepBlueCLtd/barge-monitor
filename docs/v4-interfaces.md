@@ -53,7 +53,7 @@ interface Captured {
   failed?: boolean;   // a request that got no answer (server down)
   chain?: string|null;// messages caused by one HTTP request or one model call share a chain
   hop?: number;       // order within the chain
-  model?: string;     // for models ↔ server/scilibs: which model (data-cleanse, model-a, …)
+  model?: string;     // for models ↔ server/scilibs: which model (data-cleanse, summaries, …)
 }
 ```
 
@@ -71,10 +71,10 @@ Systems (`/systems`, top level; subsystems under `/systems/{id}/subsystems`):
 | `stern` | `urn:x-barge:sensor:stern` | Stern sensor | sosa:Sensor | Equipment | barge |
 | `models` | `urn:x-barge:process:models` | Models | sosa:System | Process | |
 | `data-cleanse` | `urn:x-barge:process:data-cleanse` | Data cleanse | sosa:System | Process | models |
-| `model-a` | `urn:x-barge:process:model-a` | Model A | sosa:System | Process | models |
-| `model-b` | `urn:x-barge:process:model-b` | Model B | sosa:System | Process | models |
+| `summaries` | `urn:x-barge:process:summaries` | Summaries | sosa:System | Process | models |
+| `analysis` | `urn:x-barge:process:analysis` | Analysis | sosa:System | Process | models |
 
-`data-cleanse`, `model-a`, `model-b` (and any new model) are **created by the models
+`data-cleanse`, `summaries`, `analysis` (and any new model) are **created by the models
 themselves** (FR-28) as subsystems of `models`. The server creates only `barge`, `bow`,
 `stern` and `models`.
 
@@ -85,13 +85,13 @@ field names, so a schema change gives a new id, FR-51):
 |---|---|---|---|
 | bow, stern | `weather` | 7 quantities, each followed by `<name>_qc` (Category, QARTOD); `precipitation_type` (Category, extra) | raw, 1 s |
 | data-cleanse | `cleaned-bow`, `cleaned-stern` | 7 quantities (cleaned; removed values are null), `precipitation_type` | 1 s, kept for 24 h |
-| model-a | `summary-1min-bow`, `summary-1min-stern` | 7 quantity means, `readings_removed` (Count, extra), `precipitation_type` (most frequent, extra) | 1 min |
-| model-a | `summary-1h-bow`, `summary-1h-stern` | as above | 1 h |
-| model-a | `derived-1min`, `derived-1h` | `dew_point`, `bow_minus_stern` (air temperature, bow minus stern), `pressure_tendency_3h` (extra) | 1 min, 1 h |
-| model-b | `changes` | `run_id`, `scale` (minutes/hours), `strength` | latest run only |
-| model-b | `clusters` | `run_id`, `cluster` (Category c1…c8) | latest run only |
-| model-b | `correlation` | `run_id`, `fields`, `matrix` | latest run only |
-| model-b | `runs` | `run_id`, `command_id`, `algorithm`, `fields`, `period`, `window_start`, `window_end`, `records`, `clusters`, `score_changes`, `score_clusters`, `scored_against`, `illustrative` (Boolean) | one per run |
+| summaries | `summary-1min-bow`, `summary-1min-stern` | 7 quantity means, `readings_removed` (Count, extra), `precipitation_type` (most frequent, extra) | 1 min |
+| summaries | `summary-1h-bow`, `summary-1h-stern` | as above | 1 h |
+| summaries | `derived-1min`, `derived-1h` | `dew_point`, `bow_minus_stern` (air temperature, bow minus stern), `pressure_tendency_3h` (extra) | 1 min, 1 h |
+| analysis | `changes` | `run_id`, `scale` (minutes/hours), `strength` | latest run only |
+| analysis | `clusters` | `run_id`, `cluster` (Category c1…c8) | latest run only |
+| analysis | `correlation` | `run_id`, `fields`, `matrix` | latest run only |
+| analysis | `runs` | `run_id`, `command_id`, `algorithm`, `fields`, `period`, `window_start`, `window_end`, `records`, `clusters`, `score_changes`, `score_clusters`, `scored_against`, `illustrative` (Boolean) | one per run |
 
 Field definitions are `https://deepbluecltd.github.io/barge-monitor/def/<name>`. A summary
 mean or a cleaned value has **the same definition as the raw quantity** it comes from, so
@@ -102,8 +102,8 @@ Quantities and units: `air_temperature` Cel, `apparent_wind_speed` m/s,
 `solar_irradiance` W/m2, `water_temperature` Cel.
 
 Control streams (one per model, created by the model): `data-cleanse` `settings`
-(`spike_threshold` Quantity 1–10); `model-a` `settings` (`tendency_hours` Quantity 1–6);
-`model-b` `clustering`:
+(`spike_threshold` Quantity 1–10); `summaries` `settings` (`tendency_hours` Quantity 1–6);
+`analysis` `clustering`:
 
 | field | type | bounds |
 |---|---|---|
@@ -145,7 +145,7 @@ native resolution.
 ## 6. The display client's reading plan (FR-29, FR-53, FR-54)
 
 Chips are properties (grouped by definition) of the bow sensor and of every other
-system's datastreams, excluding `time`, QC flags, Text and Model B's run outputs
+system's datastreams, excluding `time`, QC flags, Text and Analysis's run outputs
 (`changes`, `clusters`, `correlation`, `runs`: they feed views, not chips). A property
 named in the profile is solid; any other is dashed ("optional"). Sensor properties are
 plotted from the **bow** sensor.
@@ -163,7 +163,7 @@ A property found only in a datastream not named in the profile is read from that
 datastream for the period, at its native resolution. Live data: once per simulated
 second, poll each datastream in use from the last time received.
 
-Changing the selected fields, the period or the algorithm sends one K to Model B's
+Changing the selected fields, the period or the algorithm sends one K to Analysis's
 `clustering` control stream; the cluster view and the change marks follow the latest run.
 
 ## 7. Model interface (models ↔ data server, inside the back end)
@@ -187,7 +187,7 @@ class Api:  # every method is async
     def tap(self, dst, summary, content) -> None           # models → scilibs and back
 
 class Model:
-    id = "model-c"; label = "Model C"; interval = 60.0   # simulated seconds between steps
+    id = "new-model-1"; label = "New model 1"; interval = 60.0   # simulated seconds between steps
     async def setup(self, api): ...
     async def step(self, api, t0, t1): ...               # process (t0, t1]
     async def on_command(self, api, cmd): ...            # optional
@@ -209,7 +209,7 @@ history at startup: those calls are counted, not drawn.
 | `sw.js` | the relay (no logic) | page |
 
 Page ↔ back-end worker (both back ends): page sends `start`, `connect` (port for the
-relay), `model-connect {model}` (port for a model), `control {action, arg}`; worker
+relay), `new-model-1onnect {model}` (port for a model), `control {action, arg}`; worker
 posts `progress {stage, detail, pct}`, `tick {messages, clock, server}` every 100 ms,
 `state {…control state…}`, `relay-failed {chain, path, method}`.
 
@@ -234,7 +234,7 @@ wherever WebAssembly runs) returns when `PYTHON_BY_DEFAULT` is set back to `true
 
 * Each datastream the display client uses is polled as often as it can change: raw records
   every simulated second (FR-63), 1-minute means every minute, hourly means every hour,
-  Model B's runs every minute (every second while a command's run is awaited).
+  Analysis's runs every minute (every second while a command's run is awaited).
 * A selection change (fields, period, algorithm) is answered at once, playing or paused.
   The chains of requests it causes are marked; their icons wear a **gold ring** ("caused by
   your click" in the key) and set off at once, ahead of any queue on their lines.

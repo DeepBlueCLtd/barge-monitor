@@ -44,5 +44,3 @@ RETRY_AFTER_S = 2  # FR-44: Retry-After while the index rebuilds (seconds)
 INDEX_CHUNK_RECORDS = 200_000  # records indexed per rebuild step
 
 # --- Models (FR-33..FR-37) ------------------------------------------------------
-CLEANED_RETENTION_S = 86400  # Data cleanse's 1 s output is kept for a day; summaries for ever
-MODEL_RPC_TIMEOUT_S = 30

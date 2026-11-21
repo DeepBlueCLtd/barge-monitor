@@ -7,9 +7,9 @@ export const PYODIDE_PATH = SHARED_PATH + 'pyodide/0.29.5/';
 export const HISTORY_PATH = SHARED_PATH + 'history/';
 export const PY_ZIP = 'py/barge.zip';
 /** The example model offered in an empty slot (FR-36), copied into the build from backend/models/. */
-export const EXAMPLE_MODEL = 'py/example_model_c.py';
+export const EXAMPLE_MODEL = 'py/example_new_model.py';
 /** The core models, each in its own worker in the Python back end (FR-33, FR-34). */
-export const CORE_MODELS = ['data-cleanse', 'model-a', 'model-b'] as const;
+export const CORE_MODELS = ['data-cleanse', 'summaries', 'analysis'] as const;
 // NFR-10: start-up budget, measured by the e2e test.
 export const STARTUP_BUDGET_MS = 30_000;
 // Each hop of a captured message takes this long on the flowchart, in simulated seconds.
