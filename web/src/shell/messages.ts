@@ -65,6 +65,7 @@ class MessageBus {
   total = 0;
   private recent: Message[] = [];
   private laneFree = new Map<string, number>();
+  private userLaneFree = new Map<string, number>();
   private chainEnd = new Map<string, number>();
 
   private schedule(m: Captured): number {
@@ -72,6 +73,14 @@ class MessageBus {
     let start = m.t;
     if (m.chain && this.chainEnd.has(m.chain)) start = Math.max(start, this.chainEnd.get(m.chain)!);
     const free = this.laneFree.get(lane) ?? -Infinity;
+    // A viewer's own action is drawn at once, ahead of any queue on its lines.
+    if (isUserMessage(m)) {
+      // Spaced only among themselves, so a burst of them does not stack on one point.
+      const own = Math.max(start, this.userLaneFree.get(lane) ?? -Infinity);
+      this.userLaneFree.set(lane, own + GAP_S);
+      if (m.chain) this.chainEnd.set(m.chain, own + HOP_S);
+      return own;
+    }
     const queued = Math.max(start, free);
     start = queued - m.t > MAX_LAG_S ? Math.max(start, m.t + MAX_LAG_S) : queued;
     this.laneFree.set(lane, Math.max(free, start + GAP_S));
@@ -125,3 +134,9 @@ class MessageBus {
 }
 
 export const bus = new MessageBus();
+
+/** Chains started by a viewer's own action in the display client: their icons wear a gold ring. */
+export const userChains = new Set<string>();
+export function isUserMessage(m: { chain?: string | null }): boolean {
+  return !!m.chain && userChains.has(m.chain);
+}

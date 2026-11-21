@@ -11,7 +11,7 @@ import { COMPONENT_IDS, COMPONENTS, ComponentId } from './components';
 import { Diamond } from './Diamond';
 import { allLanes, arrowhead, cardRect, laneFor, LAYOUT_SIZE, Pt, pointAt } from './geometry';
 import layout from './layout.json';
-import { bus, LETTERS, Message } from './messages';
+import { bus, isUserMessage, LETTERS, Message } from './messages';
 import { GOLD, INK, ZoneId, ZONES } from './palette';
 import { runtime } from './runtime';
 import { revealed, selectComponent, selectedComponent, selectedMessage } from './selection';
@@ -196,14 +196,14 @@ function Icons() {
         const at = position(m, now);
         if (!at) return null;
         return (
-          <button key={m.key} className={`icon${m.failed ? ' failed' : ''}`} data-letter={m.letter} data-testid="message-icon"
+          <button key={m.key} className={`icon${m.failed ? ' failed' : ''}`} data-letter={m.letter} data-user={isUserMessage(m) || undefined} data-testid="message-icon"
             aria-label={`${m.letter} message: ${m.summary}`} title={`${m.letter}: ${m.summary}`}
             style={{ transform: `translate(${at[0] - 19}px, ${at[1] - 19}px)` }}
             onClick={(e) => {
               e.stopPropagation();
               selectedMessage.set({ m, at });
             }}>
-            <Glyph letter={m.letter} failed={m.failed} />
+            <Glyph letter={m.letter} failed={m.failed} user={isUserMessage(m)} />
           </button>
         );
       })}
@@ -218,7 +218,7 @@ function SelectedIcon() {
   const { m, at } = picked;
   return (
     <div className="icon selected" data-letter={m.letter} data-testid="selected-icon" style={{ transform: `translate(${at[0] - 19}px, ${at[1] - 19}px)` }}>
-      <Glyph letter={m.letter} failed={m.failed} selected />
+      <Glyph letter={m.letter} failed={m.failed} selected user={isUserMessage(m)} />
     </div>
   );
 }

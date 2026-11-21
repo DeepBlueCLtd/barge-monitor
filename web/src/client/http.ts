@@ -3,6 +3,7 @@
 // `x-tap-chain` header so the messages it causes inside the back end can be
 // found by chain (FR-70, docs/v4-interfaces.md §3). The client does not draw its
 // own messages: the back end captures both directions of the HTTP boundary.
+import { userChains } from '../shell/messages';
 import { API_BASE } from '../config';
 import { simSleep } from '../shell/clock';
 
@@ -27,6 +28,9 @@ export class ClientHttp {
   /** Chains of observation requests, with the datastream read and whether it was raw (causing S). */
   onRequest: ((r: { chain: string; method: string; path: string; params: Record<string, string> }) => void) | null = null;
 
+  /** True while answering a viewer's action: those requests' chains are marked (gold ring). */
+  userAction = false;
+
   /** The sequence number the next request's chain will carry. */
   get nextSeq(): number {
     return this.seq + 1;
@@ -46,6 +50,10 @@ export class ClientHttp {
     if (this.closed) throw new Closed('client restarted');
     const q = new URLSearchParams(params).toString();
     const chain = `${this.prefix}${++this.seq}`;
+    if (this.userAction) {
+      userChains.add(chain);
+      if (userChains.size > 500) userChains.delete(userChains.values().next().value!);
+    }
     this.onRequest?.({ chain, method, path, params });
     let r: Response;
     try {

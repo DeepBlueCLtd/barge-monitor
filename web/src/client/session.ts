@@ -159,11 +159,13 @@ export class ClientSession {
         if (this.closed) return;
         const woken = this.woken;
         this.woken = false;
+        this.http.userAction = woken;
         if (this.loadedGen !== this.gen) await this.load();
         else if (!woken) await this.poll();
         if (this.commandDirty) await this.command();
         await this.pollRun();
         if (woken && !simClock.playing) await this.awaitRunWhilePaused();
+        this.http.userAction = false;
         if (this.stale.value) {
           this.stale.set(false);
           this.banner.set(null);

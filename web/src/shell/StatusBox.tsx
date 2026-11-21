@@ -65,6 +65,10 @@ export function MessageKey({ rect }: { rect: Box }) {
             <span>{LETTERS[l].key}</span>
           </li>
         ))}
+        <li data-testid="key-user">
+          <Glyph letter="Q" size={22} user />
+          <span>Caused by your click</span>
+        </li>
       </ul>
     </section>
   );
