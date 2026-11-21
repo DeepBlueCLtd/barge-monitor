@@ -8,6 +8,7 @@ import { ClientDetail } from './ClientDetail';
 import { ComponentDetail } from './ComponentDetail';
 import { MessageStrip } from './MessageStrip';
 import { ModelsDetail } from './ModelsDetail';
+import { Overview } from './Overview';
 import { ServerDetail } from './ServerDetail';
 
 export function DetailPanel() {
@@ -17,13 +18,8 @@ export function DetailPanel() {
     <section className="detail" aria-label="Detail panel" data-testid="detail-panel" data-showing={id ?? 'none'}>
       {id ? <Panel id={id} /> : (
         <div className="detail-empty" data-testid="detail-empty">
-          {!msg && (
-            <>
-              <p className="invite">Click a component on the flowchart to see it here.</p>
-              <p className="hint">Click a moving message to read it.</p>
-            </>
-          )}
-          <MessageStrip selectionDefault={false} />
+          <Overview />
+          {msg && <MessageStrip selectionDefault={false} />}
         </div>
       )}
     </section>

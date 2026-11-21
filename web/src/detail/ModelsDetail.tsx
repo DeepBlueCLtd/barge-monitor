@@ -21,8 +21,8 @@ interface Slot {
 
 const SLOTS: Slot[] = [
   { id: 'data-cleanse', label: 'Data cleanse', core: true, sub: 'core model · runs first', text: 'Flags and removes noise before any other model sees the data.' },
-  { id: 'summaries', label: 'Summaries', core: true, sub: 'core model · registered', text: 'Live. Publishes its own datastreams.' },
-  { id: 'analysis', label: 'Analysis', core: true, sub: 'core model · registered', text: 'Live. Publishes its own datastreams.' },
+  { id: 'summaries', label: 'Summaries', core: true, sub: 'core model · registered', text: '1-minute and hourly means, and derived values.' },
+  { id: 'analysis', label: 'Analysis', core: true, sub: 'core model · registered', text: 'Changes, correlation and clustering, on the fields the display chooses.' },
   { id: 'new-model-1', label: 'New model 1', core: false, sub: 'empty slot', text: 'Room for a new model. Appears at the next handshake.' },
   { id: 'new-model-2', label: 'New model 2', core: false, sub: 'empty slot', text: 'Room for a new model. Appears at the next handshake.' },
 ];
@@ -58,7 +58,7 @@ export function ModelsDetail() {
           const phase = phaseOf(s.id);
           const Tag = s.core ? 'div' : 'button';
           return (
-            <Tag key={s.id} className={`new-model-1ard${registered ? ' gold-box' : ' empty'}${slot === s.id ? ' open' : ''}`} data-testid={`model-${s.id}`}
+            <Tag key={s.id} className={`model-card${registered ? ' gold-box' : ' empty'}${slot === s.id ? ' open' : ''}`} data-testid={`model-${s.id}`}
               {...(s.core ? {} : { onClick: () => openSlot.set(slot === s.id ? null : s.id), 'aria-expanded': slot === s.id,
                 'aria-label': `${s.label}${registered ? '' : ', empty slot: open the editor'}` })}>
               <span className="tick" />
@@ -75,18 +75,20 @@ export function ModelsDetail() {
       {slot && (standin ? (
         <div className="editor-off" role="note" data-testid="editor-unavailable">
           <b>The model editor is unavailable here.</b> It runs Python in the browser (Pyodide), and this session is running the JavaScript
-          stand-in because WebAssembly is blocked. The steps below are how a model is added; with the Python back end you can write one here.
+          stand-in. The steps below are how a model is added. {typeof WebAssembly === 'undefined'
+            ? 'This browser blocks WebAssembly, which the Python back end needs.'
+            : <a href="?backend=python">Reload with the Python back end to write one here.</a>}
         </div>
       ) : <ModelEditor slot={slot} />)}
       <div className="adding">
         <h4 className="small-caps">Adding a model</h4>
         <ol>
           <li><b>1 · Write it</b><span>Python, using the scientific libraries, reading observations from the data server.</span></li>
-          <li><b>2 · Register it</b><span>As a process system with its own datastreams, using ordinary resource creation.</span></li>
-          <li><b>3 · See it</b><span>Restart the display client: the new stream appears as a field, drawn by its schema type.</span></li>
+          <li><b>2 · Register it</b><span>The model creates its own process system and datastreams with ordinary HTTP requests. Nothing else changes.</span></li>
+          <li><b>3 · See it</b><span>Restart the display client: the new output appears as a field, drawn by its schema type.</span></li>
         </ol>
       </div>
-      <p className="footline">Each model runs in its own worker and reaches the data server only through its interface, so a failing model never stops the data server.</p>
+      <p className="footline">Each model runs in its own worker and reaches the data server only through its HTTP interface, as the display client does, so a failing model never stops the data server.</p>
     </div>
   );
 }

@@ -37,6 +37,67 @@ def test_at01_observations_match_ground_truth_while_store_grows():
             assert np.nanmax(np.abs(v[good] - truth[p][good])) <= 6 * sigma[p] + q, p
 
 
+def test_at03_a_second_store_format_changes_the_adapter_only():
+    """The same run over two stores: the first logger's fixed-width daily files, and a second, differently
+    awkward one. Only the store's own writer and the store adapter differ; the data server, FastAPI, the
+    models and every response are the same."""
+    from tests.second_store import Format, SecondStoreAdapter
+
+    first = Rig(seed=8, days=0.2)
+    second = Rig(seed=8, days=0.2, store_format=Format(), adapter_class=SecondStoreAdapter)
+    names = [n for n, _ in second.rt.logger.list_files()]
+    assert names and all(n.endswith(".csv") for n in names)  # really the other store
+    assert second.rt.logger.read(names[0]).startswith(b"serial;")
+    for r in (first, second):
+        r.advance(900)  # both stores grow
+    w, sigma = second.rt.world, second.rt.manifest["noise"]["sigma"]
+    d = second.ds("bow", "weather")
+    st, obs, _ = second.get(f"/datastreams/{d['id']}/observations", {"phenomenonTime": "2031-04-07T04:00:00Z/..", "limit": "100000"})
+    assert st == 200
+    t = np.array([parse_iso(o["time"]) for o in obs])
+    assert t.max() >= second.clock.now() - 2 and np.all(np.diff(t) == 1.0)
+    truth = w.sensor_truth(t, "bow")
+    for p in ("air_temperature", "relative_humidity", "pressure", "water_temperature"):  # AT-01 still passes
+        v = np.array([o[p] for o in obs], dtype=float)
+        good = np.array([o[f"{p}_qc"] == "1" for o in obs])
+        assert np.nanmax(np.abs(v[good] - truth[p][good])) <= 6 * sigma[p] + (0.5 if p == "relative_humidity" else 0.05), p
+    # Nothing above the adapter can tell the stores apart: sensors, models and discovery answer identically.
+    for path, params in ((f"/datastreams/{d['id']}/observations", {"limit": "5000"}),
+                         (f"/datastreams/{second.ds('stern', 'weather')['id']}/observations", {"resultTime": "latest"}),
+                         (f"/datastreams/{second.ds('summaries', 'summary-1min-bow')['id']}/observations", {"limit": "500"}),
+                         ("/datastreams", {"limit": "100"}), ("/systems/models/subsystems", None)):
+        assert second.get(path, params)[2].content == first.get(path, params)[2].content, path
+    second.rt.restart_server(); second.ready()  # the index is rebuilt from the second store, with identical results
+    assert second.get(f"/datastreams/{d['id']}/observations", {"limit": "5000"})[2].content == \
+        first.get(f"/datastreams/{d['id']}/observations", {"limit": "5000"})[2].content
+
+
+def test_at13_a_new_model_registers_itself_and_is_served_by_schema_type():
+    """The example for an empty slot, run as any model runs: it creates its own system and datastream with
+    ordinary HTTP requests, and discovery then offers its output with no change to the server."""
+    r = Rig(seed=14, days=0.2)
+    import example_new_model  # backend/models is on the path once the in-process models are loaded
+    before = {d["id"] for d in r.get("/datastreams", {"limit": "100"})[1]["items"]}
+    runner = r.rt.local.add(example_new_model.MODEL())
+    for _ in range(20):
+        r.advance(60)
+        if runner.phase == "live":
+            break
+    assert runner.phase == "live", runner.detail
+    assert "new-model-1" in {s["id"] for s in r.get("/systems/models/subsystems")[1]["items"]}
+    d = r.ds("new-model-1", "wind-chill")
+    assert d["id"] not in before
+    fields = r.get(f"/datastreams/{d['id']}/schema", {"obsFormat": "application/swe+json"})[1]["recordSchema"]["fields"]
+    assert [(f["name"], f["type"]) for f in fields] == [("time", "Time"), ("wind_chill", "Quantity")]
+    obs = r.get(f"/datastreams/{d['id']}/observations", {"limit": "5"})[1]
+    assert len(obs) == 5 and all(isinstance(o["wind_chill"], float) for o in obs)
+    r.rt.tap.drain()
+    for _ in range(18):
+        r.advance(10)  # now live: its traffic is drawn
+    made = [m for m in r.rt.tap.drain() if m.get("model") == "new-model-1" and m["src"] == "models"]
+    assert made and all(m["dst"] in ("fastapi", "scilibs") for m in made)  # HTTP and the libraries: no other way in
+
+
 def test_at04_declared_queries_meet_budget_and_rebuild_identically():
     """AT-04 at one week: CI loads a week of history (decision D-37); four weeks is published."""
     r = Rig(seed=14, days=7)

@@ -59,7 +59,7 @@ export function ServerDetail() {
       <div className="also">
         <div className="cs-box"><b>Property definitions</b><span>the seven parameters and derived values</span></div>
         <div className="cs-box"><b>Control streams and commands</b><span>model settings from the display client</span></div>
-        <div className="cs-box"><b>System events</b><span>restarts and field changes</span></div>
+        <div className="cs-box"><b>Resource creation</b><span>how each model registers itself</span></div>
       </div>
       <div className="why">
         <h4 className="small-caps">Why it fits</h4>
@@ -67,11 +67,12 @@ export function ServerDetail() {
           <li>A platform carrying sensors is exactly its <b>Platform</b> and <b>Sensor</b> systems.</li>
           <li>No position needed: a system's <b>location is optional</b>.</li>
           <li>One <b>record datastream</b> carries all seven parameters per reading, with QC flags beside them.</li>
-          <li>Models are first-class <b>process systems</b>, so adding one is ordinary resource creation.</li>
+          <li>Models are first-class <b>process systems</b>: a model registers itself by <b>ordinary resource creation</b>, over the same interface the display reads.</li>
           <li>Settings travel as <b>commands</b>, with their bounds in the control stream's schema.</li>
-          <li>Restarts and configuration changes are standard <b>system events</b>.</li>
+          <li>A restart needs nothing special: <b>plain HTTP</b> says wait (503 with Retry-After) and an instance identifier says start again.</li>
         </ul>
-        <p className="gaps"><b>Gaps:</b> no standard aggregation, so summaries are their own datastreams; publish/subscribe (Part 3) is not yet published, so the display polls.</p>
+        <p className="gaps"><b>Gaps:</b> no standard aggregation, so summaries are their own datastreams; publish/subscribe (Part 3) is not yet published, so the display and the models poll; a result that holds the latest run only is replaced with a plain HTTP PUT.</p>
+        <p className="gaps"><b>Not used:</b> deployments, procedures, sampling features, system events and history, command feasibility, and replacing or deleting resources. Each is refused by name.</p>
       </div>
     </div>
   );

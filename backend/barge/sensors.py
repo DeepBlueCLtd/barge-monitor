@@ -19,8 +19,9 @@ CHUNK_S = 3600
 
 
 class Sensors:
-    def __init__(self, world: World, logger: L.Logger, tap: Tap = NULL):
+    def __init__(self, world: World, logger: L.Logger, tap: Tap = NULL, fmt=L):
         self.w = world
+        self.fmt = fmt  # the logger's own format: how a record is written and which file it goes to
         self.logger = logger
         self.tap = tap
         m = world.m
@@ -83,16 +84,15 @@ class Sensors:
         vals["apparent_wind_speed"] = np.clip(vals["apparent_wind_speed"], 0, None)
         vals["apparent_wind_direction"] = vals["apparent_wind_direction"] % 360.0
         vals["precipitation_type"] = tr["precipitation_type"]
-        data = L.format_records(t, vals)
-        name = L.file_name(sensor, t[0])
+        data = self.fmt.format_records(t, vals)
+        name = self.fmt.file_name(sensor, t[0])
         prev = self._last_file.get(sensor)
         if prev and prev != name:
             self.logger.close(prev)
         self.logger.append(name, data)
         self._last_file[sensor] = name
         if self.tap.recording and self.tap.enabled:
-            for i in range(n):
-                rec = data[i * L.REC_LEN:(i + 1) * L.REC_LEN].decode("ascii")
+            for rec in data.decode("ascii").splitlines(keepends=True)[-n:]:
                 self.tap.emit("platform", "store", "L", f"{sensor} record to {name}", rec)
         else:
             self.tap.count("platform", "store", "L", n)

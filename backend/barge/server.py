@@ -90,7 +90,7 @@ class Server:
         self.offering = offering.copy()
         self.tap = tap
         self.instance = f"{runtime.seed}-{number}"
-        self.adapter = StoreAdapter(runtime.logger, tap)
+        self.adapter = (getattr(runtime, "adapter_class", None) or StoreAdapter)(runtime.logger, tap)
         self.ready = False
         self.registry: Registry = runtime.registry
         self.lie_about_profile = runtime.lie_about_profile

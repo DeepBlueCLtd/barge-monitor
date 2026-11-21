@@ -196,7 +196,7 @@ class Runtime {
     w.onmessage = (e) => this.onModel(model, e.data);
     w.onerror = (e) => this.setModel(model, { phase: 'failed', detail: String(e.message ?? e) });
     const ch = new MessageChannel();
-    this.backend.postMessage({ type: 'new-model-1onnect', model }, [ch.port1]);
+    this.backend.postMessage({ type: 'model-connect', model }, [ch.port1]);
     w.postMessage({ type: 'start', pyodideUrl: resolve(PYODIDE_PATH), pyZipUrl: resolve(PY_ZIP), model, apiUrl: resolve('api'), ...(code ? { code } : {}) }, [ch.port2]);
     const clock = simClock.state.value;
     if (clock) w.postMessage({ type: 'clock', state: clock });

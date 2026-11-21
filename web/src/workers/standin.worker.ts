@@ -6,7 +6,7 @@
 // back-end worker (docs/v4-interfaces.md §8): `start`, `connect` (a port from
 // the relay), `control`; it posts `progress`, `tick` every 100 ms, `state`
 // once a second and after each control, and `relay-failed`.
-// The stand-in runs its own models: `new-model-1onnect` is not used (FR-06f).
+// The stand-in runs its own models: `model-connect` is not used (FR-06f).
 import { createStandin, HttpRequest, loadHistory, Progress, Runtime } from '../standin';
 
 declare const self: DedicatedWorkerGlobalScope;

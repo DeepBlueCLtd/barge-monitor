@@ -209,7 +209,7 @@ history at startup: those calls are counted, not drawn.
 | `sw.js` | the relay (no logic) | page |
 
 Page ↔ back-end worker (both back ends): page sends `start`, `connect` (port for the
-relay), `new-model-1onnect {model}` (port for a model), `control {action, arg}`; worker
+relay), `model-connect {model}` (port for a model), `control {action, arg}`; worker
 posts `progress {stage, detail, pct}`, `tick {messages, clock, server}` every 100 ms,
 `state {…control state…}`, `relay-failed {chain, path, method}`.
 

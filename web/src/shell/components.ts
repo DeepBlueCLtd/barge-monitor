@@ -28,12 +28,12 @@ export const COMPONENTS: Record<ComponentId, ComponentInfo> = {
   store: {
     id: 'store', code: 'C-02', name: 'Logger store', role: 'append-only files', zone: 'legacy', valueAdd: false,
     does: 'The old data logger: fixed-width text records, bow and stern in separate files rolling over daily, time in its own unit and epoch, coded values, no index, records appended while being read. It keeps receiving records while the data server is down or restarting.',
-    why: 'Legacy: it is the store we do not control and never alter. The architecture has to work in front of it as it is (claim C1).',
+    why: 'Legacy: it is the store we do not control and never alter. The architecture has to work in front of it as it is.',
   },
   adapter: {
     id: 'adapter', code: 'C-03', name: 'Store adapter', role: 'only reader · holds the index', zone: 'back', valueAdd: false,
     does: "The only code that understands the logger's format. It holds its own index (time to file and offset), answers the data server's store queries (S), reads the records through the index (S to the store, L records back) and returns columns (I). The index is rebuilt from the store on every restart.",
-    why: 'New build · back end: written for this system, and the one place that would change if the store did (AT-03).',
+    why: 'New build · back end: written for this system, and the one place that would change if the store did. A test swaps in a second, differently awkward store format and changes nothing else.',
   },
   server: {
     id: 'server', code: 'C-04', name: 'Data server', role: 'OGC Connected Systems', zone: 'back', valueAdd: false,
@@ -42,17 +42,17 @@ export const COMPONENTS: Record<ComponentId, ComponentInfo> = {
   },
   models: {
     id: 'models', code: 'C-05', name: 'Models', role: 'process systems', zone: 'back', valueAdd: true,
-    does: 'Core models and empty slots, each an OGC process system in its own worker.',
+    does: 'Core models and empty slots, each an OGC process system in its own worker, registered over the data server\'s own HTTP interface.',
     why: 'New build · back end.',
   },
   fastapi: {
     id: 'fastapi', code: 'C-06', name: 'FastAPI', role: 'ASGI web framework', zone: 'third', valueAdd: false,
     does: "FastAPI with Starlette: the ASGI framework for the data server's HTTP interface. It routes each request, validates its parameters and serves the OpenAPI definition. The committed OpenAPI master is the source of truth; a test asserts that FastAPI serves the same.",
-    why: 'Third-party libraries: off-the-shelf, openly maintained, not our code. The data server is written against it; the display client only ever sees HTTP.',
+    why: 'Third-party libraries: off-the-shelf, openly maintained, not our code. The data server is written against it; the display client and the models only ever see HTTP.',
   },
   scilibs: {
-    id: 'scilibs', code: 'C-07', name: 'Scientific libraries', role: 'numpy, scipy, sklearn', zone: 'third', valueAdd: false,
-    does: 'numpy, pandas, scipy and scikit-learn: the numerical work inside the models (cleaning, means, change detection, correlation, clustering). Used by the models only.',
+    id: 'scilibs', code: 'C-07', name: 'Scientific libraries', role: 'numpy, scikit-learn', zone: 'third', valueAdd: false,
+    does: 'numpy and scikit-learn: the numerical work inside the models (cleaning, means, change detection, correlation, clustering). Used by the models only.',
     why: 'Third-party libraries: off-the-shelf, openly maintained, not our code. The models call them; nothing else does.',
   },
   client: {

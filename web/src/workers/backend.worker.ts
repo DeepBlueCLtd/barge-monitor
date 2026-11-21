@@ -100,7 +100,7 @@ self.onmessage = (e: MessageEvent) => {
   else if (d.type === 'connect') {
     const port: MessagePort = e.ports[0];
     port.onmessage = (m) => serve(m.data, m.ports[0]);
-  } else if (d.type === 'new-model-1onnect') {
+  } else if (d.type === 'model-connect') {
     const port: MessagePort = e.ports[0];
     const model: string = d.model;
     // For the shell only: each model says which phase it is in. Its requests come through the relay.

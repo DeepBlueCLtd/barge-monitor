@@ -117,7 +117,7 @@ export function LinePlot({ session, props, changesNote }: { session: ClientSessi
       grid: { left: 8, right: 10, top: 8, bottom: 22, containLabel: false },
       xAxis: { type: 'time', min: ms(t0), max: ms(t1), axisLabel: { ...AXIS, formatter: (v: number) => timeLabel(v, span), hideOverlap: true }, splitLine: { show: false } },
       yAxis: { type: 'value', min: -0.16 * bands.length - 0.02, max: 1.04, show: false },
-      tooltip: { trigger: 'axis', confine: true, textStyle: { fontSize: 12 }, formatter: (ps: any[]) => {
+      tooltip: { trigger: 'axis', confine: true, textStyle: { fontSize: 14 }, formatter: (ps: any[]) => {
         if (!ps.length) return '';
         const head = timeLabel(ps[0].value?.[0] ?? ps[0].axisValue, 1);
         return [head, ...ps.filter((q) => q.seriesName !== 'changes' && q.value?.[2] !== undefined).map((q) => {
@@ -129,7 +129,7 @@ export function LinePlot({ session, props, changesNote }: { session: ClientSessi
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [version, props, changesNote, session]);
-  return <EChart option={option} height={150} testid="chart-line" />;
+  return <EChart option={option} height={168} testid="chart-line" />;
 }
 
 /** FR-58: the first selected field as means with ± 1 standard deviation over intervals suited to the period. */
@@ -176,7 +176,7 @@ export function ErrorBars({ session, p }: { session: ClientSession; p: Property 
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [version, p, session]);
-  return <EChart option={option} height={150} testid="chart-errorbars" />;
+  return <EChart option={option} height={168} testid="chart-errorbars" />;
 }
 
 /** FR-59: the selected fields (rows) against time (columns), each row normalised. */
@@ -221,7 +221,7 @@ export function HeatMap({ session, props }: { session: ClientSession; props: Pro
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [version, props, session]);
-  return <EChart option={option} height={150} testid="chart-heatmap" />;
+  return <EChart option={option} height={168} testid="chart-heatmap" />;
 }
 
 /** FR-60: cluster assignments as a band along the time axis, a legend, the algorithm and fields used, and the score. */

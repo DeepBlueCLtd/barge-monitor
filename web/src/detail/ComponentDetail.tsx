@@ -20,7 +20,7 @@ export function ComponentDetail({ id }: { id: ComponentId }) {
       <h3>Zone</h3>
       <p>{c.why}</p>
       {runtime.kind === 'standin' && id !== 'client' && (
-        <p className="standin-note">In this session it runs in the JavaScript stand-in, which serves the same interface; the stand-in is demonstrator scaffolding (§2.3).</p>
+        <p className="standin-note">In this session it runs in the JavaScript stand-in, which serves the same interface; the stand-in is demonstrator scaffolding, not part of the system.</p>
       )}
       {id === 'store' && store && (
         <p className="live">Now holding {store.files.toLocaleString()} files, {(store.bytes / 1e6).toFixed(1)} MB, {store.records.toLocaleString()} records.</p>

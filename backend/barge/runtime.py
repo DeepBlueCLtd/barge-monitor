@@ -26,7 +26,8 @@ from .world import generate
 
 class Runtime:
     def __init__(self, seed: int = 1, clock=None, pregen_days: float = C.PREGEN_DAYS, capture: bool = True,
-                 progress=None, history: dict | None = None, local_models: bool = False):
+                 progress=None, history: dict | None = None, local_models: bool = False,
+                 store_format=None, adapter_class=None):
         self.seed = seed
         self.manifest = generate(seed)
         self.world = World(self.manifest)
@@ -34,7 +35,9 @@ class Runtime:
         self.tap = Tap(now=self.now)
         self.tap.enabled = capture
         self.logger = Logger()
-        self.sensors = Sensors(self.world, self.logger, self.tap)
+        # The store's format and the adapter that reads it are a port (SRD §2.2): AT-03 swaps both, and nothing else.
+        self.adapter_class = adapter_class
+        self.sensors = Sensors(self.world, self.logger, self.tap, **({"fmt": store_format} if store_format else {}))
         self.registry = Registry()
         self.phases: dict[str, dict] = {}  # model -> {label, phase, detail}: what each model says of itself, for the shell
         self.local = None
