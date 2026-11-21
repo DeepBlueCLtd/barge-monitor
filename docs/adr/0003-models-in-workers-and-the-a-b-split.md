@@ -1,6 +1,6 @@
-# ADR 0003: Models in their own workers, and the split between Model A and Model B
+# ADR 0003: Models in their own workers, and the split between Summaries and Analysis
 
-**Status:** proposed, 2026-11-20 (SRD v4 FR-33, FR-34; open question §15 "Model A and Model B")
+**Status:** accepted, 2026-11-20 (SRD v4 FR-33, FR-34). **Point 1 is superseded by ADR 0004** (2026-11-21): models now use the HTTP interface. Model A is now called Summaries and Model B Analysis; the text below keeps the names it was written with.
 
 **Context.** SRD v4 merges the analysis service and the scientists' workspace into one
 component, Models: Data cleanse, Model A and Model B, each an OGC process system in its

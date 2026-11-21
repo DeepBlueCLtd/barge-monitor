@@ -60,9 +60,8 @@ export interface ModelWorkerStatus {
   progress?: Progress;
 }
 
-// TEMPORARY (decision D-80): while the cosmetics are reviewed, the stand-in is the default so
-// the page reloads in a couple of seconds. `?backend=python` still runs Pyodide. Set this back
-// to true to reinstate FR-06b.
+// FR-06b: the stand-in is the default because it starts in seconds; `?backend=python` runs
+// Pyodide. Set this to true to make Python the default wherever WebAssembly runs.
 const PYTHON_BY_DEFAULT = false;
 
 function chooseBackend(): BackendKind {

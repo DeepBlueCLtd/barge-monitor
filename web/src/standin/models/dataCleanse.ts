@@ -79,6 +79,7 @@ export class DataCleanse extends Model {
   readonly label = 'Data cleanse';
   description = 'Core model, runs first: flags and removes noise before any other model sees the data.';
   interval = 10;
+  catchUpMargin = 30; // the models that read its output must be able to come within their own margin of now
   settings: Record<string, any> = { spike_threshold: 6.0 };
   raw: Record<string, string | null> = {};
   out: Record<string, string> = {};

@@ -8,7 +8,7 @@
 import openapiJson from '../../../contracts/openapi.json';
 import { DEFAULT_LIMIT, MAX_LIMIT, PROFILE_URI, RETRY_AFTER_S, SOSA } from './constants';
 import { CATALOGUE, Field } from './fields';
-import { dumps, npRound, parseQs, PyFloat, pySlice, qsDict, urlencode } from './py';
+import { dumps, npRound, parseQs, PyFloat, pyFloat, pySlice, qsDict, urlencode } from './py';
 import { Cols, CommandRec, ControlstreamRec, NUMERIC, Series } from './registry';
 import { CommandError, DsView, Server } from './server';
 import { DataRecord, JSON_TYPE, OBS_FORMATS, schemaResponse, SWE_JSON } from './swe';
@@ -700,15 +700,29 @@ export class Api {
     }
     const nxt = offset + lim < total ? ctx.base + this.nextUrl(ctx, path, lim, offset) : null;
     if (of === SWE_JSON) {
-      const rows = times.map((tt, i) => {
-        const row: Record<string, unknown> = { time: tt };
-        for (const [n, c] of columns) row[n] = c[i];
-        return row;
-      });
+      // The same text as dumps(rows, true), written a record at a time: a day of records is one response.
+      const keys = columns.map(([n]) => ',' + dumps(n, true) + ':');
+      const seen = new Map<string, string>(); // category tokens and flags repeat: encode each once
+      const enc = (x: unknown): string => {
+        if (x === null || x === undefined) return 'null';
+        if (x instanceof PyFloat) return Number.isFinite(x.v) ? pyFloat(x.v) : 'null';
+        if (typeof x === 'string') {
+          let t = seen.get(x);
+          if (t === undefined) seen.set(x, (t = dumps(x, true)));
+          return t;
+        }
+        return dumps(x, true);
+      };
+      const parts: string[] = new Array(times.length);
+      for (let i = 0; i < times.length; i++) {
+        let row = '{"time":"' + times[i] + '"';
+        for (let c = 0; c < columns.length; c++) row += keys[c] + enc(columns[c][1][i]);
+        parts[i] = row + '}';
+      }
       const headers: [string, string][] = [['content-type', SWE_JSON]];
       if (nxt) headers.push(['link', `<${nxt}>; rel="next"`]);
       headers.push(['x-total-count', String(total)]);
-      return { status: 200, headers, body: dumps(rows, true) };
+      return { status: 200, headers, body: '[' + parts.join(',') + ']' };
     }
     const items = times.map((tt, i) => {
       const result: Record<string, unknown> = {};

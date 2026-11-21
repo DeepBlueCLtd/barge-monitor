@@ -119,7 +119,7 @@ def create_app(rt) -> FastAPI:
     """One FastAPI application over the runtime; it reaches whichever server instance is running."""
     app = FastAPI(
         title="Canal barge weather demonstrator: Connected Systems server",
-        version="4.0.0",
+        version="4.1.0",
         description=("A declared subset of OGC API – Connected Systems Parts 1 and 2 over a deliberately awkward "
                      "logger store. Everything is fictional. The facade is shown working over an awkward store, "
                      "to be confirmed against a real one (FR-19)."),
@@ -831,7 +831,8 @@ def _column(fd, v):
     if v.dtype == object:
         return [None if (isinstance(x, float) and not np.isfinite(x)) else x for x in v.tolist()]
     if fd["type"] == "Quantity":
-        return [None if x != x else x for x in np.round(v.astype(float), PRECISION).tolist()]
+        r = np.round(v.astype(float), PRECISION)
+        return r.tolist() if not np.isnan(r).any() else [None if x != x else x for x in r.tolist()]
     if fd["type"] == "Count":
         return [None if x != x else int(x) for x in v.astype(float).tolist()]
     if fd["type"] == "Boolean":

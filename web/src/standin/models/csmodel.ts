@@ -284,6 +284,8 @@ export abstract class Model {
   commandInterval: number | null = null;
   /** How much history one step takes while catching up. The stand-in takes big steps: startup is fast. */
   catchUpChunk = 86400;
+  /** Caught up once this close to now (never less than two intervals). */
+  catchUpMargin = 120;
   startFrom: 'history' | 'now' = 'history';
   system = '';
   controlKey: string | null = null;
@@ -343,7 +345,7 @@ export class Runner {
   }
 
   get caughtUp(): boolean {
-    return this.last !== null && this.api.now() - this.last < Math.max(2 * this.model.interval, 120);
+    return this.last !== null && this.api.now() - this.last < Math.max(2 * this.model.interval, this.model.catchUpMargin);
   }
 
   tick(playing: boolean, wake = false): void {

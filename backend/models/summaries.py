@@ -64,7 +64,7 @@ class Summaries(Model):
     label = "Summaries"
     description = "Core model: publishes its own datastreams."
     interval = 60.0
-    catch_up_chunk = 86400.0
+    catch_up_chunk = 4 * 3600.0  # history is read a few hours at a request, so the server stays responsive
 
     def __init__(self):
         self.settings = {"tendency_hours": 3.0}

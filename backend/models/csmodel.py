@@ -322,6 +322,7 @@ class Model:
     interval = 60.0
     command_interval = None  # simulated seconds between looks at its control stream; None: at each step
     catch_up_chunk = 6 * 3600.0  # how much history one step takes while catching up
+    catch_up_margin = 120.0  # caught up once this close to now (never less than two intervals)
     start_from = "history"  # "history": process the history from its start; "now": only what arrives
 
     def system_body(self) -> dict:
@@ -361,7 +362,7 @@ class Runner:
 
     @property
     def caught_up(self) -> bool:
-        return self.last is not None and self.api.now() - self.last < max(2 * self.model.interval, 120.0)
+        return self.last is not None and self.api.now() - self.last < max(2 * self.model.interval, self.model.catch_up_margin)
 
     async def commands_due(self, playing: bool, wake: bool) -> list:
         """Commands waiting on the model's control stream. Connected Systems publish/subscribe (Part 3) is

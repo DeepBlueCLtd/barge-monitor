@@ -3,12 +3,40 @@
 Every choice made while implementing the SRD that it did not settle. Each takes the
 recommended option; all are open for review. **Bold** rows most need your judgement.
 
+## Version 4.1: after the review
+
+Changes made after a review of how persuasive and how coherent the demonstrator is. The
+SRD is now Version 4.1 and records what is implemented. Rows below supersede the earlier
+rows they name.
+
+| # | Question | Options considered | Decision | Why |
+|---|---|---|---|---|
+| **D-89** | **How a model reaches the data server** | keep the internal interface and reword the panel; HTTP | **HTTP, at your request** (ADR 0004). Supersedes D-58 | The panel said "ordinary resource creation" while the server refused it. Now it is true, and tested against both back ends (AT-29). |
+| D-90 | Creating what already exists | look it up first; 409 with Location | 409 with the existing resource's `Location` | A restarted model finds its resources in one request. |
+| D-91 | How a command reaches a model | server notifies (D-63); model polls | The model polls its control stream on the simulation clock; the shell lets a pending command through while paused. Supersedes D-63 | A server that pushes to a model needs a channel HTTP does not give. Polling is the same recorded placeholder as the display client's. D-83 still holds. |
+| **D-92** | **Results that hold the latest run only** | one observation per run with arrays; a non-standard parameter; plain HTTP PUT | **PUT on the datastream's observations**, declared as not Connected Systems | Smallest change that is honest. The standard-only form is recorded in SRD §15. |
+| D-93 | The referee over HTTP | score on publish; an endpoint | `POST /demonstrator/referee/{kind}`, letter I, tagged scaffolding in the OpenAPI document | Models still never see the manifest (FR-37). |
+| D-94 | Who may create what | anything; own system only | Subsystems only under Models; datastreams only under a model-created system; sensors take no observations | There is no authentication, so the rule is structural, not per caller. |
+| **D-95** | **Data cleanse's output: retention** | readers tracked by the server (D-68); time only; keep all | **Keep all.** Supersedes D-68 | Tracking readers is client state in the server (FR-06). Memory is fine at 24 hours; longer histories need a policy (SRD §15). |
+| **D-96** | **History and default back end** | restore four weeks and Python (D-79, D-80 were temporary); record as implemented | **24 hours and the stand-in, recorded as what is implemented**, at your request to match the documents to the implementation | Over HTTP a day of history costs seconds in a browser. `?backend=python` and `--days N` remain. |
+| D-97 | History per request while catching up | a day; four hours | Four hours | The Python back-end worker answers the page between requests instead of freezing for seconds. |
+| D-98 | Names of the models | Model A/B (clashes with Algorithm A/B/C); by function | **Summaries and Analysis; New model 1 and 2 for the slots, at your choice.** Ids `summaries`, `analysis`, `new-model-1`. Supersedes D-59's names | An internal audience should see what each does. |
+| **D-99** | **The detail panel's opening state** | an invitation only; an overview | **An overview: sensible defaults adopted, what is written, what is not in the demonstrator (names, no estimates), at your request** | The argument that the work is mostly adopting defaults was nowhere on screen. It reveals nothing as value-add (FR-74). |
+| D-100 | Promoting the failure demos | a button for server down; a menu of scenarios with a banner | A **Failure demos** menu; each scenario sets the control panel's switches, shows the display client, starts the clock and says what to watch for; Put everything back | They were the best evidence and the hardest to find. |
+| D-101 | The Data server panel's claims | implement system events; drop the claim | Dropped: "resource creation" takes its place, and a line lists what is not used | The server refuses system events by name. |
+| D-102 | Text sizes | keep two thirds for the panel (D-88); the flowchart at its designed size | The flowchart column is 840 px at 1920 wide, so labels meet VS-05; monitor text 13 to 15 px; panel text 16 px. Supersedes D-76 and D-88's widths | D-76 and D-88 both recorded a conflict with VS-05. |
+| D-103 | Requirement numbers on screen | keep; remove | Removed from every panel (tested) | They mean nothing to the audience. |
+| D-104 | The scientific libraries named | numpy, pandas, scipy, scikit-learn; what is used | numpy and scikit-learn | pandas and scipy were named and never imported. |
+| D-105 | The second store format (AT-03) | ship it; a test fixture | A test fixture (`backend/tests/second_store.py`): hourly semicolon-separated files, spreadsheet serial times, kelvin and pascals. The store's format and its adapter are passed to the runtime | Responses are byte-identical to the first store's. Nothing ships. |
+| D-106 | D-26, conformance class identifiers | — | **Checked against the published Parts 1 and 2** (finding of 2026-11-21) | Closes D-26's open point for the classes claimed. D-31 (the `quality` reference) is still open. |
+
 ## Version 4: the fresh start
 
 The front end was rewritten from scratch to SRD Version 4; the Python back end was kept
 where Version 4 did not change it (world, store, adapter, server on FastAPI) and
 restructured where it did. Decisions D-01 to D-54 below are kept as history; those
-superseded by Version 4 are marked so in this table.
+superseded by Version 4 are marked so in this table. Rows here say Model A and Model B:
+they are now Summaries and Analysis (D-98).
 
 | # | Question | Options considered | Decision | Why |
 |---|---|---|---|---|

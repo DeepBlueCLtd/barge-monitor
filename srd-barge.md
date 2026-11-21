@@ -1,7 +1,7 @@
 # Software Requirements Document
-## Canal barge weather demonstrator, Version 4
+## Canal barge weather demonstrator, Version 4.1
 
-**Status:** Draft for development
+**Status:** As implemented (4.1 records what the demonstrator does; 4.0 was the draft it was built from)
 **Author:** Doc
 **Working name:** to be chosen (§15). This document says *the demonstrator*.
 **Supersedes:** SRD Version 3.3 and Annex A (Visual style). Both are folded in here;
@@ -17,8 +17,29 @@ nothing in them applies unless restated.
 | SRD v4 mockup 3 | Data server selected: Connected Systems diagram and why it fits |
 | Interactive display, store queries | All of the above, clickable |
 
-The mockups fix **layout, components and labels**. They are drawn in a plain style; the
-visual style is §11. Where a mockup and this document disagree, this document wins.
+The mockups fixed **layout, components and labels** for Version 4.0. They are drawn in a
+plain style; the visual style is §11. They predate Version 4.1 (they show Model A and Model
+B, a 1-hour default period, and no overview or failure demos). Where a mockup and this
+document disagree, this document wins.
+
+### Changes from Version 4.0
+
+- **Models use the Connected Systems HTTP interface**, like the display client: each
+  creates its own process system, datastreams and control stream, publishes observations,
+  reads its commands and reports their status with ordinary requests (§3.1, §6.3, §6.4).
+  The internal interface between models and the data server is gone.
+- **Models are named by function**: Data cleanse, **Summaries**, **Analysis**; the empty
+  slots are **New model 1** and **New model 2** (FR-34).
+- The detail panel opens on an **overview**: what is adopted rather than designed, what is
+  written for this system, and what is **not in the demonstrator** (§9.4).
+- **Failure demos** in the top bar run the control panel's scenarios in one click, each
+  with what to watch for (§9.7).
+- The Data server panel **no longer claims system events** (the server refuses them) and
+  says what is not used (FR-72).
+- **24 hours of history** are pre-loaded, not four weeks; the **stand-in is the default
+  back end**; the default period is **1 minute** (FR-06b, FR-15, FR-54).
+- Text meets the declared minimum sizes at 1920 × 1080; no requirement number appears on
+  screen (VS-05).
 
 ### Changes from Version 3.3
 
@@ -80,7 +101,8 @@ The claims are supported by acceptance tests (§14), never asserted by the displ
 - **NFR-01 (One browser session.)** Every component runs in the browser. No step of
   building, testing or demonstrating requires a server, a container or a daemon.
 - **NFR-02 (Two languages, by design.)** The front end is TypeScript; the back end and
-  all models are Python running in Pyodide.
+  all models are Python running in Pyodide. (The stand-in of §2.3 is TypeScript: it is
+  scaffolding, and the default only because it starts in seconds.)
 - **NFR-03 (The back end is deployable.)** The Python back end is a standard ASGI
   application that runs unchanged under an ordinary ASGI server (AT-02).
 
@@ -109,7 +131,8 @@ The browser holds four kinds of runtime:
 
 - **FR-02** All traffic between the display client, the data server and the models
   crosses as **HTTP** and nowhere else. Requests use relative URLs, are intercepted by a
-  **Service Worker relay**, and are passed to the worker that serves them.
+  **Service Worker relay**, and are passed to the worker that serves them. A model in its
+  own worker makes its requests with `fetch`, exactly as the display client does.
 - **FR-03** The relay is an **invisible transport**. It contains no application logic, is
   not a component, and is not drawn on the flowchart. Messages that pass through it are
   drawn as travelling directly between their real endpoints (for example, display client
@@ -121,7 +144,8 @@ The browser holds four kinds of runtime:
   records, the declared profile (§7.1), and JSON Schema for anything else. Seam traffic
   is validated against the masters in tests.
 - **FR-06** The data server is **stateless with respect to clients**. It holds no
-  sessions and does not know which clients exist.
+  sessions, does not know which clients or models exist, and keeps no account of who has
+  read what.
 
 ### 2.2 Honest ports
 
@@ -144,9 +168,10 @@ and says nothing about a developed system's effort or contingency.
     this document;
   - the **JavaScript stand-in**: a TypeScript implementation of the same back-end
     components (store adapter, data server, the core models) running in a Web Worker.
-- **FR-06b** At startup the demonstrator detects whether WebAssembly is available and
-  uses the Python back end if it is, otherwise the stand-in. A URL parameter forces either
-  one, so the stand-in can be rehearsed on any machine.
+- **FR-06b** The **stand-in is the default**, because it starts in a few seconds. The URL
+  parameter `?backend=python` runs the Python back end, and `?backend=standin` names the
+  stand-in explicitly, so either can be rehearsed on any machine. Without WebAssembly only
+  the stand-in can run.
 - **FR-06c** The stand-in serves **exactly the same interface**: the same Connected Systems
   subset, the same discovery documents, profile, schemas, encodings, refusals, waiting
   mode and instance identifiers, validated against the **same committed masters** (FR-05).
@@ -160,7 +185,8 @@ and says nothing about a developed system's effort or contingency.
   results are **marked as illustrative**, and their scores are labelled "stand-in" rather
   than presented as the real models' performance.
 - **FR-06f** In stand-in mode the **empty-slot model editor is unavailable** (it needs
-  Python). The Models panel says so and shows the steps for adding a model.
+  Python). The Models panel says so, shows the steps for adding a model, and offers a link
+  that reloads with the Python back end where WebAssembly is available.
 - **FR-06g** Message capture, the flowchart, every letter, the detail panel, restarts,
   waiting mode, the control panel and degraded mode **all work identically** in stand-in
   mode. The architecture view is the point, and it is complete in both modes.
@@ -191,9 +217,9 @@ corresponds **one-to-one** with the real system's architecture, under neutral na
 | C-02 | Logger store | Legacy | | Deliberately awkward, append-only files (§6.1) |
 | C-03 | Store adapter | New build · back end | | The only reader of the store; holds the index; answers store queries |
 | C-04 | Data server | New build · back end | | OGC API – Connected Systems: discovery, datastreams, observations, commands |
-| C-05 | Models | New build · back end | **★** | Core models and empty slots, each an OGC process system in its own worker |
+| C-05 | Models | New build · back end | **★** | Core models and empty slots, each an OGC process system in its own worker, registered over the data server's HTTP interface |
 | C-06 | FastAPI | Third-party libraries | | ASGI web framework: routing, validation, OpenAPI |
-| C-07 | Scientific libraries | Third-party libraries | | numpy, pandas, scipy, scikit-learn |
+| C-07 | Scientific libraries | Third-party libraries | | numpy, scikit-learn |
 | C-08 | Display client | New build · front end | **★** | The real system's screen: handshake, self-configuration, graphs and clusters |
 
 The **demonstrator shell** (flowchart, controls, key, status, detail panel) frames
@@ -208,16 +234,17 @@ everything and is not a component.
 | Logger store | Store adapter | L |
 | Data server | Store adapter | S (store query) |
 | Store adapter | Data server | I |
-| Models | Data server | I (register systems and datastreams, publish observations) |
-| Data server | Models | I (observations, commands) |
+| Models | FastAPI | Q, O, I (over HTTP: register, read, publish, look for commands; I is the referee) |
+| FastAPI | Models | D, O, H, I (over HTTP) |
 | Models | Scientific libraries | I (calls and results) |
 | FastAPI | Data server | I (parsed request) |
 | Data server | FastAPI | I (response) |
 | Display client | FastAPI | Q, K (over HTTP) |
 | FastAPI | Display client | D, P, O, H (over HTTP) |
 
-Models reach the data server **directly**, not through FastAPI: they register and
-publish through the data server's own interface, inside the back end.
+Models reach the data server **as the display client does**: through FastAPI, with
+ordinary HTTP requests to the Connected Systems interface. There is no other interface
+between a model and the data server.
 
 ---
 
@@ -257,12 +284,15 @@ publish through the data server's own interface, inside the back end.
   reads time from the **simulation clock**. No host clock is used for any operational
   purpose.
 - **FR-14** All randomness comes from named, seeded streams recorded in the manifest.
-- **FR-15** **Four weeks of history** (about five million records per sensor) are
-  **pre-calculated at build time** by the Python world generator, running the same
-  sensor-to-store path under CPython with the run's seeds, and shipped as static files
-  **in the store's own awkward format**, with the manifest. At startup either back end
-  loads them as the store's contents, and the live run continues from their end. Loading
-  progress is shown honestly; the flowchart becomes available when it finishes.
+- **FR-15** **24 hours of history** (86 400 records per sensor) are **pre-calculated at
+  build time** by the Python world generator, running the same sensor-to-store path under
+  CPython with the run's seeds, and shipped as static files **in the store's own awkward
+  format**, with the manifest. At startup either back end loads them as the store's
+  contents, the models work through them over HTTP, and the live run continues from their
+  end. Loading progress is shown honestly; the flowchart becomes available when it
+  finishes. (Version 4.0 asked for four weeks. With models reading and publishing as JSON
+  over HTTP, a day of history costs seconds to work through in a browser, so four weeks
+  is not loaded; see §15.)
 - **FR-15a** The build fails if regenerating the history from the recorded seeds does not
   reproduce the shipped files exactly. The live world (in either back end) continues from
   the recorded end state, so live readings join the history without a seam.
@@ -275,13 +305,13 @@ publish through the data server's own interface, inside the back end.
 |---|---|---|
 | Q | Connected Systems request | OGC API – Connected Systems |
 | D | Discovery resource: landing page, conformance, system and datastream descriptions, schemas | OGC API – Connected Systems, Features, Common; SensorML; SWE Common 3.0 |
-| O | Observations | SWE Common JSON (`application/swe+json`) |
+| O | Observations, read or published | SWE Common JSON (`application/swe+json`) |
 | K | Command on a control stream | OGC API – Connected Systems Part 2 |
 | P | Declared profile | JSON Schema |
 | H | Plain HTTP status: 503 with `Retry-After` | RFC 9110 |
 | S | Store query | Internal; no public standard |
 | L | Legacy fixed-width record | The logger's own format |
-| I | Internal typed object | Internal; no public standard |
+| I | Internal typed object; also the demonstrator's referee (§6.4), which is scaffolding | Internal; no public standard |
 
 - **FR-16** Messages that meet no public standard are named honestly as **S**, **L** or
   **I**, never presented as standards.
@@ -335,10 +365,21 @@ finding (`FINDING-2026-11-20-connected-systems.md`).
   and selects fields.
 - **FR-27** **Control streams and commands** on each model, carrying its settings. Commands
   are POSTed to `/controlstreams/{id}/commands`; the bounds live in the control stream's
-  schema; a command outside them is rejected with **HTTP 400** naming the bound.
-- **FR-28** **Registration**: a model registers itself by creating a System, then a
-  datastream under it, then publishing observations, using ordinary resource creation.
-  There is no registration-specific endpoint.
+  schema; a command outside them is rejected with **HTTP 400** naming the bound. A model
+  **polls** its control stream for pending commands (`statusCode=PENDING`) on the
+  simulation clock, and reports each command's progress by POSTing to
+  `/commands/{id}/status`. Polling is a recorded placeholder, as FR-63.
+- **FR-28** **Registration**: a model registers itself over HTTP by creating a System
+  under the Models system (`POST /systems/models/subsystems`), then its datastreams and
+  control stream under that system, then publishing observations
+  (`POST /datastreams/{id}/observations`), using ordinary resource creation. There is no
+  registration-specific endpoint. Creating a resource that is already there answers
+  **409** with its `Location`, so a restarted model finds what it made. A datastream whose
+  schema changes is a new datastream under a new identifier (FR-51).
+- **FR-28a** Nothing is replaced or deleted, with one declared exception that is **not
+  Connected Systems**: a result that holds the latest run only is replaced with a plain
+  HTTP `PUT` on the datastream's observations. Every other `PUT`, `PATCH` and `DELETE` is
+  refused by name, and the Create/Replace/Delete conformance classes are not claimed.
 - **FR-29** **Summary datastreams**: for each sensor field, models publish **1-minute
   means** and **hourly means** as ordinary datastreams. Clients read raw records for
   periods of an hour or less, 1-minute means for 6 hours and a day, and hourly means for
@@ -348,8 +389,9 @@ finding (`FINDING-2026-11-20-connected-systems.md`).
   refused named. A query whose result would exceed a declared size is refused with the
   limit and how to narrow it. Nothing is silently truncated. The served conformance
   declaration matches the code.
-- **FR-31** Declared queries (the last hour from each sensor; one field over four weeks
-  from a summary datastream) meet a declared time budget over four weeks of history.
+- **FR-31** Declared queries (the last hour from each sensor; one field over the whole
+  history from a summary datastream) meet a declared time budget, tested over one week of
+  history.
 - **FR-32** QC flags are computed on the way out and carried in the flag fields, never by
   altering stored records.
 
@@ -358,32 +400,38 @@ finding (`FINDING-2026-11-20-connected-systems.md`).
 - **FR-33** **Models** is a set of models, each an OGC **process system** running in **its
   own worker**. A failing, slow or broken model never stops the data server, the other
   models or the display client.
-- **FR-34** The core models are:
+- **FR-34** The core models are named by what they do:
   - **Data cleanse**, which runs first: it flags and removes noise and publishes cleaned
     datastreams. **Every other model reads Data cleanse's output**, not the raw
     datastreams.
-  - **Summaries** and **Analysis**, which between them provide the derived values, change
-    detection, correlation, clustering (with three selectable algorithms) and the summary
-    datastreams. The split between A and B is an implementation choice recorded in an ADR;
-    the demonstrator never names what each does beyond "core model".
+  - **Summaries**: the 1-minute and hourly summary datastreams (FR-29) and the derived
+    values.
+  - **Analysis**: change detection, correlation and clustering (with three selectable
+    algorithms) on the fields and period the display client chooses.
+
+  The split between Summaries and Analysis is recorded in ADR 0003.
 - **FR-35** Each model reads observations from the data server, registers its own
-  datastreams there (FR-28), and takes its settings as commands (FR-27).
-- **FR-36** **Empty slots** (New model 1, New model 2) show where new models go. Selecting an empty
-  slot in the Models panel opens an **in-browser Python editor** (CodeMirror 6). Code
-  written there runs in a new worker as a new model, using the scientific libraries, and
-  registers like any other. It appears in the display client at the client's next
-  handshake.
+  datastreams there (FR-28), and takes its settings as commands (FR-27), all through the
+  HTTP interface. A model is written against a small library that makes these requests
+  (`backend/models/csmodel.py`).
+- **FR-36** **Empty slots** (New model 1, New model 2) show where new models go. Selecting
+  an empty slot in the Models panel opens an **in-browser Python editor** (CodeMirror 6).
+  Code written there runs in a new worker as a new model, using the scientific libraries,
+  and registers over HTTP like any other. It appears in the display client at the
+  client's next handshake.
 - **FR-37** Every model result carries the settings and data range it was computed from.
   Change detection and clustering are **scored against the manifest**, and the score is
-  published with them. Models never see the manifest or the position.
+  published with them. Models never see the manifest or the position: a model asks the
+  demonstrator's **referee** (`/demonstrator/referee`, the only code that reads the
+  manifest) for a score. The referee is scaffolding and is named so in the interface
+  definition.
 
 ### 6.5 Third-party libraries
 
 - **FR-38** **FastAPI** (with Starlette) is the ASGI framework for the data server's HTTP
   interface. The **committed OpenAPI master is the source of truth**; a test asserts
   that FastAPI serves the same.
-- **FR-39** **Scientific libraries** (numpy, pandas, scipy, scikit-learn) are used by the
-  models only.
+- **FR-39** **Scientific libraries** (numpy and scikit-learn) are used by the models only.
 
 ---
 
@@ -460,8 +508,10 @@ presets** and the **clustering** control; a row of **three graph components**; t
 - **FR-53** **Fields**: chips built from the handshake (FR-43), **several selectable at
   once**. Optional fields are drawn dashed. Selecting or deselecting a field issues new
   observation requests (Q), which cause store queries (S) where raw records are needed.
-- **FR-54** **Period presets**: 1 hour, 6 hours, a day, a week, 4 weeks. Each preset is
-  one set of requests, reading raw records or a summary datastream as FR-29 sets out.
+- **FR-54** **Period presets**: 1 minute (the default, so each new second moves the
+  views), 1 hour, 6 hours, a day, a week, 4 weeks. Each preset is one set of requests,
+  reading raw records or a summary datastream as FR-29 sets out. A preset longer than the
+  history shows what history there is.
 - **FR-55** **Clustering**: a drop-down of three **unnamed algorithms** (Algorithm A, B
   and C). The clustering runs on the **selected fields**. Changing either sends a command
   (K) to the model that does the clustering.
@@ -490,9 +540,10 @@ Each view is a framed component with a value-add diamond (§11.6).
 
 ### 8.4 Live data
 
-- **FR-63** Live data reaches the client by **polling observations once per simulated
-  second**, from the last reading received onwards. This is a recorded placeholder:
-  Connected Systems publish/subscribe (Part 3) is unpublished.
+- **FR-63** Live data reaches the client by **polling**: raw records once per simulated
+  second from the last reading received, and each summary datastream as often as it can
+  change. This is a recorded placeholder: Connected Systems publish/subscribe (Part 3) is
+  unpublished.
 
 ---
 
@@ -503,8 +554,9 @@ Each view is a framed component with a value-add diamond (§11.6).
 Mockups 1 to 3 show the arrangement:
 
 - **Top bar**: title, a one-line subtitle explaining that components and messages can
-  be clicked and that ★ marks the value-add, and the controls (play/pause, speed,
-  restart client, restart server, control panel).
+  be clicked, and the controls (play/pause, speed, restart client, restart server,
+  failure demos, control panel, overview). Nothing says which components are the
+  value-add before the reveal (§9.5).
 - **Left**: the **stacked flowchart**, layered top to bottom: front end, third-party
   libraries, back end, legacy, world. Data rises from the collection platform at the
   bottom to the display client at the top.
@@ -512,13 +564,17 @@ Mockups 1 to 3 show the arrangement:
   instance, client state, essentials, optional sources) and the **message key**.
 - **Right**: the **detail panel** (§9.4).
 
+On the 1920 × 1080 target the flowchart is drawn at its designed size (840 px wide), so
+its labels meet VS-05; the detail panel takes the rest.
+
 ### 9.2 Flowchart
 
 - **FR-64** Drawn with **React Flow (xyflow)** from a **fixed layout** in a committed file.
   Zones are labelled, shaded bands. Third-party libraries form their **own band**,
   outside the back end.
 - **FR-65** Every flow in §3.1 is drawn. A two-way exchange is two arrows on the thirds of
-  the facing edges. The HTTP flow between display client and FastAPI is labelled "HTTP".
+  the facing edges. Both HTTP flows (display client and FastAPI; Models and FastAPI) are
+  labelled "HTTP".
 
 ### 9.3 Messages
 
@@ -534,25 +590,36 @@ Mockups 1 to 3 show the arrangement:
 ### 9.4 Detail panel
 
 - **FR-69** Clicking a component shows it in the detail panel; the selected component is
-  ringed on the flowchart. The panel's × returns it to its **empty state**, which invites
-  the viewer to click a component.
+  ringed on the flowchart. The panel's × and the top bar's **Overview** button return it
+  to its **opening state**, the overview.
+- **FR-69a** The **overview** invites the viewer to click a component and shows three
+  lists: **sensible defaults** (each decision the system did not have to make, the
+  standard or off-the-shelf part adopted instead, and where it is seen); **written for
+  this system** (store adapter, data server, display client, models); and **not in this
+  demonstrator** (what a developed system needs that is deliberately absent, by name,
+  without estimates). It marks nothing as value-add (FR-74).
 - **FR-70** **Display client** (mockup 1): the monitor frame holding the display client
   (§8), short notes beside it on the handshake, fields, period and clustering, and the
   **message strip** beneath it. Until a message is clicked, the strip shows the store
   query (S) built from the current selection, with the chain of messages that selection
   sends.
 - **FR-71** **Models** (mockup 2): the Models component in gold with its description;
-  beneath it, joined by lines, the models as cards in one row: **Data cleanse**, **Model
-  A**, **Analysis** (gold, registered) and **New model 1**, **New model 2** (dashed, empty slots).
-  Each card has a diamond. Below, three steps for adding a model (write it, register it,
-  see it) and a line stating that each model runs in its own worker.
+  beneath it, joined by lines, the models as cards in one row: **Data cleanse**,
+  **Summaries**, **Analysis** (gold, registered) and **New model 1**, **New model 2**
+  (dashed, empty slots). Each card has a diamond; each registered model shows a small
+  view of what it does, labelled illustrative. Below, three steps for adding a model
+  (write it, register it, see it) and a line stating that each model runs in its own
+  worker and reaches the data server only over HTTP.
 - **FR-72** **Data server** (mockup 3): a diagram of the Connected Systems resources that
   describe this system: the collection platform (Platform) with bow and stern sensors
   (Sensor), each with its record datastream and observations; Models (Process) with each
-  model's output datastreams and observations; and a row of the other resources used
-  (property definitions, control streams and commands, system events). Below it, **why
-  it fits** in six points, and the **gaps** (no standard aggregation; publish/subscribe
-  unpublished).
+  model's output datastreams and observations; and a row of the other things used
+  (property definitions, control streams and commands, resource creation). Below it,
+  **why it fits** in six points, the **gaps** (no standard aggregation; publish/subscribe
+  unpublished; a plain HTTP PUT for latest-run results), and what is **not used** and
+  refused by name (deployments, procedures, sampling features, system events and history,
+  command feasibility, replacing and deleting). The panel claims nothing the server
+  refuses.
 - **FR-73** **Every other component** (collection platform, logger store, store adapter,
   FastAPI, scientific libraries) shows an explanation panel: what it does, which zone it
   belongs to and why, which letters it sends and receives, and live counters.
@@ -577,8 +644,24 @@ Mockups 1 to 3 show the arrangement:
 - **FR-78** A **speed control** offers ¼×, ½× and 1×, with **½× the default**. The fastest
   rate is the fastest at which every icon stays legible on the target display, verified
   by measurement; there is no faster mode.
-- **FR-79** Restart client, restart server and the control panel work whether the
-  simulation is playing or paused.
+- **FR-79** Restart client, restart server, the failure demos and the control panel work
+  whether the simulation is playing or paused. A viewer's click is answered at once: the
+  messages it causes wear a gold ring and set off ahead of any queue, and while the clock
+  stands still the shell lets a pending command through to its model.
+
+### 9.7 Failure demos
+
+The failure demos belong to the demonstrator shell, like the control panel whose switches
+they set.
+
+- **FR-79a** A **Failure demos** menu in the top bar offers: the server goes down (then
+  comes up); the server restarts; an essential source is missing; fields the client has
+  never seen; a misconfigured server.
+- **FR-79b** Choosing one sets the switches, starts the clock if it is stopped, shows the
+  display client, and puts a **banner** under the title saying **what to watch for**, with
+  the next step where there is one and **Put everything back**.
+- **FR-79c** Put everything back restores every field to its default, an honest server and
+  a running server.
 
 ---
 
@@ -612,7 +695,9 @@ contents. The mockups are plain; they fix layout only.
 - **VS-04** All fonts are served from the site itself.
 - **VS-05** Minimum sizes on the target display at native resolution: component names
   20 px, other labels 16 px, message letters 17 px, message contents 13 px. Sizes scale up
-  together for the viewing distance; they never shrink to fit.
+  together for the viewing distance; they never shrink to fit. Inside the monitor, the
+  display client's own text (VS-03) is 13 px or larger. **No requirement number appears
+  on screen.**
 
 ### 11.2 Palette
 
@@ -666,7 +751,7 @@ contents. The mockups are plain; they fix layout only.
 - **VS-21** Only two things move: **messages travelling along flows**, at the speed the
   clock sets; and the **value-add diamonds**.
 - **VS-22** The **diamond** is a small cut gem in the top-right corner of each value-add
-  item. Every few seconds it **glints**: a four-pointed sparkle swells and turns, the top
+  item. Every two seconds it **glints**: a four-pointed sparkle swells and turns, the top
   facet flashes, and a gold glow pulses. Diamonds on screen together are **staggered** so
   they twinkle in turn.
 - **VS-23** Under the operating system's **reduced-motion** setting, diamonds show a still
@@ -695,8 +780,8 @@ contents. The mockups are plain; they fix layout only.
   customer or system, and no real place. A vocabulary gate enforces a privately held list
   of forbidden terms.
 - **PR-02** Spec-kit carries: constitution, specify, plan, tasks, analyze, implement. ADRs
-  record contested decisions, including the Connected Systems subset and the split of work
-  between Summaries and Analysis.
+  record contested decisions, including the Connected Systems subset, the split of work
+  between Summaries and Analysis, and how models reach the data server.
 - **PR-03** Every gate and every refusal test is watched failing before it is trusted.
 
 ### 13.1 Keeping the two back ends honest
@@ -716,8 +801,8 @@ contents. The mockups are plain; they fix layout only.
 |---|---|---|
 | AT-01 | Observations fetched through the seam match the manifest at each time, while the store is growing | C1 |
 | AT-02 | The same ASGI application passes the same contract suite in Pyodide behind the relay and in CPython under an ordinary ASGI server | C1 |
-| AT-03 | Replacing the logger store with a second, differently awkward format changes the store adapter only, and AT-01 still passes | C1 |
-| AT-04 | With four weeks of history, the declared queries of FR-31 meet their time budget, and rebuilding the index gives identical results | C1 |
+| AT-03 | Replacing the logger store with a second, differently awkward format changes the store adapter only: AT-01 still passes, and every response is identical to the first store's | C1 |
+| AT-04 | With one week of history, the declared queries of FR-31 meet their time budget, and rebuilding the index gives identical results | C1 |
 | AT-05 | The CPython build of the server is browsed by two independent Connected Systems clients (the OGC CSAPI Explorer and OSHConnect-Python): systems, datastreams, schemas and observations listed and read | C1 |
 | AT-06 | The served OpenAPI matches the committed master, and the conformance declaration matches the implemented subset | C1 |
 | AT-07 | Removing any essential source, or changing its type or unit, starts the client in degraded mode with one warning naming exactly those sources and their views disabled; removing an optional source gives no warning | C2 |
@@ -726,7 +811,7 @@ contents. The mockups are plain; they fix layout only.
 | AT-10 | Restart server: 503 with `Retry-After` while waiting; new instance identifier; every client resets and repeats the handshake; no records lost | C1, C2 |
 | AT-11 | Server down: network failures, unreachable banner, stale data marked, no records lost; on bringing it up, the client re-handshakes | C1, C2 |
 | AT-12 | A field toggle changes nothing until the next server start; afterwards discovery offers exactly the configured fields, and switching a field back on restores its full history | C1, C2 |
-| AT-13 | A model written in an empty slot registers, appears in the display client after restart client, and is drawn by its schema type | C3 |
+| AT-13 | A model written in an empty slot registers over HTTP, appears in the display client after restart client, and is drawn by its schema type | C3 |
 | AT-14 | A model that raises errors or never returns leaves the data server, the other models and the display client running | C3 |
 | AT-15 | Every model other than Data cleanse reads only Data cleanse's output datastreams | C3 |
 | AT-16 | Change detection and clustering recover the manifest's fronts, air masses and reach boundaries with reported scores, without access to position | C3 |
@@ -742,28 +827,41 @@ contents. The mockups are plain; they fix layout only.
 | AT-26 | With WebAssembly disabled, every architecture-view test (AT-07 to AT-12, AT-17 to AT-20) passes unchanged | C2, architecture view |
 | AT-27 | Both back ends read the same pre-calculated history files, and an observation query over the history returns identical values from each | C1 |
 | AT-28 | Regenerating the history from the recorded seeds reproduces the shipped files exactly | Delivery |
+| AT-29 | In both back ends, a system, a datastream and observations are created with ordinary HTTP requests and then served; creation outside a model's own system, and every replace or delete but the declared PUT, is refused by name | C3 |
+| AT-30 | The detail panel opens on the overview (adopted, written, not here); the Data server panel claims nothing the server refuses; no requirement number appears on screen | Honesty |
+| AT-31 | Each failure demo shows what its banner says: unreachable and stale then a fresh handshake; degraded with the sources named; unseen fields drawn by type; a contradicted claim rejected; and Put everything back restores a configured client | C1, C2 |
+
+Where each is tested: AT-01, AT-03, AT-04, AT-07 (server side), AT-10 to AT-16, AT-18, AT-19
+and AT-28 in `backend/tests`; AT-02, AT-06, AT-24, AT-27 and AT-29 by the contract suite
+against both back ends; AT-05 by `backend/independent` (OSHConnect; the CSAPI Explorer is a
+web tool and is checked by hand); AT-07 to AT-11, AT-13, AT-17, AT-19 to AT-23, AT-25, AT-30
+and AT-31 in `web/e2e`. AT-26 is covered for AT-07 to AT-11, which run in the stand-in.
 
 ---
 
 ## 15. Open questions
 
 - **Name.** A coined working name with no association.
-- **Summaries and Analysis.** Which core model does what (FR-34); recorded in an ADR.
-- **Naming clash.** "Summaries/B" and clustering "Algorithm A/B/C" may be read as the same
-  thing. Consider renaming the algorithms (for example, Method 1, 2, 3).
-- **History size.** Four weeks of fixed-width records for two sensors is large to
-  download. Measure it; if needed, compress the files for transfer (the store still sees
-  its own format once loaded) or shorten the shipped history.
+- **History length.** Models read and publish history as SWE Common JSON over HTTP, which
+  costs seconds per day of 1 Hz data in a browser. 24 hours is loaded. Four weeks would
+  need a compact encoding for bulk reads (Connected Systems offers SWE Common binary), or
+  models that summarise without republishing every cleaned reading.
+- **Retention.** The server keeps everything models publish. Data cleanse's 1 s output for
+  a long history would need a retention policy that a stateless server can apply.
+- **Latest-run results.** Analysis replaces its previous run with a plain HTTP PUT.
+  The standard-only alternative is one observation per run, carrying arrays.
+- **Start-up.** Measured figures for each back end are in the findings; to confirm on the
+  presentation machine.
 - **Memory.** An index, a back-end worker and one Pyodide worker per model may press on a
   tab's memory. Measure in the Python back end.
-- **Stand-in models.** How simple the stand-in's models can be while still looking like
-  the real ones' output.
 - **Legible rate.** The fastest legible speed, measured on the target display; it may be
   below 1×.
-- **Pub/sub.** Revisit polling when Connected Systems Part 3 is published.
-- **Second store format** for AT-03.
-- **Conformance.** The exact conformance class identifiers, and whether an OGC test suite
-  for Connected Systems exists.
+- **Pub/sub.** Revisit polling, by the display client and by the models, when Connected
+  Systems Part 3 is published.
+- **Conformance testing.** The conformance class identifiers claimed are those of the
+  published Parts 1 and 2. Whether an OGC test suite for Connected Systems exists is still
+  to be checked; one independent client (OSHConnect) reports two differences (decisions
+  D-31, D-32).
 
 ## 16. Deliberate exclusions from Version 4
 
@@ -771,7 +869,9 @@ contents. The mockups are plain; they fix layout only.
   as a drawn component, the separate scientists' workspace, the message popup (replaced by
   the message strip), the demonstrator-shell node on the flowchart.
 - **Position**, and every model that needs it.
-- **Evidence of low risk** on screen (risk register, live test results, code size, share
-  of off-the-shelf code). Deferred, not rejected.
+- **Estimates and measures of risk** on screen (effort, a risk register, live test
+  results, code size). The overview names what is adopted, written and absent; it puts no
+  numbers on them. Deferred, not rejected.
+- **Replacing and deleting resources**, apart from the one declared PUT (FR-28a).
 - **Discovery while running**, **server-side sessions**, **replay**, **push delivery**,
   **persistence** and **authentication**.

@@ -64,7 +64,8 @@ class DataCleanse(Model):
     label = "Data cleanse"
     description = "Core model, runs first: flags and removes noise before any other model sees the data."
     interval = 10.0
-    catch_up_chunk = 86400.0
+    catch_up_margin = 30.0  # the models that read its output must be able to come within their own margin of now
+    catch_up_chunk = 4 * 3600.0  # history is read a few hours at a request, so the server stays responsive
 
     def __init__(self):
         self.settings = {"spike_threshold": 6.0}
