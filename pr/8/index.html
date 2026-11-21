@@ -1,0 +1,1463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Software Requirements Document</title>
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<div class="banner">Preview of pull request #8 (a1dd877). Not the published document.</div>
+<main>
+<p class="demo-link"><a href="demo/"><strong>Open the working demonstrator →</strong></a> It runs whole in your browser. · <a href="index.html">Requirements</a> · <a href="interfaces.html">Version 4 interfaces</a> · Mockups: <a href="mockups/mockup-1-display-client.png">1</a>, <a href="mockups/mockup-2-models.png">2</a>, <a href="mockups/mockup-3-data-server.png">3</a></p>
+<nav id="TOC" aria-label="Contents">
+<ul>
+<li><a href="#software-requirements-document"
+id="toc-software-requirements-document">Software Requirements
+Document</a>
+<ul>
+<li><a href="#canal-barge-weather-demonstrator-version-4"
+id="toc-canal-barge-weather-demonstrator-version-4">Canal barge weather
+demonstrator, Version 4</a></li>
+<li><a href="#1-purpose" id="toc-1-purpose">1. Purpose</a></li>
+<li><a href="#2-runtime-architecture" id="toc-2-runtime-architecture">2.
+Runtime architecture</a></li>
+<li><a href="#3-components-and-zones" id="toc-3-components-and-zones">3.
+Components and zones</a></li>
+<li><a href="#4-world-simulated-platform-time-and-randomness"
+id="toc-4-world-simulated-platform-time-and-randomness">4. World:
+simulated platform, time and randomness</a></li>
+<li><a href="#5-message-letters" id="toc-5-message-letters">5. Message
+letters</a></li>
+<li><a href="#6-functional-requirements-the-back-end"
+id="toc-6-functional-requirements-the-back-end">6. Functional
+requirements: the back end</a></li>
+<li><a href="#7-functional-requirements-client-and-server-lifecycle"
+id="toc-7-functional-requirements-client-and-server-lifecycle">7.
+Functional requirements: client and server lifecycle</a></li>
+<li><a href="#8-functional-requirements-the-display-client"
+id="toc-8-functional-requirements-the-display-client">8. Functional
+requirements: the display client</a></li>
+<li><a
+href="#9-functional-requirements-the-architecture-view-demonstrator-shell"
+id="toc-9-functional-requirements-the-architecture-view-demonstrator-shell">9.
+Functional requirements: the architecture view (demonstrator
+shell)</a></li>
+<li><a href="#10-implementation-direction"
+id="toc-10-implementation-direction">10. Implementation
+direction</a></li>
+<li><a href="#11-visual-style" id="toc-11-visual-style">11. Visual
+style</a></li>
+<li><a href="#12-delivery" id="toc-12-delivery">12. Delivery</a></li>
+<li><a href="#13-development-process"
+id="toc-13-development-process">13. Development process</a></li>
+<li><a href="#14-acceptance-criteria"
+id="toc-14-acceptance-criteria">14. Acceptance criteria</a></li>
+<li><a href="#15-open-questions" id="toc-15-open-questions">15. Open
+questions</a></li>
+<li><a href="#16-deliberate-exclusions-from-version-4"
+id="toc-16-deliberate-exclusions-from-version-4">16. Deliberate
+exclusions from Version 4</a></li>
+</ul></li>
+</ul>
+</nav>
+<h1 id="software-requirements-document">Software Requirements
+Document</h1>
+<h2 id="canal-barge-weather-demonstrator-version-4">Canal barge weather
+demonstrator, Version 4</h2>
+<p><strong>Status:</strong> Draft for development
+<strong>Author:</strong> Doc <strong>Working name:</strong> to be chosen
+(§15). This document says <em>the demonstrator</em>.
+<strong>Supersedes:</strong> SRD Version 3.3 and Annex A (Visual style).
+Both are folded in here; nothing in them applies unless restated.</p>
+<p><strong>Companion mockups (non-normative):</strong> three static
+frames, one for each detail panel (§9.4), plus one interactive
+frame:</p>
+<table>
+<thead>
+<tr>
+<th>Mockup</th>
+<th>Shows</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>SRD v4 mockup 1</td>
+<td>Display client selected: monitor, graphs, clusters, message
+strip</td>
+</tr>
+<tr>
+<td>SRD v4 mockup 2</td>
+<td>Models selected: the reveal, core models and empty slots</td>
+</tr>
+<tr>
+<td>SRD v4 mockup 3</td>
+<td>Data server selected: Connected Systems diagram and why it fits</td>
+</tr>
+<tr>
+<td>Interactive display, store queries</td>
+<td>All of the above, clickable</td>
+</tr>
+</tbody>
+</table>
+<p>The mockups fix <strong>layout, components and labels</strong>. They
+are drawn in a plain style; the visual style is §11. Where a mockup and
+this document disagree, this document wins.</p>
+<h3 id="changes-from-version-33">Changes from Version 3.3</h3>
+<ul>
+<li>Components cut from 15 to <strong>8</strong>, in five zones:
+<strong>World</strong>, <strong>Legacy</strong>, <strong>New build ·
+back end</strong>, <strong>Third-party libraries</strong>, <strong>New
+build · front end</strong> (§3).</li>
+<li>The scientists' workspace and the analysis service become one
+component, <strong>Models</strong>: core models (Data cleanse, Model A,
+Model B) and empty slots, each model in its own worker (§6.4).</li>
+<li><strong>Store queries</strong> become visible: a new message letter
+<strong>S</strong>, and the index moves to the store adapter (§6.2,
+§10.2).</li>
+<li>The seam relay is no longer drawn; it is an invisible transport
+(§2.1).</li>
+<li>The layout becomes a <strong>stacked flowchart on the left</strong>
+and a <strong>detail panel on the right</strong> that shows the selected
+component or message (§9).</li>
+<li>The display client becomes an <strong>interactive monitor</strong>:
+field chips, period presets, a clustering choice, three graphs and a
+cluster view (§8).</li>
+<li><strong>Summary datastreams</strong> serve long periods (§6.3).</li>
+<li><strong>Value-add marking</strong>: the display client and Models
+are revealed in gold with a glinting diamond when first clicked (§9.5,
+§11.6).</li>
+<li>The guided tour, docked panels and canal map are removed (§16).</li>
+<li><strong>Two back ends</strong>: the Python back end, and a
+<strong>JavaScript stand-in</strong> for sites where WebAssembly is
+blocked. Both serve the same interface; the stand-in says what it does
+not prove (§2.3).</li>
+<li><strong>History is pre-calculated</strong> at build time and shipped
+in the store's own format, replacing generation at startup (FR-15).</li>
+</ul>
+<hr />
+<h2 id="1-purpose">1. Purpose</h2>
+<p>The demonstrator is a <strong>system and architecture
+demonstrator</strong> set aboard an <strong>uncrewed electric cargo
+barge</strong> (the <strong>collection platform</strong>) shuttling
+between two wharves on a fictional canal, around the clock, for weeks at
+a time. It carries a weather sensor at the <strong>bow</strong> and
+another at the <strong>stern</strong>, about twenty metres apart,
+logging to an old data logger. It records <strong>no position</strong>.
+The demonstrator runs whole in one browser session.</p>
+<p>Its intention is to show that <strong>the author's understanding of
+the software architecture is complete</strong>, and therefore that
+<strong>the software need not be a risk to the project and does not need
+a large contingency</strong>. It does this by putting the architecture
+itself on screen: every component, every interaction, every real
+message, each labelled with the standard it meets, and by marking
+clearly <strong>where the company adds value</strong> and where it
+relies on standards and off-the-shelf parts.</p>
+<p>Its audience is <strong>stakeholders deciding whether to adopt this
+architecture</strong>. It makes three claims:</p>
+<ol type="1">
+<li><strong>C1. A standards facade over an awkward legacy store
+works.</strong> An OGC API – Connected Systems server can sit in front
+of a store it does not control, while that store grows, and serve a
+modern display and models without changing the store.</li>
+<li><strong>C2. A client can configure itself from the server.</strong>
+The display client discovers what is on offer through standard
+discovery, degrades clearly when an essential source is missing, and
+shows sources it has never seen without new code.</li>
+<li><strong>C3. The value-add is isolated and extensible.</strong> The
+company's own work (the display client and the models) sits on standards
+and third-party parts, and a new model can be added without touching
+anything else.</li>
+</ol>
+<p>The claims are supported by acceptance tests (§14), never asserted by
+the display.</p>
+<ul>
+<li><strong>NFR-01 (One browser session.)</strong> Every component runs
+in the browser. No step of building, testing or demonstrating requires a
+server, a container or a daemon.</li>
+<li><strong>NFR-02 (Two languages, by design.)</strong> The front end is
+TypeScript; the back end and all models are Python running in
+Pyodide.</li>
+<li><strong>NFR-03 (The back end is deployable.)</strong> The Python
+back end is a standard ASGI application that runs unchanged under an
+ordinary ASGI server (AT-02).</li>
+</ul>
+<h3 id="11-what-this-is-not">1.1 What this is not</h3>
+<ul>
+<li><strong>FR-01</strong> The demonstrator models no real canal, boat,
+person or place. The canal, its towns, locks and tunnel are fictional.
+The weather is synthetic. The landing page says so plainly.</li>
+<li>It is not a mock of any real application's user interface. The
+display client's screen is deliberately small and generic (§8).</li>
+</ul>
+<hr />
+<h2 id="2-runtime-architecture">2. Runtime architecture</h2>
+<p>The browser holds four kinds of runtime:</p>
+<table>
+<thead>
+<tr>
+<th>Runtime</th>
+<th>Holds</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Main thread</td>
+<td>The display client and the demonstrator shell (TypeScript,
+React)</td>
+</tr>
+<tr>
+<td>Back-end worker</td>
+<td>World, logger store, store adapter, data server, FastAPI (Python,
+Pyodide)</td>
+</tr>
+<tr>
+<td>One worker per model</td>
+<td>Each model in Models (Python, Pyodide)</td>
+</tr>
+<tr>
+<td>Service Worker</td>
+<td>The seam relay</td>
+</tr>
+</tbody>
+</table>
+<h3 id="21-the-seam">2.1 The seam</h3>
+<ul>
+<li><strong>FR-02</strong> All traffic between the display client, the
+data server and the models crosses as <strong>HTTP</strong> and nowhere
+else. Requests use relative URLs, are intercepted by a <strong>Service
+Worker relay</strong>, and are passed to the worker that serves
+them.</li>
+<li><strong>FR-03</strong> The relay is an <strong>invisible
+transport</strong>. It contains no application logic, is not a
+component, and is not drawn on the flowchart. Messages that pass through
+it are drawn as travelling directly between their real endpoints (for
+example, display client to FastAPI).</li>
+<li><strong>FR-04</strong> No client code or configuration carries an
+absolute URL. Pointing the display client at a real server is a change
+of base URL alone.</li>
+<li><strong>FR-05</strong> Every shape crossing the seam is governed by
+a committed master under <code>contracts/</code>: OpenAPI for the HTTP
+interface, SWE Common 3.0 schemas for observation records, the declared
+profile (§7.1), and JSON Schema for anything else. Seam traffic is
+validated against the masters in tests.</li>
+<li><strong>FR-06</strong> The data server is <strong>stateless with
+respect to clients</strong>. It holds no sessions and does not know
+which clients exist.</li>
+</ul>
+<h3 id="22-honest-ports">2.2 Honest ports</h3>
+<p>Genuine ports, each with more than one implementation planned: the
+<strong>seam transport</strong>, the <strong>clock</strong>, the
+<strong>RNG</strong> and the <strong>store adapter</strong>. Nothing
+else is presented as pluggable. (The stand-in back end of §2.3 swaps in
+behind the seam, but is demonstrator scaffolding, not an architectural
+port.)</p>
+<h3 id="23-two-back-ends">2.3 Two back ends</h3>
+<p>Some sites block WebAssembly, so Pyodide cannot run there. Those
+audiences still need to see the architecture work.</p>
+<p>The stand-in is <strong>demonstrator scaffolding only</strong>, like
+the simulated world. It is not part of the architecture being
+demonstrated, has no counterpart in a developed system, and says nothing
+about a developed system's effort or contingency.</p>
+<ul>
+<li><p><strong>FR-06a</strong> The demonstrator has two back ends behind
+the same seam:</p>
+<ul>
+<li>the <strong>Python back end</strong> (Pyodide): the real
+implementation, described throughout this document;</li>
+<li>the <strong>JavaScript stand-in</strong>: a TypeScript
+implementation of the same back-end components (store adapter, data
+server, the core models) running in a Web Worker.</li>
+</ul></li>
+<li><p><strong>FR-06b</strong> At startup the demonstrator detects
+whether WebAssembly is available and uses the Python back end if it is,
+otherwise the stand-in. A URL parameter forces either one, so the
+stand-in can be rehearsed on any machine.</p></li>
+<li><p><strong>FR-06c</strong> The stand-in serves <strong>exactly the
+same interface</strong>: the same Connected Systems subset, the same
+discovery documents, profile, schemas, encodings, refusals, waiting mode
+and instance identifiers, validated against the <strong>same committed
+masters</strong> (FR-05). The display client cannot tell which back end
+it is talking to, and has no code that depends on it.</p></li>
+<li><p><strong>FR-06d</strong> The stand-in reads the <strong>same
+pre-calculated history</strong> (FR-15) through its own store adapter,
+in the store's own format, and its world continues the run from the end
+of history on the same simulation clock.</p></li>
+<li><p><strong>FR-06e</strong> The stand-in's core models produce the
+same kinds of output (cleaned values, derived values, change flags,
+correlation, clusters, summaries) by simpler methods. Their results are
+<strong>marked as illustrative</strong>, and their scores are labelled
+"stand-in" rather than presented as the real models'
+performance.</p></li>
+<li><p><strong>FR-06f</strong> In stand-in mode the <strong>empty-slot
+model editor is unavailable</strong> (it needs Python). The Models panel
+says so and shows the steps for adding a model.</p></li>
+<li><p><strong>FR-06g</strong> Message capture, the flowchart, every
+letter, the detail panel, restarts, waiting mode, the control panel and
+degraded mode <strong>all work identically</strong> in stand-in mode.
+The architecture view is the point, and it is complete in both
+modes.</p></li>
+<li><p><strong>FR-06h</strong> Stand-in mode is <strong>visible, never
+hidden</strong>:</p>
+<ul>
+<li>the status box shows <strong>Back end: JavaScript stand-in</strong>
+(or <strong>Python</strong>);</li>
+<li>the back-end components on the flowchart carry a small
+<strong>"stand-in"</strong> tag;</li>
+<li>a one-line notice under the title says what the stand-in does and
+does not show: <em>"Running the JavaScript stand-in: the architecture,
+interface and messages are the real design; the models' results are
+illustrative."</em></li>
+</ul></li>
+<li><p><strong>FR-06i</strong> The claims hold differently in each mode,
+and the documentation says so:</p>
+<table>
+<thead>
+<tr>
+<th>Claim</th>
+<th>Python back end</th>
+<th>Stand-in</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>C1, facade over an awkward store</td>
+<td>Shown and tested</td>
+<td>Shown; tested only in Python</td>
+</tr>
+<tr>
+<td>C2, self-configuring client</td>
+<td>Shown and tested</td>
+<td><strong>Shown and tested</strong>: the client is identical</td>
+</tr>
+<tr>
+<td>C3, value-add isolated and extensible</td>
+<td>Shown and tested</td>
+<td>Shown; live model editing only in Python</td>
+</tr>
+</tbody>
+</table></li>
+</ul>
+<hr />
+<h2 id="3-components-and-zones">3. Components and zones</h2>
+<p>Each component is one node on the flowchart and belongs to exactly
+one zone. The list corresponds <strong>one-to-one</strong> with the real
+system's architecture, under neutral names.</p>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Component</th>
+<th>Zone</th>
+<th>Value-add</th>
+<th>Responsibility</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>C-01</td>
+<td>Collection platform</td>
+<td>World</td>
+<td></td>
+<td>The barge and its bow and stern sensors; stands in for the physical
+world</td>
+</tr>
+<tr>
+<td>C-02</td>
+<td>Logger store</td>
+<td>Legacy</td>
+<td></td>
+<td>Deliberately awkward, append-only files (§6.1)</td>
+</tr>
+<tr>
+<td>C-03</td>
+<td>Store adapter</td>
+<td>New build · back end</td>
+<td></td>
+<td>The only reader of the store; holds the index; answers store
+queries</td>
+</tr>
+<tr>
+<td>C-04</td>
+<td>Data server</td>
+<td>New build · back end</td>
+<td></td>
+<td>OGC API – Connected Systems: discovery, datastreams, observations,
+commands</td>
+</tr>
+<tr>
+<td>C-05</td>
+<td>Models</td>
+<td>New build · back end</td>
+<td><strong>★</strong></td>
+<td>Core models and empty slots, each an OGC process system in its own
+worker</td>
+</tr>
+<tr>
+<td>C-06</td>
+<td>FastAPI</td>
+<td>Third-party libraries</td>
+<td></td>
+<td>ASGI web framework: routing, validation, OpenAPI</td>
+</tr>
+<tr>
+<td>C-07</td>
+<td>Scientific libraries</td>
+<td>Third-party libraries</td>
+<td></td>
+<td>numpy, pandas, scipy, scikit-learn</td>
+</tr>
+<tr>
+<td>C-08</td>
+<td>Display client</td>
+<td>New build · front end</td>
+<td><strong>★</strong></td>
+<td>The real system's screen: handshake, self-configuration, graphs and
+clusters</td>
+</tr>
+</tbody>
+</table>
+<p>The <strong>demonstrator shell</strong> (flowchart, controls, key,
+status, detail panel) frames everything and is not a component.</p>
+<h3 id="31-flows">3.1 Flows</h3>
+<table>
+<thead>
+<tr>
+<th>From</th>
+<th>To</th>
+<th>Messages</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Collection platform</td>
+<td>Logger store</td>
+<td>L</td>
+</tr>
+<tr>
+<td>Store adapter</td>
+<td>Logger store</td>
+<td>S (file read through the index)</td>
+</tr>
+<tr>
+<td>Logger store</td>
+<td>Store adapter</td>
+<td>L</td>
+</tr>
+<tr>
+<td>Data server</td>
+<td>Store adapter</td>
+<td>S (store query)</td>
+</tr>
+<tr>
+<td>Store adapter</td>
+<td>Data server</td>
+<td>I</td>
+</tr>
+<tr>
+<td>Models</td>
+<td>Data server</td>
+<td>I (register systems and datastreams, publish observations)</td>
+</tr>
+<tr>
+<td>Data server</td>
+<td>Models</td>
+<td>I (observations, commands)</td>
+</tr>
+<tr>
+<td>Models</td>
+<td>Scientific libraries</td>
+<td>I (calls and results)</td>
+</tr>
+<tr>
+<td>FastAPI</td>
+<td>Data server</td>
+<td>I (parsed request)</td>
+</tr>
+<tr>
+<td>Data server</td>
+<td>FastAPI</td>
+<td>I (response)</td>
+</tr>
+<tr>
+<td>Display client</td>
+<td>FastAPI</td>
+<td>Q, K (over HTTP)</td>
+</tr>
+<tr>
+<td>FastAPI</td>
+<td>Display client</td>
+<td>D, P, O, H (over HTTP)</td>
+</tr>
+</tbody>
+</table>
+<p>Models reach the data server <strong>directly</strong>, not through
+FastAPI: they register and publish through the data server's own
+interface, inside the back end.</p>
+<hr />
+<h2 id="4-world-simulated-platform-time-and-randomness">4. World:
+simulated platform, time and randomness</h2>
+<ul>
+<li><p><strong>FR-07</strong> The collection platform shuttles
+<strong>continuously, day and night</strong>, between two wharves on a
+canal declared as a <strong>centreline with chainage</strong>. It turns
+at each wharf after a declared dwell, stops at <strong>locks</strong>,
+and slows through <strong>bridges and the tunnel</strong>. Its movement
+is a pure function of the clock, the declared timetable and its seed
+stream. The timetable's period does not divide a day evenly, so the
+platform meets every part of the canal at every hour over a
+week.</p></li>
+<li><p><strong>FR-08</strong> The timetable declares occasional
+<strong>stoppages</strong>.</p></li>
+<li><p><strong>FR-09</strong> Two sensors, <strong>bow</strong> and
+<strong>stern</strong>, separated by a declared distance, each report
+seven parameters once per simulated second:</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Unit</th>
+<th>Essential (§7.1)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Air temperature</td>
+<td>°C</td>
+<td><strong>Yes</strong></td>
+</tr>
+<tr>
+<td>Apparent wind speed</td>
+<td>m s⁻¹</td>
+<td><strong>Yes</strong></td>
+</tr>
+<tr>
+<td>Relative humidity</td>
+<td>%</td>
+<td>Optional</td>
+</tr>
+<tr>
+<td>Barometric pressure</td>
+<td>hPa</td>
+<td>Optional</td>
+</tr>
+<tr>
+<td>Apparent wind direction</td>
+<td>degrees relative to the bow</td>
+<td>Optional</td>
+</tr>
+<tr>
+<td>Solar irradiance</td>
+<td>W m⁻²</td>
+<td>Optional</td>
+</tr>
+<tr>
+<td>Water temperature</td>
+<td>°C</td>
+<td>Optional</td>
+</tr>
+</tbody>
+</table></li>
+<li><p><strong>FR-10</strong> The platform carries <strong>no position
+measurement</strong>. Its position exists only in the simulated world
+and the manifest; nothing in the store records it and no model may use
+it.</p></li>
+<li><p><strong>FR-11</strong> The canal passes through declared
+<strong>reaches</strong> with their own microclimates (open embankment,
+cutting, woodland, town, aqueduct, tunnel). The weather passes through
+<strong>several air masses separated by fronts</strong>, with a diurnal
+cycle. Readings carry declared noise and occasional spikes.</p></li>
+<li><p><strong>FR-12</strong> Every run writes a
+<strong>manifest</strong> recording the canal, reaches, timetable, air
+masses, fronts, diurnal cycle, noise model, seeds and generator version.
+It is the ground truth that models are scored against.</p></li>
+<li><p><strong>FR-13</strong> Every component, including the display
+client's polling and every model, reads time from the <strong>simulation
+clock</strong>. No host clock is used for any operational
+purpose.</p></li>
+<li><p><strong>FR-14</strong> All randomness comes from named, seeded
+streams recorded in the manifest.</p></li>
+<li><p><strong>FR-15</strong> <strong>Four weeks of history</strong>
+(about five million records per sensor) are <strong>pre-calculated at
+build time</strong> by the Python world generator, running the same
+sensor-to-store path under CPython with the run's seeds, and shipped as
+static files <strong>in the store's own awkward format</strong>, with
+the manifest. At startup either back end loads them as the store's
+contents, and the live run continues from their end. Loading progress is
+shown honestly; the flowchart becomes available when it
+finishes.</p></li>
+<li><p><strong>FR-15a</strong> The build fails if regenerating the
+history from the recorded seeds does not reproduce the shipped files
+exactly. The live world (in either back end) continues from the recorded
+end state, so live readings join the history without a seam.</p></li>
+</ul>
+<hr />
+<h2 id="5-message-letters">5. Message letters</h2>
+<table>
+<thead>
+<tr>
+<th>Letter</th>
+<th>Meaning</th>
+<th>Standard</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Q</td>
+<td>Connected Systems request</td>
+<td>OGC API – Connected Systems</td>
+</tr>
+<tr>
+<td>D</td>
+<td>Discovery resource: landing page, conformance, system and datastream
+descriptions, schemas</td>
+<td>OGC API – Connected Systems, Features, Common; SensorML; SWE Common
+3.0</td>
+</tr>
+<tr>
+<td>O</td>
+<td>Observations</td>
+<td>SWE Common JSON (<code>application/swe+json</code>)</td>
+</tr>
+<tr>
+<td>K</td>
+<td>Command on a control stream</td>
+<td>OGC API – Connected Systems Part 2</td>
+</tr>
+<tr>
+<td>P</td>
+<td>Declared profile</td>
+<td>JSON Schema</td>
+</tr>
+<tr>
+<td>H</td>
+<td>Plain HTTP status: 503 with <code>Retry-After</code></td>
+<td>RFC 9110</td>
+</tr>
+<tr>
+<td>S</td>
+<td>Store query</td>
+<td>Internal; no public standard</td>
+</tr>
+<tr>
+<td>L</td>
+<td>Legacy fixed-width record</td>
+<td>The logger's own format</td>
+</tr>
+<tr>
+<td>I</td>
+<td>Internal typed object</td>
+<td>Internal; no public standard</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>FR-16</strong> Messages that meet no public standard are
+named honestly as <strong>S</strong>, <strong>L</strong> or
+<strong>I</strong>, never presented as standards.</li>
+</ul>
+<hr />
+<h2 id="6-functional-requirements-the-back-end">6. Functional
+requirements: the back end</h2>
+<h3 id="61-logger-store">6.1 Logger store</h3>
+<ul>
+<li><strong>FR-17</strong> The store is <strong>deliberately
+awkward</strong>: fixed-width text records, bow and stern in separate
+files rolling over daily, time in a non-standard unit and epoch, coded
+values for some fields, no index, and records appended while being
+read.</li>
+<li><strong>FR-18</strong> The store is written only by the collection
+platform and read only by the store adapter. It is <strong>independent
+of the data server</strong> and keeps receiving records while the server
+is down or restarting.</li>
+<li><strong>FR-19</strong> C1 is stated as <em>the facade works over an
+awkward store, to be confirmed against a real one</em>.</li>
+</ul>
+<h3 id="62-store-adapter">6.2 Store adapter</h3>
+<ul>
+<li><strong>FR-20</strong> The store adapter is the <strong>only code
+that understands the store's format</strong>.</li>
+<li><strong>FR-21</strong> It <strong>holds its own index</strong> over
+the store (time to file and offset) and answers <strong>store
+queries</strong> (S) from the data server: which sensors, which fields,
+which period. It finds the records through the index and reads them from
+the files (an S message to the store, L records back).</li>
+<li><strong>FR-22</strong> The store is never altered. The index is
+rebuilt from the store when lost, including on every restart, and a
+rebuilt index gives identical results.</li>
+</ul>
+<h3 id="63-data-server">6.3 Data server</h3>
+<p>The data server implements a declared subset of <strong>OGC API –
+Connected Systems Part 1 (Feature Resources)</strong> and <strong>Part 2
+(Dynamic Data)</strong>, recorded in an ADR from the Spike 0 finding
+(<code>FINDING-2026-11-20-connected-systems.md</code>).</p>
+<ul>
+<li><strong>FR-23</strong> <strong>Discovery</strong>, including the
+prerequisites inherited from OGC API – Features Part 1 (Core) and OGC
+API – Common Part 1: landing page, conformance declaration, API
+definition, <code>/collections</code>, paging links, <code>limit</code>
+and <code>datetime</code>; and a link to the declared profile.</li>
+<li><strong>FR-24</strong> <strong>Systems</strong>: the collection
+platform is a <strong>Platform</strong>; bow and stern are
+<strong>Sensors</strong>, as its subsystems; each model is
+<code>systemType</code> <strong>System</strong> with
+<code>assetType</code> <strong>Process</strong>. No system carries a
+location.</li>
+<li><strong>FR-25</strong> <strong>Datastreams</strong>: one
+<strong>record datastream per sensor</strong>, whose SWE Common 3.0
+schema declares the seven parameters as Quantity fields with units and,
+for each, a <strong>separate Category field carrying its QC
+flag</strong> in the QARTOD vocabulary. Each model's outputs are
+datastreams of its own process system. Schemas are fetched from
+<code>/datastreams/{id}/schema?obsFormat=…</code>.</li>
+<li><strong>FR-26</strong> <strong>Observations</strong>, filtered by
+<code>phenomenonTime</code> (and <code>resultTime</code>, including
+<code>latest</code>) with <code>limit</code> and paging; discovery as
+<code>application/json</code>, observations as
+<code>application/swe+json</code>. There is no per-field filter: a
+client fetches whole records and selects fields.</li>
+<li><strong>FR-27</strong> <strong>Control streams and commands</strong>
+on each model, carrying its settings. Commands are POSTed to
+<code>/controlstreams/{id}/commands</code>; the bounds live in the
+control stream's schema; a command outside them is rejected with
+<strong>HTTP 400</strong> naming the bound.</li>
+<li><strong>FR-28</strong> <strong>Registration</strong>: a model
+registers itself by creating a System, then a datastream under it, then
+publishing observations, using ordinary resource creation. There is no
+registration-specific endpoint.</li>
+<li><strong>FR-29</strong> <strong>Summary datastreams</strong>: for
+each sensor field, models publish <strong>1-minute means</strong> and
+<strong>hourly means</strong> as ordinary datastreams. Clients read raw
+records for periods of an hour or less, 1-minute means for 6 hours and a
+day, and hourly means for a week or more. Connected Systems has no
+standard aggregation; this is the declared workaround.</li>
+<li><strong>FR-30</strong> Every unsupported resource, parameter or
+encoding is refused with the thing refused named. A query whose result
+would exceed a declared size is refused with the limit and how to narrow
+it. Nothing is silently truncated. The served conformance declaration
+matches the code.</li>
+<li><strong>FR-31</strong> Declared queries (the last hour from each
+sensor; one field over four weeks from a summary datastream) meet a
+declared time budget over four weeks of history.</li>
+<li><strong>FR-32</strong> QC flags are computed on the way out and
+carried in the flag fields, never by altering stored records.</li>
+</ul>
+<h3 id="64-models">6.4 Models</h3>
+<ul>
+<li><strong>FR-33</strong> <strong>Models</strong> is a set of models,
+each an OGC <strong>process system</strong> running in <strong>its own
+worker</strong>. A failing, slow or broken model never stops the data
+server, the other models or the display client.</li>
+<li><strong>FR-34</strong> The core models are:
+<ul>
+<li><strong>Data cleanse</strong>, which runs first: it flags and
+removes noise and publishes cleaned datastreams. <strong>Every other
+model reads Data cleanse's output</strong>, not the raw
+datastreams.</li>
+<li><strong>Model A</strong> and <strong>Model B</strong>, which between
+them provide the derived values, change detection, correlation,
+clustering (with three selectable algorithms) and the summary
+datastreams. The split between A and B is an implementation choice
+recorded in an ADR; the demonstrator never names what each does beyond
+"core model".</li>
+</ul></li>
+<li><strong>FR-35</strong> Each model reads observations from the data
+server, registers its own datastreams there (FR-28), and takes its
+settings as commands (FR-27).</li>
+<li><strong>FR-36</strong> <strong>Empty slots</strong> (Model C, Model
+D) show where new models go. Selecting an empty slot in the Models panel
+opens an <strong>in-browser Python editor</strong> (CodeMirror 6). Code
+written there runs in a new worker as a new model, using the scientific
+libraries, and registers like any other. It appears in the display
+client at the client's next handshake.</li>
+<li><strong>FR-37</strong> Every model result carries the settings and
+data range it was computed from. Change detection and clustering are
+<strong>scored against the manifest</strong>, and the score is published
+with them. Models never see the manifest or the position.</li>
+</ul>
+<h3 id="65-third-party-libraries">6.5 Third-party libraries</h3>
+<ul>
+<li><strong>FR-38</strong> <strong>FastAPI</strong> (with Starlette) is
+the ASGI framework for the data server's HTTP interface. The
+<strong>committed OpenAPI master is the source of truth</strong>; a test
+asserts that FastAPI serves the same.</li>
+<li><strong>FR-39</strong> <strong>Scientific libraries</strong> (numpy,
+pandas, scipy, scikit-learn) are used by the models only.</li>
+</ul>
+<hr />
+<h2 id="7-functional-requirements-client-and-server-lifecycle">7.
+Functional requirements: client and server lifecycle</h2>
+<h3 id="71-declared-profile">7.1 Declared profile</h3>
+<ul>
+<li><strong>FR-40</strong> A committed <strong>declared
+profile</strong>, validated by JSON Schema, lists the <strong>essential
+sources</strong>: for each, the system, datastream, field, SWE Common
+type and unit. The essentials are bow and stern <strong>air
+temperature</strong> and <strong>apparent wind speed</strong>, and the
+core models' datastreams that the display client's views depend on.</li>
+<li><strong>FR-41</strong> The data server publishes the profile and
+links it from its landing page. The client checks both that the server
+<strong>claims</strong> the profile and that discovery
+<strong>satisfies</strong> it; a contradicted claim is an error.</li>
+</ul>
+<h3 id="72-handshake-and-self-configuration">7.2 Handshake and
+self-configuration</h3>
+<ul>
+<li><strong>FR-42</strong> The display client's
+<strong>handshake</strong> is standard discovery only: landing page,
+conformance, profile, systems, datastreams and schemas.</li>
+<li><strong>FR-43</strong> From the handshake the client builds its
+<strong>field list</strong> (§8.2): every field of every datastream,
+essential and optional, including any new model's outputs.</li>
+<li><strong>FR-44</strong> Discovery happens <strong>only at
+handshake</strong>. A client never adds or removes sources while
+running.</li>
+<li><strong>FR-45</strong> If an essential source is <strong>missing, or
+has the wrong type or unit</strong>, the client starts in
+<strong>degraded mode</strong>: one warning after the handshake listing
+every unavailable essential source and why; each view that depends on it
+shown as <strong>unavailable</strong> (never an empty chart); the
+control for it disabled, naming the missing source on hover. A missing
+optional source produces no warning.</li>
+</ul>
+<h3 id="73-restarts-and-waiting-mode">7.3 Restarts and waiting mode</h3>
+<ul>
+<li><strong>FR-46</strong> <strong>Restart client</strong> discards all
+display client state and repeats the handshake. The back end, history
+and models carry on.</li>
+<li><strong>FR-47</strong> <strong>Restart server</strong> restarts the
+data server. On starting it enters <strong>waiting mode</strong> while
+the store adapter rebuilds its index: every request gets <strong>HTTP
+503 with <code>Retry-After</code></strong>. Each start creates a fresh
+<strong>instance identifier</strong>, sent as the landing page's
+<code>ETag</code> and on every response.</li>
+<li><strong>FR-48</strong> A client receiving 503 waits for
+<code>Retry-After</code> and retries. A client that sees the instance
+identifier change clears its state and repeats the handshake. The server
+enforces nothing.</li>
+</ul>
+<h3 id="74-control-panel">7.4 Control panel</h3>
+<p>The control panel belongs to the demonstrator shell.</p>
+<ul>
+<li><strong>FR-49</strong> <strong>Take server down / bring server
+up.</strong> While down, the server does not answer: the relay returns a
+<strong>network failure</strong>. The client shows a "server
+unreachable" banner, keeps its last data marked as stale, and retries on
+the simulation clock.</li>
+<li><strong>FR-50</strong> <strong>Field toggles</strong> switch fields
+on or off in <strong>what the server publishes</strong>: every raw
+parameter (both sensors together, essentials included), every model
+output, and three <strong>extra fields</strong>, off by default, that
+the client has never seen, one per generic view type: a Category, a
+Quantity and a Count. Stored history is unchanged.</li>
+<li><strong>FR-51</strong> A toggle takes effect <strong>only at the
+next server start</strong>, shown as pending until then. A datastream
+whose schema changes is published under a <strong>new
+identifier</strong>.</li>
+<li><strong>FR-52</strong> A model output whose inputs are switched off
+is not published.</li>
+</ul>
+<hr />
+<h2 id="8-functional-requirements-the-display-client">8. Functional
+requirements: the display client</h2>
+<p>The display client is the real system's screen. In the demonstrator
+it appears inside a <strong>monitor frame</strong> in the detail panel
+(§9.4). Everything inside the frame is the delivered system; everything
+outside it is the demonstrator. The screen is deliberately <strong>small
+and generic</strong>, so stakeholders judge the architecture, not a UI
+proposal.</p>
+<h3 id="81-layout">8.1 Layout</h3>
+<p>From top to bottom inside the monitor: a status strip; the
+<strong>field chips</strong>; the <strong>period presets</strong> and
+the <strong>clustering</strong> control; a row of <strong>three graph
+components</strong>; the <strong>cluster view</strong> (mockup 1).</p>
+<h3 id="82-controls">8.2 Controls</h3>
+<ul>
+<li><strong>FR-53</strong> <strong>Fields</strong>: chips built from the
+handshake (FR-43), <strong>several selectable at once</strong>. Optional
+fields are drawn dashed. Selecting or deselecting a field issues new
+observation requests (Q), which cause store queries (S) where raw
+records are needed.</li>
+<li><strong>FR-54</strong> <strong>Period presets</strong>: 1 hour, 6
+hours, a day, a week, 4 weeks. Each preset is one set of requests,
+reading raw records or a summary datastream as FR-29 sets out.</li>
+<li><strong>FR-55</strong> <strong>Clustering</strong>: a drop-down of
+three <strong>unnamed algorithms</strong> (Algorithm A, B and C). The
+clustering runs on the <strong>selected fields</strong>. Changing either
+sends a command (K) to the model that does the clustering.</li>
+<li><strong>FR-56</strong> With no field selected, the graphs and
+cluster view say so and ask for a field; they are never shown empty
+without explanation.</li>
+</ul>
+<h3 id="83-views">8.3 Views</h3>
+<p>Each view is a framed component with a value-add diamond (§11.6).</p>
+<ul>
+<li><strong>FR-57</strong> <strong>Line plot</strong>: the selected
+fields overlaid on a <strong>normalised scale</strong> (each field
+scaled to its range over the period), real values on hover, detected
+changes marked on the time axis.</li>
+<li><strong>FR-58</strong> <strong>Line plot with error bars</strong>:
+the first selected field as means with ± 1 standard deviation over
+intervals suited to the period.</li>
+<li><strong>FR-59</strong> <strong>Heat map</strong>: the selected
+fields (rows) against time (columns), each row normalised.</li>
+<li><strong>FR-60</strong> <strong>Cluster view</strong>: cluster
+assignments as a band along the time axis, a legend, the algorithm and
+fields used, and the score against ground truth.</li>
+<li><strong>FR-61</strong> All three graphs and the cluster view
+<strong>follow the current field and period selection</strong>.</li>
+<li><strong>FR-62</strong> A field the client has no specific knowledge
+of (an optional field or a new model's output) is shown <strong>by its
+SWE Common type alone</strong>: a Quantity as a line, an angular
+Quantity as points (never a false jump past 360°), a Category as a
+coloured band, a Count as steps. No measurement-specific code
+exists.</li>
+</ul>
+<h3 id="84-live-data">8.4 Live data</h3>
+<ul>
+<li><strong>FR-63</strong> Live data reaches the client by
+<strong>polling observations once per simulated second</strong>, from
+the last reading received onwards. This is a recorded placeholder:
+Connected Systems publish/subscribe (Part 3) is unpublished.</li>
+</ul>
+<hr />
+<h2
+id="9-functional-requirements-the-architecture-view-demonstrator-shell">9.
+Functional requirements: the architecture view (demonstrator shell)</h2>
+<h3 id="91-layout">9.1 Layout</h3>
+<p>Mockups 1 to 3 show the arrangement:</p>
+<ul>
+<li><strong>Top bar</strong>: title, a one-line subtitle explaining that
+components and messages can be clicked and that ★ marks the value-add,
+and the controls (play/pause, speed, restart client, restart server,
+control panel).</li>
+<li><strong>Left</strong>: the <strong>stacked flowchart</strong>,
+layered top to bottom: front end, third-party libraries, back end,
+legacy, world. Data rises from the collection platform at the bottom to
+the display client at the top.</li>
+<li><strong>Below the flowchart</strong>: <strong>status</strong>
+(simulation, speed, history, server state and instance, client state,
+essentials, optional sources) and the <strong>message key</strong>.</li>
+<li><strong>Right</strong>: the <strong>detail panel</strong>
+(§9.4).</li>
+</ul>
+<h3 id="92-flowchart">9.2 Flowchart</h3>
+<ul>
+<li><strong>FR-64</strong> Drawn with <strong>React Flow
+(xyflow)</strong> from a <strong>fixed layout</strong> in a committed
+file. Zones are labelled, shaded bands. Third-party libraries form their
+<strong>own band</strong>, outside the back end.</li>
+<li><strong>FR-65</strong> Every flow in §3.1 is drawn. A two-way
+exchange is two arrows on the thirds of the facing edges. The HTTP flow
+between display client and FastAPI is labelled "HTTP".</li>
+</ul>
+<h3 id="93-messages">9.3 Messages</h3>
+<ul>
+<li><strong>FR-66</strong> Messages are <strong>real messages captured
+at every component boundary</strong> in §3.1, including in-process
+calls. Capture uses one tap mechanism, never alters a message or either
+side's behaviour, and is tested with capture on and off.</li>
+<li><strong>FR-67</strong> <strong>Every</strong> message is drawn as an
+icon bearing its letter, moving along its flow. None is sampled or
+merged.</li>
+<li><strong>FR-68</strong> Clicking a message shows it in the detail
+panel's <strong>message strip</strong> (§9.4): its letter and name,
+whether it meets a public standard, its sender and receiver, and its
+contents in monospace.</li>
+</ul>
+<h3 id="94-detail-panel">9.4 Detail panel</h3>
+<ul>
+<li><strong>FR-69</strong> Clicking a component shows it in the detail
+panel; the selected component is ringed on the flowchart. The panel's ×
+returns it to its <strong>empty state</strong>, which invites the viewer
+to click a component.</li>
+<li><strong>FR-70</strong> <strong>Display client</strong> (mockup 1):
+the monitor frame holding the display client (§8), short notes beside it
+on the handshake, fields, period and clustering, and the <strong>message
+strip</strong> beneath it. Until a message is clicked, the strip shows
+the store query (S) built from the current selection, with the chain of
+messages that selection sends.</li>
+<li><strong>FR-71</strong> <strong>Models</strong> (mockup 2): the
+Models component in gold with its description; beneath it, joined by
+lines, the models as cards in one row: <strong>Data cleanse</strong>,
+<strong>Model A</strong>, <strong>Model B</strong> (gold, registered)
+and <strong>Model C</strong>, <strong>Model D</strong> (dashed, empty
+slots). Each card has a diamond. Below, three steps for adding a model
+(write it, register it, see it) and a line stating that each model runs
+in its own worker.</li>
+<li><strong>FR-72</strong> <strong>Data server</strong> (mockup 3): a
+diagram of the Connected Systems resources that describe this system:
+the collection platform (Platform) with bow and stern sensors (Sensor),
+each with its record datastream and observations; Models (Process) with
+each model's output datastreams and observations; and a row of the other
+resources used (property definitions, control streams and commands,
+system events). Below it, <strong>why it fits</strong> in six points,
+and the <strong>gaps</strong> (no standard aggregation;
+publish/subscribe unpublished).</li>
+<li><strong>FR-73</strong> <strong>Every other component</strong>
+(collection platform, logger store, store adapter, FastAPI, scientific
+libraries) shows an explanation panel: what it does, which zone it
+belongs to and why, which letters it sends and receives, and live
+counters.</li>
+</ul>
+<h3 id="95-value-add-reveal">9.5 Value-add reveal</h3>
+<ul>
+<li><strong>FR-74</strong> At startup <strong>every component looks the
+same</strong>, the value-add ones included, and the detail panel is
+empty.</li>
+<li><strong>FR-75</strong> The first time the <strong>display
+client</strong> or <strong>Models</strong> is clicked, it is
+<strong>revealed</strong>: its card turns gold, gains a ★ in its title,
+"our value-add" in its subtitle, and a glinting diamond in its top-right
+corner. It stays revealed until the page is reloaded or the client
+restarts.</li>
+<li><strong>FR-76</strong> Inside the revealed panels, every value-add
+part carries its own diamond: the three graphs and the cluster view in
+the monitor; Models and each model card in the Models panel.</li>
+</ul>
+<h3 id="96-time-controls">9.6 Time controls</h3>
+<ul>
+<li><strong>FR-77</strong> The simulation <strong>starts off</strong>. A
+single <strong>play/pause</strong> button starts and stops the
+<strong>simulation clock</strong>, which starts and stops the whole
+system. When paused, message icons freeze in place and remain
+clickable.</li>
+<li><strong>FR-78</strong> A <strong>speed control</strong> offers ¼×,
+½× and 1×, with <strong>½× the default</strong>. The fastest rate is the
+fastest at which every icon stays legible on the target display,
+verified by measurement; there is no faster mode.</li>
+<li><strong>FR-79</strong> Restart client, restart server and the
+control panel work whether the simulation is playing or paused.</li>
+</ul>
+<hr />
+<h2 id="10-implementation-direction">10. Implementation direction</h2>
+<ul>
+<li><strong>FR-80</strong> Front end: <strong>TypeScript and
+React</strong>. Flowchart: <strong>React Flow (xyflow)</strong>. Charts:
+<strong>ECharts</strong>. Model editor: <strong>CodeMirror 6</strong>
+with Python mode.</li>
+<li><strong>FR-81</strong> Back end: <strong>FastAPI</strong> on
+Pyodide, implementing the Connected Systems subset directly. The
+committed OpenAPI master is the source of truth.</li>
+<li><strong>NFR-04</strong> TypeScript types are generated from the
+masters; the Python back end validates against the same masters.</li>
+<li><strong>NFR-05</strong> Every model's worker loads Pyodide and the
+scientific libraries it needs; the startup budget (NFR-10) includes
+this.</li>
+</ul>
+<hr />
+<h2 id="11-visual-style">11. Visual style</h2>
+<p>The style is a <strong>light, hand-drawn architecture
+explainer</strong>: ink on paper, hand-lettered labels, sketch-edged
+boxes, coloured zones, with crisp, exact message contents. The mockups
+are plain; they fix layout only.</p>
+<h3 id="111-typography">11.1 Typography</h3>
+<ul>
+<li><strong>VS-01</strong> A legible, openly licensed
+<strong>hand-lettered face</strong> for component names, zone labels,
+panel titles, buttons and the key.</li>
+<li><strong>VS-02</strong> A <strong>monospace face</strong> for message
+contents and code. Message contents are never shown in the hand-lettered
+face.</li>
+<li><strong>VS-03</strong> Inside the monitor, the display client uses a
+<strong>plain sans-serif</strong>, so the real system's screen is
+visibly distinct from the demonstrator around it.</li>
+<li><strong>VS-04</strong> All fonts are served from the site
+itself.</li>
+<li><strong>VS-05</strong> Minimum sizes on the target display at native
+resolution: component names 20 px, other labels 16 px, message letters
+17 px, message contents 13 px. Sizes scale up together for the viewing
+distance; they never shrink to fit.</li>
+</ul>
+<h3 id="112-palette">11.2 Palette</h3>
+<ul>
+<li><p><strong>VS-06</strong> <strong>Paper and ink</strong>: a warm
+off-white ground and a near-black ink.</p></li>
+<li><p><strong>VS-07</strong> <strong>Zones</strong>, each a pale fill
+with a stronger outline of one hue:</p>
+<table>
+<thead>
+<tr>
+<th>Zone</th>
+<th>Hue</th>
+<th>Outline</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>World</td>
+<td>warm grey</td>
+<td>dashed</td>
+</tr>
+<tr>
+<td>Legacy</td>
+<td>burnt orange</td>
+<td>solid</td>
+</tr>
+<tr>
+<td>New build · back end</td>
+<td>blue</td>
+<td>solid</td>
+</tr>
+<tr>
+<td>Third-party libraries</td>
+<td>violet</td>
+<td>solid</td>
+</tr>
+<tr>
+<td>New build · front end</td>
+<td>green</td>
+<td>solid</td>
+</tr>
+</tbody>
+</table></li>
+<li><p><strong>VS-08</strong> <strong>Message letters</strong>: Q blue,
+D teal, O green, K purple, P navy, H red, S amber, L brown, I grey. One
+colour per letter, shared by icon, key and message strip.</p></li>
+<li><p><strong>VS-09</strong> <strong>Value-add gold</strong>: a warm
+gold fill and a darker gold outline, used only for revealed value-add
+components and their parts.</p></li>
+<li><p><strong>VS-10</strong> Colour never carries meaning alone: every
+message shows its letter, every zone its label, every value-add item its
+★ and "our value-add".</p></li>
+<li><p><strong>VS-11</strong> Every text and icon colour meets
+<strong>4.5:1 contrast</strong> (3:1 at 24 px and above).</p></li>
+</ul>
+<h3 id="113-components-and-flows">11.3 Components and flows</h3>
+<ul>
+<li><strong>VS-12</strong> Each component is a card: white fill, ink
+outline with slightly uneven corners, its name and a one-line role.
+<strong>Text labels only</strong>; no illustrations.</li>
+<li><strong>VS-13</strong> Flows are ink arrows with filled heads,
+horizontal or vertical segments only, never crossing a card. Protocol
+labels are used sparingly.</li>
+<li><strong>VS-14</strong> A message is a circle bearing its letter. A
+<strong>selected</strong> message gains a tinted fill and a halo. A
+<strong>failed</strong> request (server down) stops at the boundary with
+its ring broken and a cross.</li>
+</ul>
+<h3 id="114-sketch-rendering">11.4 Sketch rendering</h3>
+<ul>
+<li><strong>VS-15</strong> Cards, zones and arrows are drawn with a
+<strong>sketch renderer</strong> (Rough.js, served from the site),
+<strong>gently</strong>: low roughness, single stroke, no hatching.</li>
+<li><strong>VS-16</strong> <strong>Every sketched shape is
+seeded</strong> from its stable name, so it draws identically on every
+render, pause and restart.</li>
+<li><strong>VS-17</strong> Without the renderer, the same shapes fall
+back to plain CSS outlines. The demonstrator never depends on the
+effect.</li>
+</ul>
+<h3 id="115-detail-panel">11.5 Detail panel</h3>
+<ul>
+<li><strong>VS-18</strong> The detail panel and message strip are
+<strong>crisp, not sketched</strong>: they carry the evidence.</li>
+<li><strong>VS-19</strong> The <strong>monitor frame</strong> is a dark
+bezel with a stand, drawn plainly.</li>
+<li><strong>VS-20</strong> Charts inside the monitor are drawn plainly
+by ECharts, with no sketch effect.</li>
+</ul>
+<h3 id="116-motion-and-the-diamond">11.6 Motion and the diamond</h3>
+<ul>
+<li><strong>VS-21</strong> Only two things move: <strong>messages
+travelling along flows</strong>, at the speed the clock sets; and the
+<strong>value-add diamonds</strong>.</li>
+<li><strong>VS-22</strong> The <strong>diamond</strong> is a small cut
+gem in the top-right corner of each value-add item. Every few seconds it
+<strong>glints</strong>: a four-pointed sparkle swells and turns, the
+top facet flashes, and a gold glow pulses. Diamonds on screen together
+are <strong>staggered</strong> so they twinkle in turn.</li>
+<li><strong>VS-23</strong> Under the operating system's
+<strong>reduced-motion</strong> setting, diamonds show a still sparkle
+and messages move without easing. When the simulation is paused,
+messages stop but diamonds continue: they belong to the frame, not the
+system.</li>
+</ul>
+<hr />
+<h2 id="12-delivery">12. Delivery</h2>
+<ul>
+<li><strong>NFR-06</strong> Static assets on a public gh-pages site.
+Each visit starts a fresh seeded run; nothing persists between
+visits.</li>
+<li><strong>NFR-07</strong> Pyodide and every Python package are served
+from the site itself, over HTTPS.</li>
+<li><strong>NFR-08</strong> The target is a <strong>large presentation
+display</strong>; layout and sizes are verified on it.</li>
+<li><strong>NFR-09</strong> The demonstrator runs on machines
+<strong>with or without WebAssembly</strong> (§2.3). Before a
+demonstration, the presentation machine is checked so the presenter
+knows which back end will run.</li>
+<li><strong>NFR-10</strong> A startup time budget is declared and
+measured for <strong>each back end</strong>, including loading the
+pre-calculated history and, for the Python back end, the model workers.
+The history files' download size is declared and measured too.</li>
+</ul>
+<h2 id="13-development-process">13. Development process</h2>
+<ul>
+<li><strong>PR-01</strong> The repository is public and contains no
+material about any other project, customer or system, and no real place.
+A vocabulary gate enforces a privately held list of forbidden
+terms.</li>
+<li><strong>PR-02</strong> Spec-kit carries: constitution, specify,
+plan, tasks, analyze, implement. ADRs record contested decisions,
+including the Connected Systems subset and the split of work between
+Model A and Model B.</li>
+<li><strong>PR-03</strong> Every gate and every refusal test is watched
+failing before it is trusted.</li>
+</ul>
+<h3 id="131-keeping-the-two-back-ends-honest">13.1 Keeping the two back
+ends honest</h3>
+<ul>
+<li><strong>PR-04</strong> One <strong>contract test suite</strong> runs
+against both back ends through the seam. A change to the interface that
+passes in one and fails in the other fails the build.</li>
+<li><strong>PR-05</strong> The stand-in has <strong>no capability the
+Python back end lacks</strong>. Anything shown only in the stand-in
+would misrepresent the real system.</li>
+<li><strong>PR-06</strong> The Python back end is the reference. When
+the two disagree on anything other than the models' methods, the
+stand-in is wrong.</li>
+</ul>
+<hr />
+<h2 id="14-acceptance-criteria">14. Acceptance criteria</h2>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Test</th>
+<th>Supports</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>AT-01</td>
+<td>Observations fetched through the seam match the manifest at each
+time, while the store is growing</td>
+<td>C1</td>
+</tr>
+<tr>
+<td>AT-02</td>
+<td>The same ASGI application passes the same contract suite in Pyodide
+behind the relay and in CPython under an ordinary ASGI server</td>
+<td>C1</td>
+</tr>
+<tr>
+<td>AT-03</td>
+<td>Replacing the logger store with a second, differently awkward format
+changes the store adapter only, and AT-01 still passes</td>
+<td>C1</td>
+</tr>
+<tr>
+<td>AT-04</td>
+<td>With four weeks of history, the declared queries of FR-31 meet their
+time budget, and rebuilding the index gives identical results</td>
+<td>C1</td>
+</tr>
+<tr>
+<td>AT-05</td>
+<td>The CPython build of the server is browsed by two independent
+Connected Systems clients (the OGC CSAPI Explorer and
+OSHConnect-Python): systems, datastreams, schemas and observations
+listed and read</td>
+<td>C1</td>
+</tr>
+<tr>
+<td>AT-06</td>
+<td>The served OpenAPI matches the committed master, and the conformance
+declaration matches the implemented subset</td>
+<td>C1</td>
+</tr>
+<tr>
+<td>AT-07</td>
+<td>Removing any essential source, or changing its type or unit, starts
+the client in degraded mode with one warning naming exactly those
+sources and their views disabled; removing an optional source gives no
+warning</td>
+<td>C2</td>
+</tr>
+<tr>
+<td>AT-08</td>
+<td>A server whose profile claim is contradicted by discovery is
+rejected</td>
+<td>C2</td>
+</tr>
+<tr>
+<td>AT-09</td>
+<td>Each extra field (Category, Quantity, Count) appears after restart
+client with its generic view and no new display code</td>
+<td>C2</td>
+</tr>
+<tr>
+<td>AT-10</td>
+<td>Restart server: 503 with <code>Retry-After</code> while waiting; new
+instance identifier; every client resets and repeats the handshake; no
+records lost</td>
+<td>C1, C2</td>
+</tr>
+<tr>
+<td>AT-11</td>
+<td>Server down: network failures, unreachable banner, stale data
+marked, no records lost; on bringing it up, the client
+re-handshakes</td>
+<td>C1, C2</td>
+</tr>
+<tr>
+<td>AT-12</td>
+<td>A field toggle changes nothing until the next server start;
+afterwards discovery offers exactly the configured fields, and switching
+a field back on restores its full history</td>
+<td>C1, C2</td>
+</tr>
+<tr>
+<td>AT-13</td>
+<td>A model written in an empty slot registers, appears in the display
+client after restart client, and is drawn by its schema type</td>
+<td>C3</td>
+</tr>
+<tr>
+<td>AT-14</td>
+<td>A model that raises errors or never returns leaves the data server,
+the other models and the display client running</td>
+<td>C3</td>
+</tr>
+<tr>
+<td>AT-15</td>
+<td>Every model other than Data cleanse reads only Data cleanse's output
+datastreams</td>
+<td>C3</td>
+</tr>
+<tr>
+<td>AT-16</td>
+<td>Change detection and clustering recover the manifest's fronts, air
+masses and reach boundaries with reported scores, without access to
+position</td>
+<td>C3</td>
+</tr>
+<tr>
+<td>AT-17</td>
+<td>Each period preset reads the source FR-29 specifies; the S messages
+on the flowchart and in the message strip match the queries actually
+made</td>
+<td>Architecture view</td>
+</tr>
+<tr>
+<td>AT-18</td>
+<td>Every boundary in §3.1 that carries traffic produces captured
+messages with a letter from §5; outputs are identical with capture on
+and off</td>
+<td>Architecture view</td>
+</tr>
+<tr>
+<td>AT-19</td>
+<td>Before play is pressed, and while paused, no component sends a
+message and the clock does not advance</td>
+<td>Architecture view</td>
+</tr>
+<tr>
+<td>AT-20</td>
+<td>At startup no component is gold; clicking the display client or
+Models reveals it as FR-75 describes; no other component can be
+revealed</td>
+<td>Architecture view</td>
+</tr>
+<tr>
+<td>AT-21</td>
+<td>Rendering the flowchart twice, and after a client restart, gives
+identical sketched outlines</td>
+<td>Visual style</td>
+</tr>
+<tr>
+<td>AT-22</td>
+<td>An automated contrast check passes for every text and icon
+colour</td>
+<td>Visual style</td>
+</tr>
+<tr>
+<td>AT-23</td>
+<td>All fonts, the sketch renderer and Pyodide are fetched from the
+site's own origin</td>
+<td>Delivery</td>
+</tr>
+<tr>
+<td>AT-24</td>
+<td>The same contract suite passes against the Python back end and the
+stand-in: discovery, profile, schemas, encodings, refusals, waiting mode
+and instance identifiers</td>
+<td>C2</td>
+</tr>
+<tr>
+<td>AT-25</td>
+<td>With WebAssembly disabled, the demonstrator starts the stand-in,
+shows "Back end: JavaScript stand-in", tags the back-end components,
+shows the notice, and marks model results as illustrative</td>
+<td>Honesty</td>
+</tr>
+<tr>
+<td>AT-26</td>
+<td>With WebAssembly disabled, every architecture-view test (AT-07 to
+AT-12, AT-17 to AT-20) passes unchanged</td>
+<td>C2, architecture view</td>
+</tr>
+<tr>
+<td>AT-27</td>
+<td>Both back ends read the same pre-calculated history files, and an
+observation query over the history returns identical values from
+each</td>
+<td>C1</td>
+</tr>
+<tr>
+<td>AT-28</td>
+<td>Regenerating the history from the recorded seeds reproduces the
+shipped files exactly</td>
+<td>Delivery</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="15-open-questions">15. Open questions</h2>
+<ul>
+<li><strong>Name.</strong> A coined working name with no
+association.</li>
+<li><strong>Model A and Model B.</strong> Which core model does what
+(FR-34); recorded in an ADR.</li>
+<li><strong>Naming clash.</strong> "Model A/B" and clustering "Algorithm
+A/B/C" may be read as the same thing. Consider renaming the algorithms
+(for example, Method 1, 2, 3).</li>
+<li><strong>History size.</strong> Four weeks of fixed-width records for
+two sensors is large to download. Measure it; if needed, compress the
+files for transfer (the store still sees its own format once loaded) or
+shorten the shipped history.</li>
+<li><strong>Memory.</strong> An index, a back-end worker and one Pyodide
+worker per model may press on a tab's memory. Measure in the Python back
+end.</li>
+<li><strong>Stand-in models.</strong> How simple the stand-in's models
+can be while still looking like the real ones' output.</li>
+<li><strong>Legible rate.</strong> The fastest legible speed, measured
+on the target display; it may be below 1×.</li>
+<li><strong>Pub/sub.</strong> Revisit polling when Connected Systems
+Part 3 is published.</li>
+<li><strong>Second store format</strong> for AT-03.</li>
+<li><strong>Conformance.</strong> The exact conformance class
+identifiers, and whether an OGC test suite for Connected Systems
+exists.</li>
+</ul>
+<h2 id="16-deliberate-exclusions-from-version-4">16. Deliberate
+exclusions from Version 4</h2>
+<ul>
+<li><strong>Removed since 3.3</strong>: the guided tour, the docked
+panels, the canal map, the seam relay as a drawn component, the separate
+scientists' workspace, the message popup (replaced by the message
+strip), the demonstrator-shell node on the flowchart.</li>
+<li><strong>Position</strong>, and every model that needs it.</li>
+<li><strong>Evidence of low risk</strong> on screen (risk register, live
+test results, code size, share of off-the-shelf code). Deferred, not
+rejected.</li>
+<li><strong>Discovery while running</strong>, <strong>server-side
+sessions</strong>, <strong>replay</strong>, <strong>push
+delivery</strong>, <strong>persistence</strong> and
+<strong>authentication</strong>.</li>
+</ul>
+<footer>Rendered from <code>srd-barge.md</code>.</footer>
+</main>
+</body>
+</html>
