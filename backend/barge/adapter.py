@@ -1,10 +1,10 @@
-"""Store adapter (B-C06): the only code that understands the logger's format.
+"""Store adapter (C-03): the only code that understands the logger's format (FR-20).
 
-It keeps the server's **own index** over the store: for every file, the time
+It holds **its own index** over the store (FR-21): for every file, the time
 of each complete record, so that a time range maps to a byte range. The store
 is never altered. The index is dropped on every server start and rebuilt
 from the store, a step at a time so the server can wait while it does
-(FR-29, FR-44). Records are parsed only when asked for.
+(FR-22, FR-47). Records are parsed only when asked for.
 
 Replacing the logger with another format (AT-03) means replacing this module.
 """
@@ -150,7 +150,7 @@ class StoreAdapter:
                 n += int(np.searchsorted(f.t, t1, "right") - np.searchsorted(f.t, t0, "left"))
         return n
 
-    def read(self, sensor: str, t0: float, t1: float, limit: int | None = None, offset: int = 0) -> dict:
+    def read(self, sensor: str, t0: float, t1: float, limit: int | None = None, offset: int = 0, quiet=False) -> dict:
         """Records with t0 <= t <= t1, oldest first, after skipping `offset`."""
         blocks = []
         want = limit if limit is not None else None
@@ -168,11 +168,12 @@ class StoreAdapter:
                 i1 = min(i1, i0 + want)
             if i1 <= i0:
                 continue
-            self.tap.emit("adapter", "logger", "I", f"read bytes {i0 * L.REC_LEN}-{i1 * L.REC_LEN} of {f.name}",
-                          {"file": f.name, "offset": i0 * L.REC_LEN, "length": (i1 - i0) * L.REC_LEN})
+            self.tap.emit("adapter", "store", "S", f"read {f.name} at byte {i0 * L.REC_LEN}, found through the index",
+                          {"op": "read", "file": f.name, "offset": i0 * L.REC_LEN, "length": (i1 - i0) * L.REC_LEN,
+                           "records": i1 - i0, "found_by": "index: time to file and offset"}, quiet=quiet)
             data = self.logger.read(f.name, i0 * L.REC_LEN, i1 * L.REC_LEN)
-            self.tap.emit("logger", "adapter", "L", f"{i1 - i0} records from {f.name}",
-                          data[: L.REC_LEN * 3].decode("ascii") + ("…" if i1 - i0 > 3 else ""))
+            self.tap.emit("store", "adapter", "L", f"{i1 - i0} records from {f.name}",
+                          data[: L.REC_LEN * 3].decode("ascii") + ("…" if i1 - i0 > 3 else ""), quiet=quiet)
             blocks.append(parse_records(data))
             if want is not None:
                 want -= i1 - i0

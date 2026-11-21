@@ -1,9 +1,13 @@
-"""The Connected Systems HTTP interface (B-C07 on B-C08: FastAPI and Starlette).
+"""The data server's HTTP interface (C-04 on C-06: FastAPI and Starlette).
 
 An honest, declared subset of OGC API – Connected Systems Parts 1 and 2, with
-the Features and Common prerequisites (FR-22, FR-22a). Everything outside the
-subset is refused with the thing refused named (FR-27). The application is
-an ordinary ASGI app: it runs unchanged under uvicorn and in Pyodide (NFR-03).
+the Features and Common prerequisites (FR-23). Everything outside the subset
+is refused with the thing refused named (FR-30). The application is an
+ordinary ASGI app: it runs unchanged under uvicorn and in Pyodide (NFR-03).
+
+Resources are read-only over HTTP except commands: models register their
+systems and datastreams through the server's internal interface
+(modelhost.py), not through FastAPI (SRD §3.1).
 """
 from __future__ import annotations
 
@@ -19,7 +23,7 @@ from fastapi.responses import JSONResponse, Response
 from . import config as C
 from . import swe
 from .fields import CATALOGUE
-from .server import PROFILE_URI, SENSORS, SOSA, iso, iso_many, parse_iso
+from .server import PROFILE_URI, SOSA, iso, iso_many, parse_iso
 from .tap import Tap
 
 CS1 = "http://www.opengis.net/spec/ogcapi-connectedsystems-1/1.0/conf/"
@@ -30,10 +34,8 @@ CONFORMANCE = [
     "http://www.opengis.net/spec/ogcapi-common-1/1.0/conf/json",
     "http://www.opengis.net/spec/ogcapi-common-2/1.0/conf/collections",
     "http://www.opengis.net/spec/ogcapi-features-1/1.0/conf/core",
-    CS1 + "api-common", CS1 + "system", CS1 + "subsystem", CS1 + "property",
-    CS1 + "create-replace-delete", CS1 + "sensorml",
-    CS2 + "api-common", CS2 + "datastream", CS2 + "controlstream",
-    CS2 + "create-replace-delete", CS2 + "json", CS2 + "swecommon-json",
+    CS1 + "api-common", CS1 + "system", CS1 + "subsystem", CS1 + "property", CS1 + "sensorml",
+    CS2 + "api-common", CS2 + "datastream", CS2 + "controlstream", CS2 + "json", CS2 + "swecommon-json",
 ]
 NOT_IMPLEMENTED = {
     "deployments": "Part 1 Deployment Features", "procedures": "Part 1 Procedure Features",
@@ -85,19 +87,17 @@ def _letter_for_response(status: int, path: str, ctype: str) -> str:
         return "P"
     if "swe+json" in ctype or path.rstrip("/").endswith("/observations"):
         return "O"
-    if "/commands" in path and status in (200, 201):
-        return "K"
-    return "D"
+    return "D"  # every other resource, commands and their status included (docs/decisions-log.md D-61)
 
 
 def create_app(rt) -> FastAPI:
     """One FastAPI application over the runtime; it reaches whichever server instance is running."""
     app = FastAPI(
         title="Canal barge weather demonstrator: Connected Systems server",
-        version="3.2.0",
+        version="4.0.0",
         description=("A declared subset of OGC API – Connected Systems Parts 1 and 2 over a deliberately awkward "
                      "logger store. Everything is fictional. The facade is shown working over an awkward store, "
-                     "to be confirmed against a real one (FR-21)."),
+                     "to be confirmed against a real one (FR-19)."),
         openapi_url="/api", docs_url=None, redoc_url=None,
     )
     tap: Tap = rt.tap
@@ -111,10 +111,12 @@ def create_app(rt) -> FastAPI:
         path = request.url.path
         root = request.scope.get("root_path", "") or ""
         rel = path[len(root):] if root and path.startswith(root) else path
-        token = tap.begin_chain(request.headers.get("x-tap-chain"), int(request.headers.get("x-tap-hop", "1")))
+        hop = request.headers.get("x-tap-hop", "1")
+        token = tap.begin_chain(request.headers.get("x-tap-chain"), int(hop) if hop.isdigit() else 1)
+        chain_id = tap.chain_id()
         body = await request.body()
         letter = _letter_for_request(request.method, rel)
-        tap.emit("relay", "fastapi", letter, f"{request.method} {rel}{'?' + request.url.query if request.url.query else ''}",
+        tap.emit("client", "fastapi", letter, f"{request.method} {rel}{'?' + request.url.query if request.url.query else ''}",
                  body.decode("utf-8", "replace") if body else f"{request.method} {rel}?{request.url.query}")
         s = srv()
         if s is None:
@@ -139,8 +141,8 @@ def create_app(rt) -> FastAPI:
         hops = tap.end_chain(token)
         headers["x-tap-hops"] = str(hops + 1)
         out = Response(content=payload, status_code=resp.status_code, headers=headers, media_type=resp.media_type)
-        token2 = tap.begin_chain(request.headers.get("x-tap-chain"), hops)
-        tap.emit("fastapi", "relay", _letter_for_response(resp.status_code, rel, headers.get("content-type", "")),
+        token2 = tap.begin_chain(chain_id, hops)
+        tap.emit("fastapi", "client", _letter_for_response(resp.status_code, rel, headers.get("content-type", "")),
                  f"{resp.status_code} {rel}", payload.decode("utf-8", "replace"))
         tap.end_chain(token2)
         return out
@@ -177,11 +179,12 @@ def create_app(rt) -> FastAPI:
     def fmt(request: Request, f: str | None, default: str, allowed: tuple) -> str:
         want = f
         if want is None:
-            accept = request.headers.get("accept", "")
-            for a in [x.split(";")[0].strip() for x in accept.split(",")]:
-                if a in allowed or a in UNSUPPORTED_FORMATS:
-                    want = a
-                    break
+            # Accept is a preference, not a demand: the default when acceptable, else the first offered type.
+            # An Accept naming nothing offered (a browser's text/html) gets the default (RFC 9110 §12.5.1).
+            accepted = [x.split(";")[0].strip() for x in request.headers.get("accept", "").split(",")]
+            if default in accepted or "*/*" in accepted:
+                return default
+            want = next((a for a in accepted if a in allowed), None)
         if want is None:
             return default
         if want in UNSUPPORTED_FORMATS:
@@ -193,6 +196,7 @@ def create_app(rt) -> FastAPI:
 
     def page(items: list, request: Request, path: str, limit: int, offset: int, extra_links=None):
         lim = _limit(limit)
+        _offset(offset)
         chunk = items[offset:offset + lim]
         links = [link(request, path, "self")]
         if offset + lim < len(items):
@@ -208,14 +212,14 @@ def create_app(rt) -> FastAPI:
         return s
 
     def get_ds(dsid):
-        d = srv().all_datastreams().get(dsid)
+        d = srv().datastreams().get(dsid)
         if d is None:
             raise Refusal(404, "NotFound", f"datastream {dsid} does not exist", f"datastream:{dsid}")
         return d
 
     def system_json(request, s):
         sid = s["id"]
-        out = {k: v for k, v in s.items() if k != "parent"}
+        out = {k: v for k, v in s.items() if k not in ("parent", "createdBy")}  # internal fields stay internal
         out["links"] = [link(request, f"/systems/{sid}", "self", "application/sml+json"),
                         link(request, f"/systems/{sid}/datastreams", "datastreams"),
                         link(request, f"/systems/{sid}/subsystems", "subsystems"),
@@ -226,14 +230,7 @@ def create_app(rt) -> FastAPI:
 
     def ds_json(request, d):
         s = srv()
-        tr = s.time_range()
-        if d.get("kind") == "promoted":
-            obs = s.registry.observations.get(d["id"], [])
-            pt = [obs[0]["t"], obs[-1]["t"]] if obs else None
-        elif d.get("output") in ("changes", "clusters", "correlation", "runs"):
-            pt = [s.run["window_start"], s.run["window_end"]] if s.run else None
-        else:
-            pt = list(tr) if tr else None
+        pt = s.time_range(d)
         props = [{"definition": f.get("definition", ""), "label": f.get("label", f["name"]), "name": f["name"]}
                  for f in d["schema"]["fields"] if not (f["type"] == "Time" and f["name"] == "time")]
         return {
@@ -242,18 +239,17 @@ def create_app(rt) -> FastAPI:
             "validTime": [iso(pt[0]) if pt else iso(0), iso(max(rt.now(), pt[1] if pt else 0))],
             "phenomenonTime": [iso(pt[0]), iso(pt[1])] if pt else None,
             "resultTime": [iso(pt[0]), iso(pt[1])] if pt else None,
-            "resultType": "record", "live": d.get("kind") != "promoted",
+            "resultType": "record", "live": True,
             "formats": list(swe.OBS_FORMATS), "observedProperties": props,
             "links": [link(request, f"/datastreams/{d['id']}", "self"),
                       link(request, f"/datastreams/{d['id']}/schema?obsFormat={swe.SWE_JSON.replace('+', '%2B')}", "schema"),
                       link(request, f"/datastreams/{d['id']}/observations", "observations", swe.SWE_JSON)],
         }
 
-    def cs_json(request):
-        s = srv()
-        cid = s.controlstream_id
-        return {"id": cid, "name": "Analysis settings", "inputName": "settings", "system@id": "analysis",
-                "system@link": {"href": base(request) + "/systems/analysis"}, "live": True, "async": False,
+    def cs_json(request, c):
+        cid = c["id"]
+        return {"id": cid, "name": c["name"], "inputName": c["inputName"], "system@id": c["system"],
+                "system@link": {"href": base(request) + f"/systems/{c['system']}"}, "live": True, "async": True,
                 "formats": [swe.JSON],
                 "links": [link(request, f"/controlstreams/{cid}", "self"),
                           link(request, f"/controlstreams/{cid}/schema", "schema"),
@@ -330,47 +326,11 @@ def create_app(rt) -> FastAPI:
         items = [system_json(request, s) for s in srv().all_systems().values() if not s.get("parent")]
         return page(items, request, "/systems", limit, offset)
 
-    @app.post("/systems", status_code=201, summary="Create a system (promotion, FR-36)")
-    async def create_system(request: Request):
-        only(request, set())
-        body = await _json_body(request)
-        stype = body.get("systemType") or body.get("definition")
-        allowed = [SOSA + t for t in ("Sensor", "Actuator", "Sampler", "Platform", "System")]
-        if stype not in allowed:
-            raise Refusal(400, "InvalidParameterValue",
-                          f"systemType must be one of the five SOSA types: {', '.join(allowed)}", "systemType")
-        for k in ("uniqueId", "label"):
-            if not isinstance(body.get(k), str) or not body[k]:
-                raise Refusal(400, "InvalidParameterValue", f"{k} is required", k)
-        reg = srv().registry
-        if any(s["uniqueId"] == body["uniqueId"] for s in srv().all_systems().values()):
-            raise Refusal(409, "Conflict", f"a system with uniqueId {body['uniqueId']} exists", "uniqueId")
-        sid = reg.new_id("product")
-        reg.systems[sid] = {"type": body.get("type", "SimpleProcess"), "id": sid, "uniqueId": body["uniqueId"],
-                            "label": body["label"], "description": body.get("description", ""),
-                            "definition": stype, "systemType": stype, "assetType": body.get("assetType", "Process"),
-                            "createdBy": "client"}
-        return JSONResponse(system_json(request, reg.systems[sid]), status_code=201,
-                            headers={"Location": base(request) + f"/systems/{sid}"})
-
     @app.get("/systems/{systemId}", summary="A system")
     async def system(request: Request, systemId: str = Path(...), f: str | None = Query(None)):
         only(request, {"f"})
         fmt(request, f, swe.JSON, (swe.JSON, "application/sml+json"))
         return system_json(request, get_system(systemId))
-
-    @app.delete("/systems/{systemId}", status_code=204, summary="Delete a created system")
-    async def delete_system(request: Request, systemId: str = Path(...)):
-        only(request, set())
-        get_system(systemId)
-        reg = srv().registry
-        if systemId not in reg.systems:
-            raise Refusal(403, "Forbidden", f"system {systemId} is built in and cannot be deleted", f"system:{systemId}")
-        for dsid in [d for d, v in reg.datastreams.items() if v["system"] == systemId]:
-            reg.datastreams.pop(dsid)
-            reg.observations.pop(dsid, None)
-        reg.systems.pop(systemId)
-        return Response(status_code=204)
 
     @app.get("/systems/{systemId}/subsystems", summary="Subsystems")
     async def subsystems(request: Request, systemId: str = Path(...), limit: int = Query(C.DEFAULT_LIMIT), offset: int = Query(0)):
@@ -397,7 +357,7 @@ def create_app(rt) -> FastAPI:
     async def datastreams(request: Request, limit: int = Query(C.DEFAULT_LIMIT), offset: int = Query(0),
                     datetime: str | None = Query(None)):
         only(request, {"limit", "offset", "datetime", "f"})
-        items = [ds_json(request, d) for d in srv().all_datastreams().values()]
+        items = [ds_json(request, d) for d in srv().datastreams().values()]
         return page(items, request, "/datastreams", limit, offset)
 
     @app.get("/systems/{systemId}/datastreams", summary="A system's datastreams")
@@ -405,47 +365,13 @@ def create_app(rt) -> FastAPI:
                            offset: int = Query(0)):
         only(request, {"limit", "offset", "f"})
         get_system(systemId)
-        items = [ds_json(request, d) for d in srv().all_datastreams().values() if d["system"] == systemId]
+        items = [ds_json(request, d) for d in srv().datastreams().values() if d["system"] == systemId]
         return page(items, request, f"/systems/{systemId}/datastreams", limit, offset)
-
-    @app.post("/systems/{systemId}/datastreams", status_code=201, summary="Create a datastream (promotion)")
-    async def create_datastream(request: Request, systemId: str = Path(...)):
-        only(request, set())
-        get_system(systemId)
-        reg = srv().registry
-        if systemId not in reg.systems:
-            raise Refusal(403, "Forbidden", "datastreams can be created only under created systems", f"system:{systemId}")
-        body = await _json_body(request)
-        sch = body.get("schema") or {}
-        if sch.get("obsFormat") != swe.SWE_JSON:
-            raise Refusal(400, "InvalidParameterValue", "schema.obsFormat must be application/swe+json", "schema.obsFormat")
-        rec = sch.get("recordSchema") or {}
-        _check_record(rec)
-        for k in ("name", "outputName"):
-            if not isinstance(body.get(k), str) or not body[k]:
-                raise Refusal(400, "InvalidParameterValue", f"{k} is required", k)
-        dsid = reg.new_id("ds")
-        reg.datastreams[dsid] = {"id": dsid, "name": body["name"], "outputName": body["outputName"],
-                                 "system": systemId, "kind": "promoted", "schema": rec}
-        reg.observations[dsid] = []
-        return JSONResponse(ds_json(request, reg.datastreams[dsid]), status_code=201,
-                            headers={"Location": base(request) + f"/datastreams/{dsid}"})
 
     @app.get("/datastreams/{dsId}", summary="A datastream")
     async def datastream(request: Request, dsId: str = Path(...)):
         only(request, {"f"})
         return ds_json(request, get_ds(dsId))
-
-    @app.delete("/datastreams/{dsId}", status_code=204, summary="Delete a created datastream")
-    async def delete_datastream(request: Request, dsId: str = Path(...)):
-        only(request, set())
-        get_ds(dsId)
-        reg = srv().registry
-        if dsId not in reg.datastreams:
-            raise Refusal(403, "Forbidden", f"datastream {dsId} is built in and cannot be deleted", f"datastream:{dsId}")
-        reg.datastreams.pop(dsId)
-        reg.observations.pop(dsId, None)
-        return Response(status_code=204)
 
     @app.get("/datastreams/{dsId}/schema", summary="A datastream's schema (FR-24)")
     async def ds_schema(request: Request, dsId: str = Path(...), obsFormat: str | None = Query(None)):
@@ -464,6 +390,7 @@ def create_app(rt) -> FastAPI:
         d = get_ds(dsId)
         of = fmt(request, f, swe.SWE_JSON, swe.OBS_FORMATS)
         lim = _limit(limit)
+        _offset(offset)
         s = srv()
         now = rt.now()
         latest = resultTime == "latest"
@@ -474,105 +401,71 @@ def create_app(rt) -> FastAPI:
         cols, total = _fetch(s, d, t0, t1, lim, offset, latest)
         return _obs_response(request, d, cols, of, lim, offset, total, f"/datastreams/{dsId}/observations")
 
-    @app.post("/datastreams/{dsId}/observations", status_code=201, summary="Create observations (promotion)")
-    async def create_observations(request: Request, dsId: str = Path(...)):
-        only(request, set())
-        d = get_ds(dsId)
-        reg = srv().registry
-        if dsId not in reg.datastreams:
-            raise Refusal(403, "Forbidden", f"observations can be created only in created datastreams", f"datastream:{dsId}")
-        body = await _json_body(request)
-        items = body if isinstance(body, list) else [body]
-        names = {fd["name"]: fd for fd in d["schema"]["fields"]}
-        added = []
-        for it in items:
-            if "result" in it:  # application/json observation
-                rec = dict(it["result"])
-                rec["time"] = it.get("phenomenonTime")
-            else:  # application/swe+json record
-                rec = dict(it)
-            try:
-                t = parse_iso(rec.get("time") or "")
-            except ValueError:
-                raise Refusal(400, "InvalidParameterValue", "each observation needs a UTC time", "time")
-            for k, v in rec.items():
-                if k == "time":
-                    continue
-                if k not in names:
-                    raise Refusal(400, "InvalidParameterValue", f"field {k} is not in the datastream's schema", f"field:{k}")
-                _check_value(names[k], v)
-            reg.observations[dsId].append({"t": t, "record": {k: v for k, v in rec.items() if k != "time"}})
-            added.append(t)
-        reg.observations[dsId].sort(key=lambda o: o["t"])
-        return JSONResponse({"created": len(added)}, status_code=201)
+    # --- Part 2: control streams and commands (FR-27) ---------------------------
+    def get_cs(csId):
+        c = srv().controlstreams().get(csId)
+        if c is None:
+            raise Refusal(404, "NotFound", f"control stream {csId} does not exist", f"controlstream:{csId}")
+        return c
 
-    # --- Part 2: control streams and commands (FR-26) ---------------------------
     @app.get("/controlstreams", summary="Control streams")
     async def controlstreams(request: Request, limit: int = Query(C.DEFAULT_LIMIT), offset: int = Query(0)):
         only(request, {"limit", "offset", "f"})
-        return page([cs_json(request)], request, "/controlstreams", limit, offset)
+        return page([cs_json(request, c) for c in srv().controlstreams().values()], request, "/controlstreams", limit, offset)
 
     @app.get("/systems/{systemId}/controlstreams", summary="A system's control streams")
-    async def system_controlstreams(request: Request, systemId: str = Path(...)):
+    async def system_controlstreams(request: Request, systemId: str = Path(...), limit: int = Query(C.DEFAULT_LIMIT),
+                                    offset: int = Query(0)):
         only(request, {"limit", "offset", "f"})
         get_system(systemId)
-        return {"items": [cs_json(request)] if systemId == "analysis" else [],
-                "links": [link(request, f"/systems/{systemId}/controlstreams", "self")]}
-
-    def get_cs(csId):
-        if csId != srv().controlstream_id:
-            raise Refusal(404, "NotFound", f"control stream {csId} does not exist", f"controlstream:{csId}")
+        items = [cs_json(request, c) for c in srv().controlstreams().values() if c["system"] == systemId]
+        return page(items, request, f"/systems/{systemId}/controlstreams", limit, offset)
 
     @app.get("/controlstreams/{csId}", summary="A control stream")
     async def controlstream(request: Request, csId: str = Path(...)):
         only(request, {"f"})
-        get_cs(csId)
-        return cs_json(request)
+        return cs_json(request, get_cs(csId))
 
     @app.get("/controlstreams/{csId}/schema", summary="A control stream's schema, with its bounds")
-    async def controlstream_schema(request: Request, csId: str = Path(...), obsFormat: str | None = Query(None)):
-        only(request, {"obsFormat", "f"})
-        get_cs(csId)
-        return {"commandFormat": swe.JSON, "parametersSchema": srv().control_schema}
+    async def controlstream_schema(request: Request, csId: str = Path(...)):
+        only(request, {"f"})
+        return {"commandFormat": swe.JSON, "parametersSchema": get_cs(csId)["schema"]}
 
     @app.post("/controlstreams/{csId}/commands", status_code=201, summary="Send a command")
     async def create_command(request: Request, csId: str = Path(...)):
         only(request, set())
-        get_cs(csId)
+        c = get_cs(csId)
         body = await _json_body(request)
         params = body.get("parameters") if isinstance(body, dict) else None
         if not isinstance(params, dict):
             raise Refusal(400, "InvalidParameterValue", "a command needs a parameters object", "parameters")
         s = srv()
         try:
-            settings = s.validate_command(params)
+            s.validate_command(c, params)
         except ValueError as e:
             name, msg = str(e).split("|", 1)
             raise Refusal(400, "InvalidParameterValue", msg, name)
-        cid = f"cmd-{s.instance}-{len(s.commands) + 1}"
+        reg = s.registry
+        reg.command_seq += 1
+        cid = f"cmd-{reg.command_seq}"
         issued = iso(rt.now())
-        cmd = {"id": cid, "controlstream@id": csId, "issueTime": issued, "parameters": params,
+        cmd = {"id": cid, "controlstream@id": csId, "cs_key": c["key"], "issueTime": issued, "parameters": params,
                "status": [{"statusCode": "PENDING", "reportTime": issued}]}
-        s.commands[cid] = cmd
-        cmd["status"].append({"statusCode": "ACCEPTED", "reportTime": issued})
-        try:
-            run = s.run_analysis(settings, cid)
-            cmd["status"].append({"statusCode": "COMPLETED", "reportTime": iso(rt.now()),
-                                  "message": f"{run['run_id']} over {run['records']} records"})
-        except Exception as e:  # noqa: BLE001 - reported as the command's status
-            cmd["status"].append({"statusCode": "FAILED", "reportTime": iso(rt.now()), "message": str(e)})
+        reg.commands[cid] = cmd
+        owner = reg.systems[c["system"]].get("createdBy")
+        rt.host.notify(owner, {"type": "command", "command": {k: cmd[k] for k in ("id", "issueTime", "parameters")}})
         return JSONResponse(_command_json(request, cmd), status_code=201,
                             headers={"Location": base(request) + f"/commands/{cid}"})
 
     @app.get("/controlstreams/{csId}/commands", summary="Commands sent to a control stream")
     async def commands(request: Request, csId: str = Path(...), limit: int = Query(C.DEFAULT_LIMIT), offset: int = Query(0)):
         only(request, {"limit", "offset", "f"})
-        get_cs(csId)
-        items = [_command_json(request, c) for c in srv().commands.values()]
+        c = get_cs(csId)
+        items = [_command_json(request, x) for x in srv().registry.commands.values() if x["cs_key"] == c["key"]]
         return page(items, request, f"/controlstreams/{csId}/commands", limit, offset)
 
     def get_cmd(cmdId):
-        c = srv().commands.get(cmdId)
+        c = srv().registry.commands.get(cmdId)
         if c is None:
             raise Refusal(404, "NotFound", f"command {cmdId} does not exist", f"command:{cmdId}")
         return c
@@ -593,11 +486,18 @@ def create_app(rt) -> FastAPI:
                 "links": [link(request, f"/commands/{c['id']}/status", "status")]}
 
     # --- everything else is refused by name (FR-27) -------------------------------
-    @app.api_route("/{rest:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"], include_in_schema=False)
+    @app.api_route("/{rest:path}", methods=["GET", "HEAD", "OPTIONS", "POST", "PUT", "PATCH", "DELETE"], include_in_schema=False)
     async def refuse(request: Request, rest: str):
         first = rest.split("/")[0]
         if request.method == "PATCH":
             raise Refusal(405, "OperationNotSupported", "PATCH is not supported (Part 1 and 2 Update classes)", "PATCH")
+        if request.method in ("HEAD", "OPTIONS"):
+            raise Refusal(405, "OperationNotSupported", f"{request.method} is not supported", request.method)
+        if request.method in ("POST", "PUT", "DELETE"):
+            raise Refusal(405, "OperationNotSupported",
+                          f"{request.method} /{rest} is not supported (Create/Replace/Delete classes): models register "
+                          "through the data server's internal interface, and only commands are created over HTTP",
+                          request.method)
         if first in NOT_IMPLEMENTED:
             raise Refusal(404, "OperationNotSupported", f"{first} is not implemented ({NOT_IMPLEMENTED[first]})", first)
         raise Refusal(404, "NotFound", f"no resource at /{rest}", f"path:/{rest}")
@@ -610,6 +510,12 @@ def create_app(rt) -> FastAPI:
 def _base(request: Request) -> str:
     """Absolute base URL of the API, from the request itself (links are absolute, RFC 8288)."""
     return str(request.base_url).rstrip("/")
+
+
+def _offset(offset: int) -> int:
+    if offset < 0:
+        raise Refusal(400, "InvalidParameterValue", "offset must be zero or more", "offset")
+    return offset
 
 
 def _limit(limit: int) -> int:
@@ -654,69 +560,24 @@ def _property(f):
     return p
 
 
-_TYPES = {"Quantity", "Count", "Category", "Boolean", "Text", "Time", "Matrix", "DataArray"}
-
-
-def _check_record(rec):
-    if rec.get("type") != "DataRecord" or not isinstance(rec.get("fields"), list) or not rec["fields"]:
-        raise Refusal(400, "InvalidParameterValue", "recordSchema must be a SWE Common DataRecord with fields", "schema.recordSchema")
-    first = rec["fields"][0]
-    if first.get("type") != "Time" or first.get("name") != "time":
-        raise Refusal(400, "InvalidParameterValue", "the first field must be a Time named time", "schema.recordSchema.fields[0]")
-    for fd in rec["fields"]:
-        if fd.get("type") not in _TYPES:
-            raise Refusal(400, "OptionNotSupported", f"SWE Common type {fd.get('type')} is not supported", f"type:{fd.get('type')}")
-        if not isinstance(fd.get("name"), str):
-            raise Refusal(400, "InvalidParameterValue", "every field needs a name", "name")
-
-
-def _check_value(fd, v):
-    t = fd["type"]
-    if v is None:
-        return
-    ok = {"Quantity": isinstance(v, (int, float)) and not isinstance(v, bool),
-          "Count": isinstance(v, int) and not isinstance(v, bool),
-          "Boolean": isinstance(v, bool), "Text": isinstance(v, str), "Time": isinstance(v, str),
-          "Category": isinstance(v, str), "Matrix": isinstance(v, list), "DataArray": isinstance(v, list)}.get(t, True)
-    if not ok:
-        raise Refusal(400, "InvalidParameterValue", f"field {fd['name']} must be a {t}", f"field:{fd['name']}")
-    if t == "Category":
-        allowed = (fd.get("constraint") or {}).get("values")
-        if allowed and v not in allowed:
-            raise Refusal(400, "InvalidParameterValue", f"{fd['name']}={v} is not one of {allowed}", f"field:{fd['name']}")
-
-
 def _fetch(s, d, t0, t1, lim, offset, latest):
     """Columns for one page and the total available."""
-    kind = d.get("kind")
-    if kind == "sensor":
+    names = [f["name"] for f in d["schema"]["fields"] if f["name"] != "time"]
+    if d["kind"] == "sensor":
         if latest:
             tr = s.adapter.time_range(d["sensor"])
             if not tr:
                 return {"t": np.empty(0)}, 0
             t0 = t1 = tr[1]
-        total = s.sensor_count(d["sensor"], t0, t1)
-        return s.sensor_records(d["sensor"], t0, t1, lim, offset), total
-    if kind == "analysis" and d["output"] == "derived":
-        if latest:
-            tr = s.time_range()
-            t0 = t1 = tr[1] if tr else 0.0
-        total = s.derived_count(t0, t1)
-        return s.derived_records(t0, t1, lim, offset), total
-    if kind == "analysis":
-        cols = s.analysis_records(d["output"], t0, t1)
-    else:
-        obs = [o for o in s.registry.observations.get(d["id"], []) if t0 <= o["t"] <= t1]
-        names = [fd["name"] for fd in d["schema"]["fields"] if fd["name"] != "time"]
-        cols = {"t": np.array([o["t"] for o in obs])}
-        for n in names:
-            col = np.empty(len(obs), dtype=object)
-            col[:] = [o["record"].get(n) for o in obs]
-            cols[n] = col
-    if latest and len(cols["t"]):
-        cols = {k: v[-1:] for k, v in cols.items()}
-    total = len(cols["t"])
-    return {k: v[offset:offset + lim] for k, v in cols.items()}, total
+        total = s.adapter.count(d["sensor"], t0, t1)
+        fields = [n for n in names if not n.endswith("_qc")]
+        return s.sensor_records(d["sensor"], t0, t1, lim, offset, fields=fields), total
+    ser = d["series"]
+    i0, i1 = ser.range(t0, t1)
+    if latest and len(ser):
+        i0, i1 = len(ser) - 1, len(ser)
+    total = max(0, i1 - i0)
+    return ser.slice(i0 + offset, min(i1, i0 + offset + lim), names), total
 
 
 def _column(fd, v):
@@ -730,6 +591,8 @@ def _column(fd, v):
         return [None if x != x else x for x in np.round(v.astype(float), PRECISION).tolist()]
     if fd["type"] == "Count":
         return [None if x != x else int(x) for x in v.astype(float).tolist()]
+    if fd["type"] == "Boolean":
+        return [None if x != x else bool(x) for x in v.astype(float).tolist()]
     if fd["type"] == "Category":
         return v.tolist()
     return v.tolist()
@@ -744,9 +607,11 @@ def _obs_response(request, d, cols, of, lim, offset, total, path):
         if fd["name"] == "time":
             continue
         if fd["name"] in cols:
-            columns.append((fd["name"], _column(fd, cols[fd["name"]])))
-        elif fd["type"] == "Category" and fd["name"].endswith("_qc"):
-            columns.append((fd["name"], [None] * len(t)))
+            if fd["name"].endswith("_qc") and d.get("kind") == "sensor":
+                flags = np.asarray(cols[fd["name"]], dtype=float)
+                columns.append((fd["name"], [None if x != x else str(int(x)) for x in flags.tolist()]))
+            else:
+                columns.append((fd["name"], _column(fd, cols[fd["name"]])))
     if d.get("kind") == "sensor":
         cat = {fd["name"]: fd for fd in fields}
         if "precipitation_type" in cat:

@@ -19,8 +19,8 @@ def server():
     s.bind(("127.0.0.1", 0))
     port = s.getsockname()[1]
     s.close()
-    rt = Runtime(seed=3, pregen_days=1)
-    while not rt.server.ready:
+    rt = Runtime(seed=3, pregen_days=1, local_models=True)
+    while not (rt.server.ready and rt.local.live):
         rt.tick()
     srv = uvicorn.Server(uvicorn.Config(create_app(rt), host="127.0.0.1", port=port, log_level="warning"))
     th = threading.Thread(target=srv.run, daemon=True)

@@ -3,28 +3,98 @@
   "$id": "https://deepbluecltd.github.io/barge-monitor/contracts/profile.schema.json",
   "title": "Declared profile",
   "type": "object",
-  "required": ["id", "title", "essentials"],
+  "required": [
+    "id",
+    "title",
+    "essentials"
+  ],
   "additionalProperties": false,
   "properties": {
-    "id": {"type": "string", "format": "uri"},
-    "title": {"type": "string"},
-    "description": {"type": "string"},
+    "id": {
+      "type": "string",
+      "format": "uri"
+    },
+    "title": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
     "essentials": {
       "type": "array",
       "minItems": 1,
       "items": {
         "type": "object",
-        "required": ["id", "label", "system", "datastream", "field", "type", "uom", "views"],
+        "required": [
+          "id",
+          "label",
+          "system",
+          "datastream",
+          "field",
+          "type",
+          "uom",
+          "resolution",
+          "views"
+        ],
         "additionalProperties": false,
         "properties": {
-          "id": {"type": "string", "pattern": "^[a-z0-9-]+$"},
-          "label": {"type": "string"},
-          "system": {"type": "string", "description": "the system's uniqueId"},
-          "datastream": {"type": "string", "description": "the datastream's outputName under that system"},
-          "field": {"type": "string", "description": "a field of the datastream's record schema"},
-          "type": {"enum": ["Quantity", "Count", "Category", "Boolean", "Text", "Time", "Matrix", "DataArray"]},
-          "uom": {"type": ["string", "null"], "description": "UCUM code, or null for types without a unit"},
-          "views": {"type": "array", "items": {"enum": ["temperature", "wind", "derived", "changes", "correlation", "clusters"]}}
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9-]+$"
+          },
+          "label": {
+            "type": "string"
+          },
+          "system": {
+            "type": "string",
+            "description": "the system's uniqueId"
+          },
+          "datastream": {
+            "type": "string",
+            "description": "the datastream's outputName under that system"
+          },
+          "field": {
+            "type": "string",
+            "description": "a field of the datastream's record schema"
+          },
+          "type": {
+            "enum": [
+              "Quantity",
+              "Count",
+              "Category",
+              "Boolean",
+              "Text",
+              "Time",
+              "Matrix",
+              "DataArray"
+            ]
+          },
+          "uom": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "UCUM code, or null for types without a unit"
+          },
+          "views": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "graphs",
+                "changes",
+                "clusters"
+              ]
+            }
+          },
+          "resolution": {
+            "enum": [
+              "raw",
+              "PT1M",
+              "PT1H",
+              "run"
+            ],
+            "description": "raw records, 1-minute or hourly summaries, or the latest model run"
+          }
         }
       }
     }

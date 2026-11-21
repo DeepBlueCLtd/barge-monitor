@@ -14,11 +14,11 @@ ROOT = Path(__file__).resolve().parent.parent
 out = Path(sys.argv[1])
 out.parent.mkdir(parents=True, exist_ok=True)
 with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
-    for pkg in ("barge", "contract_suite"):
+    for pkg in ("barge", "contract_suite", "models"):
         for f in sorted((ROOT / "backend" / pkg).glob("*.py")):
             z.write(f, f"{pkg}/{f.name}")
     for f in sorted((ROOT / "contracts").rglob("*.json")):
         z.write(f, f"contracts/{f.relative_to(ROOT / 'contracts')}")
-    for f in sorted((ROOT / "web" / "workspace-py").glob("*.py")):
-        z.write(f, f"workspace/{f.name}")
+# The empty-slot editor starts from this example (FR-36).
+(out.parent / "example_model_c.py").write_text((ROOT / "backend" / "models" / "example_model_c.py").read_text())
 print(f"wrote {out}")

@@ -1,232 +1,175 @@
-// The display client (B-C14): handshake, profile check, self-configuration,
-// panels. It knows the server only by its base URL and the declared
-// profile. Restart client remounts this component: all of its state goes.
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { simClock } from '../shell/clock';
-import { clientStatus } from '../shell/status';
+// The display client's screen (§8): status strip, field chips, period presets
+// and clustering, three graph components, the cluster view (mockup 1). It is
+// the delivered system, drawn in a plain sans-serif (VS-03). Everything it
+// knows about the server it learned at the handshake (C2).
+import { runtime } from '../shell/runtime';
 import { useStore } from '../shell/store';
-import { WorkspacePanel } from '../workspace/WorkspacePanel';
-import { LiveData, Row } from './data';
-import { Configuration, Field, handshake } from './handshake';
-import { ClientHttp, InstanceChanged, NetworkFailure } from './http';
-import { CorrelationTable, GenericView, Reading, ReadoutTable } from './views/views';
+import { essentialLabel } from './handshake';
+import { PERIODS, Property } from './plan';
+import { ClientSession, clientSession } from './session';
+import { ClusterBand, Empty, ErrorBars, HeatMap, LinePlot, ViewFrame } from './views/views';
 
-type Phase = { kind: 'handshake'; note: string } | { kind: 'unreachable' } | { kind: 'rejected'; reason: string } | { kind: 'running' };
+const PERIOD_SUB: Record<string, string> = { PT1M: 'last minute', PT1H: 'last hour', PT6H: 'last 6 hours', P1D: 'last day', P7D: 'last week', P28D: 'last 4 weeks' };
 
-export function DisplayClient({ onRestart }: { onRestart: () => void }) {
-  const http = useMemo(() => new ClientHttp(), []);
-  const [phase, setPhase] = useState<Phase>({ kind: 'handshake', note: 'starting' });
-  const [config, setConfig] = useState<Configuration | null>(null);
-  const [live, setLive] = useState<LiveData | null>(null);
-  const [popup, setPopup] = useState(false);
+export function DisplayClient() {
+  const session = useStore(clientSession);
+  return <Screen key={session.http.prefix} session={session} />;
+}
 
-  useEffect(() => {
-    let alive = true;
-    let data: LiveData | null = null;
-    http.onInstanceChange = () => onRestart(); // FR-46: a new instance means start afresh
-    const attempt = async () => {
-      try {
-        setPhase({ kind: 'handshake', note: 'discovering what the server offers' });
-        const cfg = await handshake(http, (s) => alive && setPhase({ kind: 'handshake', note: `server in waiting mode: retrying after ${s} s` }));
-        if (!alive) return;
-        setConfig(cfg);
-        if (cfg.rejected) {
-          setPhase({ kind: 'rejected', reason: cfg.rejected });
-          return;
-        }
-        data = new LiveData(http, cfg);
-        await data.start();
-        if (!alive) return data.stop();
-        setLive(data);
-        setPhase({ kind: 'running' });
-        if (cfg.problems.length) setPopup(true);
-      } catch (e) {
-        if (!alive || e instanceof InstanceChanged) return;
-        if (e instanceof NetworkFailure) {
-          setPhase({ kind: 'unreachable' });
-          // Retry on the simulation clock (FR-46a).
-          const from = simClock.now();
-          const h = setInterval(() => {
-            if (simClock.now() - from >= 1) {
-              clearInterval(h);
-              if (alive) void attempt();
-            }
-          }, 100);
-        } else setPhase({ kind: 'rejected', reason: String(e) });
-      }
-    };
-    void attempt();
-    return () => {
-      alive = false;
-      http.closed = true;
-      data?.stop();
-    };
-  }, [http, onRestart]);
+function Screen({ session }: { session: ClientSession }) {
+  const phase = useStore(session.phase);
+  const config = useStore(session.config);
+  const props = useStore(session.props);
+  const sel = useStore(session.selection);
+  const banner = useStore(session.banner);
+  const stale = useStore(session.stale);
+  useStore(session.version);
+  useStore(session.run);
+  const commandNote = useStore(session.commandNote);
 
-  const version = useStore(live?.version ?? NULL_STORE);
-  const stale = useStore(live?.stale ?? NULL_BOOL);
-  void version;
-
-  // Report this client's state to the shell's status summary (VS-28).
-  useEffect(() => {
-    const missing = config ? new Set(config.problems.map((p) => p.essential.id)).size : 0;
-    clientStatus.set({
-      phase: phase.kind === 'running' ? (stale ? 'unreachable' : missing ? 'degraded' : 'running') : phase.kind,
-      essentialsMissing: missing, optional: config?.generic.length ?? 0, instance: config?.instance ?? null,
-    });
-  }, [phase, config, stale]);
-
-  if (phase.kind !== 'running' || !config || !live) {
-    return (
-      <>
-        <section className="panel charts-panel" aria-label="Latest readings">
-          <ClientStatus phase={phase} />
-        </section>
-        <section className="panel analysis-panel" aria-label="Analysis views" />
-        <section className="panel workspace-panel" aria-label="Python workspace"><WorkspacePanel /></section>
-      </>
-    );
-  }
-
-  const unavailable = new Map<string, string[]>();
-  for (const p of config.problems) for (const v of p.essential.views) unavailable.set(v, [...(unavailable.get(v) ?? []), `${p.essential.label}: ${p.reason}`]);
-  const b = (id: string) => config.bindings[id];
-  const rows = (id?: string) => (id ? live.get(id) : []);
-  const runsDs = config.datastreams.find((d) => d.systemUid === 'urn:x-barge:process:analysis' && d.outputName === 'runs');
-  const run: Row | undefined = runsDs ? rows(runsDs.id)[0] : undefined;
-  const score = (k: string) => (run && typeof run[k] === 'number' ? run[k].toFixed(2) : '—');
-  // A view whose essential source is missing says why instead (FR-41).
-  const view = (id: string, label: string, body: () => JSX.Element | null) =>
-    unavailable.has(id)
-      ? <tr key={id} data-testid={`unavailable-${id}`}><th>{label}</th><td colSpan={3} className="unavailable-cell">unavailable: {unavailable.get(id)!.join('; ')}</td></tr>
-      : body();
-  const reading = (id: string, label: string, field: string, unit: string, testid: string, digits = 1) => {
-    const ds = b(id)?.ds.id;
-    return <Reading key={id} label={label} rows={rows(ds)} field={field} unit={unit} digits={digits} testid={testid} />;
-  };
-
-  const changesB = b('change-detector');
-  const lastChange = changesB ? rows(changesB.ds.id).slice(-1)[0] : undefined;
-  const corrB = b('correlation-matrix');
-  const corrRow = corrB ? rows(corrB.ds.id)[0] : undefined;
-  const clusterB = b('clustering');
-  const groups = new Map<string, { title: string; items: { field: Field; dsId: string }[] }>();
-  for (const g of config.generic) {
-    const key = g.ds.id;
-    if (!groups.has(key)) groups.set(key, { title: `${g.ds.systemLabel} · ${g.ds.name}`, items: [] });
-    groups.get(key)!.items.push({ field: g.field, dsId: g.ds.id });
-  }
+  const missing = config?.problems ?? [];
+  const status = phase === 'unreachable' ? 'server unreachable · data stale'
+    : phase === 'waiting' ? 'server starting (503) · waiting'
+      : phase === 'rejected' ? 'server rejected'
+        : !config ? (phase === 'handshake' ? 'handshake…' : 'not started')
+          : missing.length ? `degraded · ${missing.length} essential source${missing.length > 1 ? 's' : ''} unavailable`
+            : config.claimed ? 'all essential sources present' : 'the server does not claim the declared profile';
 
   return (
-    <>
-      {popup && (
-        <div className="modal" role="alertdialog" aria-label="Unavailable essential sources">
-          <div className="modal-body">
-            <h2>Running in degraded mode</h2>
-            <p>The server does not offer every essential source in the declared profile. These views are unavailable:</p>
-            <ul data-testid="degraded-list">{config.problems.map((p) => <li key={p.essential.id}><b>{p.essential.label}</b>: {p.reason} ({p.detail})</li>)}</ul>
-            <button onClick={() => setPopup(false)}>Continue</button>
-          </div>
-        </div>
+    <div className={`dc${stale ? ' is-stale' : ''}`} data-testid="display-client">
+      <div className="dc-status">
+        <b>Barge weather · live</b>
+        <span data-testid="dc-status">{status}</span>
+      </div>
+      {banner && <div className={`dc-banner${phase === 'unreachable' ? ' bad' : ''}`} role="alert" data-testid="dc-banner">{banner}</div>}
+      {!config ? <NotConfigured phase={phase} /> : config.rejected ? (
+        // FR-41, AT-08: a contradicted profile claim is an error; the server is not used.
+        <div className="dc-rejected" role="alert" data-testid="dc-rejected"><b>This server cannot be used.</b> {config.rejected}</div>
+      ) : (
+        <>
+          {missing.length > 0 && (
+            // FR-45: one warning after the handshake listing every unavailable essential source and why.
+            <div className="dc-warning" role="alert" data-testid="dc-degraded">
+              <b>Degraded mode.</b> Unavailable essential sources: {missing.map((p) => `${essentialLabel(p.essential)} (${p.reason}: ${p.detail})`).join('; ')}.
+            </div>
+          )}
+          <Controls session={session} props={props} />
+          {commandNote && <div className="dc-banner bad">{commandNote}</div>}
+          <Views session={session} props={props} sel={sel.props} />
+        </>
       )}
-      <section className="panel charts-panel" aria-label="Latest readings">
-        <header className="panel-head">
-          <h2>Latest readings <small data-testid="client-instance" title="The server instance this client handshook with">instance {config.instance}</small></h2>
-        </header>
-        {stale && <div className="banner" role="status" data-testid="unreachable">Server unreachable: showing the last data received (stale). Retrying every simulated second.</div>}
-        <div className={stale ? 'stale' : ''} data-testid="readings">
-          <ReadoutTable>
-            {view('temperature', 'Air temperature', () => <>{reading('bow-air-temperature', 'Air temperature, bow', 'air_temperature', '°C', 'reading-temperature')}{reading('stern-air-temperature', 'Air temperature, stern', 'air_temperature', '°C', 'reading-temperature-stern')}</>)}
-            {view('wind', 'Apparent wind speed', () => <>{reading('bow-wind-speed', 'Apparent wind, bow', 'apparent_wind_speed', 'm/s', 'reading-wind')}{reading('stern-wind-speed', 'Apparent wind, stern', 'apparent_wind_speed', 'm/s', 'reading-wind-stern')}</>)}
-            {view('derived', 'Derived values', () => reading('derived-values', 'Dew point (bow, derived)', 'dew_point', '°C', 'reading-derived'))}
-            {view('clusters', 'Clustering', () => <Reading key="clusters" label="Regime (cluster)" rows={rows(clusterB?.ds.id)} field="regime" testid="reading-clusters" />)}
-          </ReadoutTable>
-          {view('changes', 'Change detector', () => (
-            <p className="score" data-testid="changes-score">Change detector: {changesB ? rows(changesB.ds.id).length : 0} changes in the run window{lastChange ? `, latest at ${String(lastChange.time).replace('T', ' ').replace('Z', '')} (${lastChange.scale}, strength ${Number(lastChange.strength).toFixed(2)})` : ''}. Score against the manifest: reach boundaries found {score('score_boundary_recall')}, precision {score('score_boundary_precision')}, fronts found {score('score_front_recall')}.</p>
-          ))}
-          {!unavailable.has('clusters') && <p className="score">Clustering score against air masses {score('score_ari_air_mass')} ARI, reach kinds {score('score_ari_reach_kind')}.</p>}
-          <h3 className="other-head">Other sources <small>shown by schema type alone</small></h3>
-          <div className="generic" data-testid="generic-views">
-            <ReadoutTable>
-              {[...groups.entries()].flatMap(([key, g]) => [
-                <tr key={key} className="group" data-testid={`generic-${key}`}><th colSpan={4}>{g.title}</th></tr>,
-                ...g.items.map(({ field, dsId }) => <GenericView key={`${key}:${field.name}`} field={field} rows={rows(dsId)} />),
-              ])}
-            </ReadoutTable>
-          </div>
+    </div>
+  );
+}
+
+function NotConfigured({ phase }: { phase: string }) {
+  return (
+    <div className="dc-waiting" data-testid="dc-waiting">
+      <div className="dc-waiting-text">{phase === 'waiting-models' ? <ModelsCatchingUp />
+        : phase === 'waiting-play' ? <>Waiting for the simulation clock. Press <b>▶ Play</b>: the display client starts with the rest of the system and makes its handshake.</>
+        : phase === 'unreachable' ? <>The server does not answer. Retrying on the simulation clock.</>
+          : <>Handshake: discovering what the server offers (landing page, conformance, profile, systems, datastreams, schemas)…</>}</div>
+    </div>
+  );
+}
+
+/** The models catch up on history before they publish; their progress, shown honestly. */
+function ModelsCatchingUp() {
+  const control = useStore(runtime.control);
+  const workers = useStore(runtime.modelWorkers);
+  const models = control?.models ?? [];
+  return (
+    <div>
+      <p>Waiting for the core models to register their datastreams with the data server before the handshake.</p>
+      <ul className="dc-models">
+        {models.map((m) => <li key={m.id}><b>{m.label}</b>: {m.phase}{m.detail ? ` · ${m.detail}` : ''}</li>)}
+        {!models.length && Object.entries(workers).map(([id, w]) => <li key={id}><b>{id}</b>: {w.phase}{w.detail ? ` · ${w.detail}` : ''}</li>)}
+      </ul>
+    </div>
+  );
+}
+
+function Controls({ session, props }: { session: ClientSession; props: Property[] }) {
+  const sel = useStore(session.selection);
+  const config = session.config.value;
+  const algos = algorithms(config?.clustering?.fields);
+  const clustersOff = session.unavailableViews().get('clusters');
+  return (
+    <>
+      <div className="dc-row">
+        <span className="dc-label">Fields</span>
+        <div className="chips" role="group" aria-label="Fields">
+          {props.map((p) => {
+            const on = sel.props.includes(p.key);
+            return (
+              <button key={p.key} className={`chip${on ? ' on' : ''}${p.essential ? '' : ' optional'}`} aria-pressed={on} data-testid="chip"
+                disabled={!!p.unavailable} title={p.unavailable ? `Unavailable: ${p.unavailable}` : `${p.label}${p.uom ? ` (${p.uom})` : ''} · ${p.type}`}
+                onClick={() => session.toggleProp(p.key)}>
+                {p.label}{p.essential ? '' : ' · optional'}
+              </button>
+            );
+          })}
         </div>
-      </section>
-      <section className="panel analysis-panel" aria-label="Analysis">
-        <header className="panel-head"><h2>Analysis</h2></header>
-        {unavailable.has('correlation')
-          ? <div className="unavailable" data-testid="unavailable-correlation">Correlation matrix is unavailable: {unavailable.get('correlation')!.join('; ')}</div>
-          : corrRow ? <CorrelationTable names={String(corrRow.parameters).split(',')} matrix={corrRow.matrix}
-            subtitle={`Correlation · window ${run ? `${run.window_start} to ${run.window_end}` : ''} · ${run?.records ?? '?'} records`} testid="correlation" />
-            : <p>No correlation yet.</p>}
-        {config.control && <Commands http={http} control={config.control} onDone={() => live.poll()} />}
-      </section>
-      <section className="panel workspace-panel" aria-label="Python workspace"><WorkspacePanel /></section>
+      </div>
+      <div className="dc-row">
+        <span className="dc-label">Period</span>
+        <div className="presets" role="group" aria-label="Period">
+          {PERIODS.map((p) => (
+            <button key={p.id} className={`preset${sel.period === p.id ? ' on' : ''}`} aria-pressed={sel.period === p.id} onClick={() => session.select({ period: p.id })}>{p.label}</button>
+          ))}
+        </div>
+        <span className="spacer" />
+        <label className="dc-label" htmlFor="dc-algo">Clustering</label>
+        <select id="dc-algo" value={sel.algorithm} disabled={!!clustersOff} title={clustersOff ? `Unavailable: ${clustersOff.join(', ')}` : undefined}
+          onChange={(e) => session.select({ algorithm: e.target.value })} data-testid="algorithm">
+          {algos.map((a) => <option key={a} value={a}>Algorithm {a}</option>)}
+        </select>
+      </div>
     </>
   );
 }
 
-function ClientStatus({ phase }: { phase: Phase }) {
-  if (phase.kind === 'rejected') return <div className="rejected" role="alert" data-testid="rejected"><h2>Server rejected</h2><p>{phase.reason}</p></div>;
-  if (phase.kind === 'unreachable') return <div className="banner" role="status" data-testid="unreachable">Server unreachable. Retrying every simulated second.</div>;
-  if (phase.kind === 'handshake') return <p className="handshake" data-testid="handshake">Handshake: {phase.note}…</p>;
-  return null;
+/** The algorithms offered, from the control stream's schema (its allowed values), else A, B, C. */
+function algorithms(fields: { name: string; constraint?: unknown }[] | undefined): string[] {
+  const f = fields?.find((x) => x.name === 'algorithm');
+  const c = f?.constraint as { values?: string[]; tokens?: string[] } | undefined;
+  return c?.values ?? c?.tokens ?? ['A', 'B', 'C'];
 }
 
-/** Analysis settings as commands (FR-60). The controls come from the control stream's schema alone. */
-function Commands({ http, control, onDone }: { http: ClientHttp; control: NonNullable<Configuration['control']>; onDone: () => void }) {
-  const fields = control.schema.fields;
-  const [vals, setVals] = useState<Record<string, any>>({});
-  const [status, setStatus] = useState<string>('');
-  const busy = useRef(false);
-  async function send() {
-    if (busy.current) return;
-    busy.current = true;
-    setStatus('sending…');
-    const params: Record<string, any> = {};
-    for (const f of fields) {
-      if (vals[f.name] === undefined || vals[f.name] === '') continue;
-      params[f.name] = f.type === 'Boolean' ? !!vals[f.name] : Number(vals[f.name]);
-    }
-    try {
-      const r = await http.request('POST', `controlstreams/${control.id}/commands`, undefined, { parameters: params });
-      setStatus(r.status === 201 ? `Command ${r.body.id}: ${r.body.currentStatus}` : `Refused by the server (${r.status}): ${r.body.description}`);
-      onDone();
-    } catch (e) {
-      setStatus(String(e));
-    } finally {
-      busy.current = false;
-    }
-  }
+function Views({ session, props, sel }: { session: ClientSession; props: Property[]; sel: string[] }) {
+  const chosen = sel.map((k) => props.find((p) => p.key === k)).filter((p): p is Property => !!p && !p.unavailable);
+  const off = session.unavailableViews();
+  const graphsOff = off.get('graphs');
+  const changesOff = off.get('changes');
+  const clustersOff = off.get('clusters');
+  const period = PERIOD_SUB[session.selection.value.period];
+  const first = chosen.find((p) => p.kind !== 'band');
+  const noField = <Empty>No field selected. Choose one or more fields above to plot them.</Empty>;
+  const unavailable = (why: string[]) => <Empty>Unavailable: this view depends on {why.join(', ')}.</Empty>;
+  const loading = chosen.length > 0 && !session.plan.length;
+  const labelOf = (name: string) => props.find((p) => p.name === name)?.label ?? name;
   return (
-    <form className="commands" onSubmit={(e) => { e.preventDefault(); void send(); }}>
-      <h3>Analysis settings <small>sent as commands; bounds from the control stream's schema</small></h3>
-      <div className="fields">
-        {fields.map((f) => {
-          const iv = f.constraint?.intervals?.[0];
-          return (
-            <label key={f.name} className={f.type === 'Boolean' ? 'check' : ''}>
-              {f.type === 'Boolean' ? (
-                <input type="checkbox" checked={!!vals[f.name]} onChange={(e) => setVals({ ...vals, [f.name]: e.target.checked })} />
-              ) : null}
-              <span>{f.label ?? f.name}{f.uom?.code && f.uom.code !== '1' ? ` (${f.uom.code})` : ''}</span>
-              {f.type !== 'Boolean' && (
-                <input type="number" step={f.type === 'Count' ? 1 : 'any'} placeholder={iv ? `${iv[0]}–${iv[1]}` : ''} value={vals[f.name] ?? ''}
-                  onChange={(e) => setVals({ ...vals, [f.name]: e.target.value })} aria-label={f.name} />
-              )}
-            </label>
-          );
-        })}
+    <>
+      <div className="dc-graphs">
+        <ViewFrame title="Line plot" sub={`normalised · ${period}`} testid="view-line">
+          {graphsOff ? unavailable(graphsOff) : !chosen.length ? noField : loading ? <Empty>Reading…</Empty> : (
+            <>
+              <LinePlot session={session} props={chosen} changesNote={changesOff ? changesOff.join(', ') : null} />
+              {changesOff && <p className="dc-note">Change marks unavailable: {changesOff.join(', ')}.</p>}
+            </>
+          )}
+        </ViewFrame>
+        <ViewFrame title="Line plot with error bars" sub={first ? `${first.label.toLowerCase()} · mean ± 1σ` : 'mean ± 1σ'} testid="view-errorbars">
+          {graphsOff ? unavailable(graphsOff) : !chosen.length ? noField : !first ? <Empty>Error bars need a numeric field; the selected fields are categories.</Empty>
+            : loading ? <Empty>Reading…</Empty> : <ErrorBars session={session} p={first} />}
+        </ViewFrame>
+        <ViewFrame title="Heat map" sub={`fields × time · ${session.plan.some((r) => r.raw) ? 'raw records' : 'summaries'}`} testid="view-heatmap">
+          {graphsOff ? unavailable(graphsOff) : !chosen.length ? noField : loading ? <Empty>Reading…</Empty> : <HeatMap session={session} props={chosen} />}
+        </ViewFrame>
       </div>
-      <button type="submit">Send command</button> <span data-testid="command-status" className="cmd-status">{status}</span>
-    </form>
+      <ViewFrame title="Clusters" sub="cluster assignments along time" testid="view-clusters" className="dc-clusters">
+        {clustersOff ? unavailable(clustersOff) : !chosen.length ? noField : <ClusterBand session={session} labelOf={labelOf} />}
+      </ViewFrame>
+    </>
   );
 }
-
-import { Store } from '../shell/store';
-const NULL_STORE = new Store(0);
-const NULL_BOOL = new Store(false);

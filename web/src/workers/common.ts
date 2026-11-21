@@ -1,4 +1,4 @@
-// Shared by both Pyodide workers: load the runtime from the site itself (NFR-08).
+// Shared by the Pyodide workers (back end and models): load the runtime from the site itself (NFR-07).
 export type PyodideAPI = any;
 
 export interface Progress {
@@ -16,6 +16,6 @@ export async function loadRuntime(pyodideUrl: string, pyZipUrl: string, packages
   const r = await fetch(pyZipUrl);
   if (!r.ok) throw new Error(`could not fetch ${pyZipUrl}: ${r.status}`);
   py.unpackArchive(await r.arrayBuffer(), 'zip', { extractDir: '/home/pyodide' });
-  py.runPython(`import sys\nfor p in ('/home/pyodide', '/home/pyodide/workspace'):\n    p in sys.path or sys.path.insert(0, p)`);
+  py.runPython(`import sys\nfor p in ('/home/pyodide', '/home/pyodide/models'):\n    p in sys.path or sys.path.insert(0, p)`);
   return py;
 }

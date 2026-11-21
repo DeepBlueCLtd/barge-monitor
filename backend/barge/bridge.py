@@ -1,10 +1,14 @@
-"""The seam's last step inside the backend worker: call the ASGI app.
+"""The back-end worker's entry points: the seam's last step, and the models' port.
 
 The relay hands each request to the backend worker over a MessagePort; the
 worker calls ``handle`` here, which builds an ordinary ASGI scope and awaits
 the FastAPI application exactly as uvicorn would. While the server is down
 the bridge answers nothing, so the relay can report a network failure
-(FR-46a). No routing or application logic lives here.
+(FR-49). No routing or application logic lives here.
+
+Each model worker's calls arrive at ``model_call`` and go to the data
+server's internal interface (modelhost.py); the server reaches a model
+through ``notify``, which the worker forwards over the model's port.
 """
 from __future__ import annotations
 
@@ -19,6 +23,20 @@ class Bridge:
         kw = {} if pregen_days is None else {"pregen_days": pregen_days}
         self.rt = Runtime(seed=seed, progress=progress, history=history, **kw)
         self.app = create_app(self.rt)
+
+    def model_call(self, model: str, op: str, args, quiet: bool = False):
+        """A call from a model worker. Columns arrive and leave packed (models/csmodel.py)."""
+        from .local_models import csmodel
+
+        pack, unpack = csmodel.pack, csmodel.unpack
+
+        return pack(self.rt.host.call(model, op, unpack(args), quiet=bool(quiet)))
+
+    def set_listener(self, model: str, fn) -> None:
+        self.rt.host.listeners[model] = lambda message: fn(json.dumps(message, default=str))
+
+    def set_model_phase(self, model: str, phase: str, detail: str, label: str) -> None:
+        self.rt.host.set_phase(model, phase, detail, label)
 
     def tick(self) -> str:
         """Advance the system; return captured messages and state as JSON for the page."""

@@ -1,7 +1,7 @@
-"""Sensors (B-C04): bow and stern, sampling the world at 1 Hz.
+"""Sensors, part of the collection platform (C-01): bow and stern, sampling the world at 1 Hz.
 
 Each sensor adds declared noise and occasional spikes from its own named
-stream (FR-12, FR-15) and writes fixed-width records to the logger store, the
+stream (FR-11, FR-14) and writes fixed-width records to the logger store, the
 only thing it knows about storage. Position is used to *generate* conditions
 and is never recorded (FR-10).
 """
@@ -41,9 +41,6 @@ class Sensors:
             day_end = (self.next_t // 86400 + 1) * 86400
             stop = min(t_end, self.next_t + CHUNK_S, day_end)
             t = np.arange(self.next_t, stop, dtype=float)
-            if self.tap.recording and self.tap.enabled:
-                for tt in t:
-                    self._announce(tt)
             for s in SENSORS:
                 self._write(s, t)
             n_total += len(t)
@@ -76,14 +73,6 @@ class Sensors:
                 out[p][sel] = cached[1][p][idx]
         return out
 
-    def _announce(self, t: float) -> None:
-        b = self.w.boat(np.array([t]))
-        self.tap.emit("clock", "barge", "I", f"tick {int(t)}", {"t": t})
-        self.tap.emit("barge", "sensors", "I", "barge state for sampling",
-                      {"t": t, "chainage_m": round(float(b["chainage"][0]), 1),
-                       "speed_ms": round(float(b["speed"][0]), 2), "note": "simulated only; never recorded"})
-        self.tap.emit("world", "sensors", "I", "conditions at bow and stern", {"t": t})
-
     def _write(self, sensor: str, t: np.ndarray) -> None:
         tr = self.w.sensor_truth(t, sensor)
         n = len(t)
@@ -104,6 +93,6 @@ class Sensors:
         if self.tap.recording and self.tap.enabled:
             for i in range(n):
                 rec = data[i * L.REC_LEN:(i + 1) * L.REC_LEN].decode("ascii")
-                self.tap.emit("sensors", "logger", "L", f"{sensor} record to {name}", rec)
+                self.tap.emit("platform", "store", "L", f"{sensor} record to {name}", rec)
         else:
-            self.tap.count("sensors", "logger", "L", n)
+            self.tap.count("platform", "store", "L", n)

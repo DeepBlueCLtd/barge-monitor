@@ -1,18 +1,25 @@
-"""The running backend: the simulated world and store, and the server's lifecycle.
+"""The running back end: the world and store, the data server's lifecycle, the models' host.
 
 The world, the clock, the sensors and the logger store run continuously; the
-Connected Systems server is started, restarted, taken down and brought up
-around them (FR-20, FR-43, FR-46a). The control panel's field toggles are kept
-here as *pending* until the next server start (FR-46d).
+data server is started, restarted, taken down and brought up around them
+(FR-18, FR-47, FR-49). The control panel's field toggles are kept here as
+*pending* until the next server start (FR-51).
+
+Models run elsewhere: each in its own worker in the browser (FR-33), calling
+the data server through ``self.host``. In CPython (tests, an ordinary ASGI
+server) ``local_models=True`` runs the core models in-process instead, through
+the same interface.
 """
 from __future__ import annotations
 
 from . import config as C
 from .clock import SimClock
 from .fields import CATALOGUE, Offering
+from .modelhost import ModelHost
+from .registry import Registry
 from .logger import Logger
 from .sensors import Sensors
-from .server import Registry, Server
+from .server import Server
 from .tap import Tap
 from .truth import World
 from .world import generate
@@ -20,7 +27,7 @@ from .world import generate
 
 class Runtime:
     def __init__(self, seed: int = 1, clock=None, pregen_days: float = C.PREGEN_DAYS, capture: bool = True,
-                 progress=None, history: dict | None = None):
+                 progress=None, history: dict | None = None, local_models: bool = False):
         self.seed = seed
         self.manifest = generate(seed)
         self.world = World(self.manifest)
@@ -30,6 +37,8 @@ class Runtime:
         self.logger = Logger()
         self.sensors = Sensors(self.world, self.logger, self.tap)
         self.registry = Registry()
+        self.host = ModelHost(self)
+        self.local = None
         self.offering = Offering()  # what the next server start will publish
         self.lie_about_profile = False  # a misconfigured server, for AT-07
         self.server: Server | None = None
@@ -41,6 +50,10 @@ class Runtime:
         else:
             self.pregenerate(pregen_days, progress)
         self.start_server()
+        if local_models:
+            from .local_models import LocalModels
+
+            self.local = LocalModels(self)
 
     def now(self) -> float:
         return self.clock.now()
@@ -76,23 +89,25 @@ class Runtime:
 
     # --- the running system ---------------------------------------------------------
     def tick(self) -> None:
-        """Bring the store up to the clock; let a starting server rebuild its index."""
+        """Bring the store up to the clock; let a starting server rebuild its index; step local models."""
         if self.clock.playing:
             self.sensors.sample_until(self.clock.now() + 1)
-        if self.server and not self.down and not self.server.ready:
-            self.server.index_step()
+        if self.server and not self.down:
+            if not self.server.ready:
+                self.server.index_step()
+            else:
+                self.server.adapter.index_step()  # the adapter's index follows the growing store (FR-21)
+        if self.local:
+            self.local.tick()
 
     def play(self):
-        self.tap.emit("shell", "clock", "I", "play", {"rate": self.clock.rate})
         self.clock.play()
 
     def pause(self):
-        self.tap.emit("shell", "clock", "I", "pause", {})
         self.clock.pause()
 
     def set_rate(self, rate):
         self.clock.set_rate(rate)
-        self.tap.emit("shell", "clock", "I", f"rate {rate}×", {"rate": rate})
 
     # --- server lifecycle (FR-43..FR-46e) ----------------------------------------
     def start_server(self) -> None:
@@ -101,29 +116,25 @@ class Runtime:
         self.server = Server(self, self.server_starts, self.offering, self.tap)
 
     def restart_server(self) -> None:
-        self.tap.emit("shell", "server", "I", "restart server", {"instance": self.server.instance if self.server else None})
         self.start_server()
 
     def take_down(self) -> None:
-        self.tap.emit("shell", "server", "I", "take server down", {})
         self.down = True
         self.server = None
 
     def bring_up(self) -> None:
-        self.tap.emit("shell", "server", "I", "bring server up", {})
         self.start_server()
 
     def set_field(self, name: str, on: bool) -> None:
         if name not in CATALOGUE:
             raise KeyError(name)
         self.offering.on[name] = bool(on)
-        self.tap.emit("shell", "server", "I", f"field {name} {'on' if on else 'off'} (pending)", {"field": name, "on": on})
 
     def set_profile_lie(self, on: bool) -> None:
         self.lie_about_profile = bool(on)
 
     def control_state(self) -> dict:
-        """What the control panel shows (FR-46e)."""
+        """What the control panel and status show (FR-49..FR-52)."""
         live = self.server.offering if self.server else None
         rows = []
         for name, f in CATALOGUE.items():
@@ -136,6 +147,9 @@ class Runtime:
             })
         pending = any(r["published_now"] != r["published_next_start"] for r in rows) or (
             self.server is not None and self.server.lie_about_profile != self.lie_about_profile)
+        models = [{"id": sid, "label": sysm["label"], **self.host.phase.get(sysm.get("createdBy"), {}),
+                   "datastreams": [d["outputName"] for d in self.registry.datastreams.values() if d["system"] == sid]}
+                  for sid, sysm in self.registry.systems.items()]
         return {
             "server": "down" if self.down else ("waiting" if not self.server.ready else "running"),
             "instance": self.server.instance if self.server else None,
@@ -145,4 +159,6 @@ class Runtime:
             "store": {"bytes": self.logger.total_bytes(), "files": len(self.logger.list_files()),
                       "records": self.sensors.next_t * 2},
             "capture_counts": self.tap.counts,
+            "models": models,
+            "backend": "python",
         }

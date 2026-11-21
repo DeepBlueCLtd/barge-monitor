@@ -1,0 +1,28 @@
+// What the viewer has picked: one component (FR-69), one message (FR-68), and
+// which value-add components have been revealed (FR-74, FR-75).
+import type { ComponentId } from './components';
+import type { Message } from './messages';
+import type { Pt } from './geometry';
+import { Store } from './store';
+
+export const selectedComponent = new Store<ComponentId | null>(null);
+/** A clicked message, and where its icon was when clicked: it stays there, haloed (VS-14). */
+export const selectedMessage = new Store<{ m: Message; at: Pt } | null>(null);
+/** Value-add components revealed so far. Only the display client and Models can be (AT-20). */
+export const revealed = new Store<ReadonlySet<ComponentId>>(new Set());
+/** The empty slot whose editor is open in the Models panel. */
+export const openSlot = new Store<string | null>(null);
+
+const REVEALABLE: ReadonlySet<ComponentId> = new Set(['client', 'models']);
+
+export function selectComponent(id: ComponentId | null) {
+  selectedComponent.set(id);
+  selectedMessage.set(null);
+  // FR-75: the first click on the display client or Models reveals it; nothing else can be revealed.
+  if (id && REVEALABLE.has(id) && !revealed.value.has(id)) revealed.set(new Set([...revealed.value, id]));
+}
+
+/** Restart client un-reveals (FR-75: revealed "until the page is reloaded or the client restarts"). */
+export function unrevealAll() {
+  revealed.set(new Set());
+}

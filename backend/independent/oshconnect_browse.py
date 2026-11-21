@@ -31,8 +31,8 @@ def serve() -> int:
     s.bind(("127.0.0.1", 0))
     port = s.getsockname()[1]
     s.close()
-    rt = Runtime(seed=3, pregen_days=0.2)
-    while not rt.server.ready:
+    rt = Runtime(seed=3, pregen_days=0.2, local_models=True)
+    while not (rt.server.ready and rt.local.live):
         rt.tick()
     app = Starlette(routes=[Mount("/sensorhub/api", app=create_app(rt))])
     srv = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning"))

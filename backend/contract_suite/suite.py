@@ -1,8 +1,8 @@
-"""The contract suite for the HTTP seam (AT-02, AT-12).
+"""The contract suite for the HTTP seam (AT-02, AT-06, AT-24).
 
-Written against a minimal async client, so the *same* tests run in CPython
-against the application under uvicorn, and in the browser from the
-workspace worker through the relay to the application in Pyodide.
+Written against a minimal async client, so the *same* tests run against the
+application under uvicorn in CPython, in Pyodide behind the relay, and
+against the JavaScript stand-in (PR-04).
 
 A client provides ``async request(method, path, params=None, body=None,
 headers=None)`` returning ``(status, headers, body)``, where body is parsed
@@ -94,9 +94,9 @@ async def conformance_declares_the_subset(ctx):
     assert st == 200
     ctx.validate(body, "conformance")
     c = set(body["conformsTo"])
-    for need in ("system", "subsystem", "property", "create-replace-delete", "sensorml"):
+    for need in ("system", "subsystem", "property", "sensorml"):
         assert CS1 + need in c, need
-    for need in ("datastream", "controlstream", "create-replace-delete", "json", "swecommon-json"):
+    for need in ("datastream", "controlstream", "json", "swecommon-json"):
         assert CS2 + need in c, need
     for absent in ("deployment", "procedure", "sf", "advanced-filtering", "update", "system-event", "swecommon-text", "swecommon-binary"):
         assert CS1 + absent not in c and CS2 + absent not in c, absent
@@ -120,10 +120,14 @@ async def systems_have_the_standard_types_and_no_location(ctx):
     for s in by.values():
         ctx.validate(s, "system")
     assert by["barge"]["systemType"] == SOSA + "Platform"
-    assert by["analysis"]["systemType"] == SOSA + "System" and by["analysis"]["assetType"] == "Process"
+    assert by["models"]["systemType"] == SOSA + "System" and by["models"]["assetType"] == "Process"
     _, _, subs = await ctx.get("systems/barge/subsystems")
     types = {s["id"]: s["systemType"] for s in subs["items"]}
     assert types == {"bow": SOSA + "Sensor", "stern": SOSA + "Sensor"}
+    _, _, models = await ctx.get("systems/models/subsystems")
+    found = {s["id"]: s for s in models["items"]}
+    for m in ("data-cleanse", "model-a", "model-b"):  # each model registered itself (FR-28)
+        assert found[m]["systemType"] == SOSA + "System" and found[m]["assetType"] == "Process", m
 
 
 @test
@@ -187,8 +191,25 @@ async def refuses_what_is_not_implemented_by_name(ctx):
 
 
 @test
+async def every_model_publishes_its_datastreams(ctx):
+    expect = {"data-cleanse": {"cleaned-bow", "cleaned-stern"},
+              "model-a": {"summary-1min-bow", "summary-1min-stern", "summary-1h-bow", "summary-1h-stern",
+                          "derived-1min", "derived-1h"},
+              "model-b": {"changes", "clusters", "correlation", "runs"}}
+    for sysid, outs in expect.items():
+        st, _, body = await ctx.get(f"systems/{sysid}/datastreams")
+        assert st == 200 and outs <= {d["outputName"] for d in body["items"]}, (sysid, body)
+    d = await ctx.ds("model-a", "summary-1min-bow")
+    st, _, body = await ctx.get(f"datastreams/{d['id']}/schema", {"obsFormat": "application/swe+json"})
+    defs = {f["name"]: f.get("definition") for f in body["recordSchema"]["fields"]}
+    assert defs["air_temperature"].endswith("/def/air_temperature")  # a mean keeps its property (FR-29)
+    st, _, obs = await ctx.get(f"datastreams/{d['id']}/observations", {"resultTime": "latest"})
+    assert st == 200 and len(obs) == 1 and obs[0]["time"].endswith(":00Z")
+
+
+@test
 async def control_stream_bounds_live_in_its_schema(ctx):
-    st, _, body = await ctx.get("controlstreams")
+    st, _, body = await ctx.get("systems/model-b/controlstreams")
     cs = body["items"][0]
     st, _, sch = await ctx.get(f"controlstreams/{cs['id']}/schema")
     fields = {f["name"]: f for f in sch["parametersSchema"]["fields"]}
@@ -196,25 +217,29 @@ async def control_stream_bounds_live_in_its_schema(ctx):
     st, _, body = await ctx.c.request("POST", f"controlstreams/{cs['id']}/commands", body={"parameters": {"clusters": hi + 1}})
     refused(st, body, 400, "clusters")
     assert str(hi) in body["description"]
+    st, _, body = await ctx.c.request("POST", f"controlstreams/{cs['id']}/commands", body={"parameters": {"algorithm": "Z"}})
+    refused(st, body, 400, "algorithm")
+    st, _, body = await ctx.c.request("POST", f"controlstreams/{cs['id']}/commands", body={"parameters": {"fields": "colour"}})
+    refused(st, body, 400, "fields")
     st, h, body = await ctx.c.request("POST", f"controlstreams/{cs['id']}/commands", body={"parameters": {"clusters": lo}})
     assert st == 201, body
     ctx.validate(body, "command")
-    assert body["currentStatus"] == "COMPLETED"
+    assert body["currentStatus"] == "PENDING"  # the model takes it up on its own time
     st, _, status = await ctx.get(f"commands/{body['id']}/status")
     assert [s["statusCode"] for s in status["items"]][0] == "PENDING"
 
 
 @test
-async def analysis_results_carry_settings_range_and_scores(ctx):
-    d = await ctx.ds("analysis", "runs")
+async def model_results_carry_settings_range_and_scores(ctx):
+    d = await ctx.ds("model-b", "runs")
     st, _, body = await ctx.get(f"datastreams/{d['id']}/observations", {"resultTime": "latest"})
     assert st == 200 and body
     r = body[0]
-    for k in ("window_start", "window_end", "records", "window_hours", "clusters", "sensitivity", "parameters",
-              "score_boundary_recall", "score_ari_air_mass"):
+    for k in ("run_id", "algorithm", "fields", "period", "window_start", "window_end", "records", "clusters",
+              "score_changes", "score_clusters", "scored_against", "illustrative"):
         assert k in r, k
     for out in ("changes", "clusters", "correlation"):
-        dd = await ctx.ds("analysis", out)
+        dd = await ctx.ds("model-b", out)
         st, _, obs = await ctx.get(f"datastreams/{dd['id']}/observations", {"limit": "1"})
         assert st == 200
         if obs:
@@ -222,32 +247,10 @@ async def analysis_results_carry_settings_range_and_scores(ctx):
 
 
 @test
-async def promotion_is_standard_resource_creation(ctx):
-    req = ctx.c.request
-    st, h, sysm = await req("POST", "systems", body={
-        "type": "SimpleProcess", "uniqueId": "urn:x-barge:process:contract-test", "label": "Contract test product",
-        "systemType": SOSA + "System", "assetType": "Process"})
-    assert st == 201, sysm
-    try:
-        rec = {"type": "DataRecord", "fields": [
-            {"type": "Time", "name": "time", "definition": "http://www.opengis.net/def/property/OGC/0/SamplingTime", "uom": {"href": "x"}},
-            {"type": "Quantity", "name": "value", "label": "Value", "definition": "x", "uom": {"code": "1"}}]}
-        st, _, ds = await req("POST", f"systems/{sysm['id']}/datastreams", body={
-            "name": "Contract test series", "outputName": "series", "schema": {"obsFormat": "application/swe+json", "recordSchema": rec}})
-        assert st == 201, ds
-        st, _, body = await req("POST", f"datastreams/{ds['id']}/observations",
-                                body=[{"time": "2031-04-07T00:00:00Z", "value": 1.5}, {"time": "2031-04-07T00:00:01Z", "value": 2.5}])
-        assert st == 201, body
-        st, _, body = await req("POST", f"datastreams/{ds['id']}/observations", body=[{"time": "2031-04-07T00:00:02Z", "value": "x"}])
-        refused(st, body, 400, "field:value")
-        st, _, obs = await ctx.get(f"datastreams/{ds['id']}/observations")
-        assert [o["value"] for o in obs] == [1.5, 2.5]
-        _, _, all_sys = await ctx.get("systems")
-        assert sysm["id"] in {s["id"] for s in all_sys["items"]}
-    finally:
-        await req("DELETE", f"systems/{sysm['id']}")
-    st, _, _ = await ctx.get(f"systems/{sysm['id']}")
-    assert st == 404
+async def creation_over_http_is_refused_by_name(ctx):
+    st, _, body = await ctx.c.request("POST", "systems", body={"uniqueId": "urn:x", "label": "x"})
+    assert st in (404, 405), body
+    assert isinstance(body, dict) and body.get("refused"), body
 
 
 @test

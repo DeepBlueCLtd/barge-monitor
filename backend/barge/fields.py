@@ -1,9 +1,16 @@
-"""What the server can publish, and what it publishes now (FR-32a, FR-46b..e).
+"""What the server can publish, and what it publishes now (FR-50..FR-52).
 
-The catalogue lists every measured and calculated field. Each calculated field
-declares its inputs; a calculated field is published only when it is switched
-on *and* all its inputs are published. The configuration is read once, at
-server start: a toggle is pending until the next start (FR-46d).
+The catalogue lists every field the control panel can switch: the raw
+parameters (both sensors together), the model outputs the server knows about,
+and three extra fields, off by default, that the display client has never
+seen: a Category, a Quantity and a Count (FR-50). A field is published only
+when it is switched on *and* all its inputs are published (FR-52). The
+offering is read once, at server start: a toggle is pending until then (FR-51).
+
+The server applies the offering to every datastream it serves, its own and
+the models': a field named in the catalogue and not published is left out of
+the schema and the observations. Fields the catalogue does not know (a new
+model's outputs) are always published.
 """
 from __future__ import annotations
 
@@ -20,7 +27,7 @@ class Field:
     label: str
     swe_type: str  # Quantity, Category, Count, Boolean, Text, Time, Matrix
     uom: str | None = None
-    kind: str = "measured"  # measured | calculated
+    kind: str = "raw"  # raw | model
     inputs: tuple = ()
     default_on: bool = True
     essential: bool = False
@@ -33,57 +40,63 @@ class Field:
         return DEF + self.name
 
 
-MEASURED = [
+RAW = [
     Field("air_temperature", "Air temperature", "Quantity", "Cel", essential=True),
-    Field("apparent_wind_speed", "Apparent wind speed", "Quantity", "m/s", essential=True),
-    Field("relative_humidity", "Relative humidity", "Quantity", "%"),
-    Field("pressure", "Barometric pressure (station)", "Quantity", "hPa"),
-    Field("apparent_wind_direction", "Apparent wind direction, relative to the bow", "Quantity", "deg"),
+    Field("apparent_wind_speed", "Wind speed", "Quantity", "m/s", essential=True,
+          description="Apparent wind speed, as felt aboard."),
+    Field("relative_humidity", "Humidity", "Quantity", "%"),
+    Field("pressure", "Pressure", "Quantity", "hPa", description="Barometric pressure at the sensor."),
+    Field("apparent_wind_direction", "Wind direction", "Quantity", "deg",
+          description="Apparent wind direction, degrees relative to the bow."),
     Field("solar_irradiance", "Solar irradiance", "Quantity", "W/m2"),
-    Field("water_temperature", "Water temperature", "Quantity", "Cel"),
-    Field("precipitation_type", "Precipitation type", "Category", None, default_on=False,
+    Field("water_temperature", "Water temp", "Quantity", "Cel"),
+    Field("precipitation_type", "Precipitation", "Category", None, default_on=False,
           tokens=("none", "drizzle", "rain", "showers"), extra=True,
           description="Measured by both sensors; published only when switched on."),
 ]
-QUANTITIES = [f.name for f in MEASURED if f.swe_type == "Quantity"]
+QUANTITIES = [f.name for f in RAW if f.swe_type == "Quantity"]
 
-CALCULATED = [
-    Field("dew_point", "Dew point (bow)", "Quantity", "Cel", "calculated",
-          ("air_temperature", "relative_humidity"), essential=True),
-    Field("air_minus_water", "Air minus water temperature (bow)", "Quantity", "Cel", "calculated",
-          ("air_temperature", "water_temperature")),
-    *[Field(f"bow_minus_stern_{p}", f"Bow minus stern: {m.label.lower()}", "Quantity", m.uom, "calculated", (p,),
-            description="Unaligned: no lag correction is possible without speed.")
-      for p, m in ((m.name, m) for m in MEASURED if m.swe_type == "Quantity")],
-    Field("pressure_tendency_3h", "Pressure tendency over three hours (bow)", "Quantity", "hPa", "calculated",
-          ("pressure",), default_on=False, extra=True),
-    Field("spikes_last_hour", "Readings flagged as spikes in the last hour (both sensors)", "Count", None,
-          "calculated", ("air_temperature",), default_on=False, extra=True),
+MODEL_OUTPUTS = [
+    Field("dew_point", "Dew point", "Quantity", "Cel", "model", ("air_temperature", "relative_humidity"),
+          essential=True, description="From bow air temperature and humidity (Model A)."),
+    Field("bow_minus_stern", "Bow − stern", "Quantity", "Cel", "model", ("air_temperature",), essential=True,
+          description="Bow minus stern air temperature (Model A). Unaligned: no lag correction is possible without speed."),
+    Field("pressure_tendency_3h", "Pressure tendency", "Quantity", "hPa", "model", ("pressure",),
+          default_on=False, extra=True, description="Change in bow pressure over three hours (Model A)."),
+    Field("readings_removed", "Readings removed", "Count", None, "model", (),
+          default_on=False, extra=True, description="Readings Data cleanse removed in the interval (Model A)."),
 ]
-CATALOGUE = {f.name: f for f in MEASURED + CALCULATED}
+CATALOGUE = {f.name: f for f in RAW + MODEL_OUTPUTS}
 
 
 @dataclass
 class Offering:
     """The fields switched on. Frozen into the server at each start."""
 
-    on: dict = field(default_factory=lambda: {f.name: f.default_on for f in MEASURED + CALCULATED})
+    on: dict = field(default_factory=lambda: {f.name: f.default_on for f in RAW + MODEL_OUTPUTS})
 
     def copy(self) -> "Offering":
         return Offering(dict(self.on))
 
-    def measured(self) -> list[Field]:
-        return [f for f in MEASURED if self.on[f.name]]
-
-    def calculated(self) -> list[Field]:
-        pub = {f.name for f in self.measured()}
-        return [f for f in CALCULATED if self.on[f.name] and all(i in pub for i in f.inputs)]
+    def raw(self) -> list[Field]:
+        return [f for f in RAW if self.on[f.name]]
 
     def published(self, name: str) -> bool:
-        return name in {f.name for f in self.measured() + self.calculated()}
+        """True for a field this offering publishes, and for any field the catalogue does not know."""
+        f = CATALOGUE.get(name)
+        if f is None:
+            return True
+        if not self.on[name]:
+            return False
+        return all(self.published(i) for i in f.inputs)
+
+    def keep(self, field_name: str) -> bool:
+        """Whether a field of any datastream is served (QC flags follow their measurement)."""
+        base = field_name[:-3] if field_name.endswith("_qc") else field_name
+        return self.published(base)
 
 
 def schema_id(base: str, names: list[str]) -> str:
-    """A datastream's identifier changes whenever its schema does (FR-46c)."""
+    """A datastream's identifier changes whenever its schema does (FR-51)."""
     h = hashlib.sha1(",".join(names).encode()).hexdigest()[:6]
     return f"{base}-{h}"

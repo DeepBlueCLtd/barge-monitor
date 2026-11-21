@@ -1,48 +1,38 @@
 {
-  "comment": "Fixed, hand-designed flowchart layout (FR-51, Annex A). One card per component in SRD §4. Flows are routed by hand: horizontal and vertical segments only, never crossing a card (VS-13). A two-way flow is drawn as two arrows side by side.",
-  "size": [1820, 830],
-  "card": [196, 92],
+  "comment": "Fixed flowchart layout (FR-64), designed for the 1920x1080 target at zoom 1. Bands top to bottom: front end, third-party libraries, back end, legacy, world (SRD 9.1). Every flow of SRD 3.1 is one arrow per direction; a two-way exchange is two arrows on the thirds of the facing edges (FR-65). Segments are horizontal or vertical and never cross a card (VS-13). status and key are the boxes below the flowchart.",
+  "size": [840, 968],
   "zones": [
-    {"id": "simulated", "label": "Simulated", "rects": [[20, 30, 238, 610]]},
-    {"id": "legacy", "label": "Legacy · untouched", "rects": [[274, 300, 228, 200]]},
-    {"id": "new", "label": "New build", "rects": [[520, 300, 500, 340], [1300, 160, 500, 660]]},
-    {"id": "third", "label": "Third-party", "rects": [[1040, 300, 236, 520]]}
+    {"id": "front", "rect": [0, 0, 840, 126], "labelAt": "left"},
+    {"id": "third", "rect": [0, 172, 840, 130], "labelAt": "left"},
+    {"id": "back", "rect": [0, 348, 840, 304], "labelAt": "left"},
+    {"id": "legacy", "rect": [322, 694, 278, 118], "labelAt": "right"},
+    {"id": "world", "rect": [322, 830, 278, 138], "labelAt": "left"}
   ],
-  "nodes": [
-    {"id": "clock", "code": "B-C01", "label": "Simulation clock", "role": "single source of time", "zone": "simulated", "x": 40, "y": 60, "does": "Single source of time; off at start; play and pause; legible rates."},
-    {"id": "barge", "code": "B-C03", "label": "Barge", "role": "shuttles day and night", "zone": "simulated", "x": 40, "y": 200, "does": "Moves along the canal under the timetable. Its position is never recorded."},
-    {"id": "sensors", "code": "B-C04", "label": "Sensors", "role": "bow + stern, 1 Hz", "zone": "simulated", "x": 40, "y": 360, "does": "Sample the world at 1 Hz and write fixed-width records to the logger."},
-    {"id": "world", "code": "B-C02", "label": "World generator", "role": "canal, weather, truth", "zone": "simulated", "x": 40, "y": 520, "does": "Canal, reaches, air masses, fronts and noise; writes the manifest (ground truth)."},
-    {"id": "logger", "code": "B-C05", "label": "Logger store", "role": "awkward, append-only", "zone": "legacy", "x": 290, "y": 360, "does": "Deliberately awkward, append-only fixed-width files; independent of the server."},
-    {"id": "adapter", "code": "B-C06", "label": "Store adapter", "role": "only reader of the store", "zone": "new", "x": 540, "y": 360, "does": "The only code that understands the logger's format; keeps the server's own index."},
-    {"id": "server", "code": "B-C07", "label": "CS server", "role": "OGC Connected Systems", "zone": "new", "x": 790, "y": 360, "does": "Discovery, datastreams, observations, control streams; waiting mode; instance identifier."},
-    {"id": "analysis", "code": "B-C09", "label": "Analysis service", "role": "a process system", "zone": "new", "x": 790, "y": 520, "does": "A process system: derived values, change detection, correlation, clustering."},
-    {"id": "fastapi", "code": "B-C08", "label": "ASGI framework", "role": "FastAPI + Starlette", "zone": "third", "x": 1060, "y": 360, "does": "FastAPI and Starlette: routing, validation, OpenAPI."},
-    {"id": "scilibs", "code": "B-C10", "label": "Scientific libs", "role": "numpy, scipy, sklearn", "zone": "third", "x": 1060, "y": 520, "does": "numpy, pandas, scipy, scikit-learn."},
-    {"id": "runtime", "code": "B-C16", "label": "Pyodide runtime", "role": "hosts the workers", "zone": "third", "x": 1060, "y": 690, "hostOnly": true, "does": "The browser and Pyodide: hosts the workers and the relay."},
-    {"id": "relay", "code": "B-C11", "label": "Seam relay", "role": "Service Worker", "zone": "new", "x": 1330, "y": 360, "does": "Service Worker passing HTTP to the backend worker; no logic. Down: a network failure."},
-    {"id": "client", "code": "B-C14", "label": "Display client", "role": "self-configuring UI", "zone": "new", "x": 1580, "y": 200, "does": "Handshake, profile check, self-configuration, panels. Restartable on its own."},
-    {"id": "workspace", "code": "B-C12", "label": "Workspace", "role": "scientists' Python", "zone": "new", "x": 1580, "y": 520, "does": "CodeMirror editor and its own Pyodide worker; an ordinary client."},
-    {"id": "products", "code": "B-C13", "label": "Promoted products", "role": "scientist-authored", "zone": "new", "x": 1580, "y": 690, "createdOnly": true, "does": "Scientists' scripts registered as process systems with their own datastreams."},
-    {"id": "shell", "code": "B-C15", "label": "Demonstrator shell", "role": "not part of the system", "zone": null, "x": 1580, "y": 40, "does": "Flowchart, controls, key, tour. Not part of the real system."}
+  "cards": {
+    "client": [352, 34, 440, 78],
+    "scilibs": [28, 206, 240, 78],
+    "fastapi": [352, 206, 440, 78],
+    "models": [28, 384, 240, 104],
+    "server": [352, 384, 240, 104],
+    "adapter": [352, 554, 240, 82],
+    "store": [352, 724, 240, 74],
+    "platform": [352, 872, 240, 78]
+  },
+  "arrows": [
+    {"src": "client", "dst": "fastapi", "path": [[499, 112], [499, 206]]},
+    {"src": "fastapi", "dst": "client", "path": [[645, 206], [645, 112]], "label": "HTTP", "labelAt": [674, 166]},
+    {"src": "fastapi", "dst": "server", "path": [[432, 284], [432, 384]]},
+    {"src": "server", "dst": "fastapi", "path": [[512, 384], [512, 284]]},
+    {"src": "models", "dst": "scilibs", "path": [[108, 384], [108, 284]]},
+    {"src": "scilibs", "dst": "models", "path": [[188, 284], [188, 384]]},
+    {"src": "models", "dst": "server", "path": [[268, 419], [352, 419]]},
+    {"src": "server", "dst": "models", "path": [[352, 453], [268, 453]]},
+    {"src": "server", "dst": "adapter", "path": [[432, 488], [432, 554]]},
+    {"src": "adapter", "dst": "server", "path": [[512, 554], [512, 488]]},
+    {"src": "adapter", "dst": "store", "path": [[432, 636], [432, 724]]},
+    {"src": "store", "dst": "adapter", "path": [[512, 724], [512, 636]]},
+    {"src": "platform", "dst": "store", "path": [[472, 872], [472, 798]]}
   ],
-  "flows": [
-    {"a": "clock", "b": "barge", "letters": ["I"], "path": [[138, 152], [138, 200]]},
-    {"a": "barge", "b": "sensors", "letters": ["I"], "path": [[138, 292], [138, 360]]},
-    {"a": "world", "b": "sensors", "letters": ["I"], "path": [[138, 520], [138, 452]]},
-    {"a": "sensors", "b": "logger", "letters": ["L"], "path": [[236, 406], [290, 406]]},
-    {"a": "adapter", "b": "logger", "letters": ["I", "L"], "twoWay": true, "path": [[540, 406], [486, 406]]},
-    {"a": "server", "b": "adapter", "letters": ["I"], "twoWay": true, "path": [[790, 406], [736, 406]]},
-    {"a": "fastapi", "b": "server", "letters": ["I"], "twoWay": true, "path": [[1060, 406], [986, 406]]},
-    {"a": "relay", "b": "fastapi", "letters": ["Q", "K", "D", "O", "P", "H"], "twoWay": true, "label": "HTTP", "labelAt": [1293, 380], "path": [[1330, 406], [1256, 406]]},
-    {"a": "client", "b": "relay", "letters": ["Q", "K", "D", "O", "P", "H"], "twoWay": true, "path": [[1580, 246], [1556, 246], [1556, 384], [1526, 384]]},
-    {"a": "workspace", "b": "relay", "letters": ["Q", "D", "O", "H"], "twoWay": true, "path": [[1580, 566], [1546, 566], [1546, 432], [1526, 432]]},
-    {"a": "products", "b": "relay", "letters": ["Q", "D", "H"], "twoWay": true, "path": [[1580, 736], [1428, 736], [1428, 452]]},
-    {"a": "workspace", "b": "products", "letters": ["I"], "path": [[1678, 612], [1678, 690]]},
-    {"a": "server", "b": "analysis", "letters": ["I"], "twoWay": true, "path": [[888, 452], [888, 520]]},
-    {"a": "analysis", "b": "scilibs", "letters": ["I"], "twoWay": true, "path": [[986, 566], [1060, 566]]},
-    {"a": "shell", "b": "clock", "letters": ["I"], "path": [[1678, 40], [1678, 14], [138, 14], [138, 60]]},
-    {"a": "shell", "b": "server", "letters": ["I"], "path": [[1580, 86], [888, 86], [888, 360]]},
-    {"a": "shell", "b": "client", "letters": ["I"], "path": [[1678, 132], [1678, 200]]}
-  ]
+  "status": [0, 670, 306, 298],
+  "key": [616, 670, 224, 298]
 }

@@ -91,7 +91,7 @@ jobs:
           VITE_SHARED_PATH: ${{ env.IS_PR == 'true' && '../../../' || '../' }}
         run: |
           pip install -r ../backend/requirements-dev.txt
-          python ../scripts/build_history.py --days 28 ../.cache/history 1 2 3
+          python ../scripts/build_history.py --days 1 ../.cache/history 1 2 3
           npm ci
           npm run pyodide
           npm run build

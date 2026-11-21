@@ -1,259 +1,175 @@
 import { expect, Page, test } from '@playwright/test';
+import { contrast, contrastPairs } from '../src/shell/palette';
 
-const STARTUP_BUDGET_MS = 20_000; // NFR-09, as declared in src/config.ts
-const SLOW_MS = 180_000; // for steps that are not the start-up budget
-// Tests load the pre-built history the build provides: one week in CI (decision D-37).
-const QUICK = 'demo/';
+// End-to-end tests of the v4 architecture view (SRD §9, §14) against the
+// assembled static site. They load the pre-calculated history the build provides.
+const STARTUP_BUDGET_MS = 30_000; // NFR-10, as declared in src/config.ts
+const SLOW_MS = 180_000;
+const URL_PY = 'demo/?seed=1&backend=python'; // explicit: the stand-in is the default for now (D-80)
 
 test.describe.configure({ mode: 'serial' });
 
-async function open(page: Page, url = QUICK) {
+async function open(page: Page, url = URL_PY) {
   await page.goto(url);
-  await expect(page.getByTestId('sim-now')).toBeVisible({ timeout: SLOW_MS });
-  await expect(page.getByTestId('reading-temperature')).toBeVisible({ timeout: 60_000 });
-  await openDrawer(page);
+  await expect(page.getByTestId('flowchart')).toBeVisible({ timeout: SLOW_MS });
 }
 
-/** The control panel is a drawer under the top bar (Annex A VS-28). */
-async function openDrawer(page: Page) {
-  const t = page.getByTestId('control-panel-toggle');
-  if ((await t.getAttribute('aria-expanded')) !== 'true') await t.click();
-  await expect(page.getByTestId('server-state')).toBeVisible();
+async function play(page: Page) {
+  if ((await page.getByTestId('play').innerText()).includes('Play')) await page.getByTestId('play').click();
+  await expect(page.getByTestId('sim-state')).toHaveText('Playing');
 }
 
-/** Every sketched outline's path data, keyed by card. */
+async function pause(page: Page) {
+  if ((await page.getByTestId('play').innerText()).includes('Pause')) await page.getByTestId('play').click();
+  await expect(page.getByTestId('sim-state')).toHaveText('Paused');
+}
+
+/** The display client is configured once the core models are live and it has made its handshake. */
+async function configured(page: Page) {
+  await expect(page.getByTestId('client-state')).toHaveText(/Configured|Degraded/, { timeout: SLOW_MS });
+}
+
+/** Every sketched outline's path data, keyed by shape (AT-21). */
 async function outlines(page: Page) {
   return page.evaluate(() => Array.from(document.querySelectorAll('[data-sketch]')).map(
     (e) => `${e.getAttribute('data-sketch')}:${Array.from(e.querySelectorAll('path')).map((p) => p.getAttribute('d')).join('|')}`).sort());
 }
 
-/** Control-panel switches follow the backend's state, so click and wait for it. */
-async function toggle(page: Page, name: string, on: boolean) {
-  const box = page.getByLabel(`toggle ${name}`, { exact: true });
-  if ((await box.isChecked()) !== on) await box.click();
-  await expect(box).toBeChecked({ checked: on });
-}
-
-async function restartServerAndWait(page: Page) {
-  // The client notices a new instance on its next request: it polls only while the clock runs (FR-63).
-  if ((await page.getByTestId('play').innerText()).includes('Play')) await page.getByTestId('play').click();
-  const before = await page.getByTestId('server-state').innerText();
-  await page.getByTestId('restart-server').click();
-  await expect(page.getByTestId('server-state')).not.toHaveText(before, { timeout: 30_000 });
-  await expect(page.getByTestId('server-state')).toContainText('running', { timeout: 120_000 });
-}
-
-test('pre-built history loaded within the start-up budget, progress shown honestly (FR-16, FR-17, NFR-09)', async ({ page }) => {
+test('start-up: progress shown, then the flowchart; everything from the site itself (FR-15, NFR-10, AT-23)', async ({ page }) => {
   const requests: string[] = [];
   page.on('request', (r) => requests.push(r.url()));
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
   const t0 = Date.now();
-  await page.goto('demo/'); // a seed with pre-built history (SRD §13)
+  await page.goto(URL_PY);
   await expect(page.getByTestId('progress')).toBeVisible();
-  await expect(page.getByTestId('flowchart')).toHaveCount(0); // no flowchart until pre-generation ends
-  await expect(page.getByTestId('sim-now')).toBeVisible({ timeout: STARTUP_BUDGET_MS });
-  const ms = Date.now() - t0;
-  console.log(`start-up with pre-built history: ${ms} ms`);
-  await expect(page.locator('footer')).toContainText('history pre-built');
-  expect(ms).toBeLessThan(STARTUP_BUDGET_MS);
-  await expect(page.getByTestId('reading-temperature')).toBeVisible({ timeout: 120_000 });
-  const origin = new URL(page.url()).origin;
-  expect(requests.filter((u) => !u.startsWith(origin) && !u.startsWith('data:') && !u.startsWith('blob:'))).toEqual([]); // NFR-08
-});
-
-test('starts off; paused means silent; play moves the clock and the messages; a message opens (AT-11, FR-50, FR-52)', async ({ page }) => {
-  await open(page);
-  const t1 = await page.getByTestId('sim-now').innerText();
-  const n1 = await page.locator('footer').innerText();
-  await page.waitForTimeout(3000);
-  expect(await page.getByTestId('sim-now').innerText()).toBe(t1);
-  expect(await page.locator('footer').innerText()).toBe(n1);
-  await page.getByTestId('play').click();
-  await page.waitForTimeout(4000);
-  expect(await page.getByTestId('sim-now').innerText()).not.toBe(t1);
-  await page.getByTestId('play').click(); // pause: icons freeze and stay clickable
-  const icon = page.locator('.icon').first();
-  await expect(icon).toBeVisible({ timeout: 10_000 });
-  const letter = await icon.innerText();
-  await icon.dispatchEvent('click'); // icons queue and can overlap: click this one, not whatever lies on top
-  await expect(page.getByRole('dialog', { name: 'Message' })).toContainText(letter);
-});
-
-test('the contract suite passes in the browser, through the relay (AT-02)', async ({ page }) => {
-  await open(page);
-  const btn = page.getByRole('button', { name: 'Contract suite' });
-  await expect(btn).toBeEnabled({ timeout: 120_000 });
-  await btn.click();
-  const summary = page.getByTestId('contract-summary');
-  await expect(summary).toContainText('failed', { timeout: 180_000 });
-  const text = await summary.innerText();
-  console.log(text);
-  expect(text).toContain('0 failed');
-  expect(text).toContain('0 skipped');
-});
-
-test('promoted products of every schema type appear after restart client with generic readouts (AT-08, FR-36, FR-37)', async ({ page }) => {
-  await open(page);
-  const run = page.getByRole('button', { name: 'Run', exact: true });
-  await expect(run).toBeEnabled({ timeout: 120_000 });
-  for (const id of ['quantity', 'category', 'count', 'angular']) {
-    await page.getByLabel('Example script').selectOption(id);
-    await run.click();
-    await expect(page.locator('.console')).toContainText('Restart the client', { timeout: 120_000 });
-    await expect(run).toBeEnabled();
-    await page.locator('.console').evaluate((el) => (el.innerHTML = ''));
-  }
-  await expect(page.getByTestId('field-air_temperature_smoothed')).toHaveCount(0); // not until the next handshake (FR-37)
-  await page.getByTestId('restart-client').click();
-  await expect(page.getByTestId('field-air_temperature_smoothed')).toHaveAttribute('data-view', 'quantity', { timeout: 60_000 });
-  await expect(page.getByTestId('field-wind_class')).toHaveAttribute('data-view', 'category');
-  await expect(page.getByTestId('field-suspect_readings')).toHaveAttribute('data-view', 'count');
-  await expect(page.getByTestId('field-wind_direction_median')).toHaveAttribute('data-view', 'angle');
-});
-
-test('a broken script leaves the server answering (AT-13)', async ({ page }) => {
-  await open(page);
-  const run = page.getByRole('button', { name: 'Run', exact: true });
-  await expect(run).toBeEnabled({ timeout: 120_000 });
-  await page.getByLabel('Example script').selectOption('broken');
-  await run.click();
-  await expect(page.locator('.console')).toContainText('deliberately broken', { timeout: 60_000 });
-  expect(await page.evaluate(async () => (await fetch('api/')).status)).toBe(200);
-});
-
-test('switching off an essential source gives degraded mode at the next server start (AT-06, AT-14, FR-41)', async ({ page }) => {
-  await open(page);
-  await toggle(page, 'air_temperature', false);
-  await expect(page.getByTestId('pending')).toBeVisible();
-  await expect(page.getByTestId('reading-temperature')).toBeVisible(); // nothing changes until the server restarts
-  await restartServerAndWait(page);
-  const popup = page.getByRole('alertdialog', { name: 'Unavailable essential sources' });
-  await expect(popup).toBeVisible({ timeout: 60_000 });
-  const items = await page.getByTestId('degraded-list').locator('li').allInnerTexts();
-  expect(items.map((t) => t.split(':')[0]).sort()).toEqual(['Bow air temperature', 'Derived values (dew point)', 'Stern air temperature']);
-  await popup.getByRole('button', { name: 'Continue' }).click();
-  await expect(page.getByTestId('unavailable-temperature')).toBeVisible();
-  await expect(page.getByTestId('unavailable-temperature')).toContainText(/Bow air temperature: missing/);
-  await expect(page.getByTestId('reading-wind')).toBeVisible(); // views whose sources are present work normally
-  // An optional source removed: no warning.
-  await toggle(page, 'air_temperature', true);
-  await toggle(page, 'solar_irradiance', false);
-  await restartServerAndWait(page);
-  await expect(page.getByTestId('reading-temperature')).toBeVisible({ timeout: 60_000 });
-  await expect(page.getByRole('alertdialog')).toHaveCount(0);
-  await expect(page.getByTestId('field-solar_irradiance')).toHaveCount(0);
-});
-
-test('a server whose claim its discovery contradicts is rejected (AT-07)', async ({ page }) => {
-  await open(page);
-  await toggle(page, 'apparent_wind_speed', false);
-  await page.getByTestId('profile-lie').click();
-  await expect(page.getByTestId('profile-lie')).toBeChecked();
-  await restartServerAndWait(page);
-  await expect(page.getByTestId('rejected')).toContainText('claims the declared profile', { timeout: 60_000 });
-});
-
-test('restart server: waiting mode, a new instance, a fresh handshake (AT-09)', async ({ page }) => {
-  await open(page);
-  const inst = await page.getByTestId('server-state').innerText();
-  await page.getByTestId('restart-server').click();
-  await expect(page.getByTestId('server-state')).toContainText('waiting', { timeout: 10_000 });
-  await expect(page.getByTestId('server-state')).toContainText('running', { timeout: 120_000 });
-  const state = await page.getByTestId('server-state').innerText();
-  expect(state).not.toBe(inst);
-  const instance = state.match(/instance (\S+)/)![1];
-  await page.getByTestId('play').click(); // the client notices on its next poll, which needs the clock running
-  // A fresh handshake: the client is now configured from the new instance (a transient "handshake" state is too brief to test).
-  await expect(page.getByTestId('client-instance')).toHaveText(`instance ${instance}`, { timeout: 60_000 });
-  await expect(page.getByTestId('reading-temperature')).toBeVisible({ timeout: 60_000 });
-});
-
-test('server down: network failures, unreachable banner with stale data, re-handshake when up (AT-15)', async ({ page }) => {
-  await open(page);
-  await page.getByTestId('play').click();
-  await page.getByTestId('server-down').click();
-  await expect(page.getByTestId('unreachable')).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByTestId('reading-temperature')).toBeVisible(); // last data kept, marked stale
-  expect(await page.evaluate(async () => { try { await fetch('api/'); return 'answered'; } catch { return 'network failure'; } })).toBe('network failure');
-  await page.getByTestId('server-up').click();
-  await expect(page.getByTestId('unreachable')).toHaveCount(0, { timeout: 120_000 });
-  await expect(page.getByTestId('reading-temperature')).toBeVisible({ timeout: 60_000 });
-});
-
-test('analysis settings are commands; the server refuses an out-of-range value by naming the bound (FR-26, FR-60)', async ({ page }) => {
-  await open(page);
-  await page.getByLabel('clusters', { exact: true }).fill('99');
-  await page.getByRole('button', { name: 'Send command' }).click();
-  await expect(page.getByTestId('command-status')).toContainText('clusters=99', { timeout: 30_000 });
-  await page.getByLabel('clusters', { exact: true }).fill('3');
-  await page.getByRole('button', { name: 'Send command' }).click();
-  await expect(page.getByTestId('command-status')).toContainText('COMPLETED', { timeout: 60_000 });
-});
-
-test('with WebAssembly blocked, an illustrative JS simulation answers, and the UI says so (D-41)', async ({ page }) => {
-  await page.addInitScript(() => { delete (globalThis as any).WebAssembly; });
-  await page.goto(QUICK);
-  await expect(page.getByTestId('backend')).toContainText('illustrative JS simulation', { timeout: 20_000 });
-  await expect(page.getByTestId('backend')).toContainText('WebAssembly is blocked');
-  await expect(page.getByTestId('reading-temperature')).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByTestId('workspace-unavailable')).toBeVisible();
-  await page.getByTestId('play').click();
-  await expect(page.locator('.icon').first()).toBeVisible({ timeout: 10_000 });
-});
-
-test('with WebAssembly available, the UI names the Python backend', async ({ page }) => {
-  await open(page);
-  await expect(page.getByTestId('backend')).toContainText('Backend: Python (Pyodide)');
-});
-
-test('sketch outlines are seeded: identical after restart client and reload (AT-V1)', async ({ page }) => {
-  await open(page);
-  const a = await outlines(page);
-  expect(a.length).toBeGreaterThanOrEqual(16);
-  await page.getByTestId('restart-client').click();
-  await expect(page.getByTestId('reading-temperature')).toBeVisible({ timeout: 60_000 });
-  expect(await outlines(page)).toEqual(a);
-  await page.reload();
-  await expect(page.getByTestId('sim-now')).toBeVisible({ timeout: SLOW_MS });
-  expect(await outlines(page)).toEqual(a);
-});
-
-test('text meets 4.5:1 contrast on its background (AT-V2)', async ({ page }) => {
-  await open(page);
-  // Rendered text colours against the nearest opaque background.
-  const worst = await page.evaluate(() => {
-    const rgb = (c: string) => (c.match(/[\d.]+/g) ?? []).map(Number);
-    const lum = ([r, g, b]: number[]) => { const f = (v: number) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); };
-    const bg = (e: Element | null): number[] => { for (; e; e = e.parentElement) { const c = rgb(getComputedStyle(e).backgroundColor); if (c.length === 3 || c[3] === 1) return c.slice(0, 3); } return [255, 255, 255]; };
-    let min = 21; let at = '';
-    for (const e of document.querySelectorAll('.card-name, .card-role, .card-status, .zone-label, .key-item, .status th, .status td, .step b, .step small, .brand p, .flow-panel ~ * h3')) {
-      if (!(e as HTMLElement).innerText?.trim()) continue;
-      const a = lum(rgb(getComputedStyle(e).color)); const b = lum(bg(e));
-      const r = (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
-      if (r < min) { min = r; at = `${e.className}: ${(e as HTMLElement).innerText.slice(0, 30)}`; }
-    }
-    return { min, at };
-  });
-  expect(worst.min, worst.at).toBeGreaterThanOrEqual(4.5);
-});
-
-test('no illustration images; fonts and the sketch renderer are same-origin (AT-V4, AT-V5)', async ({ page }) => {
-  const requests: string[] = [];
-  page.on('request', (r) => requests.push(r.url()));
-  await open(page);
+  await expect(page.getByTestId('flowchart')).toBeVisible({ timeout: STARTUP_BUDGET_MS });
+  console.log(`flowchart after ${Date.now() - t0} ms`);
+  await expect(page.getByTestId('backend-state')).toHaveText('Python');
+  await expect(page.getByTestId('history-state')).not.toHaveText('none');
+  for (const id of ['platform', 'store', 'adapter', 'server', 'models', 'fastapi', 'scilibs', 'client']) await expect(page.getByTestId(`card-${id}`)).toBeVisible();
+  for (const l of 'QDOKPHSLI') await expect(page.getByTestId(`key-${l}`)).toBeVisible();
+  await expect(page.locator('[data-flow]')).toHaveCount(13); // every flow of §3.1, one arrow per direction (FR-65)
+  await expect(page.locator('.flow-label')).toHaveText('HTTP');
   const origin = new URL(page.url()).origin;
   expect(requests.filter((u) => !u.startsWith(origin) && !u.startsWith('data:') && !u.startsWith('blob:'))).toEqual([]);
-  expect(requests.filter((u) => /\.(png|jpe?g|gif|webp|svg)(\?|$)/.test(u))).toEqual([]);
-  expect(requests.some((u) => /patrick-hand.*\.woff2/.test(u))).toBe(true);
-  expect(await page.locator('img').count()).toBe(0);
+  // No horizontal scroll at 1920×1080.
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  expect(errors).toEqual([]);
 });
 
-test('with the sketch renderer off, every card still renders with a plain outline (AT-V6)', async ({ page }) => {
-  await open(page, `${QUICK}?sketch=off`);
-  await expect(page.locator('html')).toHaveClass(/sketch-off/);
-  expect(await page.locator('.card [data-sketch], .zone-region [data-sketch]').count()).toBe(0); // arrows stay, as plain lines
-  const cards = page.locator('.card');
-  expect(await cards.count()).toBeGreaterThanOrEqual(15);
-  for (const c of await cards.all()) {
-    expect(await c.evaluate((e) => getComputedStyle(e).borderTopStyle)).not.toBe('none');
+test('nothing moves before Play or while paused; play moves clock and messages (AT-19, FR-77)', async ({ page }) => {
+  await open(page);
+  await expect(page.getByTestId('sim-state')).toHaveText('Paused');
+  const t1 = await page.getByTestId('role-platform').innerText();
+  await page.waitForTimeout(4000);
+  expect(await page.getByTestId('role-platform').innerText()).toBe(t1);
+  await expect(page.getByTestId('message-icon')).toHaveCount(0);
+  await expect(page.getByTestId('client-state')).toHaveText('Waiting for play');
+  await play(page);
+  await expect(page.getByTestId('message-icon').first()).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId('role-platform')).not.toHaveText(t1);
+  await pause(page);
+  await page.waitForTimeout(800);
+  // Paused: icons freeze in place and the clock stands still.
+  const pos = () => page.getByTestId('message-icon').evaluateAll((els) => els.map((e) => (e as HTMLElement).style.transform).join(';'));
+  const t2 = await page.getByTestId('role-platform').innerText();
+  const p1 = await pos();
+  await page.waitForTimeout(3000);
+  expect(await pos()).toBe(p1);
+  expect(await page.getByTestId('role-platform').innerText()).toBe(t2);
+});
+
+test('value-add reveal: nothing gold at start; display client and Models reveal; nothing else can (AT-20, FR-74..FR-76)', async ({ page }) => {
+  await open(page);
+  await expect(page.locator('.card.gold')).toHaveCount(0);
+  await expect(page.getByTestId('detail-empty')).toBeVisible();
+  for (const id of ['platform', 'store', 'adapter', 'server', 'fastapi', 'scilibs']) {
+    await page.getByTestId(`card-${id}`).click();
+    await expect(page.getByTestId(`card-${id}`)).toHaveAttribute('data-revealed', 'false');
+    await expect(page.getByTestId('detail-panel')).toHaveAttribute('data-showing', id);
   }
+  await expect(page.locator('.card.gold')).toHaveCount(0);
+  await page.getByTestId('card-client').click();
+  await expect(page.getByTestId('card-client')).toHaveAttribute('data-revealed', 'true');
+  await expect(page.getByTestId('card-client')).toContainText('★ Display client');
+  await expect(page.getByTestId('role-client')).toContainText('our value-add');
+  await expect(page.getByTestId('card-client').getByTestId('diamond')).toBeVisible();
+  await page.getByTestId('card-models').click();
+  await expect(page.getByTestId('card-models')).toHaveAttribute('data-revealed', 'true');
+  await expect(page.getByTestId('detail-models').getByTestId('diamond')).toHaveCount(6); // Models and five model cards
+  // Stays revealed when another component is selected; the × returns the empty state (FR-69).
+  await page.getByTestId('card-server').click();
+  await expect(page.locator('.card.gold')).toHaveCount(2);
+  await page.getByTestId('detail-close').click();
+  await expect(page.getByTestId('detail-empty')).toBeVisible();
+  const before = await outlines(page);
+  await page.getByTestId('restart-client').click();
+  await expect(page.locator('.card.gold')).toHaveCount(0);
+  expect(await outlines(page)).toEqual(before); // AT-21: identical sketched outlines after a client restart
+});
+
+test('display client: chips, period, clustering, views; the strip shows the selection\'s store query (FR-53..FR-61, FR-70, AT-17)', async ({ page }) => {
+  await open(page);
+  await page.getByTestId('card-client').click();
+  await expect(page.getByTestId('dc-waiting')).toBeVisible();
+  await play(page);
+  await configured(page);
+  const chips = page.getByTestId('chip');
+  await expect(chips.first()).toBeVisible();
+  await expect(page.locator('.chip.on')).toHaveCount(2); // default: the profile's raw essentials
+  await expect(page.locator('.chip.optional').first()).toBeVisible();
+  await expect(page.getByTestId('chart-line').locator('canvas')).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByTestId('chart-errorbars').locator('canvas')).toBeVisible();
+  await expect(page.getByTestId('chart-heatmap').locator('canvas')).toBeVisible();
+  await expect(page.getByTestId('monitor').getByTestId('diamond')).toHaveCount(4); // three graphs and the cluster view (FR-76)
+  await expect(page.getByTestId('cluster-score')).toContainText('score against ground truth', { timeout: 90_000 });
+  // 1 h reads raw records: the strip shows the S that selection caused, found by its chain.
+  const strip = page.getByTestId('message-strip');
+  await expect(strip).toHaveAttribute('data-letter', 'S', { timeout: 30_000 });
+  await expect(page.getByTestId('strip-chain')).toContainText('S to the store adapter');
+  await expect(page.getByTestId('message-content')).toContainText('"op"');
+  // A week reads hourly summaries: no store query, said honestly.
+  await page.getByRole('button', { name: 'Week', exact: true }).click();
+  await expect(page.getByTestId('strip-no-s')).toBeVisible({ timeout: 30_000 });
+  // No field selected: the views say so (FR-56).
+  while (await page.locator('.chip.on').count()) await page.locator('.chip.on').first().click();
+  await expect(page.getByTestId('view-line')).toContainText('No field selected');
+  await expect(page.getByTestId('view-clusters')).toContainText('No field selected');
+});
+
+test('clicking a message shows it in the message strip (FR-68)', async ({ page }) => {
+  await open(page);
+  await play(page);
+  await expect(page.getByTestId('message-icon').first()).toBeVisible({ timeout: 30_000 });
+  await pause(page);
+  const icon = page.getByTestId('message-icon').first();
+  const letter = await icon.getAttribute('data-letter');
+  await icon.dispatchEvent('click'); // icons queue and can overlap: click this one
+  const strip = page.getByTestId('message-strip');
+  await expect(strip).toBeVisible();
+  await expect(strip).toHaveAttribute('data-letter', letter!);
+  await expect(page.getByTestId('strip-meta')).toContainText(/from .+ to /);
+  await expect(page.getByTestId('message-content')).not.toBeEmpty();
+  await expect(page.getByTestId('selected-icon')).toBeVisible();
+});
+
+test('every text and icon colour meets 4.5:1 (AT-22)', async () => {
+  const failing = contrastPairs().filter((p) => contrast(p.fg, p.bg) < 4.5).map((p) => `${p.what}: ${contrast(p.fg, p.bg).toFixed(2)}`);
+  expect(failing).toEqual([]);
+});
+
+test('stand-in: labelled, tagged, the notice shown, the editor unavailable (AT-25, FR-06f, FR-06h)', async ({ page }) => {
+  await open(page, 'demo/?seed=1&backend=standin');
+  await expect(page.getByTestId('backend-state')).toHaveText('JavaScript stand-in');
+  await expect(page.getByTestId('standin-notice')).toContainText('Running the JavaScript stand-in');
+  await expect(page.getByTestId('standin-tag')).toHaveCount(7); // every component behind the seam
+  await expect(page.getByTestId('card-client').getByTestId('standin-tag')).toHaveCount(0);
+  await page.getByTestId('card-models').click();
+  await page.getByTestId('model-model-c').click();
+  await expect(page.getByTestId('editor-unavailable')).toBeVisible();
+  await play(page);
+  await configured(page);
+  await page.getByTestId('card-client').click();
+  await expect(page.getByTestId('cluster-score')).toContainText('(illustrative)', { timeout: 90_000 });
 });
