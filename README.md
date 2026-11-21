@@ -44,9 +44,21 @@ npm run serve            # http://localhost:8080/demo/
 npm run e2e              # Playwright tests
 ```
 
-`?backend=standin` forces the JavaScript stand-in (used automatically where WebAssembly is
-blocked); `?backend=python` forces Pyodide; `?sketch=off` draws plain outlines. The
-published site pre-loads 24 hours (`--days 1`).
+`?backend=python` runs the Python back end and models in Pyodide; `?backend=standin` the
+JavaScript stand-in; `?sketch=off` draws plain outlines. The published site pre-loads 24
+hours of history (`--days 1`, decision D-79).
+
+## Temporary state (to be restored)
+
+While the look and feel is reviewed, two things depart from the SRD on purpose:
+
+| What | Now | SRD | How to restore |
+|---|---|---|---|
+| Default back end (D-80) | the JavaScript stand-in, so a reload takes ~2 s | Python (Pyodide) wherever WebAssembly runs (FR-06b) | set `PYTHON_BY_DEFAULT = true` in `web/src/shell/runtime.ts`. The browser tests already run Python explicitly (`?backend=python`), so nothing else changes |
+| History pre-loaded (D-79) | 24 hours | four weeks (FR-15) | `--days 28` in `.github/workflows/pages.yml` (and `PREGEN_DAYS` in `backend/barge/config.py`); expect a ~39 MB history download per visit and ~25 s until the models are live |
+
+While the stand-in is the default, the empty-slot model editor (Python) is unavailable unless
+the page is opened with `?backend=python`.
 
 The server also runs under an ordinary ASGI server, with the core models in-process:
 `cd backend && python -c "import uvicorn; from barge.runtime import Runtime; from barge.api import create_app; rt = Runtime(pregen_days=1, local_models=True); [rt.tick() for _ in range(200)]; uvicorn.run(create_app(rt))"`.

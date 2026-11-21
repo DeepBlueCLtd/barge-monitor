@@ -150,6 +150,9 @@ system's datastreams, excluding `time`, QC flags, Text and Model B's run outputs
 named in the profile is solid; any other is dashed ("optional"). Sensor properties are
 plotted from the **bow** sensor.
 
+Periods offered: 1 min (default), 1 h, 6 h, day, week, 4 weeks. With 24 hours of history
+pre-loaded (D-79), week and 4 weeks show only what there is.
+
 | period | sensor property reads | derived property reads |
 |---|---|---|
 | 1 min (default), 1 h | bow `weather` (raw: causes S) | `derived-1min` |
@@ -222,4 +225,18 @@ Control state (`state`): `{server: running|waiting|down, instance, progress, fie
 published_now}], pending, lie_about_profile, clock, store: {bytes, files, records},
 models: [{id, label, phase, datastreams}], capture_counts, backend: python|standin}`.
 
-URL parameters: `?backend=python|standin`, `?seed=N`, `?sketch=off`.
+URL parameters: `?backend=python|standin`, `?seed=N`, `?sketch=off`. Without `backend`,
+the page currently starts the stand-in (temporary, decision D-80); FR-06b's rule (Python
+wherever WebAssembly runs) returns when `PYTHON_BY_DEFAULT` is set back to `true` in
+`web/src/shell/runtime.ts`.
+
+## 9. Drawing the traffic (the demonstrator shell)
+
+* Each datastream the display client uses is polled as often as it can change: raw records
+  every simulated second (FR-63), 1-minute means every minute, hourly means every hour,
+  Model B's runs every minute (every second while a command's run is awaited).
+* A selection change (fields, period, algorithm) is answered at once, playing or paused.
+  The chains of requests it causes are marked; their icons wear a **gold ring** ("caused by
+  your click" in the key) and set off at once, ahead of any queue on their lines.
+* Other icons queue per line and direction; a line that falls more than 6 simulated
+  seconds behind is relieved rather than left to lag further.
