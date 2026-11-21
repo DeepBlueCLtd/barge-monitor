@@ -35,6 +35,9 @@ id="toc-7-model-interface-models--data-server-inside-the-back-end">7.
 Model interface (models ↔︎ data server, inside the back end)</a></li>
 <li><a href="#8-workers-and-the-page" id="toc-8-workers-and-the-page">8.
 Workers and the page</a></li>
+<li><a href="#9-drawing-the-traffic-the-demonstrator-shell"
+id="toc-9-drawing-the-traffic-the-demonstrator-shell">9. Drawing the
+traffic (the demonstrator shell)</a></li>
 </ul></li>
 </ul>
 </nav>
@@ -454,6 +457,9 @@ Text and Model B's run outputs (<code>changes</code>,
 feed views, not chips). A property named in the profile is solid; any
 other is dashed ("optional"). Sensor properties are plotted from the
 <strong>bow</strong> sensor.</p>
+<p>Periods offered: 1 min (default), 1 h, 6 h, day, week, 4 weeks. With
+24 hours of history pre-loaded (D-79), week and 4 weeks show only what
+there is.</p>
 <table>
 <thead>
 <tr>
@@ -575,7 +581,26 @@ port, and <code>clock {state}</code> on every tick; worker posts
 <p>Control state (<code>state</code>):
 <code>{server: running|waiting|down, instance, progress, fields: [{name, label, kind, inputs, extra, essential, type, on_next_start, published_next_start, published_now}], pending, lie_about_profile, clock, store: {bytes, files, records}, models: [{id, label, phase, datastreams}], capture_counts, backend: python|standin}</code>.</p>
 <p>URL parameters: <code>?backend=python|standin</code>,
-<code>?seed=N</code>, <code>?sketch=off</code>.</p>
+<code>?seed=N</code>, <code>?sketch=off</code>. Without
+<code>backend</code>, the page currently starts the stand-in (temporary,
+decision D-80); FR-06b's rule (Python wherever WebAssembly runs) returns
+when <code>PYTHON_BY_DEFAULT</code> is set back to <code>true</code> in
+<code>web/src/shell/runtime.ts</code>.</p>
+<h2 id="9-drawing-the-traffic-the-demonstrator-shell">9. Drawing the
+traffic (the demonstrator shell)</h2>
+<ul>
+<li>Each datastream the display client uses is polled as often as it can
+change: raw records every simulated second (FR-63), 1-minute means every
+minute, hourly means every hour, Model B's runs every minute (every
+second while a command's run is awaited).</li>
+<li>A selection change (fields, period, algorithm) is answered at once,
+playing or paused. The chains of requests it causes are marked; their
+icons wear a <strong>gold ring</strong> ("caused by your click" in the
+key) and set off at once, ahead of any queue on their lines.</li>
+<li>Other icons queue per line and direction; a line that falls more
+than 6 simulated seconds behind is relieved rather than left to lag
+further.</li>
+</ul>
 <footer>Rendered from <code>srd-barge.md</code>.</footer>
 </main>
 </body>
