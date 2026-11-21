@@ -83,6 +83,7 @@ export class ClientSession {
   private gen = 1;
   private loadedGen = 0;
   private commandDirty = true;
+  private woken = false; // a selection changed: act now, without waiting for the next simulated second
   private lastRunPoll = -Infinity;
   private lastPoll = new Map<string, number>(); // datastream id -> simulated time of its last poll
   private awaitingRun = false;
@@ -118,6 +119,9 @@ export class ClientSession {
     this.selection.set(next);
     if (change.props || change.period) this.gen++;
     this.commandDirty = true;
+    // A user action is answered at once, playing or paused (FR-79): the round trip is
+    // drawn now rather than at the next simulated second.
+    this.woken = true;
   }
 
   toggleProp(key: string) {
@@ -151,12 +155,15 @@ export class ClientSession {
             continue;
           }
         }
-        await nextSimSecond(cancelled);
+        await nextSimSecond(() => cancelled() || this.woken);
         if (this.closed) return;
+        const woken = this.woken;
+        this.woken = false;
         if (this.loadedGen !== this.gen) await this.load();
-        else await this.poll();
+        else if (!woken) await this.poll();
         if (this.commandDirty) await this.command();
         await this.pollRun();
+        if (woken && !simClock.playing) await this.awaitRunWhilePaused();
         if (this.stale.value) {
           this.stale.set(false);
           this.banner.set(null);
@@ -321,6 +328,14 @@ export class ClientSession {
     this.commandNote.set(null);
     this.commandId = r.body?.id ?? null;
     this.awaitingRun = true;
+  }
+
+  /** After a user action while paused: look for the command's run a few times, then stop (AT-19). */
+  private async awaitRunWhilePaused() {
+    for (let i = 0; i < 6 && this.awaitingRun && !this.closed && !simClock.playing && !this.woken; i++) {
+      await new Promise((r) => setTimeout(r, 700));
+      await this.pollRun();
+    }
   }
 
   /** The cluster view and change marks follow the latest run (docs/v4-interfaces.md §6). */
