@@ -6,7 +6,7 @@ file, and web/public/py/history.json pointing the demonstrator at them.
 
 Usage: scripts/build_history.py [--days D] OUT SEED [SEED ...]
 
-D is 1 (24 hours, decision D-79) for the published demonstrator and the tests
+D is 1 (24 hours, FR-15) for the published demonstrator and the tests
 """
 import gzip
 import json

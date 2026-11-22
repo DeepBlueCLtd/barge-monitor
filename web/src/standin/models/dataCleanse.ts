@@ -6,7 +6,6 @@
 // one cleaned datastream per sensor, with the same schema as the Python model;
 // every other model reads these (AT-15). The method is simpler than the
 // Python model's (median-based noise): its results are illustrative.
-import { CLEANED_RETENTION_S } from '../constants';
 import type { Cols } from '../registry';
 import { M } from '../swe';
 import { Command, measurementFields, Model, ModelApi, PRECIP, QUANTITIES, roundArr } from './csmodel';
@@ -35,9 +34,9 @@ export function clean(cols: Cols, threshold: number): [Record<string, unknown> &
   for (const p of QUANTITIES) {
     if (!(p in cols)) continue;
     const v = Float64Array.from(cols[p] as Float64Array);
-    const flag = (cols[`${p}_qc`] as Float64Array | undefined) ?? new Float64Array(v.length).fill(1);
+    const flag = (cols[`${p}_qc`] as ArrayLike<unknown> | undefined) ?? new Float64Array(v.length).fill(1);
     const bad = new Uint8Array(v.length);
-    for (let i = 0; i < v.length; i++) if (flag[i] !== 1) bad[i] = 1;
+    for (let i = 0; i < v.length; i++) if (Number(flag[i]) !== 1) bad[i] = 1;
     if (v.length >= 3 && p !== 'apparent_wind_direction') {
       const lim = threshold * noiseScale(v);
       for (let i = 1; i < v.length - 1; i++) if (Math.abs(v[i] - 0.5 * (v[i - 1] + v[i + 1])) > lim) bad[i] = 1;
@@ -70,7 +69,7 @@ export function clean(cols: Cols, threshold: number): [Record<string, unknown> &
     out[p] = roundArr(res, 3);
   }
   if ('precipitation_type' in cols) {
-    out.precipitation_type = Array.from(cols.precipitation_type as Float64Array, (c) => (Number.isFinite(c) ? PRECIP[Math.trunc(c)] : null));
+    out.precipitation_type = Array.from(cols.precipitation_type as unknown[]);
   }
   return [out, removed];
 }
@@ -80,6 +79,7 @@ export class DataCleanse extends Model {
   readonly label = 'Data cleanse';
   description = 'Core model, runs first: flags and removes noise before any other model sees the data.';
   interval = 10;
+  catchUpMargin = 30; // the models that read its output must be able to come within their own margin of now
   settings: Record<string, any> = { spike_threshold: 6.0 };
   raw: Record<string, string | null> = {};
   out: Record<string, string> = {};
@@ -91,7 +91,6 @@ export class DataCleanse extends Model {
       this.raw[s] = api.find(`urn:x-barge:sensor:${s}`, 'weather');
       this.out[s] = api.createDatastream(this.system, {
         name: `Cleaned ${s} record`, outputName: `cleaned-${s}`, schema: M.record(`Cleaned ${s} record`, fields),
-        retention: CLEANED_RETENTION_S,
       });
     }
     this.controlKey = api.createControlstream(this.system, {

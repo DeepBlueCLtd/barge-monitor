@@ -10,9 +10,9 @@ from barge.runtime import Runtime
 class Rig:
     """The application over a runtime with a hand-set clock, called in-process."""
 
-    def __init__(self, seed=5, days=2.0, capture=True):
+    def __init__(self, seed=5, days=2.0, capture=True, **store):
         self.clock = ManualClock(days * 86400.0)
-        self.rt = Runtime(seed=seed, clock=self.clock, pregen_days=days, capture=capture, local_models=True)
+        self.rt = Runtime(seed=seed, clock=self.clock, pregen_days=days, capture=capture, local_models=True, **store)
         self.app = create_app(self.rt)
         self.ready()
 

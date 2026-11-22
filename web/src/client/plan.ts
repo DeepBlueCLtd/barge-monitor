@@ -16,7 +16,7 @@ export const PERIODS: { id: PeriodId; label: string; seconds: number; want: numb
 ];
 export const periodOf = (id: PeriodId) => PERIODS.find((p) => p.id === id)!;
 
-/** Model B's run outputs feed the views, not the chips (docs/v4-interfaces.md §6). */
+/** Analysis's run outputs feed the views, not the chips (docs/v4-interfaces.md §6). */
 const RUN_OUTPUTS = new Set(['changes', 'clusters', 'correlation', 'runs']);
 export const RES_S: Record<Resolution, number | null> = { raw: 1, PT1M: 60, PT1H: 3600, run: null, native: null };
 

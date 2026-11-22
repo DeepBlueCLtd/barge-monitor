@@ -12,7 +12,7 @@ export function ModelActivity({ model }: { model: string }) {
   return (
     <>
       <ModelInner model={model} playing={playing} />
-      <div className="model-activity" data-testid={`activity-${model}`}>
+      <div className="summariesctivity" data-testid={`activity-${model}`}>
         <Busy on={playing} />
         <span className="model-quiet">{playing ? 'working' : 'paused'}</span>
       </div>

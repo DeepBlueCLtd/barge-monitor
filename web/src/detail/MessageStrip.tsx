@@ -32,6 +32,8 @@ function phrase(m: Message): string {
     case 'adapter>server': return 'I columns to the data server';
     case 'server>fastapi': return 'I response to FastAPI';
     case 'fastapi>client': return `${m.letter} to the display`;
+    case 'models>fastapi': return `${m.letter} from the model to FastAPI`;
+    case 'fastapi>models': return `${m.letter} back to the model`;
     default: return `${m.letter} from ${nameOf(m.src)} to ${nameOf(m.dst)}`;
   }
 }
@@ -45,7 +47,19 @@ export function describeChain(chain: Message[]): string {
     if (last && last.p === p) last.n++;
     else parts.push({ p, n: 1 });
   }
-  return parts.map((x) => (x.n > 1 ? `${x.p} (×${x.n})` : x.p)).join(' → ');
+  // A pair of hops that repeats (one file read after another) is said once, with its count.
+  const out: string[] = [];
+  for (let i = 0; i < parts.length; i++) {
+    const one = (x: { p: string; n: number }) => (x.n > 1 ? `${x.p} (×${x.n})` : x.p);
+    let reps = 1;
+    while (i + 2 * reps + 1 < parts.length && parts[i + 2 * reps].p === parts[i].p && parts[i + 2 * reps + 1].p === parts[i + 1].p
+      && parts[i + 2 * reps].n === 1 && parts[i + 2 * reps + 1].n === 1 && parts[i].n === 1 && parts[i + 1].n === 1) reps++;
+    if (reps > 1) {
+      out.push(`${parts[i].p} → ${parts[i + 1].p} (×${reps}: once for each file)`);
+      i += 2 * reps - 1;
+    } else out.push(one(parts[i]));
+  }
+  return out.join(' → ');
 }
 
 /** Re-render when messages arrive, at most once a second: the strip is read, not watched. */
@@ -120,7 +134,8 @@ function SelectionQuery() {
           <div className="strip-chain">
             <h4>This selection sends</h4>
             <p data-testid="strip-chain">{describeChain(chain)}.</p>
-            <p className="strip-empty">Then, once per simulated second, a poll from the last reading received repeats this chain for the new records.</p>
+            <p className="strip-empty">The query asks for whole records: Connected Systems has no per-field filter, so the display client picks its fields from what comes back.
+              Then, once per simulated second, a poll from the last reading received repeats this chain for the new records.</p>
           </div>
         </div>
       </div>

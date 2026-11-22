@@ -5,7 +5,7 @@ import { contrast, contrastPairs } from '../src/shell/palette';
 // assembled static site. They load the pre-calculated history the build provides.
 const STARTUP_BUDGET_MS = 30_000; // NFR-10, as declared in src/config.ts
 const SLOW_MS = 180_000;
-const URL_PY = 'demo/?seed=1&backend=python'; // explicit: the stand-in is the default for now (D-80)
+const URL_PY = 'demo/?seed=1&backend=python'; // explicit: the stand-in is the default (FR-06b)
 
 test.describe.configure({ mode: 'serial' });
 
@@ -50,7 +50,7 @@ test('start-up: progress shown, then the flowchart; everything from the site its
   for (const id of ['platform', 'store', 'adapter', 'server', 'models', 'fastapi', 'scilibs', 'client']) await expect(page.getByTestId(`card-${id}`)).toBeVisible();
   for (const l of 'QDOKPHSLI') await expect(page.getByTestId(`key-${l}`)).toBeVisible();
   await expect(page.locator('[data-flow]')).toHaveCount(13); // every flow of §3.1, one arrow per direction (FR-65)
-  await expect(page.locator('.flow-label')).toHaveText('HTTP');
+  await expect(page.locator('.flow-label')).toHaveText(['HTTP', 'HTTP']); // the display client's and the models' requests
   const origin = new URL(page.url()).origin;
   expect(requests.filter((u) => !u.startsWith(origin) && !u.startsWith('data:') && !u.startsWith('blob:'))).toEqual([]);
   // No horizontal scroll at 1920×1080.
@@ -166,10 +166,154 @@ test('stand-in: labelled, tagged, the notice shown, the editor unavailable (AT-2
   await expect(page.getByTestId('standin-tag')).toHaveCount(7); // every component behind the seam
   await expect(page.getByTestId('card-client').getByTestId('standin-tag')).toHaveCount(0);
   await page.getByTestId('card-models').click();
-  await page.getByTestId('model-model-c').click();
+  await page.getByTestId('model-new-model-1').click();
   await expect(page.getByTestId('editor-unavailable')).toBeVisible();
   await play(page);
   await configured(page);
   await page.getByTestId('card-client').click();
   await expect(page.getByTestId('cluster-score')).toContainText('(illustrative)', { timeout: 90_000 });
+});
+
+// ---- The failure demos and the claims behind them, in the stand-in: the display client is identical in
+// ---- both back ends (FR-06c), and the stand-in starts in seconds.
+const URL_JS = 'demo/?seed=1&backend=standin';
+
+async function ready(page: Page) {
+  await open(page, URL_JS);
+  await play(page);
+  await page.getByTestId('card-client').click();
+  await configured(page);
+  await expect(page.getByTestId('chart-line').locator('canvas')).toBeVisible({ timeout: 60_000 });
+}
+
+async function demo(page: Page, id: string) {
+  await page.getByTestId('demo-menu').click();
+  await page.getByTestId(`demo-${id}`).click();
+  await expect(page.getByTestId('demo-banner')).toBeVisible();
+}
+
+test('overview: what is adopted, what is written, what is not in the demonstrator', async ({ page }) => {
+  await open(page, URL_JS);
+  await expect(page.getByTestId('detail-empty')).toBeVisible();
+  await expect(page.getByTestId('adopted').locator('tbody tr')).toHaveCount(10);
+  await expect(page.getByTestId('adopted')).toContainText('OGC API – Connected Systems');
+  await expect(page.getByTestId('written').locator('li')).toHaveCount(4);
+  await expect(page.getByTestId('not-here').locator('li')).toHaveCount(12);
+  await expect(page.getByTestId('not-here')).toContainText('Authentication and access control');
+  await expect(page.locator('.card.gold')).toHaveCount(0); // the overview reveals nothing (FR-74)
+  await page.getByTestId('card-server').click();
+  await expect(page.getByTestId('overview')).toHaveCount(0);
+  await page.getByTestId('overview-button').click();
+  await expect(page.getByTestId('overview')).toBeVisible();
+  // Nothing on screen cites a requirement number.
+  for (const id of ['adapter', 'store', 'platform', 'fastapi', 'scilibs', 'server', 'models']) {
+    await page.getByTestId(`card-${id}`).click();
+    expect(await page.getByTestId('detail-panel').innerText()).not.toMatch(/\b(FR|AT|NFR|VS)-\d|§/);
+  }
+  await page.getByTestId('control-panel-toggle').click();
+  expect(await page.getByTestId('control-panel').innerText()).not.toMatch(/\b(FR|AT|NFR|VS)-\d|§/);
+});
+
+test('the Data server panel claims only what the server does; models register over HTTP (FR-28)', async ({ page }) => {
+  await ready(page);
+  await page.getByTestId('card-server').click();
+  const panel = page.getByTestId('detail-server');
+  await expect(panel).toContainText('ordinary resource creation');
+  await expect(panel).toContainText('Not used:');
+  // What the panel says is not used is refused by name; what it says a model does, works.
+  const probe = await page.evaluate(async () => {
+    const events = await fetch('api/systemEvents');
+    const made = await fetch('api/systems/models/subsystems', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ uniqueId: 'urn:x-barge:process:e2e-probe', label: 'Probe' }),
+    });
+    return { events: events.status, refused: (await events.json()).refused, made: made.status, location: made.headers.get('location') };
+  });
+  expect(probe.events).toBe(404);
+  expect(probe.refused).toBe('systemEvents');
+  expect([201, 409]).toContain(probe.made);
+  expect(probe.location).toContain('/systems/e2e-probe');
+  // The models' own traffic is on the flowchart, between Models and FastAPI, as HTTP.
+  await page.getByTestId('card-fastapi').click();
+  const counters = page.getByTestId('counters');
+  await expect(counters.locator('tr', { hasText: 'receives from' }).filter({ hasText: 'Models' })).toBeVisible();
+  await expect.poll(async () => Number((await counters.locator('tr', { hasText: 'receives from' }).filter({ hasText: 'Models' }).locator('td.num').innerText()).match(/Q ([\d,]+)/)?.[1].replace(/,/g, '') ?? 0),
+    { timeout: 60_000 }).toBeGreaterThan(0);
+});
+
+test('server down, then up: unreachable and stale, then waiting mode, a new instance and a fresh handshake (AT-10, AT-11)', async ({ page }) => {
+  await ready(page);
+  const instance = await page.getByTestId('server-state').innerText();
+  const simTime = () => page.getByTestId('role-platform').innerText();
+  await demo(page, 'down');
+  await expect(page.getByTestId('client-state')).toHaveText('Server unreachable', { timeout: 30_000 });
+  await expect(page.getByTestId('server-state')).toHaveText('Down');
+  await expect(page.getByTestId('dc-banner')).toContainText('Server unreachable');
+  await expect(page.getByTestId('dc-status')).toContainText('stale');
+  await expect(page.locator('.is-stale')).toHaveCount(1); // the last data stays, marked stale
+  const t = await simTime();
+  await expect.poll(simTime, { timeout: 30_000 }).not.toBe(t); // the platform and its store carry on (FR-18)
+  await page.getByTestId('demo-next').click();
+  await expect(page.getByTestId('server-state')).toHaveText(/Ready/, { timeout: 60_000 });
+  expect(await page.getByTestId('server-state').innerText()).not.toBe(instance);
+  await expect(page.getByTestId('client-state')).toHaveText('Configured', { timeout: 60_000 });
+  await expect(page.locator('.is-stale')).toHaveCount(0);
+});
+
+test('an essential source removed: degraded, one warning naming the sources, their views unavailable (AT-07)', async ({ page }) => {
+  await ready(page);
+  await demo(page, 'essential');
+  await expect(page.getByTestId('client-state')).toHaveText('Degraded', { timeout: 60_000 });
+  await expect(page.getByTestId('dc-degraded')).toHaveCount(1);
+  await expect(page.getByTestId('dc-degraded')).toContainText('Bow air temperature');
+  await expect(page.getByTestId('view-line')).toContainText('Unavailable');
+  await expect(page.getByTestId('chart-line')).toHaveCount(0); // never an empty chart (FR-45)
+  await expect(page.getByTestId('chip').filter({ hasText: 'air temperature' }).first()).toBeDisabled();
+  await page.getByTestId('demo-reset').click();
+  await expect(page.getByTestId('client-state')).toHaveText('Configured', { timeout: 60_000 });
+  await expect(page.getByTestId('dc-degraded')).toHaveCount(0);
+});
+
+test('fields the client has never seen appear after a handshake, drawn by schema type (AT-09)', async ({ page }) => {
+  await ready(page);
+  const before = await page.getByTestId('chip').allInnerTexts();
+  await demo(page, 'extra');
+  await expect.poll(async () => (await page.getByTestId('chip').allInnerTexts()).length, { timeout: 60_000 }).toBe(before.length + 3);
+  await expect(page.getByTestId('client-state')).toHaveText('Configured');
+  for (const name of ['Precipitation', 'Pressure tendency', 'Readings removed']) {
+    const chip = page.getByTestId('chip').filter({ hasText: name });
+    await expect(chip).toHaveClass(/optional/); // not in the profile: no warning, a dashed chip
+    await chip.click();
+  }
+  await expect(page.getByTestId('chart-line').locator('canvas')).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByTestId('dc-degraded')).toHaveCount(0);
+});
+
+test('a server whose profile claim discovery contradicts is rejected (AT-08)', async ({ page }) => {
+  await ready(page);
+  await demo(page, 'lie');
+  await expect(page.getByTestId('client-state')).toHaveText('Server rejected', { timeout: 60_000 });
+  await expect(page.getByTestId('dc-rejected')).toContainText('This server cannot be used');
+  await page.getByTestId('demo-reset').click();
+  await expect(page.getByTestId('client-state')).toHaveText('Configured', { timeout: 60_000 });
+});
+
+test('a model written in an empty slot registers and appears in the display client (AT-13, Python)', async ({ page }) => {
+  await open(page);
+  await play(page);
+  await configured(page);
+  await page.getByTestId('card-models').click();
+  await page.getByTestId('model-new-model-1').click();
+  await expect(page.getByTestId('model-editor')).toBeVisible();
+  await page.getByTestId('run-model').click();
+  await expect(page.getByTestId('phase-new-model-1')).toContainText('live', { timeout: SLOW_MS });
+  await page.getByTestId('card-client').click();
+  await page.getByTestId('restart-client').click(); // discovery happens only at handshake (FR-44)
+  await page.getByTestId('card-client').click();
+  await configured(page);
+  const chip = page.getByTestId('chip').filter({ hasText: 'Wind chill' });
+  await expect(chip).toBeVisible({ timeout: 60_000 });
+  await expect(chip).toHaveClass(/optional/);
+  await chip.click();
+  await expect(page.getByTestId('chart-line').locator('canvas')).toBeVisible({ timeout: 60_000 });
 });

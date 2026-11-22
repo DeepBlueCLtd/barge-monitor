@@ -11,7 +11,7 @@ echarts.use([LineChart, ScatterChart, HeatmapChart, CustomChart, GridComponent, 
 
 export type EChartsOption = echarts.EChartsCoreOption;
 export const MONITOR_FONT = "'Inter', system-ui, sans-serif";
-export const AXIS = { color: '#4b5563', fontSize: 11, fontFamily: MONITOR_FONT };
+export const AXIS = { color: '#4b5563', fontSize: 13, fontFamily: MONITOR_FONT };
 /** Series colours inside the monitor: the display client's own, not the demonstrator's letters. */
 export const SERIES = ['#2f4ac0', '#c2410c', '#0f766e', '#9333ea', '#be123c', '#4d7c0f', '#0369a1', '#a16207'];
 

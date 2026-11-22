@@ -1,6 +1,6 @@
-// Model A, stand-in: summaries and derived values (FR-29, FR-34; the split
+// Summaries, stand-in: summaries and derived values (FR-29, FR-34; the split
 // is ADR 0003). From Data cleanse's output only (AT-15) it publishes, with
-// the same datastreams and schemas as backend/models/model_a.py:
+// the same datastreams and schemas as backend/models/summaries.py:
 //   * summary datastreams per sensor: 1-minute and hourly means of the seven
 //     parameters, readings removed, most frequent precipitation type;
 //   * derived values at both resolutions: dew point, bow minus stern air
@@ -74,9 +74,9 @@ function concat(a: Float64Array, b: Float64Array): Float64Array {
   return out;
 }
 
-export class ModelA extends Model {
-  readonly id = 'model-a';
-  readonly label = 'Model A';
+export class Summaries extends Model {
+  readonly id = 'summaries';
+  readonly label = 'Summaries';
   description = 'Core model: publishes its own datastreams.';
   interval = 60;
   settings: Record<string, any> = { tendency_hours: 3.0 };
@@ -107,8 +107,8 @@ export class ModelA extends Model {
       });
     }
     this.controlKey = api.createControlstream(this.system, {
-      name: 'Model A settings', inputName: 'settings',
-      schema: M.record('Model A settings', [M.quantity('tendency_hours', 'Pressure tendency span', 'h', 1, 6)]),
+      name: 'Summaries settings', inputName: 'settings',
+      schema: M.record('Summaries settings', [M.quantity('tendency_hours', 'Pressure tendency span', 'h', 1, 6)]),
     });
   }
 

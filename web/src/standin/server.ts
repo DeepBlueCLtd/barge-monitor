@@ -127,7 +127,7 @@ export class Server {
   }
 
   /** Public id -> datastream, for this instance's offering. */
-  datastreams(): Map<string, DsView> {
+  datastreams(hidden = false): Map<string, DsView> {
     const out = new Map<string, DsView>();
     for (const s of SENSORS) {
       const rec = this.visible(this.sensorSchema[s]);
@@ -137,7 +137,7 @@ export class Server {
     for (const [key, d] of this.registry.datastreams) {
       if (!this.registry.systems.has(d.system)) continue;
       const rec = this.visible(d.schema);
-      if (rec.fields.length < 2) continue; // every output switched off: nothing to publish (FR-52)
+      if (rec.fields.length < 2 && !hidden) continue; // every output switched off: nothing to publish (FR-52)
       const id = schemaId(`${d.system}-${d.outputName}`, rec.fields.map((f) => f.name));
       out.set(id, { id, key, name: d.name, outputName: d.outputName, system: d.system, kind: 'model', schema: rec, series: d.series });
     }

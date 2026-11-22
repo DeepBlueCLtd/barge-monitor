@@ -14,7 +14,7 @@ export function ControlPanel({ onClose }: { onClose: () => void }) {
         <h2>Control panel</h2>
         <button className="close" aria-label="Close the control panel" onClick={onClose}>×</button>
       </div>
-      <p className="hint">Part of the demonstrator, not the system. Works whether the simulation is playing or paused (FR-79).</p>
+      <p className="hint">Part of the demonstrator, not the system. Works whether the simulation is playing or paused. Failure demos, in the top bar, set these switches for you.</p>
       <div className="row">
         {server === 'down'
           ? <button className="btn" onClick={() => runtime.send('up')} data-testid="server-up">Bring server up</button>
@@ -48,8 +48,8 @@ export function ControlPanel({ onClose }: { onClose: () => void }) {
             </table>
           </div>
           <label className="switch"><input type="checkbox" checked={st.lie_about_profile} data-testid="profile-lie"
-            onChange={(e) => runtime.send('profile-lie', e.target.checked)} /> Misconfigured server: claim the declared profile even when what it publishes cannot meet it (AT-08)</label>
-          <p className="hint">A toggle takes effect only at the next server start (FR-51); stored history is unchanged. Raw parameters switch both sensors together. A model output whose inputs are off is not published (FR-52).</p>
+            onChange={(e) => runtime.send('profile-lie', e.target.checked)} /> Misconfigured server: claim the declared profile even when what it publishes cannot meet it</label>
+          <p className="hint">A toggle takes effect only at the next server start; stored history is unchanged. Raw parameters switch both sensors together. A model output whose inputs are off is not published.</p>
         </>
       )}
     </aside>

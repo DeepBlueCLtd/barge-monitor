@@ -7,6 +7,7 @@ import { STARTUP_BUDGET_MS } from '../config';
 import { DetailPanel } from '../detail/DetailPanel';
 import { simClock } from './clock';
 import { ControlPanel } from './ControlPanel';
+import { DemoBanner, DemoMenu } from './Demos';
 import { Flowchart } from './Flowchart';
 import { runtime } from './runtime';
 import { selectComponent, unrevealAll } from './selection';
@@ -86,8 +87,11 @@ function Shell() {
           }}>Restart client</button>
           <button className={`btn${control?.pending ? ' attention' : ''}`} data-testid="restart-server" onClick={() => runtime.send('restart-server')}
             title={control?.pending ? 'Field changes are pending until the next server start' : undefined}>Restart server</button>
+          <DemoMenu />
           <button className="btn" onClick={() => setDrawer(!drawer)} aria-expanded={drawer} data-testid="control-panel-toggle">Control panel</button>
+          <button className="btn" onClick={() => selectComponent(null)} data-testid="overview-button" title="What is adopted, what is written, what is not here">Overview</button>
         </nav>
+        <DemoBanner />
       </header>
       {drawer && <ControlPanel onClose={() => setDrawer(false)} />}
       <div className="main">

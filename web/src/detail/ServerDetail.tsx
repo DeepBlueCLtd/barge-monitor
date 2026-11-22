@@ -13,10 +13,10 @@ const BOXES: Box[] = [
   { id: 'ds-bow', x: 20, y: 178, w: 170, title: 'Datastream', sub: '7 fields + QC flags' },
   { id: 'ds-stern', x: 210, y: 178, w: 170, title: 'Datastream', sub: '7 fields + QC flags' },
   { id: 'obs-s', x: 20, y: 256, w: 360, title: 'Observations', sub: 'one per sensor per second · SWE Common JSON' },
-  { id: 'models', x: 560, y: 22, w: 280, title: 'Models', sub: 'System · asset type Process' },
-  { id: 'cores', x: 560, y: 100, w: 280, title: 'Data cleanse · Model A · Model B', sub: 'one process system each' },
-  { id: 'outs', x: 560, y: 178, w: 280, title: 'Output datastreams', sub: 'cleaned values, summaries, clusters' },
-  { id: 'obs-m', x: 560, y: 256, w: 280, title: 'Observations', sub: 'published by each model' },
+  { id: 'models', x: 530, y: 22, w: 340, title: 'Models', sub: 'System · asset type Process' },
+  { id: 'cores', x: 530, y: 100, w: 340, title: 'Data cleanse · Summaries · Analysis', sub: 'one process system each' },
+  { id: 'outs', x: 530, y: 178, w: 340, title: 'Output datastreams', sub: 'cleaned values, summaries, clusters' },
+  { id: 'obs-m', x: 530, y: 256, w: 340, title: 'Observations', sub: 'published by each model' },
 ];
 const box = (id: string) => BOXES.find((b) => b.id === id)!;
 const cx = (b: Box) => b.x + b.w / 2;
@@ -39,7 +39,7 @@ export function ServerDetail() {
       <p className="lede">The data server describes this system in Connected Systems' own terms. Every box below is a standard resource.</p>
       <div className="cs-diagram">
         <span className="cs-col-label" style={{ left: 20 }}>Sensing</span>
-        <span className="cs-col-label" style={{ left: 560 }}>Models</span>
+        <span className="cs-col-label" style={{ left: 530 }}>Models</span>
         <svg width="980" height="330" viewBox="0 0 980 330" aria-hidden="true" className="cs-links">
           <defs>
             <marker id="cs-head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#374151" /></marker>
@@ -59,7 +59,7 @@ export function ServerDetail() {
       <div className="also">
         <div className="cs-box"><b>Property definitions</b><span>the seven parameters and derived values</span></div>
         <div className="cs-box"><b>Control streams and commands</b><span>model settings from the display client</span></div>
-        <div className="cs-box"><b>System events</b><span>restarts and field changes</span></div>
+        <div className="cs-box"><b>Resource creation</b><span>how each model registers itself</span></div>
       </div>
       <div className="why">
         <h4 className="small-caps">Why it fits</h4>
@@ -67,11 +67,12 @@ export function ServerDetail() {
           <li>A platform carrying sensors is exactly its <b>Platform</b> and <b>Sensor</b> systems.</li>
           <li>No position needed: a system's <b>location is optional</b>.</li>
           <li>One <b>record datastream</b> carries all seven parameters per reading, with QC flags beside them.</li>
-          <li>Models are first-class <b>process systems</b>, so adding one is ordinary resource creation.</li>
+          <li>Models are first-class <b>process systems</b>: a model registers itself by <b>ordinary resource creation</b>, over the same interface the display reads.</li>
           <li>Settings travel as <b>commands</b>, with their bounds in the control stream's schema.</li>
-          <li>Restarts and configuration changes are standard <b>system events</b>.</li>
+          <li>A restart needs nothing special: <b>plain HTTP</b> says wait (503 with Retry-After) and an instance identifier says start again.</li>
         </ul>
-        <p className="gaps"><b>Gaps:</b> no standard aggregation, so summaries are their own datastreams; publish/subscribe (Part 3) is not yet published, so the display polls.</p>
+        <p className="gaps"><b>Gaps:</b> no standard aggregation, so summaries are their own datastreams; publish/subscribe (Part 3) is not yet published, so the display and the models poll; a result that holds the latest run only is replaced with a plain HTTP PUT.</p>
+        <p className="gaps"><b>Not used:</b> deployments, procedures, sampling features, system events and history, command feasibility, and replacing or deleting resources. Each is refused by name.</p>
       </div>
     </div>
   );

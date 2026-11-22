@@ -9,10 +9,10 @@ import { EXAMPLE_MODEL, resolve } from '../config';
 import { runtime } from '../shell/runtime';
 import { useStore } from '../shell/store';
 
-/** The example is written for Model C; for another slot its id and label are changed to match. */
+/** The example is written for New model 1; for another slot its id and label are changed to match. */
 function forSlot(code: string, slot: string): string {
   const letter = slot.slice(-1).toUpperCase();
-  return code.replaceAll('model-c', slot).replaceAll('Model C', `Model ${letter}`);
+  return code.replaceAll('new-model-1', slot).replaceAll('New model 1', `Model ${letter}`);
 }
 
 export function ModelEditor({ slot }: { slot: string }) {

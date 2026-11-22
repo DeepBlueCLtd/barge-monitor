@@ -6,9 +6,8 @@ database it outlives server restarts (decision D-11). Field toggles never
 touch it: the server applies the offering when it serves (fields.py).
 
 Observations are kept as columns: numeric fields as float arrays (NaN for a
-missing value), everything else as object arrays. A datastream may declare a
-retention: older rows are dropped once every model that reads the datastream
-has read past them (Data cleanse's 1 s output, kept for a day).
+missing value), everything else as object arrays. Nothing is dropped: the
+server keeps no account of who has read what (FR-06).
 """
 from __future__ import annotations
 
@@ -20,12 +19,10 @@ NUMERIC = {"Quantity", "Count", "Boolean"}
 class Series:
     """Append-only columns ordered by time."""
 
-    def __init__(self, fields: list[dict], retention: float | None = None):
+    def __init__(self, fields: list[dict]):
         self.types = {f["name"]: f["type"] for f in fields if f["name"] != "time"}
-        self.retention = retention
         self.t = np.empty(0)
         self.cols: dict[str, np.ndarray] = {n: self._empty(ty) for n, ty in self.types.items()}
-        self.readers: dict[str, float] = {}  # model -> latest time it has read
 
     def __len__(self):
         return len(self.t)
@@ -56,16 +53,6 @@ class Series:
                 arr = np.full(len(t), None, dtype=object) if v is None else np.asarray(list(v) if not isinstance(v, np.ndarray) else v, dtype=object)
                 self.cols[n] = np.concatenate([self.cols[n], arr[idx]])
         return int(len(idx))
-
-    def prune(self, now: float) -> None:
-        if self.retention is None or not len(self.t) or not self.readers:
-            return  # nothing is dropped before some model has said it reads this datastream
-        cut = min(now - self.retention, min(self.readers.values()))
-        i = int(np.searchsorted(self.t, cut, "left"))
-        if i:
-            self.t = self.t[i:]
-            for n in self.cols:
-                self.cols[n] = self.cols[n][i:]
 
     def range(self, t0: float, t1: float) -> tuple[int, int]:
         return int(np.searchsorted(self.t, t0, "left")), int(np.searchsorted(self.t, t1, "right"))

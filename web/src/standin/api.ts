@@ -8,11 +8,10 @@
 import openapiJson from '../../../contracts/openapi.json';
 import { DEFAULT_LIMIT, MAX_LIMIT, PROFILE_URI, RETRY_AFTER_S, SOSA } from './constants';
 import { CATALOGUE, Field } from './fields';
-import type { ModelHost } from './modelhost';
-import { dumps, npRound, parseQs, PyFloat, pySlice, qsDict, urlencode } from './py';
-import { Cols, CommandRec, ControlstreamRec } from './registry';
+import { dumps, npRound, parseQs, PyFloat, pyFloat, pySlice, qsDict, urlencode } from './py';
+import { Cols, CommandRec, ControlstreamRec, NUMERIC, Series } from './registry';
 import { CommandError, DsView, Server } from './server';
-import { JSON_TYPE, OBS_FORMATS, schemaResponse, SWE_JSON } from './swe';
+import { DataRecord, JSON_TYPE, OBS_FORMATS, schemaResponse, SWE_JSON } from './swe';
 import type { Letter, Tap } from './tap';
 import { iso, parseIso } from './time';
 
@@ -74,7 +73,6 @@ export interface HttpResponse {
 export interface ApiRuntime {
   server: Server | null;
   tap: Tap;
-  host: ModelHost;
   now(): number;
 }
 
@@ -110,17 +108,35 @@ interface Ctx {
   base: string;
   rootPath: string;
   body: Uint8Array;
+  model: string | null; // the model that asks, when one does (capture only)
+  quiet: boolean; // a model catching up on history: counted, not drawn
 }
 
 type Handler = (ctx: Ctx, p: Record<string, string>) => Reply;
 
+const SWE_TYPES = new Set(['Quantity', 'Count', 'Category', 'Boolean', 'Text', 'Time', 'Matrix', 'DataArray']);
+const COMMAND_STATUSES = ['PENDING', 'ACCEPTED', 'EXECUTING', 'COMPLETED', 'FAILED', 'REJECTED'];
+const REFEREE = '/demonstrator/referee';
+const SHOWN = 4 * 4000; // what a captured message shows of a body (the tap clips it further)
+
 function letterForRequest(method: string, path: string): Letter {
-  return method === 'POST' && path.replace(/\/+$/, '').endsWith('/commands') ? 'K' : 'Q';
+  const p = path.replace(/\/+$/, '');
+  if (p.startsWith(REFEREE)) return 'I'; // demonstrator scaffolding: no public standard
+  if (method === 'POST' && p.endsWith('/commands')) return 'K';
+  if ((method === 'POST' || method === 'PUT') && p.endsWith('/observations')) return 'O';
+  return 'Q';
+}
+
+/** What a captured message shows of a body: its start, never megabytes of it. */
+function shown(b: Uint8Array): string {
+  if (b.length <= SHOWN) return new TextDecoder().decode(b);
+  return new TextDecoder().decode(b.subarray(0, SHOWN)) + `… (${b.length} bytes in all)`;
 }
 
 function letterForResponse(status: number, path: string, ctype: string): Letter {
   if (status >= 400) return 'H';
   const p = path.replace(/\/+$/, '');
+  if (p.startsWith(REFEREE)) return 'I';
   if (p.endsWith('/profile')) return 'P';
   if (ctype.includes('swe+json') || p.endsWith('/observations')) return 'O';
   return 'D'; // every other resource, commands and their status included (decisions-log D-61)
@@ -200,6 +216,38 @@ function column(fd: Record<string, any>, v: ArrayLike<unknown>): unknown[] {
   return Array.from(f);
 }
 
+/** Published SWE JSON records as columns. Every record needs its time; unknown fields are refused. */
+function rowsToCols(rows: Record<string, unknown>[], fields: { name: string; type: string }[]): Record<string, unknown> {
+  const known = new Map(fields.map((f) => [f.name, f.type]));
+  for (const r of [rows[0], rows[rows.length - 1]]) {
+    const extra = r ? Object.keys(r).find((k) => !known.has(k)) : undefined;
+    if (extra) throw new Refusal(400, 'InvalidParameterValue', `field ${extra} is not in the datastream's schema`, extra);
+  }
+  const times = (vals: unknown[], must: boolean) => Float64Array.from(vals, (v) => {
+    if (typeof v !== 'string') {
+      if (must) throw new Refusal(400, 'InvalidParameterValue', 'every record needs a time (ISO 8601, UTC)', 'time');
+      return NaN;
+    }
+    return parseIso(v);
+  });
+  let t: Float64Array;
+  try {
+    t = times(rows.map((r) => r.time), true);
+  } catch (e) {
+    if (e instanceof Refusal) throw e;
+    throw new Refusal(400, 'InvalidParameterValue', `every record needs a time (ISO 8601, UTC): ${(e as Error).message}`, 'time');
+  }
+  const cols: Record<string, unknown> = { t };
+  for (const [name, ty] of known) {
+    if (name === 'time') continue;
+    const vals = rows.map((r) => r[name] ?? null);
+    if (ty === 'Time') cols[name] = Array.from(times(vals, false), (x) => (Number.isNaN(x) ? null : x));
+    else if (NUMERIC.has(ty)) cols[name] = Float64Array.from(vals, (v) => (v === null ? NaN : Number(v)));
+    else cols[name] = vals;
+  }
+  return cols;
+}
+
 export class Api {
   private routes: [string[], RegExp, string[], Handler][] = [];
 
@@ -238,6 +286,13 @@ export class Api {
     r(G, '/controlstreams/{csId}/commands', (c, p) => this.commands(c, p.csId));
     r(G, '/commands/{cmdId}', (c, p) => this.command(c, p.cmdId));
     r(G, '/commands/{cmdId}/status', (c, p) => this.commandStatus(c, p.cmdId));
+    r(['POST'], '/commands/{cmdId}/status', (c, p) => this.createCommandStatus(c, p.cmdId));
+    r(['POST'], '/systems/{systemId}/subsystems', (c, p) => this.createSubsystem(c, p.systemId));
+    r(['POST'], '/systems/{systemId}/datastreams', (c, p) => this.createDatastream(c, p.systemId));
+    r(['POST'], '/systems/{systemId}/controlstreams', (c, p) => this.createControlstream(c, p.systemId));
+    r(['POST'], '/datastreams/{dsId}/observations', (c, p) => this.takeObservations(c, p.dsId, false));
+    r(['PUT'], '/datastreams/{dsId}/observations', (c, p) => this.takeObservations(c, p.dsId, true));
+    r(['POST'], REFEREE + '/{kind}', (c, p) => this.referee(c, p.kind));
     r(['GET', 'HEAD', 'OPTIONS', 'POST', 'PUT', 'PATCH', 'DELETE'], '/(.*)', (c) => this.refuse(c));
   }
 
@@ -256,16 +311,21 @@ export class Api {
     for (const [k, v] of req.headers) headers.set(k.toLowerCase(), v);
     const pairs = parseQs(req.query || '');
     const body = req.body ?? new Uint8Array(0);
+    // Who is asking: the display client, or a model (which says so). Capture only; nothing is decided by it.
+    const model = headers.get('x-tap-model') || null;
+    const who = model ? 'models' : 'client';
+    const quiet = headers.get('x-tap-quiet') === '1';
     const ctx: Ctx = {
       method, rel, pairs, q: qsDict(pairs), headers, rootPath: req.rootPath || '',
-      base: (req.origin + (req.rootPath || '')).replace(/\/+$/, ''), body,
+      base: (req.origin + (req.rootPath || '')).replace(/\/+$/, ''), body, model, quiet,
     };
+    const opts = { model: model ?? undefined, quiet };
     const hopText = headers.get('x-tap-hop') ?? '1';
     const prev = tap.beginChain(headers.get('x-tap-chain') ?? null, /^\d+$/.test(hopText) ? parseInt(hopText, 10) : 1);
     const chainId = tap.chainId();
-    const text = new TextDecoder().decode(body);
-    tap.emit('client', 'fastapi', letterForRequest(method, rel), `${method} ${rel}${req.query ? '?' + req.query : ''}`,
-      body.length ? text : `${method} ${rel}?${req.query}`);
+    const ask = `${method} ${rel}${req.query ? '?' + req.query : ''}`;
+    tap.emit(who, 'fastapi', letterForRequest(method, rel), model ? `${model}: ${ask}` : ask,
+      body.length ? shown(body) : `${method} ${rel}?${req.query}`, opts);
     const s = this.rt.server;
     let resp: Reply;
     if (s === null) {
@@ -275,9 +335,9 @@ export class Api {
       resp = new Refusal(503, 'ServiceUnavailable', `waiting mode: rebuilding the index from the store (${p.indexed} of ${p.stored} records)`,
         null, [['retry-after', String(RETRY_AFTER_S)]]).response();
     } else {
-      tap.emit('fastapi', 'server', 'I', `route ${method} ${rel}`, { path: rel, query: req.query });
+      tap.emit('fastapi', 'server', 'I', `route ${method} ${rel}`, { path: rel, query: req.query }, opts);
       resp = this.route(ctx);
-      tap.emit('server', 'fastapi', 'I', `result ${resp.status}`, { status: resp.status });
+      tap.emit('server', 'fastapi', 'I', `result ${resp.status}`, { status: resp.status }, opts);
     }
     const payload = new TextEncoder().encode(resp.body);
     const out: [string, string][] = resp.headers.filter(([k]) => k.toLowerCase() !== 'content-length');
@@ -290,7 +350,8 @@ export class Api {
     out.push(['x-tap-hops', String(hops + 1)]);
     const prev2 = tap.beginChain(chainId, hops); // the response is on its request's chain
     const ctype = out.find(([k]) => k === 'content-type')?.[1] ?? '';
-    tap.emit('fastapi', 'client', letterForResponse(resp.status, rel, ctype), `${resp.status} ${rel}`, resp.body);
+    tap.emit('fastapi', who, letterForResponse(resp.status, rel, ctype), model ? `${model}: ${resp.status} ${rel}` : `${resp.status} ${rel}`,
+      resp.body.length > SHOWN ? resp.body.slice(0, SHOWN) + `… (${payload.length} bytes in all)` : resp.body, opts);
     tap.endChain(prev2);
     return { status: resp.status, headers: out, body: method === 'HEAD' ? new Uint8Array(0) : payload };
   }
@@ -400,7 +461,7 @@ export class Api {
   private systemJson(ctx: Ctx, s: Record<string, any>) {
     const sid = s.id;
     const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(s)) if (k !== 'parent' && k !== 'createdBy') out[k] = v; // internal fields stay internal
+    for (const [k, v] of Object.entries(s)) if (k !== 'parent') out[k] = v; // the parent is given as a link
     const links = [this.link(ctx, `/systems/${sid}`, 'self', 'application/sml+json'),
       this.link(ctx, `/systems/${sid}/datastreams`, 'datastreams'),
       this.link(ctx, `/systems/${sid}/subsystems`, 'subsystems'),
@@ -590,12 +651,12 @@ export class Api {
       t0 = Math.max(t0, r0);
       t1 = Math.min(t1, r1);
     }
-    const [cols, total] = this.fetch(d, t0, t1, limit, offset, latest);
+    const [cols, total] = this.fetch(d, t0, t1, limit, offset, latest, ctx);
     return this.obsResponse(ctx, d, cols, of, limit, offset, total, `/datastreams/${dsId}/observations`);
   }
 
   /** api._fetch: columns for one page and the total available. */
-  private fetch(d: DsView, t0: number, t1: number, lim: number, offset: number, latest: boolean): [Cols, number] {
+  private fetch(d: DsView, t0: number, t1: number, lim: number, offset: number, latest: boolean, ctx: Ctx): [Cols, number] {
     const s = this.srv();
     const names = d.schema.fields.map((f) => f.name).filter((n) => n !== 'time');
     if (d.kind === 'sensor') {
@@ -606,7 +667,7 @@ export class Api {
       }
       const total = s.adapter.count(d.sensor!, t0, t1);
       const fields = names.filter((n) => !n.endsWith('_qc'));
-      return [s.sensorRecords(d.sensor!, t0, t1, lim, offset, fields), total];
+      return [s.sensorRecords(d.sensor!, t0, t1, lim, offset, fields, ctx.model ? `${ctx.model} read` : 'observation request', ctx.quiet), total];
     }
     const ser = d.series!;
     let [i0, i1] = ser.range(t0, t1);
@@ -639,15 +700,29 @@ export class Api {
     }
     const nxt = offset + lim < total ? ctx.base + this.nextUrl(ctx, path, lim, offset) : null;
     if (of === SWE_JSON) {
-      const rows = times.map((tt, i) => {
-        const row: Record<string, unknown> = { time: tt };
-        for (const [n, c] of columns) row[n] = c[i];
-        return row;
-      });
+      // The same text as dumps(rows, true), written a record at a time: a day of records is one response.
+      const keys = columns.map(([n]) => ',' + dumps(n, true) + ':');
+      const seen = new Map<string, string>(); // category tokens and flags repeat: encode each once
+      const enc = (x: unknown): string => {
+        if (x === null || x === undefined) return 'null';
+        if (x instanceof PyFloat) return Number.isFinite(x.v) ? pyFloat(x.v) : 'null';
+        if (typeof x === 'string') {
+          let t = seen.get(x);
+          if (t === undefined) seen.set(x, (t = dumps(x, true)));
+          return t;
+        }
+        return dumps(x, true);
+      };
+      const parts: string[] = new Array(times.length);
+      for (let i = 0; i < times.length; i++) {
+        let row = '{"time":"' + times[i] + '"';
+        for (let c = 0; c < columns.length; c++) row += keys[c] + enc(columns[c][1][i]);
+        parts[i] = row + '}';
+      }
       const headers: [string, string][] = [['content-type', SWE_JSON]];
       if (nxt) headers.push(['link', `<${nxt}>; rel="next"`]);
       headers.push(['x-total-count', String(total)]);
-      return { status: 200, headers, body: dumps(rows, true) };
+      return { status: 200, headers, body: '[' + parts.join(',') + ']' };
     }
     const items = times.map((tt, i) => {
       const result: Record<string, unknown> = {};
@@ -713,16 +788,22 @@ export class Api {
       status: [{ statusCode: 'PENDING', reportTime: issued }],
     };
     reg.commands.set(cid, cmd);
-    const owner = reg.systems.get(c.system)?.createdBy;
-    this.rt.host.notify(owner, { type: 'command', command: { id: cmd.id, issueTime: cmd.issueTime, parameters: cmd.parameters } });
     return json(this.commandJson(ctx, cmd), 201, [['location', ctx.base + `/commands/${cid}`]]);
   }
 
   private commands(ctx: Ctx, csId: string): Reply {
     const [limit, offset] = this.listParams(ctx);
-    this.only(ctx, ['limit', 'offset', 'f']);
+    this.only(ctx, ['limit', 'offset', 'f', 'statusCode']);
     const c = this.getCs(csId);
-    const items = [...this.srv().registry.commands.values()].filter((x) => x.cs_key === c.key).map((x) => this.commandJson(ctx, x));
+    const sc = ctx.q.get('statusCode');
+    const want = sc === undefined ? null : sc.split(',').map((x) => x.trim());
+    const bad = (want ?? []).filter((x) => !COMMAND_STATUSES.includes(x));
+    if (bad.length) {
+      throw new Refusal(400, 'InvalidParameterValue', `statusCode ${bad.join(', ')} is not one of ${COMMAND_STATUSES.join(', ')}`, 'statusCode');
+    }
+    const items = [...this.srv().registry.commands.values()]
+      .filter((x) => x.cs_key === c.key && (want === null || want.includes(x.status[x.status.length - 1].statusCode)))
+      .map((x) => this.commandJson(ctx, x));
     return json(this.page(items, ctx, `/controlstreams/${csId}/commands`, limit, offset));
   }
 
@@ -736,6 +817,157 @@ export class Api {
     return json({ items: this.getCmd(cmdId).status });
   }
 
+  // --- creating resources: how a model registers (FR-28) -------------------------------------
+  private jsonBody(ctx: Ctx): any {
+    try {
+      const text = new TextDecoder().decode(ctx.body);
+      return JSON.parse(text.trim() ? text : 'null');
+    } catch {
+      throw new Refusal(400, 'InvalidParameterValue', 'the request body must be JSON', 'body');
+    }
+  }
+
+  /** 201 with the new resource's Location; 409 with the Location of the one already there. */
+  private created(ctx: Ctx, href: string, body: unknown, existing = false): Reply {
+    const loc: [string, string][] = [['location', ctx.base + href]];
+    if (existing) return new Refusal(409, 'Conflict', `${href} already exists; its Location is given`, 'uniqueId', loc).response();
+    return json(body, 201, loc);
+  }
+
+  private checkRecord(rec: any, what: string): asserts rec is DataRecord {
+    if (!rec || typeof rec !== 'object' || rec.type !== 'DataRecord' || !rec.fields?.length) {
+      throw new Refusal(400, 'InvalidParameterValue', `${what} must be a SWE Common DataRecord with fields`, 'schema');
+    }
+    for (const f of rec.fields) {
+      if (!SWE_TYPES.has(f.type) || typeof f.name !== 'string') {
+        throw new Refusal(400, 'InvalidParameterValue', `field ${f.name}: SWE Common type ${f.type} is not supported`, 'schema');
+      }
+    }
+  }
+
+  private modelSystem(systemId: string) {
+    const s = this.srv().registry.systems.get(systemId);
+    if (!s) {
+      this.getSystem(systemId);
+      throw new Refusal(405, 'OperationNotSupported',
+        `system ${systemId} is the server's own: only a system a model created takes new datastreams`, 'POST');
+    }
+    return s;
+  }
+
+  private createSubsystem(ctx: Ctx, systemId: string): Reply {
+    this.only(ctx, []);
+    this.getSystem(systemId);
+    if (systemId !== 'models') throw new Refusal(405, 'OperationNotSupported', 'only the Models system takes new subsystems', 'POST');
+    const body = this.jsonBody(ctx);
+    const uid = body && typeof body === 'object' ? body.uniqueId : undefined;
+    if (typeof uid !== 'string' || !uid || typeof body.label !== 'string') {
+      throw new Refusal(400, 'InvalidParameterValue', 'a system needs a uniqueId and a label', 'uniqueId');
+    }
+    const s = this.srv();
+    for (const [sid, old] of s.allSystems()) if (old.uniqueId === uid) return this.created(ctx, `/systems/${sid}`, {}, true);
+    const reg = s.registry;
+    const sid = reg.systemIdFor(uid);
+    reg.systems.set(sid, {
+      type: 'SimpleProcess', id: sid, uniqueId: uid, label: body.label, description: body.description ?? '',
+      definition: SOSA + 'System', systemType: SOSA + 'System', assetType: 'Process', parent: 'models',
+    });
+    return this.created(ctx, `/systems/${sid}`, this.systemJson(ctx, reg.systems.get(sid)!));
+  }
+
+  private createDatastream(ctx: Ctx, systemId: string): Reply {
+    this.only(ctx, []);
+    this.modelSystem(systemId);
+    const body = this.jsonBody(ctx);
+    const sch = body && typeof body === 'object' ? body.schema : undefined;
+    const rec = sch && typeof sch === 'object' ? sch.recordSchema : undefined;
+    this.checkRecord(rec, 'schema.recordSchema');
+    if (rec.fields[0].type !== 'Time' || rec.fields[0].name !== 'time') {
+      throw new Refusal(400, 'InvalidParameterValue', 'the first field must be a Time named time', 'schema');
+    }
+    if ((sch.obsFormat ?? SWE_JSON) !== SWE_JSON) {
+      throw new Refusal(400, 'OptionNotSupported', `obsFormat ${sch.obsFormat} is not supported; use ${SWE_JSON}`, 'obsFormat');
+    }
+    const out = body.outputName;
+    if (typeof out !== 'string' || !out) throw new Refusal(400, 'InvalidParameterValue', 'a datastream needs an outputName', 'outputName');
+    const s = this.srv();
+    const key = `${systemId}:${out}`;
+    const old = s.registry.datastreams.get(key);
+    const same = !!old && old.schema.fields.map((f) => f.name).join('\u0000') === rec.fields.map((f) => f.name).join('\u0000');
+    if (!same) { // new, or the same output with a new schema: a new datastream under a new identifier (FR-51)
+      s.registry.datastreams.set(key, { key, system: systemId, outputName: out, name: body.name ?? out, schema: rec, series: new Series(rec.fields) });
+    }
+    const d = [...s.datastreams(true).values()].find((x) => x.key === key)!;
+    return this.created(ctx, `/datastreams/${d.id}`, same ? {} : this.dsJson(ctx, d), same);
+  }
+
+  private createControlstream(ctx: Ctx, systemId: string): Reply {
+    this.only(ctx, []);
+    this.modelSystem(systemId);
+    const body = this.jsonBody(ctx);
+    const sch = body && typeof body === 'object' ? body.schema : undefined;
+    const rec = sch && typeof sch === 'object' ? sch.parametersSchema : undefined;
+    this.checkRecord(rec, 'schema.parametersSchema');
+    const name = body.inputName || 'settings';
+    const key = `${systemId}:${name}`;
+    const s = this.srv();
+    const old = s.registry.controlstreams.get(key);
+    const same = !!old && dumps(old.schema) === dumps(rec);
+    if (!same) s.registry.controlstreams.set(key, { key, system: systemId, inputName: name, name: body.name ?? name, schema: rec });
+    const c = [...s.controlstreams().values()].find((x) => x.key === key)!;
+    return this.created(ctx, `/controlstreams/${c.id}`, same ? {} : this.csJson(ctx, c), same);
+  }
+
+  private takeObservations(ctx: Ctx, dsId: string, replace: boolean): Reply {
+    this.only(ctx, []);
+    const s = this.srv();
+    const d = s.datastreams(true).get(dsId);
+    if (!d) throw new Refusal(404, 'NotFound', `datastream ${dsId} does not exist`, `datastream:${dsId}`);
+    if (d.kind === 'sensor') {
+      throw new Refusal(405, 'OperationNotSupported', "a sensor's observations come from the logger store, not from clients", ctx.method);
+    }
+    const ctype = (ctx.headers.get('content-type') ?? SWE_JSON).split(';')[0].trim();
+    if (ctype !== SWE_JSON) {
+      throw new Refusal(415, 'OptionNotSupported', `observations are published as ${SWE_JSON}, not ${ctype}`, `content-type:${ctype}`);
+    }
+    let rows = this.jsonBody(ctx);
+    if (rows && typeof rows === 'object' && !Array.isArray(rows)) rows = [rows];
+    if (!Array.isArray(rows) || rows.some((r) => !r || typeof r !== 'object' || Array.isArray(r))) {
+      throw new Refusal(400, 'InvalidParameterValue', 'the body must be a record or an array of records', 'body');
+    }
+    const full = s.registry.datastreams.get(d.key)!; // every registered field is stored; the offering applies on the way out
+    const cols = rowsToCols(rows, full.schema.fields);
+    if (replace) full.series.clear();
+    const n = full.series.append(cols);
+    return json({ created: n }, replace ? 200 : 201, [['location', ctx.base + `/datastreams/${dsId}/observations`]]);
+  }
+
+  private createCommandStatus(ctx: Ctx, cmdId: string): Reply {
+    this.only(ctx, []);
+    const c = this.getCmd(cmdId);
+    const body = this.jsonBody(ctx);
+    const code = body && typeof body === 'object' ? body.statusCode : undefined;
+    if (!COMMAND_STATUSES.slice(1).includes(code)) {
+      throw new Refusal(400, 'InvalidParameterValue', `statusCode must be one of ${COMMAND_STATUSES.slice(1).join(', ')}`, 'statusCode');
+    }
+    const report = { statusCode: code as string, reportTime: iso(this.rt.now()), ...(body.message ? { message: String(body.message) } : {}) };
+    c.status.push(report);
+    return json(report, 201, [['location', ctx.base + `/commands/${cmdId}/status`]]);
+  }
+
+  /**
+   * The demonstrator's referee (scaffolding, FR-37). The stand-in has none: the
+   * manifest (the ground truth) is written by the Python world generator and is
+   * not part of the pre-calculated history, so every score is null (FR-06e).
+   */
+  private referee(ctx: Ctx, kind: string): Reply {
+    this.only(ctx, []);
+    this.jsonBody(ctx);
+    if (kind === 'changes') return json({ boundary_recall: null, boundary_precision: null, front_recall: null, scored_by: 'stand-in: not scored' });
+    if (kind === 'clusters') return json({ ari_air_mass: null, ari_reach_kind: null, scored_by: 'stand-in: not scored' });
+    throw new Refusal(404, 'NotFound', `the referee scores changes and clusters, not ${kind}`, `referee:${kind}`);
+  }
+
   // --- everything else is refused by name (FR-30) ------------------------------------------
   private refuse(ctx: Ctx): Reply {
     const rest = ctx.rel.replace(/^\//, '');
@@ -746,7 +978,7 @@ export class Api {
     }
     if (['POST', 'PUT', 'DELETE'].includes(ctx.method)) {
       throw new Refusal(405, 'OperationNotSupported',
-        `${ctx.method} /${rest} is not supported (Create/Replace/Delete classes): models register through the data server's internal interface, and only commands are created over HTTP`,
+        `${ctx.method} /${rest} is not supported: a model creates its system under /systems/models/subsystems, then its datastreams, control stream, observations and command status; nothing is replaced or deleted`,
         ctx.method);
     }
     if (first in NOT_IMPLEMENTED) throw new Refusal(404, 'OperationNotSupported', `${first} is not implemented (${NOT_IMPLEMENTED[first]})`, first);

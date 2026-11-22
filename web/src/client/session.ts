@@ -50,7 +50,7 @@ function toRow(x: any): Row {
 const isoMs = (t: number) => new Date((SIM_EPOCH_UNIX + t) * 1000).toISOString();
 const isoS = (t: number) => new Date(Math.round(SIM_EPOCH_UNIX + t) * 1000).toISOString().replace('.000Z', 'Z');
 
-// Model B re-runs every ten simulated minutes; a minute's lag in noticing is fine. While a
+// Analysis re-runs every ten simulated minutes; a minute's lag in noticing is fine. While a
 // command's run is awaited, the client looks every second.
 const RUN_POLL_S = 60;
 // A datastream the profile gives no resolution is polled once a simulated minute.
@@ -310,7 +310,7 @@ export class ClientSession {
     if (changed) this.bump();
   }
 
-  /** FR-55: one command (K) to Model B's clustering control stream for the current selection. */
+  /** FR-55: one command (K) to Analysis's clustering control stream for the current selection. */
   private async command() {
     const cs = this.config.value?.clustering;
     const props = this.selectedProps();

@@ -1,8 +1,8 @@
-"""Model B: change detection, correlation and clustering (FR-34; the split is ADR 0003).
+"""Analysis: change detection, correlation and clustering (FR-34; the split is ADR 0003).
 
-Model B runs on the fields and period the display client selects, which reach
+Analysis runs on the fields and period the display client selects, which reach
 it as commands on its ``clustering`` control stream (FR-55). It reads only
-Data cleanse's output and Model A's summaries of it (AT-15):
+Data cleanse's output and Summaries' summaries of it (AT-15):
 
 | period        | reads                                   |
 |---------------|-----------------------------------------|
@@ -28,7 +28,7 @@ PERIODS = {"PT1M": 60.0, "PT1H": 3600.0, "PT6H": 6 * 3600.0, "P1D": 86400.0, "P7
 SENSOR_FIELDS = ["air_temperature", "apparent_wind_speed", "relative_humidity", "pressure",
                  "apparent_wind_direction", "solar_irradiance", "water_temperature"]
 DERIVED_FIELDS = ["dew_point", "bow_minus_stern", "pressure_tendency_3h"]
-KMEANS_SEED = 20310407  # Model B's own named stream (FR-14)
+KMEANS_SEED = 20310407  # Analysis's own named stream (FR-14)
 MAX_CLUSTERS = 8
 
 
@@ -58,11 +58,12 @@ def relabel(labels):
     return np.array([f"c{order[int(x)]}" for x in labels], dtype=object)
 
 
-class ModelB(Model):
-    id = "model-b"
-    label = "Model B"
+class Analysis(Model):
+    id = "analysis"
+    label = "Analysis"
     description = "Core model: publishes its own datastreams."
     interval = 600.0  # re-run the latest settings every ten simulated minutes
+    command_interval = 1.0  # the display client's choices arrive as commands: look every simulated second
     start_from = "now"
 
     def __init__(self):
@@ -129,20 +130,20 @@ class ModelB(Model):
 
     async def _key(self, api, system, output):
         if self.src.get((system, output)) is None:  # never cache a miss: the other model may not have registered yet
-            self.src[(system, output)] = await api.find(f"urn:x-barge:process:{system}", output, since=api.now() - 3600)
+            self.src[(system, output)] = await api.find(f"urn:x-barge:process:{system}", output)
         return self.src[(system, output)]
 
     async def _series(self, api, t0, t1, fields):
         """Sample times and one column per field, on the source the period calls for."""
         period = self.settings["period"]
         if period == "PT1M":
-            key, dkey, step = await self._key(api, "data-cleanse", "cleaned-bow"), await self._key(api, "model-a", "derived-1min"), 1
+            key, dkey, step = await self._key(api, "data-cleanse", "cleaned-bow"), await self._key(api, "summaries", "derived-1min"), 1
         elif period == "PT1H":
-            key, dkey, step = await self._key(api, "data-cleanse", "cleaned-bow"), await self._key(api, "model-a", "derived-1min"), 5
+            key, dkey, step = await self._key(api, "data-cleanse", "cleaned-bow"), await self._key(api, "summaries", "derived-1min"), 5
         elif period in ("PT6H", "P1D"):
-            key, dkey, step = await self._key(api, "model-a", "summary-1min-bow"), await self._key(api, "model-a", "derived-1min"), 1
+            key, dkey, step = await self._key(api, "summaries", "summary-1min-bow"), await self._key(api, "summaries", "derived-1min"), 1
         else:
-            key, dkey, step = await self._key(api, "model-a", "summary-1h-bow"), await self._key(api, "model-a", "derived-1h"), 1
+            key, dkey, step = await self._key(api, "summaries", "summary-1h-bow"), await self._key(api, "summaries", "derived-1h"), 1
         sf = [f for f in fields if f in SENSOR_FIELDS]
         df = [f for f in fields if f in DERIVED_FIELDS]
         base = await api.read(key, t0, t1, sf or ["air_temperature"]) if key else {"t": np.empty(0)}
@@ -211,4 +212,4 @@ class ModelB(Model):
         return {"run_id": run_id, "records": len(t)}
 
 
-MODEL = ModelB
+MODEL = Analysis

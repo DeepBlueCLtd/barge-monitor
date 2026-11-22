@@ -54,7 +54,7 @@ jobs:
         with:
           path: .cache
           key: shared-${{ hashFiles('web/scripts/fetch-pyodide.mjs', 'backend/barge/*.py') }}
-      - run: python scripts/build_history.py --days 1 .cache/history 1 2 3  # 24 hours, as published (D-79)
+      - run: python scripts/build_history.py --days 1 .cache/history 1 2 3  # 24 hours, as published (FR-15)
       - run: npm run pyodide && npm run build && npm run site
         working-directory: web
       - run: npx playwright install --with-deps chromium

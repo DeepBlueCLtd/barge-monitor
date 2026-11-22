@@ -48,13 +48,13 @@ export const QUANTITIES = RAW.filter((f) => f.swe_type === 'Quantity').map((f) =
 
 export const MODEL_OUTPUTS: Field[] = [
   field('dew_point', 'Dew point', 'Quantity', 'Cel', { kind: 'model', inputs: ['air_temperature', 'relative_humidity'], essential: true,
-    description: 'From bow air temperature and humidity (Model A).' }),
+    description: 'From bow air temperature and humidity (Summaries).' }),
   field('bow_minus_stern', 'Bow − stern', 'Quantity', 'Cel', { kind: 'model', inputs: ['air_temperature'], essential: true,
-    description: 'Bow minus stern air temperature (Model A). Unaligned: no lag correction is possible without speed.' }),
+    description: 'Bow minus stern air temperature (Summaries). Unaligned: no lag correction is possible without speed.' }),
   field('pressure_tendency_3h', 'Pressure tendency', 'Quantity', 'hPa', { kind: 'model', inputs: ['pressure'], default_on: false, extra: true,
-    description: 'Change in bow pressure over three hours (Model A).' }),
+    description: 'Change in bow pressure over three hours (Summaries).' }),
   field('readings_removed', 'Readings removed', 'Count', null, { kind: 'model', default_on: false, extra: true,
-    description: 'Readings Data cleanse removed in the interval (Model A).' }),
+    description: 'Readings Data cleanse removed in the interval (Summaries).' }),
 ];
 export const CATALOGUE = new Map<string, Field>([...RAW, ...MODEL_OUTPUTS].map((f) => [f.name, f]));
 
