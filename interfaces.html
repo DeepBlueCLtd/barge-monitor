@@ -675,6 +675,12 @@ second while a command's run is awaited).</li>
 playing or paused. The chains of requests it causes are marked; their
 icons wear a <strong>gold ring</strong> ("caused by your click" in the
 key) and set off at once, ahead of any queue on their lines.</li>
+<li>The handshake is paced by its drawing (FR-42a): the display client
+sends each handshake request only when the reply to the one before has
+been drawn arriving. Its chains' icons carry
+<code>data-handshake</code>, take 0.3 simulated seconds a hop
+(<code>HANDSHAKE_HOP_S</code>) and do not queue behind other traffic. 31
+requests of 4 hops take about 37 simulated seconds.</li>
 <li>Other icons queue per line and direction; a line that falls more
 than 6 simulated seconds behind is relieved rather than left to lag
 further.</li>

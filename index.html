@@ -874,6 +874,14 @@ self-configuration</h3>
 <li><strong>FR-42</strong> The display client's
 <strong>handshake</strong> is standard discovery only: landing page,
 conformance, profile, systems, datastreams and schemas.</li>
+<li><strong>FR-42a</strong> The handshake is made <strong>one request at
+a time, at the pace it is drawn</strong>: the client sends each
+handshake request only when the reply to the one before has been drawn
+arriving at it on the flowchart, so the architecture view shows the
+exchange in its true order. Handshake messages travel at 0.3 simulated
+seconds a hop. With capture off nothing is drawn and the client does not
+wait. Only the handshake is paced: polling (FR-63) and commands are
+not.</li>
 <li><strong>FR-43</strong> From the handshake the client builds its
 <strong>field list</strong> (§8.2): every field of every datastream,
 essential and optional, including any new model's outputs.</li>
@@ -1243,9 +1251,11 @@ outline with slightly uneven corners, its name and a one-line role.
 horizontal or vertical segments only, never crossing a card. Protocol
 labels are used sparingly.</li>
 <li><strong>VS-14</strong> A message is a circle bearing its letter. A
-<strong>selected</strong> message gains a tinted fill and a halo. A
-<strong>failed</strong> request (server down) stops at the boundary with
-its ring broken and a cross.</li>
+<strong>selected</strong> message gains a tinted fill and a halo. One
+selected while playing stays where it was clicked, so it can be read;
+one selected while paused travels on at Play and is deselected when it
+arrives. A <strong>failed</strong> request (server down) stops at the
+boundary with its ring broken and a cross.</li>
 </ul>
 <h3 id="114-sketch-rendering">11.4 Sketch rendering</h3>
 <ul>
