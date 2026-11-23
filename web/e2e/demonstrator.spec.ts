@@ -225,7 +225,7 @@ test('overview: what is adopted, what is written, what is not in the demonstrato
   await expect(page.getByTestId('adopted')).toContainText('OGC API – Connected Systems');
   await expect(page.getByTestId('written').locator('li')).toHaveCount(3);
   await expect(page.getByTestId('adopted')).toContainText('OpenSensorHub');
-  await expect(page.getByTestId('not-here').locator('li')).toHaveCount(12);
+  await expect(page.getByTestId('not-here').locator('li')).toHaveCount(13);
   await expect(page.getByTestId('not-here')).toContainText('Authentication and access control');
   await expect(page.locator('.card.gold')).toHaveCount(0); // the overview reveals nothing (FR-74)
   await page.getByTestId('card-server').click();
