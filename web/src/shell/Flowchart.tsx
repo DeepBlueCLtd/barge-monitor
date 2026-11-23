@@ -13,7 +13,8 @@ import layout from './layout.json';
 import { bus, isHandshakeMessage, isUserMessage, LETTERS, Message } from './messages';
 import { GOLD, INK, ZoneId, ZONES } from './palette';
 import { runtime } from './runtime';
-import { revealed, selectComponent, selectedComponent, selectedMessage } from './selection';
+import { useRevealed } from './reveal';
+import { selectComponent, selectedComponent, selectedMessage } from './selection';
 import { sketchLine, sketchRect } from './sketch';
 import { Glyph } from './Glyph';
 import { MessageKey, StatusBox } from './StatusBox';
@@ -96,7 +97,7 @@ function FixedView({ box }: { box: { w: number; h: number } }) {
 
 export function Flowchart() {
   const sel = useStore(selectedComponent);
-  const rev = useStore(revealed);
+  const rev = useRevealed();
   const roles = useRoles();
   const ref = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState({ w: LAYOUT_SIZE[0], h: LAYOUT_SIZE[1] });
@@ -119,7 +120,7 @@ export function Flowchart() {
       return {
         id, type: 'card', position: { x, y }, width: w, height: h, draggable: false, connectable: false, selectable: false,
         // FR-06h: in stand-in mode every component behind the seam runs in the stand-in worker.
-        data: { id, gold: rev.has(id), selected: sel === id, standin: standin && id !== 'client', role: roles[id] },
+        data: { id, gold: rev.has(id), selected: sel === id, standin: (standin && id !== 'client') || id === 'server', role: roles[id] },
       };
     }),
   ], [rev, sel, standin, roles]);

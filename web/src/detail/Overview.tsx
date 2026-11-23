@@ -12,20 +12,20 @@ const ADOPTED: [string, string, string][] = [
   ['Quality flags', 'QARTOD vocabulary', 'a flag beside each measurement'],
   ['Defining the interface', 'OpenAPI 3.1 and JSON Schema', 'committed masters, checked by tests'],
   ['Waiting, restarts, errors', 'HTTP itself (RFC 9110)', '503 with Retry-After, ETag'],
-  ['Serving HTTP', 'FastAPI on Starlette (ASGI)', 'routing, validation'],
+  ['The data server', 'OpenSensorHub, off the shelf', 'a stand-in takes its place in the browser'],
   ['Numerical work', 'numpy and scikit-learn', 'cleaning, means, clustering'],
   ['The screen', 'React, ECharts, React Flow, CodeMirror', 'display, charts, flowchart, editor'],
 ];
 
 const WRITTEN: [string, string][] = [
   ['Store adapter', "the only code that knows the logger's format"],
-  ['Data server', 'the declared subset of Connected Systems'],
   ['Display client', 'handshake, self-configuration, generic views'],
   ['Models', 'a small library for models, and the models'],
 ];
 
 /** In a developed system, deliberately not in this demonstrator. Names only. */
 const NOT_HERE: [string, string][] = [
+  ['OpenSensorHub itself', 'a stand-in serves the same interface here; to be confirmed against the real server'],
   ['The real logger store', 'shown over an awkward stand-in; to be confirmed against the real one'],
   ['Authentication and access control', 'who may read, publish or command'],
   ['Persistence', 'what models register and publish lives in memory here'],

@@ -157,7 +157,7 @@ class Runtime {
       case 'relay-failed': {
         // A request that got no answer (server down) is drawn stopped at the boundary (VS-14).
         const kOrQ = d.method === 'POST' && String(d.path).endsWith('/commands') ? 'K' : 'Q';
-        bus.add([{ t: simClock.now(), src: d.model ? 'models' : 'client', dst: 'fastapi', letter: kOrQ, ...(d.model ? { model: d.model } : {}), summary: `${d.method} ${d.path}: no answer, the server is down`,
+        bus.add([{ t: simClock.now(), src: d.model ? 'models' : 'client', dst: 'server', letter: kOrQ, ...(d.model ? { model: d.model } : {}), summary: `${d.method} ${d.path}: no answer, the server is down`,
           content: `${d.method} ${d.path}\n\nnetwork failure: the relay found no server to answer`, failed: true, chain: d.chain ?? null, hop: 0 }]);
         break;
       }

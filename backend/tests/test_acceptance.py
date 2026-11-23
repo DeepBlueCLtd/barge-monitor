@@ -95,7 +95,7 @@ def test_at13_a_new_model_registers_itself_and_is_served_by_schema_type():
     for _ in range(18):
         r.advance(10)  # now live: its traffic is drawn
     made = [m for m in r.rt.tap.drain() if m.get("model") == "new-model-1" and m["src"] == "models"]
-    assert made and all(m["dst"] in ("fastapi", "scilibs") for m in made)  # HTTP and the libraries: no other way in
+    assert made and all(m["dst"] in ("server", "scilibs") for m in made)  # HTTP and the libraries: no other way in
 
 
 def test_at04_declared_queries_meet_budget_and_rebuild_identically():
@@ -233,7 +233,7 @@ def test_at15_models_other_than_data_cleanse_read_only_its_output():
     for _ in range(70):
         r.advance(10)
     owner = {d["id"]: d["system@id"] for d in r.get("/datastreams", {"limit": "1000"})[1]["items"]}
-    reads = [m for m in r.rt.tap.drain() if m["src"] == "models" and m["dst"] == "fastapi" and "/observations?" in m["summary"]
+    reads = [m for m in r.rt.tap.drain() if m["src"] == "models" and m["dst"] == "server" and "/observations?" in m["summary"]
              and " GET " in m["summary"]]
     by = {}
     for m in reads:
@@ -280,8 +280,8 @@ def test_at18_capture_changes_nothing_and_every_busy_boundary_is_tapped():
         if capture:
             keys = {k.split(":")[0] for k in r.rt.tap.counts}
             for edge in ("platform>store", "server>adapter", "adapter>store", "store>adapter", "adapter>server",
-                         "models>fastapi", "fastapi>models", "models>scilibs", "scilibs>models",
-                         "fastapi>server", "server>fastapi", "client>fastapi", "fastapi>client"):
+                         "models>server", "server>models", "models>scilibs", "scilibs>models",
+                         "client>server", "server>client"):
                 assert edge in keys, edge
             assert all(m["letter"] in "QDOKPHSLI" for m in r.rt.tap.drain())
     assert bodies[0] == bodies[1]

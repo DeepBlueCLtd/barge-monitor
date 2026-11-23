@@ -27,7 +27,7 @@ LETTERS = {
 }
 MAX_CONTENT = 4000
 # The eight components of SRD §3 (docs/v4-interfaces.md §1).
-COMPONENTS = ("platform", "store", "adapter", "server", "models", "fastapi", "scilibs", "client")
+COMPONENTS = ("platform", "store", "adapter", "server", "models", "scilibs", "client")
 
 _chain: contextvars.ContextVar = contextvars.ContextVar("tap_chain", default=None)
 _ids = itertools.count(1)

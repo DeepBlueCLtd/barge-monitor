@@ -47,9 +47,9 @@ test('start-up: progress shown, then the flowchart; everything from the site its
   console.log(`flowchart after ${Date.now() - t0} ms`);
   await expect(page.getByTestId('backend-state')).toHaveText('Python');
   await expect(page.getByTestId('history-state')).not.toHaveText('none');
-  for (const id of ['platform', 'store', 'adapter', 'server', 'models', 'fastapi', 'scilibs', 'client']) await expect(page.getByTestId(`card-${id}`)).toBeVisible();
+  for (const id of ['platform', 'store', 'adapter', 'server', 'models', 'scilibs', 'client']) await expect(page.getByTestId(`card-${id}`)).toBeVisible();
   for (const l of 'QDOKPHSLI') await expect(page.getByTestId(`key-${l}`)).toBeVisible();
-  await expect(page.locator('[data-flow]')).toHaveCount(13); // every flow of §3.1, one arrow per direction (FR-65)
+  await expect(page.locator('[data-flow]')).toHaveCount(11); // every flow of §3.1, one arrow per direction (FR-65)
   await expect(page.locator('.flow-label')).toHaveText(['HTTP', 'HTTP']); // the display client's and the models' requests
   const origin = new URL(page.url()).origin;
   expect(requests.filter((u) => !u.startsWith(origin) && !u.startsWith('data:') && !u.startsWith('blob:'))).toEqual([]);
@@ -96,10 +96,10 @@ test('the handshake is drawn in its true order: each request leaves after the re
     await page.waitForTimeout(100);
   }
   expect(seen).toBeGreaterThan(20);
-  // Four hops of 0.3 simulated seconds at half speed: no request within two seconds of the one before.
+  // Two hops of 0.3 simulated seconds at half speed: no request within a second of the one before.
   const gaps = sent.slice(1).map((t, i) => t - sent[i]);
   expect(gaps.length).toBeGreaterThan(2);
-  expect(Math.min(...gaps)).toBeGreaterThan(2000);
+  expect(Math.min(...gaps)).toBeGreaterThan(1000);
   await configured(page);
 });
 
@@ -107,14 +107,27 @@ test('value-add reveal: nothing gold at start; display client and Models reveal;
   await open(page);
   await expect(page.locator('.card.gold')).toHaveCount(0);
   await expect(page.getByTestId('detail-empty')).toBeVisible();
-  for (const id of ['platform', 'store', 'adapter', 'server', 'fastapi', 'scilibs']) {
+  for (const id of ['platform', 'store', 'adapter', 'server', 'scilibs']) {
     await page.getByTestId(`card-${id}`).click();
     await expect(page.getByTestId(`card-${id}`)).toHaveAttribute('data-revealed', 'false');
     await expect(page.getByTestId('detail-panel')).toHaveAttribute('data-showing', id);
   }
   await expect(page.locator('.card.gold')).toHaveCount(0);
   await page.getByTestId('card-client').click();
+  // Clicked, but not yet showing its views: not revealed until it is configured.
+  await expect(page.getByTestId('card-client')).toHaveAttribute('data-revealed', 'false');
+  await expect(page.getByTestId('detail-title')).toHaveText('Display client');
+  // Configured while another panel is open: still not revealed, so Models can be shown first.
+  await page.getByTestId('card-models').click();
+  await expect(page.getByTestId('card-models')).toHaveAttribute('data-revealed', 'true');
+  await play(page);
+  await configured(page);
+  await expect(page.locator('.card.gold')).toHaveCount(1);
+  await expect(page.getByTestId('card-client')).toHaveAttribute('data-revealed', 'false');
+  // Configured and its panel on screen: revealed.
+  await page.getByTestId('card-client').click();
   await expect(page.getByTestId('card-client')).toHaveAttribute('data-revealed', 'true');
+  await expect(page.getByTestId('detail-title')).toHaveText('★ Display client');
   await expect(page.getByTestId('card-client')).toContainText('★ Display client');
   await expect(page.getByTestId('role-client')).toContainText('our value-add');
   await expect(page.getByTestId('card-client').getByTestId('diamond')).toBeVisible();
@@ -189,7 +202,7 @@ test('stand-in: labelled, tagged, the notice shown, the editor unavailable (AT-2
   await open(page, 'demo/?seed=1&backend=standin');
   await expect(page.getByTestId('backend-state')).toHaveText('JavaScript stand-in');
   await expect(page.getByTestId('standin-notice')).toContainText('Running the JavaScript stand-in');
-  await expect(page.getByTestId('standin-tag')).toHaveCount(7); // every component behind the seam
+  await expect(page.getByTestId('standin-tag')).toHaveCount(6); // every component behind the seam
   await expect(page.getByTestId('card-client').getByTestId('standin-tag')).toHaveCount(0);
   await page.getByTestId('card-models').click();
   await page.getByTestId('model-new-model-1').click();
@@ -223,8 +236,9 @@ test('overview: what is adopted, what is written, what is not in the demonstrato
   await expect(page.getByTestId('detail-empty')).toBeVisible();
   await expect(page.getByTestId('adopted').locator('tbody tr')).toHaveCount(10);
   await expect(page.getByTestId('adopted')).toContainText('OGC API – Connected Systems');
-  await expect(page.getByTestId('written').locator('li')).toHaveCount(4);
-  await expect(page.getByTestId('not-here').locator('li')).toHaveCount(12);
+  await expect(page.getByTestId('written').locator('li')).toHaveCount(3);
+  await expect(page.getByTestId('adopted')).toContainText('OpenSensorHub');
+  await expect(page.getByTestId('not-here').locator('li')).toHaveCount(13);
   await expect(page.getByTestId('not-here')).toContainText('Authentication and access control');
   await expect(page.locator('.card.gold')).toHaveCount(0); // the overview reveals nothing (FR-74)
   await page.getByTestId('card-server').click();
@@ -232,7 +246,7 @@ test('overview: what is adopted, what is written, what is not in the demonstrato
   await page.getByTestId('overview-button').click();
   await expect(page.getByTestId('overview')).toBeVisible();
   // Nothing on screen cites a requirement number.
-  for (const id of ['adapter', 'store', 'platform', 'fastapi', 'scilibs', 'server', 'models']) {
+  for (const id of ['adapter', 'store', 'platform', 'scilibs', 'server', 'models']) {
     await page.getByTestId(`card-${id}`).click();
     expect(await page.getByTestId('detail-panel').innerText()).not.toMatch(/\b(FR|AT|NFR|VS)-\d|§/);
   }
@@ -259,8 +273,9 @@ test('the Data server panel claims only what the server does; models register ov
   expect(probe.refused).toBe('systemEvents');
   expect([201, 409]).toContain(probe.made);
   expect(probe.location).toContain('/systems/e2e-probe');
-  // The models' own traffic is on the flowchart, between Models and FastAPI, as HTTP.
-  await page.getByTestId('card-fastapi').click();
+  // The models' own traffic is on the flowchart, between Models and the data server, as HTTP.
+  await expect(page.getByTestId('server-osh')).toContainText('OpenSensorHub');
+  await expect(page.getByTestId('card-server').getByTestId('standin-tag')).toBeVisible(); // a stand-in in both back ends
   const counters = page.getByTestId('counters');
   await expect(counters.locator('tr', { hasText: 'receives from' }).filter({ hasText: 'Models' })).toBeVisible();
   await expect.poll(async () => Number((await counters.locator('tr', { hasText: 'receives from' }).filter({ hasText: 'Models' }).locator('td.num').innerText()).match(/Q ([\d,]+)/)?.[1].replace(/,/g, '') ?? 0),

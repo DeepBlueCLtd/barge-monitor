@@ -24,16 +24,14 @@ export function pretty(s: string): string {
 function phrase(m: Message): string {
   const k = `${m.src}>${m.dst}`;
   switch (k) {
-    case 'client>fastapi': return `${m.letter} to FastAPI`;
-    case 'fastapi>server': return 'I to the data server';
+    case 'client>server': return `${m.letter} to the data server`;
     case 'server>adapter': return 'S to the store adapter';
     case 'adapter>store': return "S read of the logger files, found through the adapter's index";
     case 'store>adapter': return 'L records back up';
     case 'adapter>server': return 'I columns to the data server';
-    case 'server>fastapi': return 'I response to FastAPI';
-    case 'fastapi>client': return `${m.letter} to the display`;
-    case 'models>fastapi': return `${m.letter} from the model to FastAPI`;
-    case 'fastapi>models': return `${m.letter} back to the model`;
+    case 'server>client': return `${m.letter} to the display`;
+    case 'models>server': return `${m.letter} from the model to the data server`;
+    case 'server>models': return `${m.letter} back to the model`;
     default: return `${m.letter} from ${nameOf(m.src)} to ${nameOf(m.dst)}`;
   }
 }

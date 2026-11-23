@@ -1,38 +1,297 @@
 {
   "comment": "Fixed flowchart layout (FR-64), designed for the 1920x1080 target at zoom 1. Bands top to bottom: front end, third-party libraries, back end, legacy, world (SRD 9.1). Every flow of SRD 3.1 is one arrow per direction; a two-way exchange is two arrows on the thirds of the facing edges (FR-65). Segments are horizontal or vertical and never cross a card (VS-13). status and key are the boxes below the flowchart.",
-  "size": [840, 968],
+  "size": [
+    840,
+    968
+  ],
   "zones": [
-    {"id": "front", "rect": [0, 0, 840, 126], "labelAt": "left"},
-    {"id": "third", "rect": [0, 172, 840, 130], "labelAt": "left"},
-    {"id": "back", "rect": [0, 348, 840, 304], "labelAt": "left"},
-    {"id": "legacy", "rect": [322, 694, 278, 118], "labelAt": "right"},
-    {"id": "world", "rect": [322, 830, 278, 138], "labelAt": "left"}
+    {
+      "id": "front",
+      "rect": [
+        0,
+        0,
+        840,
+        126
+      ],
+      "labelAt": "left"
+    },
+    {
+      "id": "third",
+      "rect": [
+        0,
+        172,
+        840,
+        130
+      ],
+      "labelAt": "left"
+    },
+    {
+      "id": "back",
+      "rect": [
+        0,
+        348,
+        840,
+        170
+      ],
+      "labelAt": "left"
+    },
+    {
+      "id": "legacy",
+      "rect": [
+        322,
+        694,
+        278,
+        118
+      ],
+      "labelAt": "right"
+    },
+    {
+      "id": "world",
+      "rect": [
+        322,
+        830,
+        278,
+        138
+      ],
+      "labelAt": "left"
+    }
   ],
   "cards": {
-    "client": [352, 34, 440, 78],
-    "scilibs": [28, 206, 240, 78],
-    "fastapi": [352, 206, 440, 78],
-    "models": [28, 384, 240, 104],
-    "server": [352, 384, 240, 104],
-    "adapter": [352, 554, 240, 82],
-    "store": [352, 724, 240, 74],
-    "platform": [352, 872, 240, 78]
+    "client": [
+      352,
+      34,
+      440,
+      78
+    ],
+    "scilibs": [
+      28,
+      206,
+      240,
+      78
+    ],
+    "models": [
+      28,
+      384,
+      240,
+      104
+    ],
+    "server": [
+      352,
+      206,
+      440,
+      78
+    ],
+    "adapter": [
+      352,
+      396,
+      240,
+      82
+    ],
+    "store": [
+      352,
+      724,
+      240,
+      74
+    ],
+    "platform": [
+      352,
+      872,
+      240,
+      78
+    ]
   },
   "arrows": [
-    {"src": "client", "dst": "fastapi", "path": [[499, 112], [499, 206]]},
-    {"src": "fastapi", "dst": "client", "path": [[645, 206], [645, 112]], "label": "HTTP", "labelAt": [674, 166]},
-    {"src": "fastapi", "dst": "server", "path": [[432, 284], [432, 384]]},
-    {"src": "server", "dst": "fastapi", "path": [[512, 384], [512, 284]]},
-    {"src": "models", "dst": "scilibs", "path": [[108, 384], [108, 284]]},
-    {"src": "scilibs", "dst": "models", "path": [[188, 284], [188, 384]]},
-    {"src": "models", "dst": "fastapi", "path": [[268, 412], [298, 412], [298, 232], [352, 232]], "label": "HTTP", "labelAt": [232, 326]},
-    {"src": "fastapi", "dst": "models", "path": [[352, 258], [322, 258], [322, 446], [268, 446]]},
-    {"src": "server", "dst": "adapter", "path": [[432, 488], [432, 554]]},
-    {"src": "adapter", "dst": "server", "path": [[512, 554], [512, 488]]},
-    {"src": "adapter", "dst": "store", "path": [[432, 636], [432, 724]]},
-    {"src": "store", "dst": "adapter", "path": [[512, 724], [512, 636]]},
-    {"src": "platform", "dst": "store", "path": [[472, 872], [472, 798]]}
+    {
+      "src": "client",
+      "dst": "server",
+      "path": [
+        [
+          499,
+          112
+        ],
+        [
+          499,
+          206
+        ]
+      ]
+    },
+    {
+      "src": "server",
+      "dst": "client",
+      "path": [
+        [
+          645,
+          206
+        ],
+        [
+          645,
+          112
+        ]
+      ],
+      "label": "HTTP",
+      "labelAt": [
+        674,
+        166
+      ]
+    },
+    {
+      "src": "models",
+      "dst": "scilibs",
+      "path": [
+        [
+          108,
+          384
+        ],
+        [
+          108,
+          284
+        ]
+      ]
+    },
+    {
+      "src": "scilibs",
+      "dst": "models",
+      "path": [
+        [
+          188,
+          284
+        ],
+        [
+          188,
+          384
+        ]
+      ]
+    },
+    {
+      "src": "models",
+      "dst": "server",
+      "path": [
+        [
+          268,
+          412
+        ],
+        [
+          298,
+          412
+        ],
+        [
+          298,
+          232
+        ],
+        [
+          352,
+          232
+        ]
+      ],
+      "label": "HTTP",
+      "labelAt": [
+        232,
+        326
+      ]
+    },
+    {
+      "src": "server",
+      "dst": "models",
+      "path": [
+        [
+          352,
+          258
+        ],
+        [
+          322,
+          258
+        ],
+        [
+          322,
+          446
+        ],
+        [
+          268,
+          446
+        ]
+      ]
+    },
+    {
+      "src": "server",
+      "dst": "adapter",
+      "path": [
+        [
+          432,
+          284
+        ],
+        [
+          432,
+          396
+        ]
+      ]
+    },
+    {
+      "src": "adapter",
+      "dst": "server",
+      "path": [
+        [
+          512,
+          396
+        ],
+        [
+          512,
+          284
+        ]
+      ]
+    },
+    {
+      "src": "adapter",
+      "dst": "store",
+      "path": [
+        [
+          432,
+          478
+        ],
+        [
+          432,
+          724
+        ]
+      ]
+    },
+    {
+      "src": "store",
+      "dst": "adapter",
+      "path": [
+        [
+          512,
+          724
+        ],
+        [
+          512,
+          478
+        ]
+      ]
+    },
+    {
+      "src": "platform",
+      "dst": "store",
+      "path": [
+        [
+          472,
+          872
+        ],
+        [
+          472,
+          798
+        ]
+      ]
+    }
   ],
-  "status": [0, 670, 306, 298],
-  "key": [616, 670, 224, 298]
+  "status": [
+    0,
+    670,
+    306,
+    298
+  ],
+  "key": [
+    616,
+    670,
+    224,
+    298
+  ]
 }

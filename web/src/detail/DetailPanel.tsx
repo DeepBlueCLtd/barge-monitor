@@ -2,7 +2,8 @@
 // state inviting a click. Crisp, not sketched (VS-18).
 import { COMPONENTS, ComponentId } from '../shell/components';
 import { ZONES } from '../shell/palette';
-import { revealed, selectComponent, selectedComponent, selectedMessage } from '../shell/selection';
+import { useRevealed } from '../shell/reveal';
+import { selectComponent, selectedComponent, selectedMessage } from '../shell/selection';
 import { useStore } from '../shell/store';
 import { ClientDetail } from './ClientDetail';
 import { ComponentDetail } from './ComponentDetail';
@@ -30,7 +31,7 @@ const ZONE_EXTRA: Partial<Record<ComponentId, string>> = { server: 'OGC API – 
 
 function Panel({ id }: { id: ComponentId }) {
   const c = COMPONENTS[id];
-  const gold = useStore(revealed).has(id);
+  const gold = useRevealed().has(id);
   const z = ZONES[c.zone];
   return (
     <>

@@ -9,9 +9,7 @@ import { useStore } from '../shell/store';
 
 export function ComponentDetail({ id }: { id: ComponentId }) {
   const c = COMPONENTS[id];
-  const counts = useStore(bus.counts);
   const control = useStore(runtime.control);
-  const flows = FLOWS.filter((f) => f.src === id || f.dst === id);
   const store = control?.store;
   return (
     <div className="component-detail" data-testid={`detail-${id}`}>
@@ -26,23 +24,32 @@ export function ComponentDetail({ id }: { id: ComponentId }) {
         <p className="live">Now holding {store.files.toLocaleString()} files, {(store.bytes / 1e6).toFixed(1)} MB, {store.records.toLocaleString()} records.</p>
       )}
       <h3>Messages</h3>
-      <table className="letters-table" data-testid="counters">
-        <thead><tr><th>Direction</th><th>With</th><th>Letters</th><th>Drawn so far</th></tr></thead>
-        <tbody>
-          {flows.map((f) => {
-            const out = f.src === id;
-            const other = out ? f.dst : f.src;
-            return (
-              <tr key={`${f.src}>${f.dst}`}>
-                <td>{out ? 'sends to' : 'receives from'}</td>
-                <td>{nameOf(other)}</td>
-                <td className="letters">{f.letters.map((l) => <Glyph key={l} letter={l} size={22} />)}</td>
-                <td className="num">{f.letters.map((l) => `${l} ${(counts[`${f.src}>${f.dst}:${l}`] ?? 0).toLocaleString()}`).join(' · ')}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+      <Counters id={id} />
     </div>
+  );
+}
+
+/** Which letters a component sends and receives on each of its flows, with live counts of those drawn. */
+export function Counters({ id }: { id: ComponentId }) {
+  const counts = useStore(bus.counts);
+  const flows = FLOWS.filter((f) => f.src === id || f.dst === id);
+  return (
+    <table className="letters-table" data-testid="counters">
+      <thead><tr><th>Direction</th><th>With</th><th>Letters</th><th>Drawn so far</th></tr></thead>
+      <tbody>
+        {flows.map((f) => {
+          const out = f.src === id;
+          const other = out ? f.dst : f.src;
+          return (
+            <tr key={`${f.src}>${f.dst}`}>
+              <td>{out ? 'sends to' : 'receives from'}</td>
+              <td>{nameOf(other)}</td>
+              <td className="letters">{f.letters.map((l) => <Glyph key={l} letter={l} size={22} />)}</td>
+              <td className="num">{f.letters.map((l) => `${l} ${(counts[`${f.src}>${f.dst}:${l}`] ?? 0).toLocaleString()}`).join(' · ')}</td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
   );
 }
