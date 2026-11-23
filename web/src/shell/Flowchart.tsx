@@ -119,7 +119,7 @@ export function Flowchart() {
       return {
         id, type: 'card', position: { x, y }, width: w, height: h, draggable: false, connectable: false, selectable: false,
         // FR-06h: in stand-in mode every component behind the seam runs in the stand-in worker.
-        data: { id, gold: rev.has(id), selected: sel === id, standin: standin && id !== 'client', role: roles[id] },
+        data: { id, gold: rev.has(id), selected: sel === id, standin: (standin && id !== 'client') || id === 'server', role: roles[id] },
       };
     }),
   ], [rev, sel, standin, roles]);

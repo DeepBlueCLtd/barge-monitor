@@ -146,7 +146,7 @@ def create_app(rt) -> FastAPI:
         who = "models" if model else "client"
         quiet = request.headers.get("x-tap-quiet") == "1"  # a model catching up on history: counted, not drawn
         ask = f"{request.method} {rel}{'?' + request.url.query if request.url.query else ''}"
-        tap.emit(who, "fastapi", letter, f"{model}: {ask}" if model else ask,
+        tap.emit(who, "server", letter, f"{model}: {ask}" if model else ask,
                  _shown(body) if body else f"{request.method} {rel}?{request.url.query}", model=model, quiet=quiet)
         s = srv()
         if s is None:
@@ -157,12 +157,9 @@ def create_app(rt) -> FastAPI:
                            f"waiting mode: rebuilding the index from the store ({p['indexed']} of {p['stored']} records)",
                            headers={"Retry-After": str(C.RETRY_AFTER_S)}).response()
         else:
-            tap.emit("fastapi", "server", "I", f"route {request.method} {rel}", {"path": rel, "query": str(request.url.query)},
-                     model=model, quiet=quiet)
             request.state.quiet = quiet
             request.state.model = model
             resp = await call_next(request)
-            tap.emit("server", "fastapi", "I", f"result {resp.status_code}", {"status": resp.status_code}, model=model, quiet=quiet)
         chunks = [c async for c in resp.body_iterator] if hasattr(resp, "body_iterator") else [resp.body]
         payload = b"".join(chunks)
         headers = dict(resp.headers)
@@ -175,7 +172,7 @@ def create_app(rt) -> FastAPI:
         headers["x-tap-hops"] = str(hops + 1)
         out = Response(content=payload, status_code=resp.status_code, headers=headers, media_type=resp.media_type)
         token2 = tap.begin_chain(chain_id, hops)
-        tap.emit("fastapi", who, _letter_for_response(resp.status_code, rel, headers.get("content-type", "")),
+        tap.emit("server", who, _letter_for_response(resp.status_code, rel, headers.get("content-type", "")),
                  f"{model}: {resp.status_code} {rel}" if model else f"{resp.status_code} {rel}", _shown(payload),
                  model=model, quiet=quiet)
         tap.end_chain(token2)

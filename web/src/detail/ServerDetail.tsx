@@ -1,6 +1,7 @@
 // Data server panel (FR-72, mockup 3): the Connected Systems resources that
 // describe this system, why the standard fits, and its gaps.
 import { Fragment } from 'react';
+import { Counters } from './ComponentDetail';
 
 type Box = { id: string; x: number; y: number; w: number; title: string; sub: string };
 const H = 52;
@@ -36,7 +37,8 @@ function linkPath(a: Box, b: Box): string {
 export function ServerDetail() {
   return (
     <div className="server-detail" data-testid="detail-server">
-      <p className="lede">The data server describes this system in Connected Systems' own terms. Every box below is a standard resource.</p>
+      <p className="lede" data-testid="server-osh">The data server is <b>OpenSensorHub</b>, adopted off the shelf. It cannot run in a browser, so a stand-in serves the same interface here; whether a stock OpenSensorHub does everything shown is still to be confirmed.</p>
+      <p className="lede">It describes this system in Connected Systems' own terms. Every box below is a standard resource.</p>
       <div className="cs-diagram">
         <span className="cs-col-label" style={{ left: 20 }}>Sensing</span>
         <span className="cs-col-label" style={{ left: 530 }}>Models</span>
@@ -74,6 +76,8 @@ export function ServerDetail() {
         <p className="gaps"><b>Gaps:</b> no standard aggregation, so summaries are their own datastreams; publish/subscribe (Part 3) is not yet published, so the display and the models poll; a result that holds the latest run only is replaced with a plain HTTP PUT.</p>
         <p className="gaps"><b>Not used:</b> deployments, procedures, sampling features, system events and history, command feasibility, and replacing or deleting resources. Each is refused by name.</p>
       </div>
+      <h4 className="small-caps">Messages</h4>
+      <Counters id="server" />
     </div>
   );
 }

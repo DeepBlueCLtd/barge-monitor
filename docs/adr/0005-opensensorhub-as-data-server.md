@@ -1,8 +1,8 @@
 # ADR 0005: OpenSensorHub, off the shelf, is the data server
 
 **Status:** proposed, 2026-11-23 (SRD 4.2 §3, §6.3, §6.5, §7, FR-38, FR-81). Supersedes
-ADR 0001. Not yet built: the demonstrator still runs the Version 4.1 server, and nothing
-here has been tried against OpenSensorHub.
+ADR 0001. The demonstrator's architecture view shows this design, with the Version 4.1
+server as the stand-in; nothing here has been tried against OpenSensorHub.
 
 **Context.** ADR 0001 wrote a subset of OGC API – Connected Systems directly on FastAPI,
 because no off-the-shelf server runs in Pyodide. That was a constraint of the

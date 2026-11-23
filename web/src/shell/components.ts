@@ -1,8 +1,8 @@
-// The eight components and their zones (SRD §3, docs/v4-interfaces.md §1),
+// The seven components and their zones (SRD §3, docs/v4-interfaces.md §1),
 // with the words the flowchart and the detail panel show for each.
 import type { ZoneId } from './palette';
 
-export type ComponentId = 'platform' | 'store' | 'adapter' | 'server' | 'models' | 'fastapi' | 'scilibs' | 'client';
+export type ComponentId = 'platform' | 'store' | 'adapter' | 'server' | 'models' | 'scilibs' | 'client';
 
 export interface ComponentInfo {
   id: ComponentId;
@@ -32,23 +32,18 @@ export const COMPONENTS: Record<ComponentId, ComponentInfo> = {
   },
   adapter: {
     id: 'adapter', code: 'C-03', name: 'Store adapter', role: 'only reader · holds the index', zone: 'back', valueAdd: false,
-    does: "The only code that understands the logger's format. It holds its own index (time to file and offset), answers the data server's store queries (S), reads the records through the index (S to the store, L records back) and returns columns (I). The index is rebuilt from the store on every restart.",
+    does: "A module of the data server, and the only code that understands the logger's format. It holds its own index (time to file and offset), answers the data server's store queries (S), reads the records through the index (S to the store, L records back) and returns columns (I). The index is rebuilt from the store on every restart.",
     why: 'New build · back end: written for this system, and the one place that would change if the store did. A test swaps in a second, differently awkward store format and changes nothing else.',
   },
   server: {
-    id: 'server', code: 'C-04', name: 'Data server', role: 'OGC Connected Systems', zone: 'back', valueAdd: false,
-    does: 'OGC API – Connected Systems: discovery, systems, datastreams, observations, control streams and commands.',
-    why: 'New build · back end: a standard interface over the awkward store.',
+    id: 'server', code: 'C-04', name: 'Data server', role: 'OpenSensorHub · OGC Connected Systems', zone: 'third', valueAdd: false,
+    does: 'OpenSensorHub, an open-source server for OGC API – Connected Systems: discovery, systems, datastreams, observations, control streams and commands, served over HTTP to the display client and the models alike. A Java server cannot run in a browser, so here a stand-in takes its place and serves the same interface.',
+    why: 'Third-party libraries: off-the-shelf, openly maintained, not our code. The system adopts it as shipped; the store adapter is the module written for it. Whether a stock OpenSensorHub does everything shown here is still to be confirmed.',
   },
   models: {
     id: 'models', code: 'C-05', name: 'Models', role: 'process systems', zone: 'back', valueAdd: true,
     does: 'Core models and empty slots, each an OGC process system in its own worker, registered over the data server\'s own HTTP interface.',
     why: 'New build · back end.',
-  },
-  fastapi: {
-    id: 'fastapi', code: 'C-06', name: 'FastAPI', role: 'ASGI web framework', zone: 'third', valueAdd: false,
-    does: "FastAPI with Starlette: the ASGI framework for the data server's HTTP interface. It routes each request, validates its parameters and serves the OpenAPI definition. The committed OpenAPI master is the source of truth; a test asserts that FastAPI serves the same.",
-    why: 'Third-party libraries: off-the-shelf, openly maintained, not our code. The data server is written against it; the display client and the models only ever see HTTP.',
   },
   scilibs: {
     id: 'scilibs', code: 'C-07', name: 'Scientific libraries', role: 'numpy, scikit-learn', zone: 'third', valueAdd: false,
@@ -73,12 +68,10 @@ export const FLOWS: { src: ComponentId; dst: ComponentId; letters: string[] }[] 
   { src: 'store', dst: 'adapter', letters: ['L'] },
   { src: 'server', dst: 'adapter', letters: ['S'] },
   { src: 'adapter', dst: 'server', letters: ['I'] },
-  { src: 'models', dst: 'fastapi', letters: ['Q', 'O', 'I'] },
-  { src: 'fastapi', dst: 'models', letters: ['D', 'O', 'H', 'I'] },
+  { src: 'models', dst: 'server', letters: ['Q', 'O', 'I'] },
+  { src: 'server', dst: 'models', letters: ['D', 'O', 'H', 'I'] },
   { src: 'models', dst: 'scilibs', letters: ['I'] },
   { src: 'scilibs', dst: 'models', letters: ['I'] },
-  { src: 'fastapi', dst: 'server', letters: ['I'] },
-  { src: 'server', dst: 'fastapi', letters: ['I'] },
-  { src: 'client', dst: 'fastapi', letters: ['Q', 'K'] },
-  { src: 'fastapi', dst: 'client', letters: ['D', 'P', 'O', 'H'] },
+  { src: 'client', dst: 'server', letters: ['Q', 'K'] },
+  { src: 'server', dst: 'client', letters: ['D', 'P', 'O', 'H'] },
 ];

@@ -95,7 +95,7 @@ export class ModelApi {
       rootPath: '', origin: 'http://models',
     });
     if (res === null) { // the server is down: no answer at all (drawn stopped at the boundary, VS-14)
-      this.rt.tap.emit('models', 'fastapi', 'Q', `${this.model}: ${method} ${target}: no answer, the server is down`,
+      this.rt.tap.emit('models', 'server', 'Q', `${this.model}: ${method} ${target}: no answer, the server is down`,
         `${method} ${target}\n\nnetwork failure: no server to answer`, { failed: true, model: this.model, quiet: this.quiet });
       throw new Unavailable('the data server does not answer');
     }

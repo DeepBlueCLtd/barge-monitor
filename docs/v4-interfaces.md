@@ -13,14 +13,14 @@ Every captured message names its sender and receiver with one of these ids (SRD 
 | `platform` | Collection platform | World |
 | `store` | Logger store | Legacy |
 | `adapter` | Store adapter | New build · back end |
-| `server` | Data server | New build · back end |
+| `server` | Data server (OpenSensorHub; a stand-in here, ADR 0005) | Third-party libraries |
 | `models` | Models | New build · back end ★ |
-| `fastapi` | FastAPI | Third-party libraries |
 | `scilibs` | Scientific libraries | Third-party libraries |
 | `client` | Display client | New build · front end ★ |
 
-The relay is not a component: HTTP messages are captured as `client → fastapi` and
-`fastapi → client` (FR-03).
+The relay is not a component: HTTP messages are captured as `client → server` and
+`server → client` (FR-03). FastAPI is an internal detail of the Python stand-in for the data
+server and is not a component: no message is captured to or from it.
 
 ## 2. Flows and letters (SRD §3.1, §5)
 
@@ -31,14 +31,12 @@ The relay is not a component: HTTP messages are captured as `client → fastapi`
 | adapter → store | S | file read found through the index: file, offset, length |
 | store → adapter | L | the records read (first three shown) |
 | adapter → server | I | columns |
-| models → fastapi | Q, O, I | HTTP request: create a system, datastream or control stream, read (Q); publish observations (O); ask the referee (I) |
-| fastapi → models | D, O, H, I | HTTP response |
+| models → server | Q, O, I | HTTP request: create a system, datastream or control stream, read (Q); publish observations (O); ask the referee (I) |
+| server → models | D, O, H, I | HTTP response |
 | models → scilibs | I | a call (numpy, pandas, scipy, scikit-learn) |
 | scilibs → models | I | its result |
-| fastapi → server | I | parsed request |
-| server → fastapi | I | response |
-| client → fastapi | Q, K | HTTP request (K = POST to `/controlstreams/{id}/commands`) |
-| fastapi → client | D, P, O, H | HTTP response (H = any status ≥ 400, and 503) |
+| client → server | Q, K | HTTP request (K = POST to `/controlstreams/{id}/commands`) |
+| server → client | D, P, O, H | HTTP response (H = any status ≥ 400, and 503) |
 
 A request says who makes it only for the capture: a model sends `x-tap-model: <id>`, and
 `x-tap-quiet: 1` while it works through history at startup (counted, not drawn). Nothing
@@ -57,7 +55,7 @@ interface Captured {
   failed?: boolean;   // a request that got no answer (server down)
   chain?: string|null;// messages caused by one HTTP request or one model call share a chain
   hop?: number;       // order within the chain
-  model?: string;     // for models ↔ fastapi/scilibs, and the hops their requests cause: which model (data-cleanse, summaries, …)
+  model?: string;     // for models ↔ server/scilibs, and the hops their requests cause: which model (data-cleanse, summaries, …)
 }
 ```
 
@@ -191,7 +189,7 @@ Changing the selected fields, the period or the algorithm sends one K to Analysi
 
 ## 7. What a model is written against
 
-A model reaches the data server only by HTTP, through FastAPI, as the display client does
+A model reaches the data server only by HTTP, as the display client does
 (§4). In the browser each model runs in its own worker and makes its requests with `fetch`,
 carried by the relay. In CPython (tests, an ordinary ASGI server) and in the stand-in the
 models share a process with the server and make the same requests of the same application.
@@ -233,7 +231,7 @@ viewer's click through: it tells each model worker how many commands are pending
 
 | worker | runs | started by |
 |---|---|---|
-| `backend.worker.ts` | Pyodide: world, store, adapter, server, FastAPI | page, if WebAssembly |
+| `backend.worker.ts` | Pyodide: world, store, adapter, the data server's stand-in | page, if WebAssembly |
 | `model.worker.ts` ×3 (+ one per empty slot used) | Pyodide: one model each; its requests go through the relay | page, Python mode |
 | `standin.worker.ts` | TypeScript: world continuation, store adapter, server, core models | page, without WebAssembly or `?backend=standin` |
 | `sw.js` | the relay (no logic) | page |
@@ -271,7 +269,7 @@ makes Python the default wherever WebAssembly runs.
 * The handshake is paced by its drawing (FR-42a): the display client sends each handshake
   request only when the reply to the one before has been drawn arriving. Its chains'
   icons carry `data-handshake`, take 0.3 simulated seconds a hop (`HANDSHAKE_HOP_S`) and
-  do not queue behind other traffic. 31 requests of 4 hops take about 37 simulated seconds.
+  do not queue behind other traffic. 31 requests of 2 hops take about 19 simulated seconds.
 * Other icons queue per line and direction; a line that falls more than 6 simulated
   seconds behind is relieved rather than left to lag further.
 

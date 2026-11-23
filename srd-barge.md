@@ -1,9 +1,11 @@
 # Software Requirements Document
 ## Canal barge weather demonstrator, Version 4.2 (draft)
 
-**Status:** Draft. 4.1 recorded what the demonstrator does. 4.2 changes the design it
-stands for (OpenSensorHub as the data server, ADR 0005); the requirements listed under
-*Changes from Version 4.1* are **not yet built**, and the demonstrator still behaves as 4.1
+**Status:** Draft. 4.2 changes the design the demonstrator stands for: OpenSensorHub as
+the data server (ADR 0005). The **architecture view shows it** (seven components, the data
+server among the third-party libraries, a stand-in in its place). **Nothing has been tried
+against OpenSensorHub**: the relaxed requirements and the store adapter as its module are
+unconfirmed until AT-32 is run
 **Author:** Doc
 **Working name:** to be chosen (§15). This document says *the demonstrator*.
 **Supersedes:** SRD Version 3.3 and Annex A (Visual style). Both are folded in here;
@@ -26,7 +28,8 @@ document disagree, this document wins.
 
 ### Changes from Version 4.1
 
-Not yet built, and to be confirmed by a spike against a stock OpenSensorHub (ADR 0005).
+Shown on the architecture view; to be confirmed by a spike against a stock OpenSensorHub
+(ADR 0005).
 
 - The **data server is OpenSensorHub, off the shelf**. It moves to the **Third-party libraries** zone;
   the demonstrator's own server becomes a stand-in for it (§3, §6.3, FR-38a).

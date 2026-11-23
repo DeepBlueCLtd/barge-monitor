@@ -324,7 +324,7 @@ export class Api {
     const prev = tap.beginChain(headers.get('x-tap-chain') ?? null, /^\d+$/.test(hopText) ? parseInt(hopText, 10) : 1);
     const chainId = tap.chainId();
     const ask = `${method} ${rel}${req.query ? '?' + req.query : ''}`;
-    tap.emit(who, 'fastapi', letterForRequest(method, rel), model ? `${model}: ${ask}` : ask,
+    tap.emit(who, 'server', letterForRequest(method, rel), model ? `${model}: ${ask}` : ask,
       body.length ? shown(body) : `${method} ${rel}?${req.query}`, opts);
     const s = this.rt.server;
     let resp: Reply;
@@ -335,9 +335,7 @@ export class Api {
       resp = new Refusal(503, 'ServiceUnavailable', `waiting mode: rebuilding the index from the store (${p.indexed} of ${p.stored} records)`,
         null, [['retry-after', String(RETRY_AFTER_S)]]).response();
     } else {
-      tap.emit('fastapi', 'server', 'I', `route ${method} ${rel}`, { path: rel, query: req.query }, opts);
       resp = this.route(ctx);
-      tap.emit('server', 'fastapi', 'I', `result ${resp.status}`, { status: resp.status }, opts);
     }
     const payload = new TextEncoder().encode(resp.body);
     const out: [string, string][] = resp.headers.filter(([k]) => k.toLowerCase() !== 'content-length');
@@ -350,7 +348,7 @@ export class Api {
     out.push(['x-tap-hops', String(hops + 1)]);
     const prev2 = tap.beginChain(chainId, hops); // the response is on its request's chain
     const ctype = out.find(([k]) => k === 'content-type')?.[1] ?? '';
-    tap.emit('fastapi', who, letterForResponse(resp.status, rel, ctype), model ? `${model}: ${resp.status} ${rel}` : `${resp.status} ${rel}`,
+    tap.emit('server', who, letterForResponse(resp.status, rel, ctype), model ? `${model}: ${resp.status} ${rel}` : `${resp.status} ${rel}`,
       resp.body.length > SHOWN ? resp.body.slice(0, SHOWN) + `… (${payload.length} bytes in all)` : resp.body, opts);
     tap.endChain(prev2);
     return { status: resp.status, headers: out, body: method === 'HEAD' ? new Uint8Array(0) : payload };
