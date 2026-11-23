@@ -17,13 +17,14 @@ export const revealed = new Store<ReadonlySet<ComponentId>>(new Set());
 /** The empty slot whose editor is open in the Models panel. */
 export const openSlot = new Store<string | null>(null);
 
-const REVEALABLE: ReadonlySet<ComponentId> = new Set(['client', 'models']);
+/** Revealed by a click. The display client is revealed by `useRevealed`, once it is showing its views in its panel. */
+const REVEALED_BY_CLICK: ReadonlySet<ComponentId> = new Set(['models']);
 
 export function selectComponent(id: ComponentId | null) {
   selectedComponent.set(id);
   selectedMessage.set(null);
-  // FR-75: the first click on the display client or Models reveals it; nothing else can be revealed.
-  if (id && REVEALABLE.has(id) && !revealed.value.has(id)) revealed.set(new Set([...revealed.value, id]));
+  // FR-75: the first click on Models reveals it; nothing but Models and the display client can be revealed.
+  if (id && REVEALED_BY_CLICK.has(id) && !revealed.value.has(id)) revealed.set(new Set([...revealed.value, id]));
 }
 
 /** Restart client un-reveals (FR-75: revealed "until the page is reloaded or the client restarts"). */

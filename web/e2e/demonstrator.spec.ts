@@ -117,8 +117,15 @@ test('value-add reveal: nothing gold at start; display client and Models reveal;
   // Clicked, but not yet showing its views: not revealed until it is configured.
   await expect(page.getByTestId('card-client')).toHaveAttribute('data-revealed', 'false');
   await expect(page.getByTestId('detail-title')).toHaveText('Display client');
+  // Configured while another panel is open: still not revealed, so Models can be shown first.
+  await page.getByTestId('card-models').click();
+  await expect(page.getByTestId('card-models')).toHaveAttribute('data-revealed', 'true');
   await play(page);
   await configured(page);
+  await expect(page.locator('.card.gold')).toHaveCount(1);
+  await expect(page.getByTestId('card-client')).toHaveAttribute('data-revealed', 'false');
+  // Configured and its panel on screen: revealed.
+  await page.getByTestId('card-client').click();
   await expect(page.getByTestId('card-client')).toHaveAttribute('data-revealed', 'true');
   await expect(page.getByTestId('detail-title')).toHaveText('★ Display client');
   await expect(page.getByTestId('card-client')).toContainText('★ Display client');
