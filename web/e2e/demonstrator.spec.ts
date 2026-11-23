@@ -80,6 +80,29 @@ test('nothing moves before Play or while paused; play moves clock and messages (
   expect(await page.getByTestId('role-platform').innerText()).toBe(t2);
 });
 
+test('the handshake is drawn in its true order: each request leaves after the reply before it arrives (FR-42a)', async ({ page }) => {
+  const sent: number[] = [];
+  page.on('request', (r) => r.url().includes('/demo/api') && sent.push(Date.now()));
+  await open(page, 'demo/?seed=1&backend=standin');
+  await page.getByTestId('card-client').click();
+  await play(page);
+  await expect(page.getByTestId('handshake-step')).toContainText('Request 2', { timeout: 30_000 });
+  // One handshake message at most is on the flowchart at any moment.
+  let seen = 0;
+  for (let i = 0; i < 60; i++) {
+    const n = await page.locator('[data-testid="message-icon"][data-handshake]').count();
+    expect(n).toBeLessThanOrEqual(1);
+    seen += n;
+    await page.waitForTimeout(100);
+  }
+  expect(seen).toBeGreaterThan(20);
+  // Four hops of 0.3 simulated seconds at half speed: no request within two seconds of the one before.
+  const gaps = sent.slice(1).map((t, i) => t - sent[i]);
+  expect(gaps.length).toBeGreaterThan(2);
+  expect(Math.min(...gaps)).toBeGreaterThan(2000);
+  await configured(page);
+});
+
 test('value-add reveal: nothing gold at start; display client and Models reveal; nothing else can (AT-20, FR-74..FR-76)', async ({ page }) => {
   await open(page);
   await expect(page.locator('.card.gold')).toHaveCount(0);
@@ -152,6 +175,9 @@ test('clicking a message shows it in the message strip (FR-68)', async ({ page }
   await expect(page.getByTestId('strip-meta')).toContainText(/from .+ to /);
   await expect(page.getByTestId('message-content')).not.toBeEmpty();
   await expect(page.getByTestId('selected-icon')).toBeVisible();
+  // Picked while paused: at Play it travels on, and is deselected when it arrives.
+  await play(page);
+  await expect(page.getByTestId('selected-icon')).toHaveCount(0, { timeout: 20_000 });
 });
 
 test('every text and icon colour meets 4.5:1 (AT-22)', async () => {
@@ -256,21 +282,21 @@ test('server down, then up: unreachable and stale, then waiting mode, a new inst
   await page.getByTestId('demo-next').click();
   await expect(page.getByTestId('server-state')).toHaveText(/Ready/, { timeout: 60_000 });
   expect(await page.getByTestId('server-state').innerText()).not.toBe(instance);
-  await expect(page.getByTestId('client-state')).toHaveText('Configured', { timeout: 60_000 });
+  await expect(page.getByTestId('client-state')).toHaveText('Configured', { timeout: SLOW_MS });
   await expect(page.locator('.is-stale')).toHaveCount(0);
 });
 
 test('an essential source removed: degraded, one warning naming the sources, their views unavailable (AT-07)', async ({ page }) => {
   await ready(page);
   await demo(page, 'essential');
-  await expect(page.getByTestId('client-state')).toHaveText('Degraded', { timeout: 60_000 });
+  await expect(page.getByTestId('client-state')).toHaveText('Degraded', { timeout: SLOW_MS });
   await expect(page.getByTestId('dc-degraded')).toHaveCount(1);
   await expect(page.getByTestId('dc-degraded')).toContainText('Bow air temperature');
   await expect(page.getByTestId('view-line')).toContainText('Unavailable');
   await expect(page.getByTestId('chart-line')).toHaveCount(0); // never an empty chart (FR-45)
   await expect(page.getByTestId('chip').filter({ hasText: 'air temperature' }).first()).toBeDisabled();
   await page.getByTestId('demo-reset').click();
-  await expect(page.getByTestId('client-state')).toHaveText('Configured', { timeout: 60_000 });
+  await expect(page.getByTestId('client-state')).toHaveText('Configured', { timeout: SLOW_MS });
   await expect(page.getByTestId('dc-degraded')).toHaveCount(0);
 });
 
@@ -278,7 +304,7 @@ test('fields the client has never seen appear after a handshake, drawn by schema
   await ready(page);
   const before = await page.getByTestId('chip').allInnerTexts();
   await demo(page, 'extra');
-  await expect.poll(async () => (await page.getByTestId('chip').allInnerTexts()).length, { timeout: 60_000 }).toBe(before.length + 3);
+  await expect.poll(async () => (await page.getByTestId('chip').allInnerTexts()).length, { timeout: SLOW_MS }).toBe(before.length + 3);
   await expect(page.getByTestId('client-state')).toHaveText('Configured');
   for (const name of ['Precipitation', 'Pressure tendency', 'Readings removed']) {
     const chip = page.getByTestId('chip').filter({ hasText: name });
@@ -292,10 +318,10 @@ test('fields the client has never seen appear after a handshake, drawn by schema
 test('a server whose profile claim discovery contradicts is rejected (AT-08)', async ({ page }) => {
   await ready(page);
   await demo(page, 'lie');
-  await expect(page.getByTestId('client-state')).toHaveText('Server rejected', { timeout: 60_000 });
+  await expect(page.getByTestId('client-state')).toHaveText('Server rejected', { timeout: SLOW_MS });
   await expect(page.getByTestId('dc-rejected')).toContainText('This server cannot be used');
   await page.getByTestId('demo-reset').click();
-  await expect(page.getByTestId('client-state')).toHaveText('Configured', { timeout: 60_000 });
+  await expect(page.getByTestId('client-state')).toHaveText('Configured', { timeout: SLOW_MS });
 });
 
 test('a model written in an empty slot registers and appears in the display client (AT-13, Python)', async ({ page }) => {
@@ -312,7 +338,7 @@ test('a model written in an empty slot registers and appears in the display clie
   await page.getByTestId('card-client').click();
   await configured(page);
   const chip = page.getByTestId('chip').filter({ hasText: 'Wind chill' });
-  await expect(chip).toBeVisible({ timeout: 60_000 });
+  await expect(chip).toBeVisible({ timeout: SLOW_MS });
   await expect(chip).toHaveClass(/optional/);
   await chip.click();
   await expect(page.getByTestId('chart-line').locator('canvas')).toBeVisible({ timeout: 60_000 });

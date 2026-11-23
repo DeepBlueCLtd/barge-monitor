@@ -5,13 +5,12 @@
 import { Node, NodeProps, ReactFlow, useReactFlow, ViewportPortal } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
-import { HOP_S } from '../config';
 import { simClock } from './clock';
 import { COMPONENT_IDS, COMPONENTS, ComponentId } from './components';
 import { Diamond } from './Diamond';
 import { allLanes, arrowhead, cardRect, laneFor, LAYOUT_SIZE, Pt, pointAt } from './geometry';
 import layout from './layout.json';
-import { bus, isUserMessage, LETTERS, Message } from './messages';
+import { bus, isHandshakeMessage, isUserMessage, LETTERS, Message } from './messages';
 import { GOLD, INK, ZoneId, ZONES } from './palette';
 import { runtime } from './runtime';
 import { revealed, selectComponent, selectedComponent, selectedMessage } from './selection';
@@ -135,7 +134,6 @@ export function Flowchart() {
         <ViewportPortal>
           <Arrows />
           <Icons />
-          <SelectedIcon />
           <StatusBox rect={layout.status as [number, number, number, number]} />
           <MessageKey rect={layout.key as [number, number, number, number]} />
         </ViewportPortal>
@@ -167,7 +165,7 @@ const Arrows = memo(function Arrows() {
 function position(m: Message, now: number): Pt | null {
   const lane = laneFor(m.src, m.dst);
   if (!lane) return null;
-  const f = (now - m.start) / HOP_S;
+  const f = (now - m.start) / m.dur;
   if (f < 0 || f > 1) return null;
   // A failed request stops at the boundary (VS-14).
   return pointAt(lane, m.failed ? Math.min(f, 0.55) : f);
@@ -182,6 +180,9 @@ function Icons() {
     let raf = 0;
     const loop = () => {
       bus.tick();
+      // A message picked while paused travels on at Play; once it arrives it is deselected.
+      const sel = selectedMessage.value;
+      if (sel?.follow && simClock.playing && !position(sel.m, simClock.displayNow())) selectedMessage.set(null);
       setFrame((f) => (f + 1) % 1e6);
       raf = requestAnimationFrame(loop);
     };
@@ -196,26 +197,28 @@ function Icons() {
         const at = position(m, now);
         if (!at) return null;
         return (
-          <button key={m.key} className={`icon${m.failed ? ' failed' : ''}`} data-letter={m.letter} data-user={isUserMessage(m) || undefined} data-testid="message-icon"
+          <button key={m.key} className={`icon${m.failed ? ' failed' : ''}`} data-letter={m.letter} data-user={isUserMessage(m) || undefined} data-handshake={isHandshakeMessage(m) || undefined} data-testid="message-icon"
             aria-label={`${m.letter} message: ${m.summary}`} title={`${m.letter}: ${m.summary}`}
             style={{ transform: `translate(${at[0] - 19}px, ${at[1] - 19}px)` }}
             onClick={(e) => {
               e.stopPropagation();
-              selectedMessage.set({ m, at });
+              selectedMessage.set({ m, at, follow: !simClock.playing });
             }}>
             <Glyph letter={m.letter} failed={m.failed} user={isUserMessage(m)} />
           </button>
         );
       })}
+      <SelectedIcon now={now} />
     </>
   );
 }
 
-/** A selected message stays where it was picked, tinted and haloed (VS-14). */
-function SelectedIcon() {
+/** A selected message, tinted and haloed (VS-14): where it was picked, or travelling on if picked while paused. */
+function SelectedIcon({ now }: { now: number }) {
   const picked = useStore(selectedMessage);
   if (!picked) return null;
-  const { m, at } = picked;
+  const { m } = picked;
+  const at = picked.follow ? position(m, now) ?? picked.at : picked.at;
   return (
     <div className="icon selected" data-letter={m.letter} data-testid="selected-icon" style={{ transform: `translate(${at[0] - 19}px, ${at[1] - 19}px)` }}>
       <Glyph letter={m.letter} failed={m.failed} selected user={isUserMessage(m)} />

@@ -26,12 +26,13 @@ function Screen({ session }: { session: ClientSession }) {
   useStore(session.version);
   useStore(session.run);
   const commandNote = useStore(session.commandNote);
+  const step = useStore(session.handshakeStep);
 
   const missing = config?.problems ?? [];
   const status = phase === 'unreachable' ? 'server unreachable · data stale'
     : phase === 'waiting' ? 'server starting (503) · waiting'
       : phase === 'rejected' ? 'server rejected'
-        : !config ? (phase === 'handshake' ? 'handshake…' : 'not started')
+        : !config ? (phase === 'handshake' ? (step ? `handshake · request ${step.n}` : 'handshake…') : 'not started')
           : missing.length ? `degraded · ${missing.length} essential source${missing.length > 1 ? 's' : ''} unavailable`
             : config.claimed ? 'all essential sources present' : 'the server does not claim the declared profile';
 
@@ -42,7 +43,7 @@ function Screen({ session }: { session: ClientSession }) {
         <span data-testid="dc-status">{status}</span>
       </div>
       {banner && <div className={`dc-banner${phase === 'unreachable' ? ' bad' : ''}`} role="alert" data-testid="dc-banner">{banner}</div>}
-      {!config ? <NotConfigured phase={phase} /> : config.rejected ? (
+      {!config ? <NotConfigured phase={phase} step={step} /> : config.rejected ? (
         // FR-41, AT-08: a contradicted profile claim is an error; the server is not used.
         <div className="dc-rejected" role="alert" data-testid="dc-rejected"><b>This server cannot be used.</b> {config.rejected}</div>
       ) : (
@@ -62,13 +63,14 @@ function Screen({ session }: { session: ClientSession }) {
   );
 }
 
-function NotConfigured({ phase }: { phase: string }) {
+function NotConfigured({ phase, step }: { phase: string; step: { n: number; path: string } | null }) {
   return (
     <div className="dc-waiting" data-testid="dc-waiting">
       <div className="dc-waiting-text">{phase === 'waiting-models' ? <ModelsCatchingUp />
         : phase === 'waiting-play' ? <>Waiting for the simulation clock. Press <b>▶ Play</b>: the display client starts with the rest of the system and makes its handshake.</>
         : phase === 'unreachable' ? <>The server does not answer. Retrying on the simulation clock.</>
-          : <>Handshake: discovering what the server offers (landing page, conformance, profile, systems, datastreams, schemas)…</>}</div>
+          : <>Handshake: discovering what the server offers (landing page, conformance, profile, systems, datastreams, schemas). Each request is sent when the reply to the one before has arrived.
+            {step && <span className="dc-handshake-step" data-testid="handshake-step"><br />Request {step.n}: <code>GET /{step.path}</code></span>}</>}</div>
     </div>
   );
 }
