@@ -1,9 +1,7 @@
 # Software Requirements Document
-## Canal barge weather demonstrator, Version 4.2 (draft)
+## Canal barge weather demonstrator, Version 4.1
 
-**Status:** Draft. 4.1 recorded what the demonstrator does. 4.2 changes the design it
-stands for (OpenSensorHub as the data server, ADR 0005); the requirements listed under
-*Changes from Version 4.1* are **not yet built**, and the demonstrator still behaves as 4.1
+**Status:** As implemented (4.1 records what the demonstrator does; 4.0 was the draft it was built from)
 **Author:** Doc
 **Working name:** to be chosen (§15). This document says *the demonstrator*.
 **Supersedes:** SRD Version 3.3 and Annex A (Visual style). Both are folded in here;
@@ -23,22 +21,6 @@ The mockups fixed **layout, components and labels** for Version 4.0. They are dr
 plain style; the visual style is §11. They predate Version 4.1 (they show Model A and Model
 B, a 1-hour default period, and no overview or failure demos). Where a mockup and this
 document disagree, this document wins.
-
-### Changes from Version 4.1
-
-Not yet built, and to be confirmed by a spike against a stock OpenSensorHub (ADR 0005).
-
-- The **data server is OpenSensorHub, off the shelf**. It moves to the **Third-party libraries** zone;
-  the demonstrator's own server becomes a stand-in for it (§3, §6.3, FR-38a).
-- **FastAPI is no longer a component.** The display client and the models talk to the
-  data server directly (§3.1). Components fall from 8 to **7**.
-- The **store adapter** becomes a module of the data server (FR-20a).
-- Requirements that asked for behaviour beyond the standard are **relaxed** to what a
-  stock server gives, each with a fallback: the profile link (FR-41), the instance
-  identifier and waiting mode (FR-47, FR-48), 409 on creating what exists (FR-28), and
-  the plain PUT (FR-28a).
-- Already built in 4.2: the handshake is paced by its drawing (FR-42a), and a message
-  selected while paused travels on at Play (VS-14).
 
 ### Changes from Version 4.0
 
@@ -141,7 +123,7 @@ The browser holds four kinds of runtime:
 | Runtime | Holds |
 |---|---|
 | Main thread | The display client and the demonstrator shell (TypeScript, React) |
-| Back-end worker | World, logger store, store adapter, the data server's stand-in (Python, Pyodide) |
+| Back-end worker | World, logger store, store adapter, data server, FastAPI (Python, Pyodide) |
 | One worker per model | Each model in Models (Python, Pyodide) |
 | Service Worker | The seam relay |
 
@@ -154,7 +136,7 @@ The browser holds four kinds of runtime:
 - **FR-03** The relay is an **invisible transport**. It contains no application logic, is
   not a component, and is not drawn on the flowchart. Messages that pass through it are
   drawn as travelling directly between their real endpoints (for example, display client
-  to data server).
+  to FastAPI).
 - **FR-04** No client code or configuration carries an absolute URL. Pointing the
   display client at a real server is a change of base URL alone.
 - **FR-05** Every shape crossing the seam is governed by a committed master under
@@ -185,15 +167,11 @@ and says nothing about a developed system's effort or contingency.
   - the **Python back end** (Pyodide): the real implementation, described throughout
     this document;
   - the **JavaScript stand-in**: a TypeScript implementation of the same back-end
-    components (store adapter, the data server's stand-in, the core models) running in a
-    Web Worker.
+    components (store adapter, data server, the core models) running in a Web Worker.
 - **FR-06b** The **stand-in is the default**, because it starts in a few seconds. The URL
   parameter `?backend=python` runs the Python back end, and `?backend=standin` names the
   stand-in explicitly, so either can be rehearsed on any machine. Without WebAssembly only
   the stand-in can run.
-- **FR-06j** In **both** back ends the data server is a **stand-in for OpenSensorHub**,
-  which cannot run in a browser (FR-38a). Its card says so. What the demonstrator shows of
-  the data server is its interface, not an implementation a developed system would keep.
 - **FR-06c** The stand-in serves **exactly the same interface**: the same Connected Systems
   subset, the same discovery documents, profile, schemas, encodings, refusals, waiting
   mode and instance identifiers, validated against the **same committed masters** (FR-05).
@@ -237,10 +215,10 @@ corresponds **one-to-one** with the real system's architecture, under neutral na
 |---|---|---|---|---|
 | C-01 | Collection platform | World | | The barge and its bow and stern sensors; stands in for the physical world |
 | C-02 | Logger store | Legacy | | Deliberately awkward, append-only files (§6.1) |
-| C-03 | Store adapter | New build · back end | | A module of the data server: the only reader of the store; holds the index; answers store queries |
-| C-04 | Data server | Third-party libraries | | **OpenSensorHub**, off the shelf. OGC API – Connected Systems: discovery, datastreams, observations, commands |
+| C-03 | Store adapter | New build · back end | | The only reader of the store; holds the index; answers store queries |
+| C-04 | Data server | New build · back end | | OGC API – Connected Systems: discovery, datastreams, observations, commands |
 | C-05 | Models | New build · back end | **★** | Core models and empty slots, each an OGC process system in its own worker, registered over the data server's HTTP interface |
-| C-06 | *(withdrawn in 4.2: FastAPI)* | | | Not a component: the data server serves HTTP itself (ADR 0005) |
+| C-06 | FastAPI | Third-party libraries | | ASGI web framework: routing, validation, OpenAPI |
 | C-07 | Scientific libraries | Third-party libraries | | numpy, scikit-learn |
 | C-08 | Display client | New build · front end | **★** | The real system's screen: handshake, self-configuration, graphs and clusters |
 
@@ -256,13 +234,15 @@ everything and is not a component.
 | Logger store | Store adapter | L |
 | Data server | Store adapter | S (store query) |
 | Store adapter | Data server | I |
-| Models | Data server | Q, O, I (over HTTP: register, read, publish, look for commands; I is the referee) |
-| Data server | Models | D, O, H, I (over HTTP) |
+| Models | FastAPI | Q, O, I (over HTTP: register, read, publish, look for commands; I is the referee) |
+| FastAPI | Models | D, O, H, I (over HTTP) |
 | Models | Scientific libraries | I (calls and results) |
-| Display client | Data server | Q, K (over HTTP) |
-| Data server | Display client | D, P, O, H (over HTTP) |
+| FastAPI | Data server | I (parsed request) |
+| Data server | FastAPI | I (response) |
+| Display client | FastAPI | Q, K (over HTTP) |
+| FastAPI | Display client | D, P, O, H (over HTTP) |
 
-Models reach the data server **as the display client does**: with
+Models reach the data server **as the display client does**: through FastAPI, with
 ordinary HTTP requests to the Connected Systems interface. There is no other interface
 between a model and the data server.
 
@@ -358,21 +338,14 @@ between a model and the data server.
   answers **store queries** (S) from the data server: which sensors, which fields, which
   period. It finds the records through the index and reads them from the files (an S
   message to the store, L records back).
-- **FR-20a** The store adapter is a **module of the data server**, written against
-  OpenSensorHub's extension interface. That interface, and so the adapter's language, is
-  to be confirmed (ADR 0005). In the demonstrator it remains the Python and TypeScript
-  adapter of Version 4.1.
 - **FR-22** The store is never altered. The index is rebuilt from the store when lost,
   including on every restart, and a rebuilt index gives identical results.
 
 ### 6.3 Data server
 
-The data server is **OpenSensorHub, used as shipped** (ADR 0005, superseding ADR 0001).
-This section lists what the system **needs** of it: a subset of **OGC API – Connected
-Systems Part 1 (Feature Resources)** and **Part 2 (Dynamic Data)**, from the Spike 0
-finding (`FINDING-2026-11-20-connected-systems.md`). Nothing here is to be written; each
-item is to be confirmed against a stock OpenSensorHub. The demonstrator's stand-in serves
-exactly this subset.
+The data server implements a declared subset of **OGC API – Connected Systems Part 1
+(Feature Resources)** and **Part 2 (Dynamic Data)**, recorded in an ADR from the Spike 0
+finding (`FINDING-2026-11-20-connected-systems.md`).
 
 - **FR-23** **Discovery**, including the prerequisites inherited from OGC API – Features
   Part 1 (Core) and OGC API – Common Part 1: landing page, conformance declaration, API
@@ -392,8 +365,7 @@ exactly this subset.
   and selects fields.
 - **FR-27** **Control streams and commands** on each model, carrying its settings. Commands
   are POSTed to `/controlstreams/{id}/commands`; the bounds live in the control stream's
-  schema; a command outside them is rejected (the stand-in answers **HTTP 400** naming the
-  bound; what OpenSensorHub answers is to be confirmed). A model
+  schema; a command outside them is rejected with **HTTP 400** naming the bound. A model
   **polls** its control stream for pending commands (`statusCode=PENDING`) on the
   simulation clock, and reports each command's progress by POSTing to
   `/commands/{id}/status`. Polling is a recorded placeholder, as FR-63.
@@ -401,15 +373,13 @@ exactly this subset.
   under the Models system (`POST /systems/models/subsystems`), then its datastreams and
   control stream under that system, then publishing observations
   (`POST /datastreams/{id}/observations`), using ordinary resource creation. There is no
-  registration-specific endpoint. A restarted model must find what it made: the stand-in answers
-  **409** with its `Location` to creating what is already there; if OpenSensorHub does
-  not, a model looks its resources up before creating them. A datastream whose
+  registration-specific endpoint. Creating a resource that is already there answers
+  **409** with its `Location`, so a restarted model finds what it made. A datastream whose
   schema changes is a new datastream under a new identifier (FR-51).
 - **FR-28a** Nothing is replaced or deleted, with one declared exception that is **not
   Connected Systems**: a result that holds the latest run only is replaced with a plain
-  HTTP `PUT` on the datastream's observations. If OpenSensorHub does not accept it, a run
-  becomes one observation carrying arrays (§15). The stand-in refuses every other `PUT`,
-  `PATCH` and `DELETE` by name; the system does not use them, whatever the server offers.
+  HTTP `PUT` on the datastream's observations. Every other `PUT`, `PATCH` and `DELETE` is
+  refused by name, and the Create/Replace/Delete conformance classes are not claimed.
 - **FR-29** **Summary datastreams**: for each sensor field, models publish **1-minute
   means** and **hourly means** as ordinary datastreams. Clients read raw records for
   periods of an hour or less, 1-minute means for 6 hours and a day, and hourly means for
@@ -458,13 +428,9 @@ exactly this subset.
 
 ### 6.5 Third-party libraries
 
-- **FR-38** *(Replaced in 4.2.)* The **data server is OpenSensorHub**, adopted as shipped
-  and not modified. The **committed OpenAPI master** states what this system needs of a
-  Connected Systems server; the contract suite is the test that a server provides it.
-- **FR-38a** In the demonstrator a **stand-in** takes OpenSensorHub's place: the subset of
-  §6.3, on FastAPI in the Python back end and in TypeScript in the JavaScript stand-in.
-  FastAPI is an internal detail of the stand-in and is not drawn. A test asserts that the
-  stand-in serves the master.
+- **FR-38** **FastAPI** (with Starlette) is the ASGI framework for the data server's HTTP
+  interface. The **committed OpenAPI master is the source of truth**; a test asserts
+  that FastAPI serves the same.
 - **FR-39** **Scientific libraries** (numpy and scikit-learn) are used by the models only.
 
 ---
@@ -477,9 +443,7 @@ exactly this subset.
   **essential sources**: for each, the system, datastream, field, SWE Common type and
   unit. The essentials are bow and stern **air temperature** and **apparent wind speed**,
   and the core models' datastreams that the display client's views depend on.
-- **FR-41** The profile is published with the data server: linked from its landing page
-  if OpenSensorHub allows a link to be added, otherwise at a fixed path relative to the
-  base URL (to be confirmed; the stand-in links it).
+- **FR-41** The data server publishes the profile and links it from its landing page.
   The client checks both that the server **claims** the profile and that discovery
   **satisfies** it; a contradicted claim is an error.
 
@@ -507,16 +471,12 @@ exactly this subset.
 
 - **FR-46** **Restart client** discards all display client state and repeats the
   handshake. The back end, history and models carry on.
-- **FR-47** **Restart server** restarts the data server. While the store adapter rebuilds
-  its index the server is **not ready**. The stand-in answers every request **HTTP 503
-  with `Retry-After`** (waiting mode) and gives each start a fresh **instance identifier**,
-  sent as the landing page's `ETag` and on every response. Neither is required by the
-  standard: how a starting OpenSensorHub answers, and how its restart can be recognised,
-  are to be confirmed (ADR 0005).
-- **FR-48** A client receiving 503 waits for `Retry-After` and retries; a server that does
-  not answer at all is treated as unreachable (FR-49). A client that **recognises a
-  restart** clears its state and repeats the handshake: by the instance identifier where
-  the server gives one, otherwise by the means the spike settles on. The server
+- **FR-47** **Restart server** restarts the data server. On starting it enters **waiting
+  mode** while the store adapter rebuilds its index: every request gets **HTTP 503 with
+  `Retry-After`**. Each start creates a fresh **instance identifier**, sent as the landing
+  page's `ETag` and on every response.
+- **FR-48** A client receiving 503 waits for `Retry-After` and retries. A client that sees
+  the instance identifier change clears its state and repeats the handshake. The server
   enforces nothing.
 
 ### 7.4 Control panel
@@ -619,7 +579,7 @@ its labels meet VS-05; the detail panel takes the rest.
   Zones are labelled, shaded bands. Third-party libraries form their **own band**,
   outside the back end.
 - **FR-65** Every flow in §3.1 is drawn. A two-way exchange is two arrows on the thirds of
-  the facing edges. Both HTTP flows (display client and data server; Models and data server) are
+  the facing edges. Both HTTP flows (display client and FastAPI; Models and FastAPI) are
   labelled "HTTP".
 
 ### 9.3 Messages
@@ -641,8 +601,7 @@ its labels meet VS-05; the detail panel takes the rest.
 - **FR-69a** The **overview** invites the viewer to click a component and shows three
   lists: **sensible defaults** (each decision the system did not have to make, the
   standard or off-the-shelf part adopted instead, and where it is seen); **written for
-  this system** (store adapter, display client, models; the data server is among the
-  defaults); and **not in this
+  this system** (store adapter, data server, display client, models); and **not in this
   demonstrator** (what a developed system needs that is deliberately absent, by name,
   without estimates). It marks nothing as value-add (FR-74).
 - **FR-70** **Display client** (mockup 1): the monitor frame holding the display client
@@ -657,8 +616,7 @@ its labels meet VS-05; the detail panel takes the rest.
   view of what it does, labelled illustrative. Below, three steps for adding a model
   (write it, register it, see it) and a line stating that each model runs in its own
   worker and reaches the data server only over HTTP.
-- **FR-72** **Data server** (mockup 3): that it is OpenSensorHub, off the shelf, with a
-  stand-in in its place here; a diagram of the Connected Systems resources that
+- **FR-72** **Data server** (mockup 3): a diagram of the Connected Systems resources that
   describe this system: the collection platform (Platform) with bow and stern sensors
   (Sensor), each with its record datastream and observations; Models (Process) with each
   model's output datastreams and observations; and a row of the other things used
@@ -669,7 +627,7 @@ its labels meet VS-05; the detail panel takes the rest.
   command feasibility, replacing and deleting). The panel claims nothing the server
   refuses.
 - **FR-73** **Every other component** (collection platform, logger store, store adapter,
-  scientific libraries) shows an explanation panel: what it does, which zone it
+  FastAPI, scientific libraries) shows an explanation panel: what it does, which zone it
   belongs to and why, which letters it sends and receives, and live counters.
 
 ### 9.5 Value-add reveal
@@ -717,9 +675,8 @@ they set.
 
 - **FR-80** Front end: **TypeScript and React**. Flowchart: **React Flow (xyflow)**.
   Charts: **ECharts**. Model editor: **CodeMirror 6** with Python mode.
-- **FR-81** Back end, in a developed system: **OpenSensorHub** with the store adapter as
-  its module, and the models as separate processes. In the demonstrator: the stand-in of
-  FR-38a on Pyodide. The committed OpenAPI master states what is needed of either.
+- **FR-81** Back end: **FastAPI** on Pyodide, implementing the Connected Systems subset
+  directly. The committed OpenAPI master is the source of truth.
 - **NFR-04** TypeScript types are generated from the masters; the Python back end validates
   against the same masters.
 - **NFR-05** Every model's worker loads Pyodide and the scientific libraries it needs; the
@@ -830,7 +787,7 @@ contents. The mockups are plain; they fix layout only.
   customer or system, and no real place. A vocabulary gate enforces a privately held list
   of forbidden terms.
 - **PR-02** Spec-kit carries: constitution, specify, plan, tasks, analyze, implement. ADRs
-  record contested decisions, including the choice of data server, the split of work
+  record contested decisions, including the Connected Systems subset, the split of work
   between Summaries and Analysis, and how models reach the data server.
 - **PR-03** Every gate and every refusal test is watched failing before it is trusted.
 
@@ -879,7 +836,6 @@ contents. The mockups are plain; they fix layout only.
 | AT-28 | Regenerating the history from the recorded seeds reproduces the shipped files exactly | Delivery |
 | AT-29 | In both back ends, a system, a datastream and observations are created with ordinary HTTP requests and then served; creation outside a model's own system, and every replace or delete but the declared PUT, is refused by name | C3 |
 | AT-30 | The detail panel opens on the overview (adopted, written, not here); the Data server panel claims nothing the server refuses; no requirement number appears on screen | Honesty |
-| AT-32 | *(Not yet run.)* The contract suite, pointed at a stock OpenSensorHub, passes; each difference is recorded with the fallback taken (ADR 0005) | C1 |
 | AT-31 | Each failure demo shows what its banner says: unreachable and stale then a fresh handshake; degraded with the sources named; unseen fields drawn by type; a contradicted claim rejected; and Put everything back restores a configured client | C1, C2 |
 
 Where each is tested: AT-01, AT-03, AT-04, AT-07 (server side), AT-10 to AT-16, AT-18, AT-19
@@ -909,10 +865,6 @@ and AT-31 in `web/e2e`. AT-26 is covered for AT-07 to AT-11, which run in the st
   below 1×.
 - **Pub/sub.** Revisit polling, by the display client and by the models, when Connected
   Systems Part 3 is published.
-- **OpenSensorHub.** Everything in ADR 0005's table is unconfirmed until AT-32 is run:
-  the profile link, restart recognition, the answer while starting, 409 on creating what
-  exists, the plain PUT, the `quality` reference form, and the interface and language the
-  store adapter is written in.
 - **Conformance testing.** The conformance class identifiers claimed are those of the
   published Parts 1 and 2. Whether an OGC test suite for Connected Systems exists is still
   to be checked; one independent client (OSHConnect) reports two differences (decisions
