@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="site.css">
 </head>
 <body>
-<div class="banner">Preview of pull request #11 (43dfb2f). Not the published document.</div>
+<div class="banner">Preview of pull request #11 (43ccf7a). Not the published document.</div>
 <main>
 <p class="demo-link"><a href="demo/"><strong>Open the working demonstrator →</strong></a> It runs whole in your browser. · <a href="index.html">Requirements</a> · <a href="interfaces.html">Version 4 interfaces</a> · Mockups: <a href="mockups/mockup-1-display-client.png">1</a>, <a href="mockups/mockup-2-models.png">2</a>, <a href="mockups/mockup-3-data-server.png">3</a></p>
 <nav id="TOC" aria-label="Contents">
@@ -1154,10 +1154,12 @@ same</strong>, the value-add ones included, and the detail panel is
 empty.</li>
 <li><strong>FR-75</strong> The first time the <strong>display
 client</strong> or <strong>Models</strong> is clicked, it is
-<strong>revealed</strong>: its card turns gold, gains a ★ in its title,
-"our value-add" in its subtitle, and a glinting diamond in its top-right
-corner. It stays revealed until the page is reloaded or the client
-restarts.</li>
+<strong>revealed</strong>, the display client only once it is
+<strong>showing its views</strong> (not while it waits for Play, the
+models or its handshake, nor when it has rejected the server): its card
+turns gold, gains a ★ in its title, "our value-add" in its subtitle, and
+a glinting diamond in its top-right corner. It stays revealed until the
+page is reloaded or the client restarts.</li>
 <li><strong>FR-76</strong> Inside the revealed panels, every value-add
 part carries its own diamond: the three graphs and the cluster view in
 the monitor; Models and each model card in the Models panel.</li>
