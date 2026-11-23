@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="site.css">
 </head>
 <body>
-<div class="banner">Preview of pull request #11 (a908350). Not the published document.</div>
+<div class="banner">Preview of pull request #11 (870b8b2). Not the published document.</div>
 <main>
 <p class="demo-link"><a href="demo/"><strong>Open the working demonstrator →</strong></a> It runs whole in your browser. · <a href="index.html">Requirements</a> · <a href="interfaces.html">Version 4 interfaces</a> · Mockups: <a href="mockups/mockup-1-display-client.png">1</a>, <a href="mockups/mockup-2-models.png">2</a>, <a href="mockups/mockup-3-data-server.png">3</a></p>
 <nav id="TOC" aria-label="Contents">
@@ -65,15 +65,17 @@ exclusions from Version 4</a></li>
 Document</h1>
 <h2 id="canal-barge-weather-demonstrator-version-42-draft">Canal barge
 weather demonstrator, Version 4.2 (draft)</h2>
-<p><strong>Status:</strong> Draft. 4.1 recorded what the demonstrator
-does. 4.2 changes the design it stands for (OpenSensorHub as the data
-server, ADR 0005); the requirements listed under <em>Changes from
-Version 4.1</em> are <strong>not yet built</strong>, and the
-demonstrator still behaves as 4.1 <strong>Author:</strong> Doc
-<strong>Working name:</strong> to be chosen (§15). This document says
-<em>the demonstrator</em>. <strong>Supersedes:</strong> SRD Version 3.3
-and Annex A (Visual style). Both are folded in here; nothing in them
-applies unless restated.</p>
+<p><strong>Status:</strong> Draft. 4.2 changes the design the
+demonstrator stands for: OpenSensorHub as the data server (ADR 0005).
+The <strong>architecture view shows it</strong> (seven components, the
+data server among the third-party libraries, a stand-in in its place).
+<strong>Nothing has been tried against OpenSensorHub</strong>: the
+relaxed requirements and the store adapter as its module are unconfirmed
+until AT-32 is run <strong>Author:</strong> Doc <strong>Working
+name:</strong> to be chosen (§15). This document says <em>the
+demonstrator</em>. <strong>Supersedes:</strong> SRD Version 3.3 and
+Annex A (Visual style). Both are folded in here; nothing in them applies
+unless restated.</p>
 <p><strong>Companion mockups (non-normative):</strong> three static
 frames, one for each detail panel (§9.4), plus one interactive
 frame:</p>
@@ -110,8 +112,8 @@ They predate Version 4.1 (they show Model A and Model B, a 1-hour
 default period, and no overview or failure demos). Where a mockup and
 this document disagree, this document wins.</p>
 <h3 id="changes-from-version-41">Changes from Version 4.1</h3>
-<p>Not yet built, and to be confirmed by a spike against a stock
-OpenSensorHub (ADR 0005).</p>
+<p>Shown on the architecture view; to be confirmed by a spike against a
+stock OpenSensorHub (ADR 0005).</p>
 <ul>
 <li>The <strong>data server is OpenSensorHub, off the shelf</strong>. It
 moves to the <strong>Third-party libraries</strong> zone; the
