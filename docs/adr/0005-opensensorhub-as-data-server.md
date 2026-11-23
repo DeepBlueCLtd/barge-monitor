@@ -2,7 +2,8 @@
 
 **Status:** proposed, 2026-11-23 (SRD 4.2 §3, §6.3, §6.5, §7, FR-38, FR-81). Supersedes
 ADR 0001. The demonstrator's architecture view shows this design, with the Version 4.1
-server as the stand-in; nothing here has been tried against OpenSensorHub.
+server as the stand-in. A spike against a stock OpenSensorHub is recorded below; three
+items stay open, so this ADR is not yet accepted.
 
 **Context.** ADR 0001 wrote a subset of OGC API – Connected Systems directly on FastAPI,
 because no off-the-shelf server runs in Pyodide. That was a constraint of the
@@ -28,18 +29,20 @@ to write and keep honest its own Connected Systems server when one can be adopte
    server**, not the definition of one. The contract suite is the check that a server,
    OpenSensorHub included, provides it.
 
-**To be confirmed by a spike** (the contract suite pointed at a stock OpenSensorHub).
-Each of these is something the Version 4.1 server does that the standard does not require:
+**Spike, 2026-11-23** (`docs/findings/FINDING-2026-11-23-opensensorhub-spike.md`;
+OpenSensorHub 2.0.4). Sensing, discovery, resource creation and reading work as shipped.
+Commands, restart recognition and replacing a result do not, and need design changes.
 
-| Behaviour | Used for | If OpenSensorHub does not provide it |
-|---|---|---|
-| A link to the declared profile on the landing page | FR-41 | The profile is published beside the server at a fixed relative path |
-| An instance identifier on every response | FR-47, FR-48 | The client detects a restart another way (for example the landing page's `ETag`, or a failed request followed by an answer) |
-| 503 with `Retry-After` while starting | FR-47 | A server that is starting is treated as unreachable until it answers |
-| 409 with `Location` when creating what exists | FR-28 | A model looks its resources up before creating them |
-| Plain `PUT` to replace a datastream's observations | FR-28a | One observation per run, carrying arrays (already the standard-only alternative in §15) |
-| The `quality` reference form `{"href": "#…_qc"}` | FR-25 | The form OpenSensorHub's own client accepts (D-31) |
-| The extension interface the store adapter is written against, and its language | FR-20, FR-21 | A separate process in front of the store that OpenSensorHub reads |
+| Behaviour | Used for | Stock OpenSensorHub | Outcome |
+|---|---|---|---|
+| A link to the declared profile on the landing page | FR-41 | Absent | Publish the profile beside the server at a fixed relative path |
+| An instance identifier on every response | FR-47, FR-48 | None | A restart is a period of unreachability; what was created persists, so no fresh handshake is needed |
+| 503 with `Retry-After` while starting | FR-47 | Connections refused until ready | Starting is treated as unreachable |
+| 409 with `Location` when creating what exists | FR-28 | 201 with the same `Location` | Models accept 201; no lookup needed |
+| Plain `PUT` to replace a datastream's observations | FR-28a | 405 | **Open.** One observation per run needs an array, which was also refused as encoded |
+| The `quality` reference form `{"href": "#…_qc"}` | FR-25 | Accepted and returned unchanged | No change |
+| The extension interface the store adapter is written against | FR-20, FR-21 | Not tried | **Open.** Needs a spike of its own |
+| *Found by the spike:* commands polled by a model | FR-27 | Not possible: commands are pushed to a receiver, and dropped without one; the sender waits 5 s; bounds are not enforced | **Open.** FR-27 must be revised, and with it the exclusion of push delivery |
 
 **Consequences.**
 

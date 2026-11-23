@@ -3,9 +3,10 @@
 
 **Status:** Draft. 4.2 changes the design the demonstrator stands for: OpenSensorHub as
 the data server (ADR 0005). The **architecture view shows it** (seven components, the data
-server among the third-party libraries, a stand-in in its place). **Nothing has been tried
-against OpenSensorHub**: the relaxed requirements and the store adapter as its module are
-unconfirmed until AT-32 is run
+server among the third-party libraries, a stand-in in its place). A **spike against a
+stock OpenSensorHub** (finding of 2026-11-23) confirmed sensing, discovery and reading,
+and found that **commands, restart recognition and replacing a result need redesign**; the
+requirements below do not yet reflect that, and the store adapter as its module is untried
 **Author:** Doc
 **Working name:** to be chosen (§15). This document says *the demonstrator*.
 **Supersedes:** SRD Version 3.3 and Annex A (Visual style). Both are folded in here;
@@ -886,7 +887,7 @@ contents. The mockups are plain; they fix layout only.
 | AT-28 | Regenerating the history from the recorded seeds reproduces the shipped files exactly | Delivery |
 | AT-29 | In both back ends, a system, a datastream and observations are created with ordinary HTTP requests and then served; creation outside a model's own system, and every replace or delete but the declared PUT, is refused by name | C3 |
 | AT-30 | The detail panel opens on the overview (adopted, written, not here); the Data server panel claims nothing the server refuses; no requirement number appears on screen | Honesty |
-| AT-32 | *(Not yet run.)* The contract suite, pointed at a stock OpenSensorHub, passes; each difference is recorded with the fallback taken (ADR 0005) | C1 |
+| AT-32 | *(Run once as a spike, 2026-11-23: not passed.)* The contract suite, pointed at a stock OpenSensorHub, passes; each difference is recorded with the fallback taken (ADR 0005). The suite passed 0 of 15 unchanged and must first find resources by unique id, not by the stand-in's identifiers | C1 |
 | AT-31 | Each failure demo shows what its banner says: unreachable and stale then a fresh handshake; degraded with the sources named; unseen fields drawn by type; a contradicted claim rejected; and Put everything back restores a configured client | C1, C2 |
 
 Where each is tested: AT-01, AT-03, AT-04, AT-07 (server side), AT-10 to AT-16, AT-18, AT-19
@@ -916,10 +917,19 @@ and AT-31 in `web/e2e`. AT-26 is covered for AT-07 to AT-11, which run in the st
   below 1×.
 - **Pub/sub.** Revisit polling, by the display client and by the models, when Connected
   Systems Part 3 is published.
-- **OpenSensorHub.** Everything in ADR 0005's table is unconfirmed until AT-32 is run:
-  the profile link, restart recognition, the answer while starting, 409 on creating what
-  exists, the plain PUT, the `quality` reference form, and the interface and language the
-  store adapter is written in.
+- **OpenSensorHub.** The spike of 2026-11-23 leaves these open:
+  - **Commands.** A model cannot poll for them (FR-27): OpenSensorHub pushes a command to
+    a receiver and drops it without one, keeps the sender waiting 5 s, and does not
+    enforce the schema's bounds. FR-27, FR-55 and the exclusion of push delivery need
+    revising.
+  - **Latest-run results.** No `PUT` (FR-28a), and an array inside a record was refused
+    as the stand-in encodes it.
+  - **The store adapter** as a module: untried, and loading over HTTP is one observation
+    per request.
+  - **The stand-in** now differs from the server it stands for (identifiers, missing
+    values as `"NaN"`, one observation per request, HTML refusals, no 503, no instance
+    identifier). Either it follows OpenSensorHub, or FR-06c is weakened.
+  - **The contract suite** must be made server-neutral before AT-32 can be passed.
 - **Conformance testing.** The conformance class identifiers claimed are those of the
   published Parts 1 and 2. Whether an OGC test suite for Connected Systems exists is still
   to be checked; one independent client (OSHConnect) reports two differences (decisions
