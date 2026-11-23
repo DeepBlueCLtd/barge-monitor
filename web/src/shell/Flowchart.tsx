@@ -134,7 +134,6 @@ export function Flowchart() {
         <ViewportPortal>
           <Arrows />
           <Icons />
-          <SelectedIcon />
           <StatusBox rect={layout.status as [number, number, number, number]} />
           <MessageKey rect={layout.key as [number, number, number, number]} />
         </ViewportPortal>
@@ -181,6 +180,9 @@ function Icons() {
     let raf = 0;
     const loop = () => {
       bus.tick();
+      // A message picked while paused travels on at Play; once it arrives it is deselected.
+      const sel = selectedMessage.value;
+      if (sel?.follow && simClock.playing && !position(sel.m, simClock.displayNow())) selectedMessage.set(null);
       setFrame((f) => (f + 1) % 1e6);
       raf = requestAnimationFrame(loop);
     };
@@ -200,21 +202,23 @@ function Icons() {
             style={{ transform: `translate(${at[0] - 19}px, ${at[1] - 19}px)` }}
             onClick={(e) => {
               e.stopPropagation();
-              selectedMessage.set({ m, at });
+              selectedMessage.set({ m, at, follow: !simClock.playing });
             }}>
             <Glyph letter={m.letter} failed={m.failed} user={isUserMessage(m)} />
           </button>
         );
       })}
+      <SelectedIcon now={now} />
     </>
   );
 }
 
-/** A selected message stays where it was picked, tinted and haloed (VS-14). */
-function SelectedIcon() {
+/** A selected message, tinted and haloed (VS-14): where it was picked, or travelling on if picked while paused. */
+function SelectedIcon({ now }: { now: number }) {
   const picked = useStore(selectedMessage);
   if (!picked) return null;
-  const { m, at } = picked;
+  const { m } = picked;
+  const at = picked.follow ? position(m, now) ?? picked.at : picked.at;
   return (
     <div className="icon selected" data-letter={m.letter} data-testid="selected-icon" style={{ transform: `translate(${at[0] - 19}px, ${at[1] - 19}px)` }}>
       <Glyph letter={m.letter} failed={m.failed} selected user={isUserMessage(m)} />

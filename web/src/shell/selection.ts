@@ -6,8 +6,12 @@ import type { Pt } from './geometry';
 import { Store } from './store';
 
 export const selectedComponent = new Store<ComponentId | null>(null);
-/** A clicked message, and where its icon was when clicked: it stays there, haloed (VS-14). */
-export const selectedMessage = new Store<{ m: Message; at: Pt } | null>(null);
+/**
+ * A clicked message, haloed (VS-14), and where its icon was when clicked. One picked while
+ * playing stays there, so it can be read. One picked while paused (`follow`) moves on with
+ * the rest at Play and is deselected when it arrives.
+ */
+export const selectedMessage = new Store<{ m: Message; at: Pt; follow?: boolean } | null>(null);
 /** Value-add components revealed so far. Only the display client and Models can be (AT-20). */
 export const revealed = new Store<ReadonlySet<ComponentId>>(new Set());
 /** The empty slot whose editor is open in the Models panel. */

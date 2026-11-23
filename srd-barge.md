@@ -733,7 +733,8 @@ contents. The mockups are plain; they fix layout only.
 - **VS-13** Flows are ink arrows with filled heads, horizontal or vertical segments only,
   never crossing a card. Protocol labels are used sparingly.
 - **VS-14** A message is a circle bearing its letter. A **selected** message gains a tinted
-  fill and a halo. A **failed** request (server down) stops at the boundary with its ring
+  fill and a halo. One selected while playing stays where it was clicked, so it can be read;
+  one selected while paused travels on at Play and is deselected when it arrives. A **failed** request (server down) stops at the boundary with its ring
   broken and a cross.
 
 ### 11.4 Sketch rendering

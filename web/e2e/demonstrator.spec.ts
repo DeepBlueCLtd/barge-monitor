@@ -175,6 +175,9 @@ test('clicking a message shows it in the message strip (FR-68)', async ({ page }
   await expect(page.getByTestId('strip-meta')).toContainText(/from .+ to /);
   await expect(page.getByTestId('message-content')).not.toBeEmpty();
   await expect(page.getByTestId('selected-icon')).toBeVisible();
+  // Picked while paused: at Play it travels on, and is deselected when it arrives.
+  await play(page);
+  await expect(page.getByTestId('selected-icon')).toHaveCount(0, { timeout: 20_000 });
 });
 
 test('every text and icon colour meets 4.5:1 (AT-22)', async () => {
