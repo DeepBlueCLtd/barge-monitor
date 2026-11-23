@@ -680,7 +680,8 @@ its labels meet VS-05; the detail panel takes the rest.
 - **FR-74** At startup **every component looks the same**, the value-add ones included,
   and the detail panel is empty.
 - **FR-75** The first time the **display client** or **Models** is clicked, it is
-  **revealed**: its card turns gold, gains a ★ in its title, "our value-add" in its
+  **revealed**, the display client only once it is **showing its views** (not while it
+  waits for Play, the models or its handshake, nor when it has rejected the server): its card turns gold, gains a ★ in its title, "our value-add" in its
   subtitle, and a glinting diamond in its top-right corner. It stays revealed until the
   page is reloaded or the client restarts.
 - **FR-76** Inside the revealed panels, every value-add part carries its own diamond: the
