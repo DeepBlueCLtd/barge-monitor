@@ -80,6 +80,29 @@ test('nothing moves before Play or while paused; play moves clock and messages (
   expect(await page.getByTestId('role-platform').innerText()).toBe(t2);
 });
 
+test('the handshake is drawn in its true order: each request leaves after the reply before it arrives (FR-42a)', async ({ page }) => {
+  const sent: number[] = [];
+  page.on('request', (r) => r.url().includes('/demo/api') && sent.push(Date.now()));
+  await open(page, 'demo/?seed=1&backend=standin');
+  await page.getByTestId('card-client').click();
+  await play(page);
+  await expect(page.getByTestId('handshake-step')).toContainText('Request 2', { timeout: 30_000 });
+  // One handshake message at most is on the flowchart at any moment.
+  let seen = 0;
+  for (let i = 0; i < 60; i++) {
+    const n = await page.locator('[data-testid="message-icon"][data-handshake]').count();
+    expect(n).toBeLessThanOrEqual(1);
+    seen += n;
+    await page.waitForTimeout(100);
+  }
+  expect(seen).toBeGreaterThan(20);
+  // Four hops of 0.3 simulated seconds at half speed: no request within two seconds of the one before.
+  const gaps = sent.slice(1).map((t, i) => t - sent[i]);
+  expect(gaps.length).toBeGreaterThan(2);
+  expect(Math.min(...gaps)).toBeGreaterThan(2000);
+  await configured(page);
+});
+
 test('value-add reveal: nothing gold at start; display client and Models reveal; nothing else can (AT-20, FR-74..FR-76)', async ({ page }) => {
   await open(page);
   await expect(page.locator('.card.gold')).toHaveCount(0);

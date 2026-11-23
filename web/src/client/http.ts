@@ -3,9 +3,9 @@
 // `x-tap-chain` header so the messages it causes inside the back end can be
 // found by chain (FR-70, docs/v4-interfaces.md §3). The client does not draw its
 // own messages: the back end captures both directions of the HTTP boundary.
-import { userChains } from '../shell/messages';
+import { bus, handshakeChains, userChains } from '../shell/messages';
 import { API_BASE } from '../config';
-import { simSleep } from '../shell/clock';
+import { simClock, simSleep } from '../shell/clock';
 
 export class NetworkFailure extends Error {}
 export class InstanceChanged extends Error {}
@@ -31,6 +31,27 @@ export class ClientHttp {
   /** True while answering a viewer's action: those requests' chains are marked (gold ring). */
   userAction = false;
 
+  /**
+   * True during the handshake: each request is sent only when the reply to the one before
+   * has been drawn arriving, so the flowchart shows the exchange in its true order.
+   */
+  paced = false;
+  /** Requests made by the current handshake so far. */
+  onPaced: ((n: number, path: string) => void) | null = null;
+  private pacedCount = 0;
+
+  /** Wait, on the simulation clock, until a chain's reply has been drawn arriving at the client. */
+  private async drawn(chain: string): Promise<void> {
+    // With capture switched off nothing is drawn, so there is nothing to wait for.
+    const giveUp = performance.now() + 2000;
+    for (;;) {
+      if (this.closed) throw new Closed('client restarted');
+      const end = bus.replyArrival(chain);
+      if (end != null ? simClock.now() >= end : performance.now() > giveUp) return;
+      await new Promise((r) => setTimeout(r, 30));
+    }
+  }
+
   /** The sequence number the next request's chain will carry. */
   get nextSeq(): number {
     return this.seq + 1;
@@ -55,6 +76,12 @@ export class ClientHttp {
       if (userChains.size > 500) userChains.delete(userChains.values().next().value!);
     }
     this.onRequest?.({ chain, method, path, params });
+    const paced = this.paced;
+    if (paced) {
+      handshakeChains.add(chain);
+      if (handshakeChains.size > 500) handshakeChains.delete(handshakeChains.values().next().value!);
+      this.onPaced?.(++this.pacedCount, path);
+    } else this.pacedCount = 0;
     let r: Response;
     try {
       r = await fetch(API_BASE + path + (q ? `?${q}` : ''), {
@@ -66,6 +93,7 @@ export class ClientHttp {
       throw new NetworkFailure('the server did not answer');
     }
     if (this.closed) throw new Closed('client restarted');
+    if (paced) await this.drawn(chain);
     const text = await r.text();
     const ctype = r.headers.get('content-type') ?? '';
     // FR-48: a changed instance identifier means a new server start: clear state, handshake again.

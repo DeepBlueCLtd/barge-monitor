@@ -268,6 +268,10 @@ makes Python the default wherever WebAssembly runs.
 * A selection change (fields, period, algorithm) is answered at once, playing or paused.
   The chains of requests it causes are marked; their icons wear a **gold ring** ("caused by
   your click" in the key) and set off at once, ahead of any queue on their lines.
+* The handshake is paced by its drawing (FR-42a): the display client sends each handshake
+  request only when the reply to the one before has been drawn arriving. Its chains'
+  icons carry `data-handshake`, take 0.3 simulated seconds a hop (`HANDSHAKE_HOP_S`) and
+  do not queue behind other traffic. 31 requests of 4 hops take about 37 simulated seconds.
 * Other icons queue per line and direction; a line that falls more than 6 simulated
   seconds behind is relieved rather than left to lag further.
 

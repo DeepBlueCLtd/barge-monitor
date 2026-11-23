@@ -2,7 +2,7 @@
 // Every message is drawn: none is sampled or merged (FR-67). Each directed
 // line has its own queue, so icons on one line travel one behind another,
 // and a message's next hop sets off when its previous hop arrives.
-import { HOP_S } from '../config';
+import { HANDSHAKE_HOP_S, HOP_S } from '../config';
 import { simClock } from './clock';
 import type { ComponentId } from './components';
 import { LETTER_COLOURS } from './palette';
@@ -29,6 +29,7 @@ export interface Captured {
 export interface Message extends Captured {
   key: string;
   start: number; // simulated seconds
+  dur: number; // simulated seconds on its line
 }
 
 /** SRD §5: the nine letters, what each is and the standard it meets (FR-16: internal ones say so). */
@@ -68,10 +69,27 @@ class MessageBus {
   private userLaneFree = new Map<string, number>();
   private chainEnd = new Map<string, number>();
 
+  /** For the handshake's chains: when the reply is drawn arriving back at the display client. */
+  private replyEnd = new Map<string, number>();
+
+  /** When a handshake chain's reply arrives at the display client on the flowchart, or null if not yet captured. */
+  replyArrival(chain: string): number | null {
+    return this.replyEnd.get(chain) ?? null;
+  }
+
   private schedule(m: Captured): number {
     const lane = `${m.src}>${m.dst}`;
     let start = m.t;
     if (m.chain && this.chainEnd.has(m.chain)) start = Math.max(start, this.chainEnd.get(m.chain)!);
+    // The handshake is drawn one hop after another, never queued behind other traffic: the
+    // client itself waits for each reply to be drawn before it sends the next request.
+    if (isHandshakeMessage(m)) {
+      const end = start + HANDSHAKE_HOP_S;
+      this.chainEnd.set(m.chain!, end);
+      if (m.dst === 'client' || m.failed) this.replyEnd.set(m.chain!, end);
+      if (this.replyEnd.size > 500) this.replyEnd.delete(this.replyEnd.keys().next().value!);
+      return start;
+    }
     const free = this.laneFree.get(lane) ?? -Infinity;
     // A viewer's own action is drawn at once, ahead of any queue on its lines.
     if (isUserMessage(m)) {
@@ -93,7 +111,7 @@ class MessageBus {
     if (!list?.length) return;
     // Within a chain, hops play in order; otherwise in order of capture.
     const ordered = [...list].sort((a, b) => a.t - b.t || (a.chain ?? '').localeCompare(b.chain ?? '') || (a.hop ?? 0) - (b.hop ?? 0));
-    const added: Message[] = ordered.map((m) => ({ ...m, key: `m${++seq}`, start: this.schedule(m) }));
+    const added: Message[] = ordered.map((m) => ({ ...m, key: `m${++seq}`, start: this.schedule(m), dur: isHandshakeMessage(m) ? HANDSHAKE_HOP_S : HOP_S }));
     const counts = { ...this.counts.value };
     for (const m of added) counts[`${m.src}>${m.dst}:${m.letter}`] = (counts[`${m.src}>${m.dst}:${m.letter}`] ?? 0) + 1;
     this.total += added.length;
@@ -107,7 +125,7 @@ class MessageBus {
   /** Drop messages that have arrived. While paused nothing arrives: icons stay where they are, clickable (FR-77). */
   private prune(list = this.live.value): Message[] {
     const now = simClock.displayNow();
-    return list.filter((m) => m.start + HOP_S > now);
+    return list.filter((m) => m.start + m.dur > now);
   }
 
   tick() {
@@ -139,4 +157,10 @@ export const bus = new MessageBus();
 export const userChains = new Set<string>();
 export function isUserMessage(m: { chain?: string | null }): boolean {
   return !!m.chain && userChains.has(m.chain);
+}
+
+/** Chains of the display client's handshake: drawn in strict sequence, at the handshake's pace. */
+export const handshakeChains = new Set<string>();
+export function isHandshakeMessage(m: { chain?: string | null }): boolean {
+  return !!m.chain && handshakeChains.has(m.chain);
 }

@@ -451,6 +451,12 @@ finding (`FINDING-2026-11-20-connected-systems.md`).
 
 - **FR-42** The display client's **handshake** is standard discovery only: landing page,
   conformance, profile, systems, datastreams and schemas.
+- **FR-42a** The handshake is made **one request at a time, at the pace it is drawn**: the
+  client sends each handshake request only when the reply to the one before has been
+  drawn arriving at it on the flowchart, so the architecture view shows the exchange in
+  its true order. Handshake messages travel at 0.3 simulated seconds a hop. With capture
+  off nothing is drawn and the client does not wait. Only the handshake is paced: polling
+  (FR-63) and commands are not.
 - **FR-43** From the handshake the client builds its **field list** (§8.2): every field of
   every datastream, essential and optional, including any new model's outputs.
 - **FR-44** Discovery happens **only at handshake**. A client never adds or removes sources

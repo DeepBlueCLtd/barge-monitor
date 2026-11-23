@@ -68,6 +68,8 @@ export class ClientSession {
   stale = new Store(false);
   run = new Store<Run | null>(null);
   commandNote = new Store<string | null>(null);
+  /** The handshake in progress: how many requests so far, and the latest (null when none is under way). */
+  handshakeStep = new Store<{ n: number; path: string } | null>(null);
   /** The latest observation read for the current selection: the message strip follows its chain (FR-70). */
   lastRead = new Store<{ chain: string; raw: boolean; outputName: string } | null>(null);
 
@@ -210,10 +212,19 @@ export class ClientSession {
 
   private async configure() {
     this.phase.set('handshake');
-    const config = await handshake(this.http, (s) => {
-      this.phase.set('waiting');
-      this.banner.set(`The server is starting (HTTP 503): retrying after ${s} s, as Retry-After asks.`);
-    });
+    // Each handshake request waits for the reply before it to be drawn arriving (D-89).
+    this.http.paced = true;
+    this.http.onPaced = (n, path) => this.handshakeStep.set({ n, path });
+    let config: Configuration;
+    try {
+      config = await handshake(this.http, (s) => {
+        this.phase.set('waiting');
+        this.banner.set(`The server is starting (HTTP 503): retrying after ${s} s, as Retry-After asks.`);
+      });
+    } finally {
+      this.http.paced = false;
+      this.handshakeStep.set(null);
+    }
     this.banner.set(null);
     this.config.set(config);
     const props = properties(config);

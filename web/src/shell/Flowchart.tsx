@@ -5,13 +5,12 @@
 import { Node, NodeProps, ReactFlow, useReactFlow, ViewportPortal } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
-import { HOP_S } from '../config';
 import { simClock } from './clock';
 import { COMPONENT_IDS, COMPONENTS, ComponentId } from './components';
 import { Diamond } from './Diamond';
 import { allLanes, arrowhead, cardRect, laneFor, LAYOUT_SIZE, Pt, pointAt } from './geometry';
 import layout from './layout.json';
-import { bus, isUserMessage, LETTERS, Message } from './messages';
+import { bus, isHandshakeMessage, isUserMessage, LETTERS, Message } from './messages';
 import { GOLD, INK, ZoneId, ZONES } from './palette';
 import { runtime } from './runtime';
 import { revealed, selectComponent, selectedComponent, selectedMessage } from './selection';
@@ -167,7 +166,7 @@ const Arrows = memo(function Arrows() {
 function position(m: Message, now: number): Pt | null {
   const lane = laneFor(m.src, m.dst);
   if (!lane) return null;
-  const f = (now - m.start) / HOP_S;
+  const f = (now - m.start) / m.dur;
   if (f < 0 || f > 1) return null;
   // A failed request stops at the boundary (VS-14).
   return pointAt(lane, m.failed ? Math.min(f, 0.55) : f);
@@ -196,7 +195,7 @@ function Icons() {
         const at = position(m, now);
         if (!at) return null;
         return (
-          <button key={m.key} className={`icon${m.failed ? ' failed' : ''}`} data-letter={m.letter} data-user={isUserMessage(m) || undefined} data-testid="message-icon"
+          <button key={m.key} className={`icon${m.failed ? ' failed' : ''}`} data-letter={m.letter} data-user={isUserMessage(m) || undefined} data-handshake={isHandshakeMessage(m) || undefined} data-testid="message-icon"
             aria-label={`${m.letter} message: ${m.summary}`} title={`${m.letter}: ${m.summary}`}
             style={{ transform: `translate(${at[0] - 19}px, ${at[1] - 19}px)` }}
             onClick={(e) => {
