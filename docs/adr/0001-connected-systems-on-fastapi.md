@@ -1,6 +1,7 @@
 # ADR 0001: OGC API – Connected Systems, written directly on FastAPI
 
-**Status:** accepted, 2026-11-20 (SRD 3.2 FR-22, FR-22a, FR-65; Spike 0)
+**Status:** superseded by ADR 0005 (2026-11-23) for the system the demonstrator stands
+for; it still describes the demonstrator's own stand-in server. Accepted 2026-11-20 (SRD 3.2 FR-22, FR-22a, FR-65; Spike 0)
 
 **Context.** The SRD replaces EDR with Connected Systems Parts 1 and 2. No
 off-the-shelf Python server runs in Pyodide (Spike 0 §6).
