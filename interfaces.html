@@ -79,18 +79,13 @@ these ids (SRD §3):</p>
 </tr>
 <tr>
 <td><code>server</code></td>
-<td>Data server</td>
-<td>New build · back end</td>
+<td>Data server (OpenSensorHub; a stand-in here, ADR 0005)</td>
+<td>Third-party libraries</td>
 </tr>
 <tr>
 <td><code>models</code></td>
 <td>Models</td>
 <td>New build · back end ★</td>
-</tr>
-<tr>
-<td><code>fastapi</code></td>
-<td>FastAPI</td>
-<td>Third-party libraries</td>
 </tr>
 <tr>
 <td><code>scilibs</code></td>
@@ -105,8 +100,9 @@ these ids (SRD §3):</p>
 </tbody>
 </table>
 <p>The relay is not a component: HTTP messages are captured as
-<code>client → fastapi</code> and <code>fastapi → client</code>
-(FR-03).</p>
+<code>client → server</code> and <code>server → client</code> (FR-03).
+FastAPI is an internal detail of the Python stand-in for the data server
+and is not a component: no message is captured to or from it.</p>
 <h2 id="2-flows-and-letters-srd-31-5">2. Flows and letters (SRD §3.1,
 §5)</h2>
 <table>
@@ -144,13 +140,13 @@ these ids (SRD §3):</p>
 <td>columns</td>
 </tr>
 <tr>
-<td>models → fastapi</td>
+<td>models → server</td>
 <td>Q, O, I</td>
 <td>HTTP request: create a system, datastream or control stream, read
 (Q); publish observations (O); ask the referee (I)</td>
 </tr>
 <tr>
-<td>fastapi → models</td>
+<td>server → models</td>
 <td>D, O, H, I</td>
 <td>HTTP response</td>
 </tr>
@@ -165,23 +161,13 @@ these ids (SRD §3):</p>
 <td>its result</td>
 </tr>
 <tr>
-<td>fastapi → server</td>
-<td>I</td>
-<td>parsed request</td>
-</tr>
-<tr>
-<td>server → fastapi</td>
-<td>I</td>
-<td>response</td>
-</tr>
-<tr>
-<td>client → fastapi</td>
+<td>client → server</td>
 <td>Q, K</td>
 <td>HTTP request (K = POST to
 <code>/controlstreams/{id}/commands</code>)</td>
 </tr>
 <tr>
-<td>fastapi → client</td>
+<td>server → client</td>
 <td>D, P, O, H</td>
 <td>HTTP response (H = any status ≥ 400, and 503)</td>
 </tr>
@@ -202,7 +188,7 @@ is decided by either header.</p>
 <span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>  failed<span class="op">?:</span> <span class="dt">boolean</span><span class="op">;</span>   <span class="co">// a request that got no answer (server down)</span></span>
 <span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>  chain<span class="op">?:</span> <span class="dt">string</span><span class="op">|</span><span class="dt">null</span><span class="op">;</span><span class="co">// messages caused by one HTTP request or one model call share a chain</span></span>
 <span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>  hop<span class="op">?:</span> <span class="dt">number</span><span class="op">;</span>       <span class="co">// order within the chain</span></span>
-<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>  model<span class="op">?:</span> <span class="dt">string</span><span class="op">;</span>     <span class="co">// for models ↔ fastapi/scilibs, and the hops their requests cause: which model (data-cleanse, summaries, …)</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>  model<span class="op">?:</span> <span class="dt">string</span><span class="op">;</span>     <span class="co">// for models ↔ server/scilibs, and the hops their requests cause: which model (data-cleanse, summaries, …)</span></span>
 <span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
 <p>The display client sends <code>x-tap-chain: &lt;chain&gt;</code> on
 every request, so the S messages a selection causes can be found by
@@ -568,12 +554,12 @@ to Analysis's <code>clustering</code> control stream; the cluster view
 and the change marks follow the latest run.</p>
 <h2 id="7-what-a-model-is-written-against">7. What a model is written
 against</h2>
-<p>A model reaches the data server only by HTTP, through FastAPI, as the
-display client does (§4). In the browser each model runs in its own
-worker and makes its requests with <code>fetch</code>, carried by the
-relay. In CPython (tests, an ordinary ASGI server) and in the stand-in
-the models share a process with the server and make the same requests of
-the same application.</p>
+<p>A model reaches the data server only by HTTP, as the display client
+does (§4). In the browser each model runs in its own worker and makes
+its requests with <code>fetch</code>, carried by the relay. In CPython
+(tests, an ordinary ASGI server) and in the stand-in the models share a
+process with the server and make the same requests of the same
+application.</p>
 <p>A model is written against a small library,
 <code>backend/models/csmodel.py</code>, which makes those requests:</p>
 <div class="sourceCode" id="cb2"><pre
@@ -618,7 +604,7 @@ one waiting looks at once.</p>
 <tbody>
 <tr>
 <td><code>backend.worker.ts</code></td>
-<td>Pyodide: world, store, adapter, server, FastAPI</td>
+<td>Pyodide: world, store, adapter, the data server's stand-in</td>
 <td>page, if WebAssembly</td>
 </tr>
 <tr>
@@ -680,7 +666,7 @@ sends each handshake request only when the reply to the one before has
 been drawn arriving. Its chains' icons carry
 <code>data-handshake</code>, take 0.3 simulated seconds a hop
 (<code>HANDSHAKE_HOP_S</code>) and do not queue behind other traffic. 31
-requests of 4 hops take about 37 simulated seconds.</li>
+requests of 2 hops take about 19 simulated seconds.</li>
 <li>Other icons queue per line and direction; a line that falls more
 than 6 simulated seconds behind is relieved rather than left to lag
 further.</li>
