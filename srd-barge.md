@@ -724,7 +724,7 @@ they set.
 ## 10. Implementation direction
 
 - **FR-80** Front end: **TypeScript and React**. Flowchart: **React Flow (xyflow)**.
-  Charts: **ECharts**. Model editor: **CodeMirror 6** with Python mode.
+  Charts: **ECharts**. The display client's panel layout: **react-grid-layout**. Model editor: **CodeMirror 6** with Python mode.
 - **FR-81** Back end, in a developed system: **OpenSensorHub** with the store adapter as
   its module, and the models as separate processes. In the demonstrator: the stand-in of
   FR-38a on Pyodide. The committed OpenAPI master states what is needed of either.
