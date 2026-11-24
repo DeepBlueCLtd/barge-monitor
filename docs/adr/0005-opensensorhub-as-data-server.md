@@ -41,6 +41,21 @@ Each of these is something the Version 4.1 server does that the standard does no
 | The `quality` reference form `{"href": "#…_qc"}` | FR-25 | The form OpenSensorHub's own client accepts (D-31) |
 | The extension interface the store adapter is written against, and its language | FR-20, FR-21 | A separate process in front of the store that OpenSensorHub reads |
 
+**Also to be confirmed by the same spike.** These are within the standard, but the models
+depend on them and a server need not offer them to an outside client:
+
+| Behaviour | Used for | If OpenSensorHub does not provide it |
+|---|---|---|
+| An outside client creating a subsystem under an existing system | FR-28 | A model registers as a top-level system and names the Models system as its parent another way |
+| An outside client taking up a command and reporting its status over HTTP, rather than a module inside the server doing so | FR-27 | A small module in the server passes commands to the model; failing that, a model reads its settings from a datastream |
+| A model described as a system whose asset type is a process, with no procedure resource | FR-28 | The model also creates, or refers to, a procedure |
+
+**Considered and rejected: OpenSensorHub itself in the browser tab.** Pyodide is CPython
+and carries no Java runtime. A Java runtime compiled to WebAssembly cannot open a listening
+socket in a tab, so the server's own HTTP layer could not serve. The stand-in is therefore
+**representative only**: the spikes establish the contract and behaviour it must copy, and
+the demonstrator says so on the Data server card.
+
 **Consequences.**
 
 * Less is written for this system: the display client, the models and the store adapter.
