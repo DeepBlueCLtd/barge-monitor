@@ -1,0 +1,821 @@
+{
+ "server": "http://localhost:8181/sensorhub/api",
+ "checks": [
+  {
+   "check": "landing page",
+   "need": "FR-23",
+   "reference": "200 application/json",
+   "observed": "200 auto",
+   "same": false
+  },
+  {
+   "check": "landing page links",
+   "need": "FR-23",
+   "reference": [
+    "conformance",
+    "controlstreams",
+    "data",
+    "datastreams",
+    "profile",
+    "properties",
+    "self",
+    "service-desc",
+    "systems"
+   ],
+   "observed": [
+    "collections",
+    "conformance",
+    "datastreams",
+    "deployments",
+    "observations",
+    "procedures",
+    "samplingFeatures",
+    "service-desc",
+    "systems"
+   ],
+   "same": true
+  },
+  {
+   "check": "profile link on the landing page",
+   "need": "FR-41",
+   "reference": "rel=profile",
+   "observed": "absent",
+   "same": false
+  },
+  {
+   "check": "instance identifier",
+   "need": "FR-47",
+   "reference": {
+    "etag": "\"3-1\"",
+    "x-server-instance": "3-1"
+   },
+   "observed": {
+    "etag": null,
+    "x-server-instance": null
+   },
+   "same": false
+  },
+  {
+   "check": "conformance classes the reference claims",
+   "need": "FR-23",
+   "reference": "16 classes",
+   "observed": {
+    "missing": [
+     "http://www.opengis.net/spec/ogcapi-common-1/1.0/conf/landing-page",
+     "http://www.opengis.net/spec/ogcapi-common-2/1.0/conf/collections",
+     "http://www.opengis.net/spec/ogcapi-connectedsystems-1/1.0/conf/api-common",
+     "http://www.opengis.net/spec/ogcapi-connectedsystems-2/1.0/conf/api-common"
+    ],
+    "extra": 22
+   },
+   "same": false
+  },
+  {
+   "check": "OpenAPI definition served by the server",
+   "need": "FR-23",
+   "reference": "200 at /api",
+   "observed": "400 text/html;charset=iso-8859-1: Error 400 Invalid resource name: &apos;api&apos;",
+   "same": false
+  },
+  {
+   "check": "/collections",
+   "need": "FR-23",
+   "reference": "200",
+   "observed": "200 application/json: { \"collections\": [ { \"id\": \"all_systems\", \"title\": \"All Conn",
+   "same": true
+  },
+  {
+   "check": "refusals are JSON, named",
+   "need": "FR-28a",
+   "reference": "404 application/json {code, description, refused}",
+   "observed": "400 text/html;charset=iso-8859-1: Error 400 Invalid resource name: &apos;systemEvents&apos;",
+   "same": false
+  },
+  {
+   "check": "create a system (SensorML JSON)",
+   "need": "FR-28",
+   "reference": "201 with Location",
+   "observed": "201 Location /systems/040g",
+   "same": true
+  },
+  {
+   "check": "create the same system again",
+   "need": "FR-28",
+   "reference": "409 with the same Location",
+   "observed": "201 Location /systems/040g",
+   "same": false
+  },
+  {
+   "check": "...finds what was made, without a lookup",
+   "need": "FR-28",
+   "reference": "same Location",
+   "observed": true,
+   "same": true
+  },
+  {
+   "check": "identifiers",
+   "need": "FR-28 (models POST to /systems/models/subsystems)",
+   "reference": "readable, chosen by the server from the uniqueId (barge, models)",
+   "observed": "opaque, assigned by the server (040g)",
+   "same": false
+  },
+  {
+   "check": "create a subsystem",
+   "need": "FR-24",
+   "reference": "201",
+   "observed": 201,
+   "same": true
+  },
+  {
+   "check": "system resource, default encoding",
+   "need": "FR-24",
+   "reference": [
+    "assetType",
+    "definition",
+    "description",
+    "id",
+    "label",
+    "systemType",
+    "type",
+    "uniqueId"
+   ],
+   "observed": {
+    "top": [
+     "geometry",
+     "id",
+     "properties",
+     "type"
+    ],
+    "properties": [
+     "description",
+     "featureType",
+     "name",
+     "uid",
+     "validTime"
+    ]
+   },
+   "same": false
+  },
+  {
+   "check": "top-level systems listing",
+   "need": "FR-42",
+   "reference": [
+    "barge",
+    "models"
+   ],
+   "observed": [
+    "barge",
+    "models"
+   ],
+   "same": true
+  },
+  {
+   "check": "subsystems listing",
+   "need": "FR-42",
+   "reference": [
+    "bow",
+    "stern"
+   ],
+   "observed": [
+    "bow",
+    "stern"
+   ],
+   "same": true
+  },
+  {
+   "check": "a model is a process system",
+   "need": "FR-24",
+   "reference": "assetType Process",
+   "observed": "Process",
+   "same": true
+  },
+  {
+   "check": "no system carries a location",
+   "need": "FR-24",
+   "reference": "no geometry",
+   "observed": null,
+   "same": true
+  },
+  {
+   "check": "system as SensorML JSON on request",
+   "need": "FR-24",
+   "reference": "uniqueId, label, definition",
+   "observed": [
+    "definition",
+    "description",
+    "id",
+    "label",
+    "type",
+    "uniqueId",
+    "validTime"
+   ],
+   "same": true
+  },
+  {
+   "check": "create every datastream with its SWE Common schema",
+   "need": "FR-25, FR-28",
+   "reference": "14 created",
+   "observed": {
+    "created": 14,
+    "refused": []
+   },
+   "same": true
+  },
+  {
+   "check": "create the same datastream again",
+   "need": "FR-28",
+   "reference": "409 with the same Location",
+   "observed": "201 Location /datastreams/040g",
+   "same": false
+  },
+  {
+   "check": "schema keeps every field, type and unit",
+   "need": "FR-25",
+   "reference": 15,
+   "observed": 15,
+   "same": true
+  },
+  {
+   "check": "quality as a reference to the flag field",
+   "need": "FR-25, D-31",
+   "reference": [
+    {
+     "href": "#air_temperature_qc"
+    }
+   ],
+   "observed": [
+    {
+     "href": "#air_temperature_qc"
+    }
+   ],
+   "same": true
+  },
+  {
+   "check": "constraint encoding",
+   "need": "FR-25",
+   "reference": {
+    "type": "AllowedTokens",
+    "values": [
+     "1",
+     "2",
+     "3",
+     "4",
+     "9"
+    ]
+   },
+   "observed": {
+    "values": [
+     "1",
+     "2",
+     "3",
+     "4",
+     "9"
+    ]
+   },
+   "same": false
+  },
+  {
+   "check": "record name",
+   "need": "FR-25",
+   "reference": "record",
+   "observed": "weather",
+   "same": false
+  },
+  {
+   "check": "datastream resource",
+   "need": "FR-25",
+   "reference": [
+    "formats",
+    "id",
+    "live",
+    "name",
+    "observedProperties",
+    "outputName",
+    "phenomenonTime",
+    "resultTime",
+    "resultType",
+    "system@id",
+    "system@link",
+    "validTime"
+   ],
+   "observed": [
+    "formats",
+    "id",
+    "links",
+    "name",
+    "observedProperties",
+    "outputName",
+    "resultType",
+    "system@id",
+    "system@link",
+    "validTime"
+   ],
+   "same": true
+  },
+  {
+   "check": "datastreams listing",
+   "need": "FR-42",
+   "reference": 14,
+   "observed": 14,
+   "same": true
+  },
+  {
+   "check": "publish several observations in one request (SWE JSON array)",
+   "need": "FR-28",
+   "reference": "201 {created: n}",
+   "observed": "400 text/html;charset=iso-8859-1: Error 400 Invalid payload: java.lang.IllegalStateException: Expected BEGIN_OBJECT but was BEGIN_ARRAY at line 1 column 2 path $ See https://github.com/google/gs",
+   "same": false
+  },
+  {
+   "check": "publish one observation per request (SWE JSON)",
+   "need": "FR-28",
+   "reference": "201",
+   "observed": [
+    201
+   ],
+   "same": true
+  },
+  {
+   "check": "...rate, one per request, local",
+   "need": "\u00a715 history length",
+   "reference": "bulk",
+   "observed": "427 observations a second",
+   "same": false
+  },
+  {
+   "check": "a missing value as JSON null",
+   "need": "FR-25 (QC flag 9, value null)",
+   "reference": "accepted",
+   "observed": "400 text/html;charset=iso-8859-1: Error 400 Invalid payload: Expected decimal value or one of [&apos;NaN&apos;, &apos;-INF&apos;, &apos;+INF&apos;] but was NULL at $.air_temperature at $.air_tem",
+   "same": false
+  },
+  {
+   "check": "...a missing value as \"NaN\"",
+   "need": "fallback",
+   "reference": "n/a",
+   "observed": "201 application/swe+json: ",
+   "same": true
+  },
+  {
+   "check": "an unknown field is refused",
+   "need": "FR-28",
+   "reference": "400 naming the field",
+   "observed": "400 text/html;charset=iso-8859-1: Error 400 Invalid payload: Expected field &apos;air_temperature&apos; but was &apos;colour&apos;",
+   "same": true
+  },
+  {
+   "check": "observations as SWE JSON by Accept header",
+   "need": "FR-26 (the display client asks this way)",
+   "reference": "application/swe+json",
+   "observed": "application/json",
+   "same": false
+  },
+  {
+   "check": "observations as SWE JSON by f=",
+   "need": "FR-26",
+   "reference": "records keyed by field name",
+   "observed": "200 application/swe+json: [ { \"time\": \"2031-04-07T00:00:00Z\", \"air_temperature\": 19.2,",
+   "same": true
+  },
+  {
+   "check": "...values round-trip",
+   "need": "AT-01",
+   "reference": {
+    "time": "2031-04-07T00:00:00Z",
+    "air_temperature": 19.2,
+    "air_temperature_qc": "1",
+    "apparent_wind_speed": 3.0,
+    "apparent_wind_speed_qc": "1",
+    "relative_humidity": 85.0,
+    "relative_humidity_qc": "1",
+    "pressure": 1005.6,
+    "pressure_qc": "1",
+    "apparent_wind_direction": 90.0,
+    "apparent_wind_direction_qc": "1",
+    "solar_irradiance": 0.0,
+    "solar_irradiance_qc": "1",
+    "water_temperature": 16.1,
+    "water_temperature_qc": "1"
+   },
+   "observed": {
+    "time": "2031-04-07T00:00:00Z",
+    "air_temperature": 19.2,
+    "air_temperature_qc": "1",
+    "apparent_wind_speed": 3.0,
+    "apparent_wind_speed_qc": "1",
+    "relative_humidity": 85.0,
+    "relative_humidity_qc": "1",
+    "pressure": 1005.6,
+    "pressure_qc": "1",
+    "apparent_wind_direction": 90.0,
+    "apparent_wind_direction_qc": "1",
+    "solar_irradiance": 0.0,
+    "solar_irradiance_qc": "1",
+    "water_temperature": 16.1,
+    "water_temperature_qc": "1"
+   },
+   "same": true
+  },
+  {
+   "check": "phenomenonTime interval",
+   "need": "FR-26",
+   "reference": 11,
+   "observed": 11,
+   "same": true
+  },
+  {
+   "check": "phenomenonTime open interval (polling)",
+   "need": "FR-63",
+   "reference": "the rest",
+   "observed": 6,
+   "same": true
+  },
+  {
+   "check": "resultTime=latest",
+   "need": "FR-26",
+   "reference": 1,
+   "observed": 1,
+   "same": true
+  },
+  {
+   "check": "paging of SWE JSON: a next link",
+   "need": "FR-23, FR-26",
+   "reference": "Link: rel=next",
+   "observed": null,
+   "same": false
+  },
+  {
+   "check": "paging of JSON observations: a next link",
+   "need": "FR-23",
+   "reference": "next link",
+   "observed": "limit=5&offset=5",
+   "same": true
+  },
+  {
+   "check": "an oversize limit",
+   "need": "FR-26",
+   "reference": "400 naming the limit",
+   "observed": "200, 121 returned",
+   "same": false
+  },
+  {
+   "check": "plain PUT to replace a datastream's observations",
+   "need": "FR-28a",
+   "reference": "200",
+   "observed": "405 : ",
+   "same": false
+  },
+  {
+   "check": "a sample of every other datastream replays",
+   "need": "FR-28",
+   "reference": "all accepted",
+   "observed": {
+    "data-cleanse-cleaned-bow-09f1c5": "5/20",
+    "data-cleanse-cleaned-stern-09f1c5": "7/20",
+    "analysis-correlation-d04630": "0/1"
+   },
+   "same": false
+  },
+  {
+   "check": "...why one was refused",
+   "need": "FR-28",
+   "reference": "n/a",
+   "observed": {
+    "datastream": "data-cleanse-cleaned-bow-09f1c5",
+    "answer": "400 text/html;charset=iso-8859-1: Error 400 Invalid payload: Expected decimal value or one of [&apos;NaN&apos;, &apos;-INF&apos;, &apos;+INF&apos;] but was NULL at $.water_temperature at $.water_temperature"
+   },
+   "same": false
+  },
+  {
+   "check": "create a control stream with its parameter schema",
+   "need": "FR-27",
+   "reference": "201",
+   "observed": "201 application/json: ",
+   "same": true
+  },
+  {
+   "check": "the bounds live in the control stream's schema",
+   "need": "FR-27, FR-55",
+   "reference": {
+    "algorithm": [
+     "A",
+     "B",
+     "C"
+    ],
+    "fields": [
+     "air_temperature",
+     "apparent_wind_speed",
+     "relative_humidity",
+     "pressure",
+     "apparent_wind_direction",
+     "solar_irradiance",
+     "water_temperature",
+     "dew_point",
+     "bow_minus_stern",
+     "pressure_tendency_3h"
+    ],
+    "period": [
+     "PT1M",
+     "PT1H",
+     "PT6H",
+     "P1D",
+     "P7D",
+     "P28D"
+    ],
+    "clusters": [
+     [
+      2,
+      8
+     ]
+    ],
+    "sensitivity": [
+     [
+      1,
+      10
+     ]
+    ]
+   },
+   "observed": {
+    "algorithm": [
+     "A",
+     "B",
+     "C"
+    ],
+    "fields": [
+     "air_temperature",
+     "apparent_wind_speed",
+     "relative_humidity",
+     "pressure",
+     "apparent_wind_direction",
+     "solar_irradiance",
+     "water_temperature",
+     "dew_point",
+     "bow_minus_stern",
+     "pressure_tendency_3h"
+    ],
+    "period": [
+     "PT1M",
+     "PT1H",
+     "PT6H",
+     "P1D",
+     "P7D",
+     "P28D"
+    ],
+    "clusters": [
+     [
+      2.0,
+      8.0
+     ]
+    ],
+    "sensitivity": [
+     [
+      1.0,
+      10.0
+     ]
+    ]
+   },
+   "same": true
+  },
+  {
+   "check": "control streams listed under their system",
+   "need": "FR-42",
+   "reference": 1,
+   "observed": 1,
+   "same": true
+  },
+  {
+   "check": "a command carrying only the settings that change",
+   "need": "FR-55",
+   "reference": "201",
+   "observed": "400 text/html;charset=iso-8859-1: Error 400 Invalid payload: Invalid JSON: java.lang.IllegalStateException: Expected a name but was END_OBJECT at line 1 column 95 path $.parameters.period See ht",
+   "same": false
+  },
+  {
+   "check": "a command carrying every parameter",
+   "need": "FR-27",
+   "reference": "201 with Location",
+   "observed": "202 text/html;charset=iso-8859-1: Error 202 Command accepted but request timed out before command was acknowledged Location None",
+   "same": false
+  },
+  {
+   "check": "a command outside the bounds is refused",
+   "need": "FR-27",
+   "reference": "400 naming the bound",
+   "observed": "202 text/html;charset=iso-8859-1: Error 202 Command accepted but request timed out before command was acknowledged by receiving system",
+   "same": false
+  },
+  {
+   "check": "commands are kept and listed",
+   "need": "FR-27",
+   "reference": "listed",
+   "observed": "200, 0 listed",
+   "same": false
+  },
+  {
+   "check": "a model polls for pending commands (statusCode=PENDING)",
+   "need": "FR-27",
+   "reference": "the new command",
+   "observed": "200, 0 listed",
+   "same": false
+  },
+  {
+   "check": "with a receiver: the command is pushed to it over the WebSocket",
+   "need": "FR-27 (the stand-in has the model poll)",
+   "reference": "polled",
+   "observed": "3 of 3 pushed, as ['controlstream@id', 'id', 'issueTime', 'parameters', 'sender']",
+   "same": true
+  },
+  {
+   "check": "with a receiver: the sender's POST",
+   "need": "FR-55, FR-79 (a click is answered at once)",
+   "reference": "201 at once",
+   "observed": {
+    "status": 200,
+    "seconds": 5.0,
+    "body": "{ \"command@id\": \"040tf7chr030ni72s0\", \"reportTime\": \"2026-11-23T14:34:04.209626624Z\", \"statusCode\": \"PENDING\" }"
+   },
+   "same": false
+  },
+  {
+   "check": "with a receiver: commands are then kept and listed",
+   "need": "FR-27",
+   "reference": "listed",
+   "observed": {
+    "listed": 3,
+    "pending": 3,
+    "completed": 0
+   },
+   "same": true
+  },
+  {
+   "check": "with a receiver: a command outside the bounds",
+   "need": "FR-27",
+   "reference": "400 naming the bound",
+   "observed": {
+    "status": 200,
+    "seconds": 5.0,
+    "body": "{ \"command@id\": \"040u37chr030q5rab0\", \"reportTime\": \"2026-11-23T14:34:14.221511426Z\", \"statusCode\": \"PENDING\" }"
+   },
+   "same": false
+  },
+  {
+   "check": "with a receiver: status reported at /commands/{id}/status",
+   "need": "FR-27",
+   "reference": "201",
+   "observed": 400,
+   "same": false
+  },
+  {
+   "check": "with a receiver: status reported at /controlstreams/{id}/status",
+   "need": "fallback",
+   "reference": "n/a",
+   "observed": 201,
+   "same": true
+  },
+  {
+   "check": "with a receiver: the sender's POST once the model has reported COMPLETED",
+   "need": "FR-27",
+   "reference": "n/a",
+   "observed": {
+    "status": 200,
+    "seconds": 5.0,
+    "body": "{ \"command@id\": \"040tp7chr030pitm4k\", \"reportTime\": \"2026-11-23T14:34:09.216270104Z\", \"statusCode\": \"PENDING\" }"
+   },
+   "same": false
+  },
+  {
+   "check": "discovery by standard listings finds every system",
+   "need": "FR-42",
+   "reference": 7,
+   "observed": 7,
+   "same": true
+  },
+  {
+   "check": "every essential of the declared profile is offered, with its type and unit",
+   "need": "FR-45",
+   "reference": "15 essentials",
+   "observed": "all present",
+   "same": true
+  },
+  {
+   "check": "the contract suite, unchanged",
+   "need": "AT-32",
+   "reference": "15 pass against the stand-in",
+   "observed": "0 of 15 pass",
+   "same": false
+  }
+ ],
+ "contract_suite": [
+  {
+   "test": "landing_links_profile_and_carries_instance",
+   "outcome": "failed",
+   "detail": "ValidationError: '{\\n \"title\": \"Connected Systems API Service\",\\n \"serviceProvider\": {},\\n \"links\": [\\n {\\n \"rel\": \"service-desc\",\\n \"title\": \"Definition of the API Part 1 in OpenAPI 3.1\",\\n \"href\": \"https://opengeospatial.github.io/ogcapi-connected-systems/api/part1/openapi/openapi-connectedsystems"
+  },
+  {
+   "test": "conformance_declares_the_subset",
+   "outcome": "failed",
+   "detail": "ValidationError: '{\\n \"conformsTo\": [\\n \"http://www.opengis.net/spec/ogcapi-common-1/1.0/conf/core\",\\n \"http://www.opengis.net/spec/ogcapi-common-1/1.0/conf/html\",\\n \"http://www.opengis.net/spec/ogcapi-common-1/1.0/conf/json\",\\n \"http://www.opengis.net/spec/ogcapi-common-1/1.0/conf/oas30\",\\n \"http:/"
+  },
+  {
+   "test": "profile_is_served_valid_and_claimed",
+   "outcome": "failed",
+   "detail": "AssertionError:"
+  },
+  {
+   "test": "systems_have_the_standard_types_and_no_location",
+   "outcome": "failed",
+   "detail": "ValidationError: 'links' is a required property Failed validating 'required' in schema: {'$schema': 'https://json-schema.org/draft/2020-12/schema', '$id': 'https://deepbluecltd.github.io/barge-monitor/contracts/schemas/page.json', 'title': 'Page', 'type': 'object', 'required': ['items', 'links'], 'p"
+  },
+  {
+   "test": "sensor_schema_has_qc_category_per_quantity",
+   "outcome": "failed",
+   "detail": "AssertionError: <html> <head> <meta http-equiv=\"Content-Type\" content=\"text/html;charset=ISO-8859-1\"/> <title>Error 404 Resource not found: bow</title> </head> <body><h2>HTTP ERROR 404 Resource not found: bow</h2> <table> <tr><th>URI:</th><td>/sensorhub/api/systems/bow/datastreams</td></tr> <tr><th>"
+  },
+  {
+   "test": "observations_are_swe_json_and_poll_by_phenomenon_time",
+   "outcome": "failed",
+   "detail": "AssertionError: <html> <head> <meta http-equiv=\"Content-Type\" content=\"text/html;charset=ISO-8859-1\"/> <title>Error 404 Resource not found: stern</title> </head> <body><h2>HTTP ERROR 404 Resource not found: stern</h2> <table> <tr><th>URI:</th><td>/sensorhub/api/systems/stern/datastreams</td></tr> <t"
+  },
+  {
+   "test": "observations_page_and_refuse_oversize",
+   "outcome": "failed",
+   "detail": "AssertionError: <html> <head> <meta http-equiv=\"Content-Type\" content=\"text/html;charset=ISO-8859-1\"/> <title>Error 404 Resource not found: bow</title> </head> <body><h2>HTTP ERROR 404 Resource not found: bow</h2> <table> <tr><th>URI:</th><td>/sensorhub/api/systems/bow/datastreams</td></tr> <tr><th>"
+  },
+  {
+   "test": "refuses_what_is_not_implemented_by_name",
+   "outcome": "failed",
+   "detail": "AssertionError: expected 404, got 200: {'items': []}"
+  },
+  {
+   "test": "every_model_publishes_its_datastreams",
+   "outcome": "failed",
+   "detail": "AssertionError: ('data-cleanse', '<html>\\n<head>\\n<meta http-equiv=\"Content-Type\" content=\"text/html;charset=ISO-8859-1\"/>\\n<title>Error 404 Resource not found: data-cleanse</title>\\n</head>\\n<body><h2>HTTP ERROR 404 Resource not found: data-cleanse</h2>\\n<table>\\n<tr><th>URI:</th><td>/sensorhub/api"
+  },
+  {
+   "test": "control_stream_bounds_live_in_its_schema",
+   "outcome": "failed",
+   "detail": "TypeError: string indices must be integers, not 'str'"
+  },
+  {
+   "test": "model_results_carry_settings_range_and_scores",
+   "outcome": "failed",
+   "detail": "AssertionError: <html> <head> <meta http-equiv=\"Content-Type\" content=\"text/html;charset=ISO-8859-1\"/> <title>Error 404 Resource not found: analysis</title> </head> <body><h2>HTTP ERROR 404 Resource not found: analysis</h2> <table> <tr><th>URI:</th><td>/sensorhub/api/systems/analysis/datastreams</td"
+  },
+  {
+   "test": "a_model_registers_by_ordinary_resource_creation",
+   "outcome": "failed",
+   "detail": "AssertionError: <html> <head> <meta http-equiv=\"Content-Type\" content=\"text/html;charset=ISO-8859-1\"/> <title>Error 404 Resource not found: models</title> </head> <body><h2>HTTP ERROR 404 Resource not found: models</h2> <table> <tr><th>URI:</th><td>/sensorhub/api/systems/models/subsystems</td></tr> "
+  },
+  {
+   "test": "creation_outside_a_models_own_system_is_refused_by_name",
+   "outcome": "failed",
+   "detail": "AssertionError: expected 405, got 400: <html> <head> <meta http-equiv=\"Content-Type\" content=\"text/html;charset=ISO-8859-1\"/> <title>Error 400 Invalid JSON: Missing &apos;type&apos; property in JSON object @ $.label</title> </head> <body><h2>HTTP ERROR 400 Invalid JSON: Missing &apos;type&apos; prop"
+  },
+  {
+   "test": "a_model_reads_its_commands_and_reports_their_status",
+   "outcome": "failed",
+   "detail": "TypeError: string indices must be integers, not 'str'"
+  },
+  {
+   "test": "openapi_is_served",
+   "outcome": "failed",
+   "detail": "AssertionError:"
+  }
+ ],
+ "after_restart": [
+  {
+   "check": "after a restart: instance identifier",
+   "need": "FR-47, FR-48",
+   "reference": "a new identifier",
+   "observed": {
+    "etag": null,
+    "x-server-instance": null
+   },
+   "same": false
+  },
+  {
+   "check": "after a restart: resources created over HTTP persist",
+   "need": "FR-28 (a restarted model finds what it made)",
+   "reference": "kept",
+   "observed": {
+    "top-level systems": 2,
+    "datastreams": 14
+   },
+   "same": true
+  },
+  {
+   "check": "after a restart: observations persist",
+   "need": "FR-22",
+   "reference": "kept",
+   "observed": "200 application/swe+json: [ { \"time\": \"2031-04-07T00:00:00Z\", \"air_temperature\": 19.2,",
+   "same": true
+  },
+  {
+   "check": "after a restart: identifiers are unchanged",
+   "need": "FR-44",
+   "reference": "unchanged",
+   "observed": "040g",
+   "same": true
+  }
+ ]
+}

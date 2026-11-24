@@ -1,0 +1,40 @@
+[
+  {
+    "objClass": "org.sensorhub.impl.service.HttpServerConfig",
+    "id": "6ca9c8a8-9768-4b60-9554-a8d277bf6b3f",
+    "name": "HTTP Server",
+    "moduleClass": "org.sensorhub.impl.service.HttpServer",
+    "httpPort": 8181,
+    "servletsRootUrl": "/sensorhub",
+    "autoStart": true
+  },
+  {
+    "objClass": "org.sensorhub.impl.datastore.h2.MVObsSystemDatabaseConfig",
+    "indexObsLocation": false,
+    "storagePath": "spike_obs_h2.dat",
+    "memoryCacheSize": 1024,
+    "autoCommitBufferSize": 1024,
+    "useCompression": false,
+    "readOnly": false,
+    "databaseNum": 1,
+    "id": "0309491d-d5cb-4f2f-9b95-166179c66746",
+    "moduleClass": "org.sensorhub.impl.datastore.h2.MVObsSystemDatabase",
+    "name": "Obs Database",
+    "autoStart": true
+  },
+  {
+    "objClass": "org.sensorhub.impl.service.consys.ConSysApiServiceConfig",
+    "databaseID": "0309491d-d5cb-4f2f-9b95-166179c66746",
+    "exposedResources": {
+      "objClass": "org.sensorhub.impl.datastore.view.ObsSystemDatabaseViewConfig",
+      "includeFilter": { "objClass": "org.sensorhub.api.datastore.system.SystemFilter", "uniqueIDs": ["*"] }
+    },
+    "security": { "objClass": "org.sensorhub.api.security.SecurityConfig", "enableAccessControl": false, "requireAuth": false },
+    "enableTransactional": true,
+    "endPoint": "/api",
+    "id": "9d23a6a7-7455-41d1-9f1d-494be4e2463c",
+    "moduleClass": "org.sensorhub.impl.service.consys.ConSysApiService",
+    "name": "Connected Systems API Service",
+    "autoStart": true
+  }
+]
