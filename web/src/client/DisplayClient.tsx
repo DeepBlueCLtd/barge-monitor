@@ -7,6 +7,7 @@ import { useStore } from '../shell/store';
 import { essentialLabel } from './handshake';
 import { PERIODS, Property } from './plan';
 import { ClientSession, clientSession } from './session';
+import { PanelGrid } from './views/PanelGrid';
 import { ClusterBand, Empty, ErrorBars, HeatMap, LinePlot, ViewFrame } from './views/views';
 
 const PERIOD_SUB: Record<string, string> = { PT1M: 'last minute', PT1H: 'last hour', PT6H: 'last 6 hours', P1D: 'last day', P7D: 'last week', P28D: 'last 4 weeks' };
@@ -150,9 +151,10 @@ function Views({ session, props, sel }: { session: ClientSession; props: Propert
   const unavailable = (why: string[]) => <Empty>Unavailable: this view depends on {why.join(', ')}.</Empty>;
   const loading = chosen.length > 0 && !session.plan.length;
   const labelOf = (name: string) => props.find((p) => p.name === name)?.label ?? name;
+  // The views sit on a grid the user can rearrange: drag a header, resize from a corner.
   return (
-    <>
-      <div className="dc-graphs">
+    <PanelGrid panels={[
+      { id: 'line', x: 0, y: 0, w: 4, h: 7, minW: 2, minH: 4, node: (
         <ViewFrame title="Line plot" sub={`normalised · ${period}`} testid="view-line">
           {graphsOff ? unavailable(graphsOff) : !chosen.length ? noField : loading ? <Empty>Reading…</Empty> : (
             <>
@@ -161,17 +163,23 @@ function Views({ session, props, sel }: { session: ClientSession; props: Propert
             </>
           )}
         </ViewFrame>
+      ) },
+      { id: 'errorbars', x: 4, y: 0, w: 4, h: 7, minW: 2, minH: 4, node: (
         <ViewFrame title="Line plot with error bars" sub={first ? `${first.label.toLowerCase()} · mean ± 1σ` : 'mean ± 1σ'} testid="view-errorbars">
           {graphsOff ? unavailable(graphsOff) : !chosen.length ? noField : !first ? <Empty>Error bars need a numeric field; the selected fields are categories.</Empty>
             : loading ? <Empty>Reading…</Empty> : <ErrorBars session={session} p={first} />}
         </ViewFrame>
+      ) },
+      { id: 'heatmap', x: 8, y: 0, w: 4, h: 7, minW: 2, minH: 4, node: (
         <ViewFrame title="Heat map" sub={`fields × time · ${session.plan.some((r) => r.raw) ? 'raw records' : 'summaries'}`} testid="view-heatmap">
           {graphsOff ? unavailable(graphsOff) : !chosen.length ? noField : loading ? <Empty>Reading…</Empty> : <HeatMap session={session} props={chosen} />}
         </ViewFrame>
-      </div>
-      <ViewFrame title="Clusters" sub="cluster assignments along time" testid="view-clusters" className="dc-clusters">
-        {clustersOff ? unavailable(clustersOff) : !chosen.length ? noField : <ClusterBand session={session} labelOf={labelOf} />}
-      </ViewFrame>
-    </>
+      ) },
+      { id: 'clusters', x: 0, y: 7, w: 12, h: 4, minW: 4, minH: 4, node: (
+        <ViewFrame title="Clusters" sub="cluster assignments along time" testid="view-clusters" className="dc-clusters">
+          {clustersOff ? unavailable(clustersOff) : !chosen.length ? noField : <ClusterBand session={session} labelOf={labelOf} />}
+        </ViewFrame>
+      ) },
+    ]} />
   );
 }

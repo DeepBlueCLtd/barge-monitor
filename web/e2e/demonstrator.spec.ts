@@ -174,6 +174,38 @@ test('display client: chips, period, clustering, views; the strip shows the sele
   await expect(page.getByTestId('view-clusters')).toContainText('No field selected');
 });
 
+test('display client: a view is moved by its header and resized from its corner; its chart follows', async ({ page }) => {
+  await open(page, 'demo/?seed=1&backend=standin');
+  await page.getByTestId('card-client').click();
+  await play(page);
+  await configured(page);
+  const chart = page.getByTestId('chart-line');
+  await expect(chart.locator('canvas')).toBeVisible({ timeout: 60_000 });
+  const line = page.locator('[data-panel="line"]');
+  const heat = page.locator('[data-panel="heatmap"]');
+  const box = async (l: typeof line) => (await l.boundingBox())!;
+  // Resize: drag the line plot's corner down and to the left; the panel and its chart shrink in width and grow in height.
+  const before = await box(line);
+  const chartBefore = await box(chart);
+  const handle = await box(line.locator('.react-resizable-handle'));
+  await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(handle.x - before.width / 3, handle.y + 110, { steps: 8 });
+  await page.mouse.up();
+  await expect.poll(async () => (await box(line)).width).toBeLessThan(before.width - 40);
+  await expect.poll(async () => (await box(line)).height).toBeGreaterThan(before.height + 60);
+  await expect.poll(async () => (await box(chart)).height).toBeGreaterThan(chartBefore.height + 60);
+  // Move: drag the heat map by its header to the left edge; it ends up left of where it began.
+  const heatBefore = await box(heat);
+  const header = await box(heat.locator('header'));
+  await page.mouse.move(header.x + 40, header.y + 10);
+  await page.mouse.down();
+  await page.mouse.move(before.x + 40, header.y + 10, { steps: 12 });
+  await page.mouse.up();
+  await expect.poll(async () => (await box(heat)).x).toBeLessThan(heatBefore.x - 100);
+  await expect(page.getByTestId('chart-heatmap').locator('canvas')).toBeVisible();
+});
+
 test('clicking a message shows it in the message strip (FR-68)', async ({ page }) => {
   await open(page);
   await play(page);
