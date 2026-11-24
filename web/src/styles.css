@@ -149,7 +149,7 @@ h1, h2, h3, h4 { margin: 0; font-weight: 400; }
 .dc { font-family: var(--sans); font-size: 15px; color: #1f2937; background: #fff; padding: 0 10px 10px; min-height: 440px; }
 .dc-status { display: flex; justify-content: space-between; align-items: center; background: #eef0f4; margin: 0 -10px 8px; padding: 6px 12px; font-size: 15px; }
 .dc-status span { color: #374151; }
-.is-stale .dc-graphs, .is-stale .dc-clusters { opacity: 0.55; }
+.is-stale .dc-grid { opacity: 0.55; }
 .is-stale .dc-view::after { content: 'stale'; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-weight: 600; color: #991b1b; background: #fff; border: 1px solid #991b1b; padding: 1px 8px; border-radius: 4px; }
 .dc-banner { background: #eef4ff; border: 1px solid #b6c8f0; color: #1e3a8a; padding: 5px 9px; border-radius: 4px; margin-bottom: 6px; }
 .dc-banner.bad, .dc-rejected { background: #fdecec; border: 1px solid #f0b4b4; color: #8f1d1d; padding: 5px 9px; border-radius: 4px; margin-bottom: 6px; }
@@ -167,14 +167,22 @@ h1, h2, h3, h4 { margin: 0; font-weight: 400; }
 .preset.on { background: #1f2937; border-color: #1f2937; color: #fff; }
 .spacer { flex: 1; }
 .dc select { font-family: var(--sans); font-size: 14.5px; padding: 3px 6px; border: 1px solid #9ca3af; border-radius: 5px; background: #fff; color: #1f2937; }
-.dc-graphs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 8px; }
-.dc-view { position: relative; border: 1.6px solid var(--gold-outline); background: var(--gold-fill); /* value-add, as the Models cards (VS-09) */ border-radius: 6px; padding: 6px 8px 4px; min-height: 218px; }
+/* The views sit on a grid: drag a view by its header, resize it from its corner. */
+.dc-grid { min-height: 356px; }
+.dc-panel > .dc-view { height: 100%; display: flex; flex-direction: column; overflow: hidden; }
+.dc-view > header { cursor: grab; padding-right: 20px; touch-action: none; user-select: none; }
+.dc-view > header h4, .dc-view > header p { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.react-draggable-dragging .dc-view > header { cursor: grabbing; }
+.dc-view .echart { flex: 1 1 0; min-height: 0; }
+.dc-grid .react-grid-item.react-grid-placeholder { background: #2f4ac0; opacity: 0.15; border-radius: 6px; }
+.dc-grid .react-grid-item > .react-resizable-handle { z-index: 2; opacity: 0.55; }
+.dc-grid .react-grid-item:hover > .react-resizable-handle { opacity: 1; }
+.dc-view { position: relative; border: 1.6px solid var(--gold-outline); background: var(--gold-fill); /* value-add, as the Models cards (VS-09) */ border-radius: 6px; padding: 6px 8px 4px; }
 .dc-view header h4 { font-family: var(--sans); font-weight: 600; font-size: 15px; color: #1f2937; }
 .dc-view header p { margin: 0; font-size: 13.5px; color: #4b5563; }
 .view-diamond { position: absolute; top: 4px; right: 4px; }
-.dc-empty { display: flex; align-items: center; justify-content: center; text-align: center; min-height: 190px; color: #4b5563; font-size: 15px; padding: 0 10px; }
+.dc-empty { flex: 1 1 0; min-height: 0; display: flex; align-items: center; justify-content: center; text-align: center; color: #4b5563; font-size: 15px; padding: 0 10px; }
 .dc-note { margin: 0; font-size: 13.5px; color: #6b4300; }
-.dc-clusters { min-height: 112px; }
 .cluster-body { margin-top: 4px; }
 .cluster-head { display: flex; justify-content: space-between; font-size: 14.5px; margin-bottom: 4px; padding-right: 22px; }
 .cluster-head .score b { color: #11703a; }

@@ -18,7 +18,8 @@ export const SERIES = ['#2f4ac0', '#c2410c', '#0f766e', '#9333ea', '#be123c', '#
 /** Simulated seconds to a JavaScript time value, for the time axes. */
 export const ms = (t: number) => (SIM_EPOCH_UNIX + t) * 1000;
 
-export function EChart({ option, testid, height }: { option: EChartsOption; testid?: string; height: number }) {
+/** A chart that fills its panel and follows the panel's size. */
+export function EChart({ option, testid }: { option: EChartsOption; testid?: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const chart = useRef<echarts.ECharts | null>(null);
   useEffect(() => {
@@ -35,7 +36,7 @@ export function EChart({ option, testid, height }: { option: EChartsOption; test
   useEffect(() => {
     chart.current?.setOption({ animation: false, textStyle: { fontFamily: MONITOR_FONT }, ...option }, true);
   }, [option]);
-  return <div ref={ref} className="echart" data-testid={testid} style={{ height }} />;
+  return <div ref={ref} className="echart" data-testid={testid} />;
 }
 
 export function timeLabel(v: number, spanS: number): string {
