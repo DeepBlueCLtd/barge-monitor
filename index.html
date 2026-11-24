@@ -67,14 +67,16 @@ weather demonstrator, Version 4.2 (draft)</h2>
 <p><strong>Status:</strong> Draft. 4.2 changes the design the
 demonstrator stands for: OpenSensorHub as the data server (ADR 0005).
 The <strong>architecture view shows it</strong> (seven components, the
-data server among the third-party libraries, a stand-in in its place).
-<strong>Nothing has been tried against OpenSensorHub</strong>: the
-relaxed requirements and the store adapter as its module are unconfirmed
-until AT-32 is run <strong>Author:</strong> Doc <strong>Working
-name:</strong> to be chosen (§15). This document says <em>the
-demonstrator</em>. <strong>Supersedes:</strong> SRD Version 3.3 and
-Annex A (Visual style). Both are folded in here; nothing in them applies
-unless restated.</p>
+data server among the third-party libraries, a stand-in in its place). A
+<strong>spike against a stock OpenSensorHub</strong> (finding of
+2026-11-23) confirmed sensing, discovery and reading, and found that
+<strong>commands, restart recognition and replacing a result need
+redesign</strong>; the requirements below do not yet reflect that, and
+the store adapter as its module is untried <strong>Author:</strong> Doc
+<strong>Working name:</strong> to be chosen (§15). This document says
+<em>the demonstrator</em>. <strong>Supersedes:</strong> SRD Version 3.3
+and Annex A (Visual style). Both are folded in here; nothing in them
+applies unless restated.</p>
 <p><strong>Companion mockups (non-normative):</strong> three static
 frames, one for each detail panel (§9.4), plus one interactive
 frame:</p>
@@ -1607,9 +1609,11 @@ number appears on screen</td>
 </tr>
 <tr>
 <td>AT-32</td>
-<td><em>(Not yet run.)</em> The contract suite, pointed at a stock
-OpenSensorHub, passes; each difference is recorded with the fallback
-taken (ADR 0005)</td>
+<td><em>(Run once as a spike, 2026-11-23: not passed.)</em> The contract
+suite, pointed at a stock OpenSensorHub, passes; each difference is
+recorded with the fallback taken (ADR 0005). The suite passed 0 of 15
+unchanged and must first find resources by unique id, not by the
+stand-in's identifiers</td>
 <td>C1</td>
 </tr>
 <tr>
@@ -1654,11 +1658,25 @@ end.</li>
 on the target display; it may be below 1×.</li>
 <li><strong>Pub/sub.</strong> Revisit polling, by the display client and
 by the models, when Connected Systems Part 3 is published.</li>
-<li><strong>OpenSensorHub.</strong> Everything in ADR 0005's table is
-unconfirmed until AT-32 is run: the profile link, restart recognition,
-the answer while starting, 409 on creating what exists, the plain PUT,
-the <code>quality</code> reference form, and the interface and language
-the store adapter is written in.</li>
+<li><strong>OpenSensorHub.</strong> The spike of 2026-11-23 leaves these
+open:
+<ul>
+<li><strong>Commands.</strong> A model cannot poll for them (FR-27):
+OpenSensorHub pushes a command to a receiver and drops it without one,
+keeps the sender waiting 5 s, and does not enforce the schema's bounds.
+FR-27, FR-55 and the exclusion of push delivery need revising.</li>
+<li><strong>Latest-run results.</strong> No <code>PUT</code> (FR-28a),
+and an array inside a record was refused as the stand-in encodes
+it.</li>
+<li><strong>The store adapter</strong> as a module: untried, and loading
+over HTTP is one observation per request.</li>
+<li><strong>The stand-in</strong> now differs from the server it stands
+for (identifiers, missing values as <code>"NaN"</code>, one observation
+per request, HTML refusals, no 503, no instance identifier). Either it
+follows OpenSensorHub, or FR-06c is weakened.</li>
+<li><strong>The contract suite</strong> must be made server-neutral
+before AT-32 can be passed.</li>
+</ul></li>
 <li><strong>Conformance testing.</strong> The conformance class
 identifiers claimed are those of the published Parts 1 and 2. Whether an
 OGC test suite for Connected Systems exists is still to be checked; one
