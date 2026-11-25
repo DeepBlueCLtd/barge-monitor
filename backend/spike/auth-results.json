@@ -887,5 +887,280 @@
    },
    "as_needed": false
   }
+ ],
+ "phase 3: deny entries also on every ancestor (parent=) form, after a restart": [
+  {
+   "question": 6,
+   "check": "GET /api without credentials",
+   "expected": "401, nothing served",
+   "observed": {
+    "status": 401,
+    "www-authenticate": "basic realm=\"OpenSensorHub: Authentication Required\"",
+    "content-type": "text/html;charset=iso-8859-1",
+    "set-cookie": null,
+    "body": "401 text/html;charset=iso-8859-1: Error 401 Unauthorized (Unauthorized)"
+   },
+   "as_needed": true
+  },
+  {
+   "question": 6,
+   "check": "GET /api/systems without credentials",
+   "expected": "401, nothing served",
+   "observed": {
+    "status": 401,
+    "www-authenticate": "basic realm=\"OpenSensorHub: Authentication Required\"",
+    "content-type": "text/html;charset=iso-8859-1",
+    "set-cookie": null,
+    "body": "401 text/html;charset=iso-8859-1: Error 401 Unauthorized (Unauthorized)"
+   },
+   "as_needed": true
+  },
+  {
+   "question": 6,
+   "check": "GET /api/systems/040g without credentials",
+   "expected": "401, nothing served",
+   "observed": {
+    "status": 401,
+    "www-authenticate": "basic realm=\"OpenSensorHub: Authentication Required\"",
+    "content-type": "text/html;charset=iso-8859-1",
+    "set-cookie": null,
+    "body": "401 text/html;charset=iso-8859-1: Error 401 Unauthorized (Unauthorized)"
+   },
+   "as_needed": true
+  },
+  {
+   "question": 6,
+   "check": "GET /api-weather/systems without credentials",
+   "expected": "401, nothing served",
+   "observed": {
+    "status": 401,
+    "www-authenticate": "basic realm=\"OpenSensorHub: Authentication Required\"",
+    "content-type": "text/html;charset=iso-8859-1",
+    "set-cookie": null,
+    "body": "401 text/html;charset=iso-8859-1: Error 401 Unauthorized (Unauthorized)"
+   },
+   "as_needed": true
+  },
+  {
+   "question": 6,
+   "check": "GET /admin/ without credentials",
+   "expected": "401, nothing served",
+   "observed": {
+    "status": 401,
+    "www-authenticate": "basic realm=\"OpenSensorHub: Authentication Required\"",
+    "content-type": "text/html;charset=iso-8859-1",
+    "set-cookie": null,
+    "body": "401 text/html;charset=iso-8859-1: Error 401 Unauthorized (Unauthorized)"
+   },
+   "as_needed": true
+  },
+  {
+   "question": 6,
+   "check": "wrong password",
+   "expected": "401",
+   "observed": 401,
+   "as_needed": true
+  },
+  {
+   "question": 6,
+   "check": "OPTIONS (CORS preflight) without credentials",
+   "expected": "n/a",
+   "observed": "200 allow-origin=http://example.org",
+   "as_needed": true
+  },
+  {
+   "question": 7,
+   "check": "after a restart, friend still owns their workspace (run-time permissions persisted)",
+   "expected": "200",
+   "observed": "200 auto: { \"type\": \"Feature\", \"id\": \"0430\", \"geom",
+   "as_needed": true
+  },
+  {
+   "question": 7,
+   "check": "...and can append to it",
+   "expected": "201",
+   "observed": "201 application/swe+json: ",
+   "as_needed": true
+  },
+  {
+   "question": 1,
+   "check": "deny entries on the role, also on every ancestor's parent= form: is CO2 hidden from friend?",
+   "expected": "absent from every listing, 404 by id",
+   "observed": {
+    "/systems": [
+     "040g",
+     "0420",
+     "0430",
+     "043g",
+     "044g"
+    ],
+    "/systems/{bow}/subsystems": [
+     "041g"
+    ],
+    "/systems/{analysis}/subsystems": [
+     "042g"
+    ],
+    "/datastreams": [
+     "040g",
+     "0410",
+     "041g",
+     "0420",
+     "042g",
+     "0430"
+    ],
+    "/systems?searchMembers=true": [
+     "040g",
+     "0410",
+     "041g",
+     "0420",
+     "042g",
+     "0430",
+     "043g",
+     "0440",
+     "044g"
+    ],
+    "GET /systems/{bow-co2}": "403 text/html;charset=iso-8859-1: Error 403 Permission denied (Permission ",
+    "GET /systems/{analysis-co2}": "403 text/html;charset=iso-8859-1: Error 403 Permission denied (Permission ",
+    "GET /datastreams/{ds-bow-co2}": "200 auto: { \"id\": \"0410\", \"name\": \"co2\", \"system@i",
+    "GET /datastreams/{ds-bow-co2}/schema": "403 text/html;charset=iso-8859-1: Error 403 Permission denied (Permission ",
+    "GET /datastreams/{ds-bow-co2}/observations": "200 application/json: { \"items\": [ { \"id\": \"041e5tvlj43g000000\", \"datastream@id\": ",
+    "GET /datastreams/{ds-clusters-co2}": "403 text/html;charset=iso-8859-1: Error 403 Permission denied (Permission ",
+    "GET /datastreams/{ds-clusters-co2}/schema": "403 text/html;charset=iso-8859-1: Error 403 Permission denied (Permission ",
+    "GET /datastreams/{ds-clusters-co2}/observations": "200 application/json: { \"items\": [ { \"id\": \"041s1b7mj43g000000\", \"datastream@id\": ",
+    "GET /systems/{bow-co2}/datastreams": "200 application/json: { \"items\": [ { \"id\": \"0410\", \"name\": \"co2\", \"system@id\": \"04",
+    "GET /systems/{bow} (open, control)": "200 auto: { \"type\": \"Feature\", \"id\": \"0410\", \"geom",
+    "restricted ids still listed": [
+     "datastream 0410",
+     "datastream 041g",
+     "system 041g",
+     "system 042g"
+    ]
+   },
+   "as_needed": false
+  },
+  {
+   "question": 2,
+   "check": "collateral: friend asks for the bow sensor (open, but a child of a denied parent= form)",
+   "expected": "200",
+   "observed": "200 auto: { \"type\": \"Feature\", \"id\": \"0410\", \"geometry\": null, \"proper",
+   "as_needed": true
+  },
+  {
+   "question": 2,
+   "check": "collateral: friend asks for the bow weather datastream",
+   "expected": "200",
+   "observed": "200 auto: { \"id\": \"040g\", \"name\": \"weather\", \"system@id\": \"0410\", \"sys",
+   "as_needed": true
+  },
+  {
+   "question": 1,
+   "check": "for comparison: an id that does not exist",
+   "expected": "404",
+   "observed": "404 text/html;charset=iso-8859-1: Error 404 Resource not found: zzzz (Resource not found: zzzz",
+   "as_needed": true
+  },
+  {
+   "question": 1,
+   "check": "deny entries: friend subscribes by WebSocket to the bow CO2 datastream's observations (3 tries, owner publishes one each time)",
+   "expected": "refused or 404",
+   "observed": [
+    {
+     "handshake": 101,
+     "received": [
+      {
+       "datastream@id": "0410",
+       "phenomenonTime": "2031-04-08T10:49:30Z",
+       "resultTime": "2031-04-08T10:49:30Z",
+       "result": {
+        "co2": 420.0
+       }
+      }
+     ]
+    },
+    {
+     "handshake": 101,
+     "received": [
+      {
+       "datastream@id": "0410",
+       "phenomenonTime": "2031-04-08T11:53:30Z",
+       "resultTime": "2031-04-08T11:53:30Z",
+       "result": {
+        "co2": 421.0
+       }
+      }
+     ]
+    },
+    {
+     "handshake": 101,
+     "received": [
+      {
+       "datastream@id": "0410",
+       "phenomenonTime": "2031-04-08T12:57:30Z",
+       "resultTime": "2031-04-08T12:57:30Z",
+       "result": {
+        "co2": 422.0
+       }
+      }
+     ]
+    }
+   ],
+   "as_needed": false
+  },
+  {
+   "question": 1,
+   "check": "viewer with emissions (control): is CO2 hidden from emi?",
+   "expected": "absent from every listing, 404 by id",
+   "observed": {
+    "/systems": [
+     "040g",
+     "0420",
+     "0430",
+     "043g",
+     "044g"
+    ],
+    "/systems/{bow}/subsystems": [
+     "041g"
+    ],
+    "/systems/{analysis}/subsystems": [
+     "042g"
+    ],
+    "/datastreams": [
+     "040g",
+     "0410",
+     "041g",
+     "0420",
+     "042g",
+     "0430"
+    ],
+    "/systems?searchMembers=true": [
+     "040g",
+     "0410",
+     "041g",
+     "0420",
+     "042g",
+     "0430",
+     "043g",
+     "0440",
+     "044g"
+    ],
+    "GET /systems/{bow-co2}": "200 auto: { \"type\": \"Feature\", \"id\": \"041g\", \"geom",
+    "GET /systems/{analysis-co2}": "200 auto: { \"type\": \"Feature\", \"id\": \"042g\", \"geom",
+    "GET /datastreams/{ds-bow-co2}": "200 auto: { \"id\": \"0410\", \"name\": \"co2\", \"system@i",
+    "GET /datastreams/{ds-bow-co2}/schema": "200 auto: { \"obsFormat\": \"application/om+json\", \"r",
+    "GET /datastreams/{ds-bow-co2}/observations": "200 application/json: { \"items\": [ { \"id\": \"041e5tvlj43g000000\", \"datastream@id\": ",
+    "GET /datastreams/{ds-clusters-co2}": "200 auto: { \"id\": \"041g\", \"name\": \"clusters co2\", ",
+    "GET /datastreams/{ds-clusters-co2}/schema": "200 auto: { \"obsFormat\": \"application/om+json\", \"r",
+    "GET /datastreams/{ds-clusters-co2}/observations": "200 application/json: { \"items\": [ { \"id\": \"041s1b7mj43g000000\", \"datastream@id\": ",
+    "GET /systems/{bow-co2}/datastreams": "200 application/json: { \"items\": [ { \"id\": \"0410\", \"name\": \"co2\", \"system@id\": \"04",
+    "GET /systems/{bow} (open, control)": "200 auto: { \"type\": \"Feature\", \"id\": \"0410\", \"geom",
+    "restricted ids still listed": [
+     "datastream 0410",
+     "datastream 041g",
+     "system 041g",
+     "system 042g"
+    ]
+   },
+   "as_needed": false
+  }
  ]
 }

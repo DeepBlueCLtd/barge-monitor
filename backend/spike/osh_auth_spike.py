@@ -303,25 +303,36 @@ class Spike:
         self.out.write_text(json.dumps(data, indent=1, ensure_ascii=False))
 
     # ---- phase 2: after the deny entries were added and the server restarted ------------
-    def after_deny(self):
+    def after_deny(self, ancestors=False):
         self.ids = json.loads(self.out.read_text())["ids"]
         self.no_credentials()
         r = self.c["friend"].get(f"/api/systems/{self.ids['ws-friend']}")
         self.note(7, "after a restart, friend still owns their workspace (run-time permissions persisted)", "200", self.brief(r, 40), r.status_code == 200)
         r = self.obs("friend", self.ids["ds-ws-friend"], {"selection": 2}, "2031-04-08T13:00:00Z")
         self.note(7, "...and can append to it", "201", self.brief(r, 40), r.status_code == 201)
-        self.visibility("friend", "/api", "deny entries on the role (get on both restricted systems, get on one CO2 datastream)")
+        self.visibility("friend", "/api", "deny entries on the role, also on every ancestor's parent= form" if ancestors else
+                        "deny entries on the role (get on both restricted systems, get on one CO2 datastream)")
+        if ancestors:
+            r = self.c["friend"].get(f"/api/systems/{self.ids['bow']}")
+            self.note(2, "collateral: friend asks for the bow sensor (open, but a child of a denied parent= form)", "200", self.brief(r, 60), r.status_code == 200)
+            r = self.c["friend"].get(f"/api/datastreams/{self.ids['ds-weather']}")
+            self.note(2, "collateral: friend asks for the bow weather datastream", "200", self.brief(r, 60), r.status_code == 200)
+            r = self.c["friend"].get("/api/systems/zzzz")
+            self.note(1, "for comparison: an id that does not exist", "404", self.brief(r, 60), r.status_code == 404)
         self.stream_restricted("friend", "/api", "deny entries")
         self.visibility("emi", "/api", "viewer with emissions (control)")
 
 
-def write_deny(results: Path, src: Path, dst: Path):
+def write_deny(results: Path, src: Path, dst: Path, ancestors=False):
     ids = json.loads(results.read_text())["ids"]
     cfg = json.loads(src.read_text())
     realm = next(m for m in cfg if m["objClass"].endswith("BasicSecurityRealmConfig"))
     role = next(r for r in realm["roles"] if r["id"] == "viewer_weather")
     role["deny"] = [f"csapi[*]/get/systems/{ids['bow-co2']}", f"csapi[*]/get/systems/{ids['analysis-co2']}",
                     f"csapi[*]/get/datastreams/{ids['ds-clusters-co2']}"]
+    if ancestors:  # also deny what is inherited from every ancestor of the restricted systems
+        role["deny"] += [f"csapi[*]/get/systems[parent={ids[k]}]" for k in ("bow", "platform", "analysis")]
+        role["deny"] += [f"csapi[*]/get/datastreams[parent={ids[k]}]" for k in ("bow-co2", "analysis-co2", "bow", "platform", "analysis")]
     dst.write_text(json.dumps(cfg, indent=2))
     print("deny entries for viewer_weather:", role["deny"])
 
@@ -329,14 +340,15 @@ def write_deny(results: Path, src: Path, dst: Path):
 def main():
     args = sys.argv[1:]
     if args[0] == "--write-deny":
-        write_deny(Path(args[1]), Path(args[2]), Path(args[3]))
+        write_deny(Path(args[1]), Path(args[2]), Path(args[3]), "--ancestors" in args)
         return
     root, out = args[0], Path(args[1])
     rundir = Path(args[args.index("--rundir") + 1]) if "--rundir" in args else None
     s = Spike(root, out)
     if "--after-deny" in args:
-        s.after_deny()
-        s.save("phase 2: deny entries on viewer_weather, after a restart")
+        anc = "--ancestors" in args
+        s.after_deny(anc)
+        s.save("phase 3: deny entries also on every ancestor (parent=) form, after a restart" if anc else "phase 2: deny entries on viewer_weather, after a restart")
         return
     s.no_credentials()
     s.session()
