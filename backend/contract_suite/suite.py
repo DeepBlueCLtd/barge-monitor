@@ -1,28 +1,45 @@
-"""The contract suite for the HTTP seam (AT-02, AT-06, AT-24).
+"""The contract suite for the HTTP seam (PR-04, AT-02, AT-32): server-neutral.
 
-Written against a minimal async client, so the *same* tests run against the
-application under uvicorn in CPython, in Pyodide behind the relay, and
-against the JavaScript stand-in (PR-04).
+Written against a minimal async client, so the *same* tests run against the CPython application
+under uvicorn, against the JavaScript stand-in in Node, in Pyodide behind the relay, and against a
+stock OpenSensorHub behind the access gateway. It never relies on a server's identifiers: it finds
+everything by uniqueId and outputName, as the display client does, and carries credentials.
 
-A client provides ``async request(method, path, params=None, body=None,
-headers=None)`` returning ``(status, headers, body)``, where body is parsed
-JSON when the response is JSON and text otherwise. Paths are relative to the
-API base.
+A client provides:
+
+* ``async request(method, path, params=None, body=None, headers=None)`` returning ``(status, headers,
+  body)``, where body is parsed JSON when the response is JSON and text otherwise; paths are relative
+  to the API base;
+* ``async open_stream(path, params=None, headers=None)`` returning an object with ``status``,
+  ``async next_line(timeout)`` (a line, or None) and ``async close()``: a push subscription (§9.2).
+
+Tests are in two groups. ``NEED``: what this system needs of any server (and of the gateway in
+front of it). ``STANDIN``: what the stand-ins also do, to stay faithful to OpenSensorHub (§9.1);
+a stock OpenSensorHub is not expected to be run against these.
 """
 from __future__ import annotations
 
+import asyncio
+import base64
 import json
 import traceback
 from pathlib import Path
 
-TESTS = []
-SOSA = "http://www.w3.org/ns/sosa/"
-CS1 = "http://www.opengis.net/spec/ogcapi-connectedsystems-1/1.0/conf/"
+NEED, STANDIN = [], []
+URN = "urn:x-barge:"
+SWE = "application/swe+json"
 CS2 = "http://www.opengis.net/spec/ogcapi-connectedsystems-2/1.0/conf/"
+DEMO = {"owner": "demo-owner", "friend": "demo-friend", "analyst": "demo-analyst",
+        "svc-new-model-2": "svc-demo"}  # demo credentials (PR-07)
 
 
-def test(fn):
-    TESTS.append(fn)
+def need(fn):
+    NEED.append(fn)
+    return fn
+
+
+def standin(fn):
+    STANDIN.append(fn)
     return fn
 
 
@@ -38,329 +55,372 @@ def contracts_dir() -> Path:
     raise FileNotFoundError("contracts")
 
 
+def basic(user: str, password: str) -> str:
+    return "Basic " + base64.b64encode(f"{user}:{password}".encode()).decode()
+
+
 class Ctx:
-    def __init__(self, client):
+    def __init__(self, client, accounts=None):
         self.c = client
+        self.accounts = accounts or DEMO
         self.dir = contracts_dir()
+        self._systems = {}
+
+    def auth(self, user="owner") -> dict:
+        return {"Authorization": basic(user, self.accounts[user])}
+
+    async def get(self, path, params=None, user="owner", headers=None):
+        return await self.c.request("GET", path, params=params, headers={**(self.auth(user) if user else {}),
+                                                                           **(headers or {})})
+
+    async def post(self, path, body, user="owner", ctype="application/json"):
+        return await self.c.request("POST", path, body=body, headers={**self.auth(user), "Content-Type": ctype})
+
+    # --- finding things by uniqueId and outputName --------------------------------------------------
+    async def systems(self, user="owner") -> dict:
+        """uniqueId -> system id, from discovery (either encoding)."""
+        st, _, body = await self.get("collections/all_systems/items", {"f": "application/sml+json", "limit": "100000"},
+                                     user=user)
+        assert st == 200, (st, body)
+        out = {}
+        for s in body["items"]:
+            uid = s.get("uniqueId") or (s.get("properties") or {}).get("uid")
+            out[uid] = s["id"]
+        return out
+
+    async def system(self, uid, user="owner"):
+        return (await self.systems(user)).get(uid)
+
+    async def datastreams(self, uid, user="owner") -> list:
+        sid = await self.system(uid, user)
+        assert sid, f"no system {uid}"
+        st, _, body = await self.get(f"systems/{sid}/datastreams", {"limit": "100000"}, user=user)
+        assert st == 200, (st, body)
+        return body["items"]
+
+    async def ds(self, uid, output, user="owner"):
+        return next((d for d in await self.datastreams(uid, user) if d["outputName"] == output), None)
+
+    async def cs(self, uid, name, user="owner"):
+        sid = await self.system(uid, user)
+        st, _, body = await self.get(f"systems/{sid}/controlstreams", user=user)
+        assert st == 200, (st, body)
+        return next((c for c in body["items"] if c["inputName"] == name), None)
+
+    async def obs(self, ds_id, params=None, user="owner"):
+        st, _, body = await self.get(f"datastreams/{ds_id}/observations", {"f": SWE, **(params or {})}, user=user)
+        assert st == 200, (st, body)
+        if isinstance(body, str):
+            body = json.loads(body)
+        return body
+
+    async def replay_state(self):
+        d = await self.ds(URN + "replay", "state")
+        assert d, "no replay state datastream"
+        rows = await self.obs(d["id"], {"resultTime": "latest"})
+        assert rows, "the replay state has no observation"
+        return rows[-1]
+
+    def validate(self, instance, schema_file):
         import jsonschema
-        from referencing import Registry, Resource
 
-        self._js = jsonschema
-        resources = []
-        for p in sorted((self.dir / "schemas").glob("*.json")):
-            doc = json.loads(p.read_text())
-            resources.append((doc["$id"], Resource.from_contents(doc)))
-        prof = json.loads((self.dir / "profile.schema.json").read_text())
-        resources.append((prof["$id"], Resource.from_contents(prof)))
-        self.registry = Registry().with_resources(resources)
-        self.base = "https://deepbluecltd.github.io/barge-monitor/contracts/"
-
-    def validate(self, instance, name):
-        uri = self.base + ("profile.schema.json" if name == "profile" else f"schemas/{name}.json")
-        v = self._js.Draft202012Validator({"$ref": uri}, registry=self.registry)
-        v.validate(instance)
-
-    async def get(self, path, params=None, headers=None):
-        return await self.c.request("GET", path, params=params, headers=headers)
-
-    async def ds(self, system_id, output):
-        st, _, body = await self.get(f"systems/{system_id}/datastreams")
-        assert st == 200, body
-        for d in body["items"]:
-            if d["outputName"] == output:
-                return d
-        raise AssertionError(f"no {output} datastream on {system_id}")
+        jsonschema.Draft202012Validator(json.loads((self.dir / schema_file).read_text())).validate(instance)
 
 
-def refused(st, body, status, name):
-    assert st == status, f"expected {status}, got {st}: {body}"
-    assert isinstance(body, dict) and body.get("refused") == name, f"refusal should name {name!r}: {body}"
+# --- what we need of any server -------------------------------------------------------------------------
+@need
+async def landing_and_conformance(x: Ctx):
+    st, _, body = await x.get("")
+    assert st == 200 and isinstance(body.get("links"), list), (st, body)
+    st, _, body = await x.get("conformance")
+    assert st == 200, (st, body)
+    for cls in ("datastream", "controlstream", "swecommon-json"):
+        assert CS2 + cls in body["conformsTo"], f"conformance does not claim {cls}"
 
 
-@test
-async def landing_links_profile_and_carries_instance(ctx):
-    st, h, body = await ctx.get("")
+@need
+async def credentials_are_needed_everywhere(x: Ctx):
+    """AT-49: every request without valid credentials is refused with 401, discovery and the profile included."""
+    for path in ("", "systems", "datastreams", "collections/all_systems/items", "profile.json"):
+        st, _, _ = await x.get(path, user=None)
+        assert st == 401, f"{path or '/'} without credentials answered {st}"
+        st, _, _ = await x.c.request("GET", path, headers={"Authorization": basic("owner", "wrong")})
+        assert st == 401, f"{path or '/'} with a wrong password answered {st}"
+    cat = await x.ds(URN + "importer", "catalogue")
+    st, _, _ = await x.get(f"datastreams/{cat['id']}/observations", user=None)
+    assert st == 401, f"the catalogue without credentials answered {st}"
+
+
+@need
+async def the_platform_is_found_by_unique_id(x: Ctx):
+    sy = await x.systems()
+    for uid in (URN + "platform:barge", URN + "sensor:bow", URN + "sensor:stern", URN + "process:models",
+                URN + "importer", URN + "replay"):
+        assert uid in sy, f"{uid} not found by discovery"
+    st, _, body = await x.get(f"systems/{sy[URN + 'platform:barge']}/subsystems")
     assert st == 200
-    ctx.validate(body, "landing")
-    rels = {lk["rel"] for lk in body["links"]}
-    assert {"self", "service-desc", "conformance", "data", "systems", "datastreams", "profile"} <= rels
-    inst = h.get("x-server-instance")
-    assert inst and h.get("etag", "").strip('"') == inst
+    uids = {s.get("uniqueId") or s.get("properties", {}).get("uid") for s in body["items"]}
+    assert {URN + "sensor:bow", URN + "sensor:stern"} <= uids, uids
 
 
-@test
-async def conformance_declares_the_subset(ctx):
-    st, _, body = await ctx.get("conformance")
-    assert st == 200
-    ctx.validate(body, "conformance")
-    c = set(body["conformsTo"])
-    for need in ("system", "subsystem", "property", "sensorml"):
-        assert CS1 + need in c, need
-    for need in ("datastream", "controlstream", "json", "swecommon-json"):
-        assert CS2 + need in c, need
-    for absent in ("deployment", "procedure", "sf", "advanced-filtering", "update", "system-event", "swecommon-text", "swecommon-binary"):
-        assert CS1 + absent not in c and CS2 + absent not in c, absent
+@need
+async def the_profile_is_beside_the_server(x: Ctx):
+    """FR-41: GET profile.json, with credentials; valid against its schema."""
+    st, _, body = await x.get("profile.json")
+    assert st == 200, st
+    if isinstance(body, str):
+        body = json.loads(body)
+    x.validate(body, "profile.schema.json")
 
 
-@test
-async def profile_is_served_valid_and_claimed(ctx):
-    st, _, prof = await ctx.get("profile")
-    assert st == 200
-    ctx.validate(prof, "profile")
-    _, _, conf = await ctx.get("conformance")
-    assert prof["id"] in conf["conformsTo"]
-
-
-@test
-async def systems_have_the_standard_types_and_no_location(ctx):
-    st, _, body = await ctx.get("systems")
-    assert st == 200
-    ctx.validate(body, "page")
-    by = {s["id"]: s for s in body["items"]}
-    for s in by.values():
-        ctx.validate(s, "system")
-    assert by["barge"]["systemType"] == SOSA + "Platform"
-    assert by["models"]["systemType"] == SOSA + "System" and by["models"]["assetType"] == "Process"
-    _, _, subs = await ctx.get("systems/barge/subsystems")
-    types = {s["id"]: s["systemType"] for s in subs["items"]}
-    assert types == {"bow": SOSA + "Sensor", "stern": SOSA + "Sensor"}
-    _, _, models = await ctx.get("systems/models/subsystems")
-    found = {s["id"]: s for s in models["items"]}
-    for m in ("data-cleanse", "summaries", "analysis"):  # each model registered itself (FR-28)
-        assert found[m]["systemType"] == SOSA + "System" and found[m]["assetType"] == "Process", m
-
-
-@test
-async def sensor_schema_has_qc_category_per_quantity(ctx):
-    d = await ctx.ds("bow", "weather")
-    ctx.validate(d, "datastream")
-    st, _, body = await ctx.get(f"datastreams/{d['id']}/schema")
-    refused(st, body, 400, "obsFormat")
-    st, _, body = await ctx.get(f"datastreams/{d['id']}/schema", {"obsFormat": "application/swe+json"})
-    assert st == 200 and body["obsFormat"] == "application/swe+json"
-    rec = body["recordSchema"]
-    ctx.validate(rec, "swe-record")
-    names = {f["name"]: f for f in rec["fields"]}
-    for f in rec["fields"]:
-        if f["type"] == "Quantity":
-            q = names[f["name"] + "_qc"]
-            assert q["type"] == "Category" and f["quality"] == [{"href": f"#{f['name']}_qc"}]
-    st, _, body = await ctx.get(f"datastreams/{d['id']}/schema", {"obsFormat": "application/json"})
-    assert st == 200 and "resultSchema" in body
-
-
-@test
-async def observations_are_swe_json_and_poll_by_phenomenon_time(ctx):
-    d = await ctx.ds("stern", "weather")
-    st, h, latest = await ctx.get(f"datastreams/{d['id']}/observations", {"resultTime": "latest"})
-    assert st == 200 and h.get("content-type", "").startswith("application/swe+json"), h
-    assert isinstance(latest, list) and len(latest) == 1
-    last = latest[0]["time"]
-    st, _, body = await ctx.get(f"datastreams/{d['id']}/observations", {"phenomenonTime": f"{last}/..", "limit": "5"})
-    assert st == 200 and body and body[0]["time"] >= last
-    st, _, body = await ctx.get(f"datastreams/{d['id']}/observations", {"resultTime": "latest", "f": "application/json"})
-    assert st == 200
-    ctx.validate(body, "page")
-    ctx.validate(body["items"][0], "observation")
-
-
-@test
-async def observations_page_and_refuse_oversize(ctx):
-    d = await ctx.ds("bow", "weather")
-    st, h, body = await ctx.get(f"datastreams/{d['id']}/observations", {"limit": "3"})
-    assert st == 200 and len(body) == 3 and 'rel="next"' in h.get("link", "")
-    st, _, body = await ctx.get(f"datastreams/{d['id']}/observations", {"limit": "100000000"})
-    refused(st, body, 400, "limit")
-    assert "maximum" in body["description"]
-
-
-@test
-async def refuses_what_is_not_implemented_by_name(ctx):
-    st, _, body = await ctx.get("deployments")
-    refused(st, body, 404, "deployments")
-    st, _, body = await ctx.get("systems", {"q": "barge"})
-    refused(st, body, 400, "q")
-    st, _, body = await ctx.get("systems", {"colour": "red"})
-    refused(st, body, 400, "colour")
-    d = await ctx.ds("bow", "weather")
-    st, _, body = await ctx.get(f"datastreams/{d['id']}/observations", {"f": "application/swe+text"})
-    refused(st, body, 400, "f:application/swe+text")
-    st, _, body = await ctx.c.request("PATCH", "systems/barge", body={})
-    refused(st, body, 405, "PATCH")
-    ctx.validate(body, "exception")
-
-
-@test
-async def every_model_publishes_its_datastreams(ctx):
-    expect = {"data-cleanse": {"cleaned-bow", "cleaned-stern"},
-              "summaries": {"summary-1min-bow", "summary-1min-stern", "summary-1h-bow", "summary-1h-stern",
-                          "derived-1min", "derived-1h"},
-              "analysis": {"changes", "clusters", "correlation", "runs"}}
-    for sysid, outs in expect.items():
-        st, _, body = await ctx.get(f"systems/{sysid}/datastreams")
-        assert st == 200 and outs <= {d["outputName"] for d in body["items"]}, (sysid, body)
-    d = await ctx.ds("summaries", "summary-1min-bow")
-    st, _, body = await ctx.get(f"datastreams/{d['id']}/schema", {"obsFormat": "application/swe+json"})
-    defs = {f["name"]: f.get("definition") for f in body["recordSchema"]["fields"]}
-    assert defs["air_temperature"].endswith("/def/air_temperature")  # a mean keeps its property (FR-29)
-    st, _, obs = await ctx.get(f"datastreams/{d['id']}/observations", {"resultTime": "latest"})
-    assert st == 200 and len(obs) == 1 and obs[0]["time"].endswith(":00Z")
-
-
-@test
-async def control_stream_bounds_live_in_its_schema(ctx):
-    st, _, body = await ctx.get("systems/analysis/controlstreams")
-    cs = body["items"][0]
-    st, _, sch = await ctx.get(f"controlstreams/{cs['id']}/schema")
-    fields = {f["name"]: f for f in sch["parametersSchema"]["fields"]}
-    lo, hi = fields["clusters"]["constraint"]["intervals"][0]
-    st, _, body = await ctx.c.request("POST", f"controlstreams/{cs['id']}/commands", body={"parameters": {"clusters": hi + 1}})
-    refused(st, body, 400, "clusters")
-    assert str(hi) in body["description"]
-    st, _, body = await ctx.c.request("POST", f"controlstreams/{cs['id']}/commands", body={"parameters": {"algorithm": "Z"}})
-    refused(st, body, 400, "algorithm")
-    st, _, body = await ctx.c.request("POST", f"controlstreams/{cs['id']}/commands", body={"parameters": {"fields": "colour"}})
-    refused(st, body, 400, "fields")
-    st, h, body = await ctx.c.request("POST", f"controlstreams/{cs['id']}/commands", body={"parameters": {"clusters": lo}})
-    assert st == 201, body
-    ctx.validate(body, "command")
-    assert body["currentStatus"] == "PENDING"  # the model takes it up on its own time
-    st, _, status = await ctx.get(f"commands/{body['id']}/status")
-    assert [s["statusCode"] for s in status["items"]][0] == "PENDING"
-
-
-@test
-async def model_results_carry_settings_range_and_scores(ctx):
-    d = await ctx.ds("analysis", "runs")
-    st, _, body = await ctx.get(f"datastreams/{d['id']}/observations", {"resultTime": "latest"})
-    assert st == 200 and body
-    r = body[0]
-    for k in ("run_id", "algorithm", "fields", "period", "window_start", "window_end", "records", "clusters",
-              "score_changes", "score_clusters", "scored_against", "illustrative"):
-        assert k in r, k
-    for out in ("changes", "clusters", "correlation"):
-        dd = await ctx.ds("analysis", out)
-        st, _, obs = await ctx.get(f"datastreams/{dd['id']}/observations", {"limit": "1"})
-        assert st == 200
-        if obs:
-            assert obs[0]["run_id"].startswith("run-")
-
-
-SWE = {"content-type": "application/swe+json"}
-DEF = "https://deepbluecltd.github.io/barge-monitor/def/"
-
-
-@test
-async def a_model_registers_by_ordinary_resource_creation(ctx):
-    """FR-28, AT-13: what every model does, done here by hand: a system, a datastream, observations."""
-    post = lambda path, body, headers=None: ctx.c.request("POST", path, body=body, headers=headers)
-    sysm = {"uniqueId": "urn:x-barge:process:contract-probe", "label": "Contract probe", "description": "Made by the contract suite."}
-    st, h, body = await post("systems/models/subsystems", sysm)
-    assert st in (201, 409), body  # 409 when the suite has run against this server before
-    sid = h["location"].rstrip("/").rsplit("/", 1)[-1]
-    st, h2, body = await post("systems/models/subsystems", sysm)
-    refused(st, body, 409, "uniqueId")  # the same system again: its Location, not a second system
-    assert h2["location"] == h["location"]
-    st, _, got = await ctx.get(f"systems/{sid}")
-    assert st == 200 and got["uniqueId"] == sysm["uniqueId"] and got["assetType"] == "Process"
-    ctx.validate(got, "system")
-    st, _, subs = await ctx.get("systems/models/subsystems")
-    assert sid in {x["id"] for x in subs["items"]}
-
-    rec = {"type": "DataRecord", "name": "record", "label": "Probe", "fields": [
-        {"type": "Time", "name": "time", "label": "Time", "definition": "http://www.opengis.net/def/property/OGC/0/SamplingTime",
-         "uom": {"href": "http://www.opengis.net/def/uom/ISO-8601/0/Gregorian"}},
-        {"type": "Quantity", "name": "probe_value", "label": "Probe value", "definition": DEF + "probe_value", "uom": {"code": "1"}},
-        {"type": "Count", "name": "probe_count", "label": "Probe count", "definition": DEF + "probe_count"},
-        {"type": "Category", "name": "probe_kind", "label": "Probe kind", "definition": DEF + "probe_kind",
-         "codeSpace": DEF + "probe_kind", "constraint": {"type": "AllowedTokens", "values": ["a", "b"]}}]}
-    made = {"name": "Probe", "outputName": "probe", "schema": {"obsFormat": "application/swe+json", "recordSchema": rec}}
-    st, h, body = await post(f"systems/{sid}/datastreams", made)
-    assert st in (201, 409), body
-    ds = h["location"].rstrip("/").rsplit("/", 1)[-1]
-    st, _, d = await ctx.get(f"datastreams/{ds}")
-    assert st == 200 and d["outputName"] == "probe" and d["system@id"] == sid
-    ctx.validate(d, "datastream")
-    st, _, sch = await ctx.get(f"datastreams/{ds}/schema", {"obsFormat": "application/swe+json"})
-    assert [f["name"] for f in sch["recordSchema"]["fields"]] == ["time", "probe_value", "probe_count", "probe_kind"]
-
-    rows = [{"time": "2031-04-07T00:00:10Z", "probe_value": 1.5, "probe_count": 2, "probe_kind": "a"},
-            {"time": "2031-04-07T00:00:20Z", "probe_value": None, "probe_count": 3, "probe_kind": "b"}]
-    st, _, body = await ctx.c.request("PUT", f"datastreams/{ds}/observations", body=rows, headers=SWE)
-    assert st == 200 and body["created"] == 2, body  # PUT: these, in place of whatever was there
-    st, _, body = await post(f"datastreams/{ds}/observations", [{"time": "2031-04-07T00:00:30Z", "probe_value": 2.25}], SWE)
-    assert st == 201 and body["created"] == 1, body
-    st, _, obs = await ctx.get(f"datastreams/{ds}/observations")
-    assert st == 200 and obs == rows + [{"time": "2031-04-07T00:00:30Z", "probe_value": 2.25, "probe_count": None, "probe_kind": None}], obs
-
-    st, _, body = await post(f"datastreams/{ds}/observations", [{"time": "2031-04-07T00:00:40Z", "colour": 1}], SWE)
-    refused(st, body, 400, "colour")
-    st, _, body = await post(f"datastreams/{ds}/observations", [{"probe_value": 1}], SWE)
-    refused(st, body, 400, "time")
-    st, _, body = await post(f"datastreams/{ds}/observations", rows)
-    refused(st, body, 415, "content-type:application/json")
-
-
-@test
-async def creation_outside_a_models_own_system_is_refused_by_name(ctx):
-    st, _, body = await ctx.c.request("POST", "systems", body={"uniqueId": "urn:x", "label": "x"})
-    refused(st, body, 405, "POST")  # a model's system goes under Models, not at the top
-    st, _, body = await ctx.c.request("POST", "systems/barge/subsystems", body={"uniqueId": "urn:x", "label": "x"})
-    refused(st, body, 405, "POST")
-    st, _, body = await ctx.c.request("POST", "systems/bow/datastreams", body={})
-    refused(st, body, 405, "POST")
-    d = await ctx.ds("bow", "weather")
-    st, _, body = await ctx.c.request("POST", f"datastreams/{d['id']}/observations", body=[], headers=SWE)
-    refused(st, body, 405, "POST")  # a sensor's observations come from the store
-    st, _, body = await ctx.c.request("DELETE", f"datastreams/{d['id']}")
-    refused(st, body, 405, "DELETE")
-    st, _, body = await ctx.c.request("PUT", "systems/summaries", body={})
-    refused(st, body, 405, "PUT")
-
-
-@test
-async def a_model_reads_its_commands_and_reports_their_status(ctx):
-    st, _, body = await ctx.get("systems/data-cleanse/controlstreams")
-    cs = body["items"][0]["id"]
-    st, _, cmd = await ctx.c.request("POST", f"controlstreams/{cs}/commands", body={"parameters": {"spike_threshold": 6}})
-    assert st == 201, cmd
-    st, _, waiting = await ctx.get(f"controlstreams/{cs}/commands", {"statusCode": "PENDING"})
-    assert st == 200 and all(c["currentStatus"] == "PENDING" for c in waiting["items"]), waiting
-    st, _, body = await ctx.get(f"controlstreams/{cs}/commands", {"statusCode": "SOMETIMES"})
-    refused(st, body, 400, "statusCode")
-    st, _, body = await ctx.c.request("POST", f"commands/{cmd['id']}/status", body={"statusCode": "DONE"})
-    refused(st, body, 400, "statusCode")
-    st, _, body = await ctx.c.request("POST", f"commands/{cmd['id']}/status", body={"statusCode": "ACCEPTED", "message": "by the suite"})
-    assert st == 201 and body["statusCode"] == "ACCEPTED", body
-    st, _, status = await ctx.get(f"commands/{cmd['id']}/status")
-    assert [s["statusCode"] for s in status["items"]][:2] == ["PENDING", "ACCEPTED"]
-    st, _, waiting = await ctx.get(f"controlstreams/{cs}/commands", {"statusCode": "PENDING"})
-    assert cmd["id"] not in {c["id"] for c in waiting["items"]}
-
-
-@test
-async def openapi_is_served(ctx):
-    st, _, body = await ctx.get("api")
-    assert st == 200 and body["openapi"].startswith("3.1")
-    master = json.loads((ctx.dir / "openapi.json").read_text())
-    body.pop("servers", None)  # FastAPI adds the mount point, which differs between hosts
-    master.pop("servers", None)
-    assert body == master, "the served OpenAPI differs from contracts/openapi.json"
-
-
-async def run(client, only=None) -> list[dict]:
-    """Run every test; never raises. One result per test."""
-    ctx = Ctx(client)
-    results = []
-    for fn in TESTS:
-        if only and fn.__name__ not in only:
+@need
+async def every_essential_of_the_loaded_dataset_is_found(x: Ctx):
+    """FR-40, FR-40a: fixed essentials, and the templates filled with the current dataset."""
+    st, _, prof = await x.get("profile.json")
+    prof = json.loads(prof) if isinstance(prof, str) else prof
+    state = await x.replay_state()
+    dataset = state["dataset"]
+    missing = []
+    for e in prof["essentials"]:
+        out = e["datastream"].replace("{dataset}", dataset)
+        if e.get("kind") == "controlstream":
+            if await x.cs(e["system"], out) is None:
+                missing.append(e["id"])
             continue
-        try:
-            await fn(ctx)
-            results.append({"test": fn.__name__, "outcome": "passed"})
-        except Skip as s:
-            results.append({"test": fn.__name__, "outcome": "skipped", "detail": str(s)})
-        except Exception as e:  # noqa: BLE001
-            results.append({"test": fn.__name__, "outcome": "failed", "detail": f"{type(e).__name__}: {e}",
-                            "trace": traceback.format_exc(limit=3)})
-    return results
+        d = await x.ds(e["system"], out)
+        if d is None:
+            missing.append(e["id"])
+            continue
+        st, _, sch = await x.get(f"datastreams/{d['id']}/schema", {"obsFormat": SWE})
+        assert st == 200, (st, sch)
+        f = next((f for f in sch["recordSchema"]["fields"] if f["name"] == e["field"]), None)
+        if f is None or f["type"] != e["type"] or (e.get("uom") and (f.get("uom") or {}).get("code") != e["uom"]):
+            missing.append(e["id"])
+    assert not missing, f"essentials not found for {dataset}: {missing}"
+
+
+@need
+async def a_sensor_record_has_quality_flags(x: Ctx):
+    state = await x.replay_state()
+    d = await x.ds(URN + "sensor:bow", f"weather__{state['dataset']}")
+    st, _, sch = await x.get(f"datastreams/{d['id']}/schema", {"obsFormat": SWE})
+    assert st == 200
+    fields = sch["recordSchema"]["fields"]
+    assert fields[0]["type"] == "Time" and fields[0]["name"] == "time"
+    at = next(f for f in fields if f["name"] == "air_temperature")
+    assert at["uom"]["code"] == "Cel" and any(q.get("href") == "#air_temperature_qc" for q in at.get("quality", []))
+    assert next(f for f in fields if f["name"] == "air_temperature_qc")["type"] == "Category"
+    assert all("co2" not in f["name"] for f in fields), "CO₂ is never in the weather record (FR-21c)"
+
+
+@need
+async def observations_by_time_latest_and_offset(x: Ctx):
+    """FR-26: phenomenonTime, an open interval, resultTime=latest, f=application/swe+json, paging by offset."""
+    state = await x.replay_state()
+    d = await x.ds(URN + "sensor:bow", f"weather__{state['dataset']}")
+    a = await x.obs(d["id"], {"phenomenonTime": f"{state['start']}/..", "limit": "20"})
+    assert len(a) == 20 and a[0]["time"] == state["start"], a[:1]
+    b = await x.obs(d["id"], {"phenomenonTime": f"{state['start']}/..", "limit": "10", "offset": "10"})
+    assert b == a[10:], "paging by offset gives the next records"
+    c = await x.obs(d["id"], {"phenomenonTime": f"{a[3]['time']}/{a[5]['time']}"})
+    assert [r["time"] for r in c] == [r["time"] for r in a[3:6]]
+    latest = await x.obs(d["id"], {"resultTime": "latest"})
+    assert len(latest) >= 1 and latest[-1]["time"] >= a[-1]["time"]
+
+
+async def _model_resources(x: Ctx):
+    """A model registers (FR-28) as svc-new-model-2: its system under Models, a datastream, a control stream."""
+    user = "svc-new-model-2"
+    models = await x.system(URN + "process:models", user)
+    uid = URN + "process:new-model-2"
+    body = {"type": "SimpleProcess", "uniqueId": uid, "label": "New model 2", "description": "contract suite",
+            "definition": "http://www.w3.org/ns/sosa/System", "assetType": "Process"}
+    st, h, _ = await x.post(f"systems/{models}/subsystems", body, user)
+    assert st == 201, st
+    loc = {k.lower(): v for k, v in h.items()}["location"]
+    sid = loc.rstrip("/").rsplit("/", 1)[-1]
+    ds_body = {"name": "Suite", "outputName": "suite", "schema": {"obsFormat": SWE, "recordSchema": {
+        "type": "DataRecord", "name": "record", "label": "Suite", "fields": [
+            {"type": "Time", "name": "time", "label": "Time", "definition": "http://www.opengis.net/def/property/OGC/0/SamplingTime",
+             "uom": {"href": "http://www.opengis.net/def/uom/ISO-8601/0/Gregorian"}},
+            {"type": "Quantity", "name": "x", "label": "X", "definition": "https://deepbluecltd.github.io/barge-monitor/def/x",
+             "uom": {"code": "1"}}]}}}
+    st, h, _ = await x.post(f"systems/{sid}/datastreams", ds_body, user)
+    assert st == 201, st
+    ds_loc = {k.lower(): v for k, v in h.items()}["location"]
+    cs_body = {"name": "Suite", "inputName": "suite", "schema": {"commandFormat": "application/json", "parametersSchema": {
+        "type": "DataRecord", "name": "record", "label": "Suite", "fields": [
+            {"type": "Quantity", "name": "level", "label": "Level", "definition": "https://deepbluecltd.github.io/barge-monitor/def/level",
+             "uom": {"code": "1"}, "constraint": {"type": "AllowedValues", "intervals": [[1, 10]]}}]}}}
+    st, h, _ = await x.post(f"systems/{sid}/controlstreams", cs_body, user)
+    assert st == 201, st
+    cs_loc = {k.lower(): v for k, v in h.items()}["location"]
+    return {"user": user, "uid": uid, "system": sid, "loc": loc, "ds": ds_loc.rstrip("/").rsplit("/", 1)[-1],
+            "cs": cs_loc.rstrip("/").rsplit("/", 1)[-1], "bodies": (body, ds_body, cs_body), "models": models}
+
+
+@need
+async def creating_again_answers_the_same_location(x: Ctx):
+    """FR-28, AT-29: 201 with the existing Location is success."""
+    r = await _model_resources(x)
+    body, ds_body, _ = r["bodies"]
+    st, h, _ = await x.post(f"systems/{r['models']}/subsystems", body, r["user"])
+    assert st == 201 and {k.lower(): v for k, v in h.items()}["location"] == r["loc"]
+    st, h, _ = await x.post(f"systems/{r['system']}/datastreams", ds_body, r["user"])
+    assert st == 201 and {k.lower(): v for k, v in h.items()}["location"].endswith("/" + r["ds"])
+
+
+@need
+async def one_observation_with_a_missing_value(x: Ctx):
+    """§9.1: one observation per POST; a missing value is "NaN", returned as "NaN"."""
+    r = await _model_resources(x)
+    for i, v in enumerate([1.5, "NaN"]):
+        st, _, _ = await x.post(f"datastreams/{r['ds']}/observations", {"time": f"2031-04-07T00:00:0{i}Z", "x": v},
+                                r["user"], ctype=SWE)
+        assert st in (200, 201), st
+    rows = await x.obs(r["ds"], {"phenomenonTime": "2031-04-07T00:00:00Z/2031-04-07T00:00:01Z"}, user=r["user"])
+    assert [row["x"] for row in rows][-2:] == [1.5, "NaN"], rows
+
+
+@need
+async def commands_are_pushed_to_a_subscriber(x: Ctx):
+    """FR-27, §9.2: a receiver's subscription gets each command at once, with every parameter and its sender."""
+    r = await _model_resources(x)
+    s = await x.c.open_stream(f"controlstreams/{r['cs']}/commands", {"subscribe": "1"}, x.auth(r["user"]))
+    try:
+        assert s.status == 200, s.status
+        send = asyncio.ensure_future(x.post(f"controlstreams/{r['cs']}/commands", {"parameters": {"level": 3}}))
+        line = await s.next_line(timeout=20)
+        assert line, "no command was pushed"
+        cmd = json.loads(line)
+        assert cmd["parameters"] == {"level": 3} and cmd.get("id"), cmd
+        st, _, _ = await x.post(f"controlstreams/{r['cs']}/status", {"command@id": cmd["id"], "statusCode": "COMPLETED"},
+                                r["user"])
+        assert st in (200, 201), st
+        st, _, _ = await send
+        assert st in (200, 201), st
+    finally:
+        await s.close()
+
+
+@need
+async def the_friend_finds_no_co2(x: Ctx):
+    """FR-93, AT-55: a restricted system is absent for a weather-only role: not listed, and 404 by id."""
+    owner = await x.systems("owner")
+    friend = await x.systems("friend")
+    hidden = [u for u in owner if u.endswith(":co2") or u.endswith(":restricted")]
+    assert hidden, "no restricted system to hide"
+    assert not [u for u in friend if u in hidden], "restricted systems are listed for the friend"
+    for path in ("datastreams", "controlstreams"):
+        st, _, body = await x.get(path, {"limit": "100000"}, user="friend")
+        assert st == 200
+        assert not [d for d in body["items"] if "co2" in json.dumps(d).lower()], f"CO₂ in {path} for the friend"
+    for uid in hidden:
+        st, _, _ = await x.get(f"systems/{owner[uid]}", user="friend")
+        assert st == 404, f"{uid} by id answered {st}"
+    state = await x.replay_state()
+    d = await x.ds(URN + "sensor:bow:co2", f"co2__{state['dataset']}")
+    if d:
+        for path in (f"datastreams/{d['id']}", f"datastreams/{d['id']}/observations", f"datastreams/{d['id']}/schema"):
+            st, _, _ = await x.get(path, user="friend")
+            assert st == 404, f"{path} answered {st} for the friend"
+
+
+@need
+async def workspaces_are_private(x: Ctx):
+    """FR-93, AT-52: no account reads another user's workspace."""
+    owner = await x.systems("owner")
+    friend = await x.systems("friend")
+    assert URN + "workspace:owner" in owner and URN + "workspace:friend" not in owner
+    assert URN + "workspace:friend" in friend and URN + "workspace:owner" not in friend
+    st, _, _ = await x.get(f"systems/{owner[URN + 'workspace:owner']}", user="friend")
+    assert st == 404, st
+
+
+# --- what the stand-ins also do, to behave as OpenSensorHub (§9.1) -----------------------------------------
+@standin
+async def refusals_are_html_without_a_login_dialog(x: Ctx):
+    st, h, body = await x.get("", user=None)
+    hl = {k.lower(): v for k, v in h.items()}
+    assert st == 401 and hl.get("content-type", "").startswith("text/html"), (st, hl)
+    assert "www-authenticate" not in hl, "the browser must never show its own login dialog (D-153)"
+    st, h, _ = await x.get("systems/zzzz")
+    assert st == 404 and {k.lower(): v for k, v in h.items()}.get("content-type", "").startswith("text/html")
+
+
+@standin
+async def put_and_delete_are_not_allowed(x: Ctx):
+    sy = await x.systems()
+    for method, path in (("PUT", f"systems/{sy[URN + 'sensor:bow']}"), ("DELETE", f"systems/{sy[URN + 'sensor:bow']}")):
+        st, _, _ = await x.c.request(method, path, body={}, headers=x.auth())
+        assert st == 405, f"{method} {path}: {st}"
+
+
+@standin
+async def one_observation_per_post_and_nan_not_null(x: Ctx):
+    r = await _model_resources(x)
+    st, _, _ = await x.post(f"datastreams/{r['ds']}/observations", [{"time": "2031-04-07T00:00:05Z", "x": 1}], r["user"], SWE)
+    assert st == 400, f"an array answered {st}"
+    st, _, _ = await x.post(f"datastreams/{r['ds']}/observations", {"time": "2031-04-07T00:00:05Z", "x": None}, r["user"], SWE)
+    assert st == 400, f"null in a Quantity answered {st}"
+
+
+@standin
+async def accept_is_ignored_and_f_chooses(x: Ctx):
+    state = await x.replay_state()
+    d = await x.ds(URN + "sensor:bow", f"weather__{state['dataset']}")
+    st, h, body = await x.get(f"datastreams/{d['id']}/observations", {"limit": "2"}, headers={"Accept": SWE})
+    assert st == 200 and isinstance(body, dict) and "items" in body, "the default is application/json resources"
+    assert {k.lower(): v for k, v in h.items()}.get("link") is None
+    rows = await x.obs(d["id"], {"limit": "200001"})  # a limit over the maximum is served, not refused
+    assert isinstance(rows, list)
+
+
+@standin
+async def no_instance_identifier(x: Ctx):
+    st, h, _ = await x.get("")
+    hl = {k.lower() for k in h}
+    assert "x-server-instance" not in hl and "etag" not in hl
+
+
+@standin
+async def a_command_without_a_subscriber_is_dropped(x: Ctx):
+    r = await _model_resources(x)
+    st, _, _ = await x.post(f"controlstreams/{r['cs']}/commands", {"parameters": {"level": 2}})
+    assert st == 202, st
+    st, _, body = await x.get(f"controlstreams/{r['cs']}/commands")
+    assert st == 200 and not [c for c in body["items"] if c["parameters"] == {"level": 2}], "a dropped command is listed"
+
+
+@standin
+async def only_services_subscribe(x: Ctx):
+    r = await _model_resources(x)
+    s = await x.c.open_stream(f"controlstreams/{r['cs']}/commands", {"subscribe": "1"}, x.auth("owner"))
+    try:
+        assert s.status in (401, 403), s.status
+    finally:
+        await s.close()
+    s = await x.c.open_stream(f"controlstreams/{r['cs']}/commands", {"subscribe": "1"}, {})
+    try:
+        assert s.status == 401, s.status
+    finally:
+        await s.close()
+
+
+async def run(client, groups=("need", "standin"), accounts=None) -> list[dict]:
+    """Run the suite; one result per test: {name, group, outcome, detail}."""
+    x = Ctx(client, accounts)
+    out = []
+    for group, tests in (("need", NEED), ("standin", STANDIN)):
+        if group not in groups:
+            continue
+        for t in tests:
+            try:
+                await t(x)
+                out.append({"name": t.__name__, "group": group, "outcome": "passed", "detail": ""})
+            except Skip as e:
+                out.append({"name": t.__name__, "group": group, "outcome": "skipped", "detail": str(e)})
+            except Exception as e:  # noqa: BLE001 - reported, the suite goes on
+                out.append({"name": t.__name__, "group": group, "outcome": "failed",
+                            "detail": f"{type(e).__name__}: {e}\n{traceback.format_exc(limit=3)}"})
+    return out

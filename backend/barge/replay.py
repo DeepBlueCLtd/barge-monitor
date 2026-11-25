@@ -73,6 +73,8 @@ class Replay:
         self.ready_since = 0.0
         self.ready_checked = -1e18
         self.ready_quiet = False
+        self.first_seen = {}
+        self.skipped = set()
         self.last_real = None
         self.last_state = -1e18
         self.is_frozen = False
@@ -195,6 +197,8 @@ class Replay:
         self.ready_since = self.rt.real()
         self.ready_checked = -1e18
         self.ready_quiet = quiet
+        self.first_seen: dict[str, float] = {}
+        self.skipped: set[str] = set()
         self.publish(quiet=quiet)
 
     def _seek(self, position: float) -> None:
@@ -232,7 +236,7 @@ class Replay:
         self.rt.tap.emit("replay", "server", "O", f"state: {s['dataset']} {s['time']} "
                          f"{'playing' if s['playing'] else 'paused'} ×{s['rate']:g}", s, quiet=quiet)
 
-    async def tick(self) -> None:
+    def tick(self) -> None:
         if self.dataset is None or self.state_ds is None:
             return
         now = self.rt.real()
@@ -246,33 +250,40 @@ class Replay:
                 self.publish()
             elif now - self.last_state >= C.STATE_EVERY_S - 1e-9:
                 self.publish()
-        if not self.models_ready and not self.is_frozen and now - self.ready_checked >= 1.0:
+        if not self.is_frozen and now - self.ready_checked >= 1.0:
             self.ready_checked = now
             self._check_models(now)
 
     def _check_models(self, now: float) -> None:
-        """Models ready (§8): every model under Models has a datastream for the dataset."""
+        """Models ready (§8): every model under Models has a datastream for the dataset. Checked once per real
+        second while a dataset is loaded, so a model that registers later is waited for too; a model not ready
+        10 real seconds after it was first seen (or after the load) is skipped and named in the log."""
         st, tap, q = self.rt.store, self.rt.tap, self.ready_quiet
         models = st.system_by_uid(URN + "process:models")
         if models is None:
             return
-        tap.emit("replay", "server", "Q", f"GET /systems/{models['id']}/subsystems",
-                 f"GET /systems/{models['id']}/subsystems\nAuthorization: Basic ****", quiet=q)
-        tap.emit("replay", "server", "Q", "GET /datastreams", "GET /datastreams?limit=10000\nAuthorization: Basic ****",
-                 quiet=q)
+        if not self.models_ready:  # once ready it keeps watching for a model that registers later, undrawn
+            tap.emit("replay", "server", "Q", f"GET /systems/{models['id']}/subsystems",
+                     f"GET /systems/{models['id']}/subsystems\nAuthorization: Basic ****", quiet=q)
+            tap.emit("replay", "server", "Q", "GET /datastreams",
+                     "GET /datastreams?limit=10000\nAuthorization: Basic ****", quiet=q)
         suffix = "__" + self.dataset["id"]
-        waiting = []
+        waiting, seen = [], 0
         for m in st.system_list():
             if m["parent"] != models["id"]:
                 continue
+            seen += 1
             own = {m["id"]} | {s["id"] for s in st.system_list() if s["parent"] == m["id"]}
-            if not any(d["system"] in own and d["outputName"].endswith(suffix) for d in st.datastreams.values()):
+            if any(d["system"] in own and d["outputName"].endswith(suffix) for d in st.datastreams.values()):
+                continue
+            first = self.first_seen.setdefault(m["id"], now)
+            if now - max(first, self.ready_since) < C.MODEL_READY_TIMEOUT_S:
                 waiting.append(m["label"])
-        timed_out = now - self.ready_since >= C.MODEL_READY_TIMEOUT_S
-        if not waiting or timed_out:
-            self.models_ready = True
-            if waiting:
-                self._log("", "models-ready", "svc-replay", note=f"skipped, not ready after "
-                          f"{C.MODEL_READY_TIMEOUT_S:g} s: {', '.join(waiting)}", quiet=q)
-            self.publish(quiet=q)
-
+            elif m["id"] not in self.skipped:
+                self.skipped.add(m["id"])
+                self._log("", "models-ready", "svc-replay", note=f"skipped {m['label']}: not ready after "
+                          f"{C.MODEL_READY_TIMEOUT_S:g} s", quiet=q)
+        ready = not waiting and (seen > 0 or now - self.ready_since >= C.MODEL_READY_TIMEOUT_S)
+        if ready != self.models_ready:
+            self.models_ready = ready
+            self.publish(quiet=self.ready_quiet)

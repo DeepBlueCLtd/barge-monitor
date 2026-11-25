@@ -116,13 +116,40 @@ class Runtime:
     def running(self) -> bool:
         return self.status == "running"
 
-    async def tick(self) -> None:
+    def tick(self) -> None:
         if self.status == "starting" and self.real() >= self.ready_at and (self._boot_task is None or self._boot_task.done()):
             if self._boot_task is not None and self._boot_task.exception() is not None:
                 raise self._boot_task.exception()
             self.status = "running"
         if self.running:
-            await self.replay.tick()
+            self.replay.tick()
+
+    # --- control actions (§13.3) ------------------------------------------------------------------
+    def control(self, action: str, arg=None) -> dict:
+        """A control action from the shell; returns the control state. Must be called with the event loop
+        running (the worker's, or a test's)."""
+        if action == "restart-server":
+            self.restart()
+        elif action == "down":
+            self.take_down()
+        elif action == "up":
+            if self.status == "down":
+                self.begin_start()
+        elif action == "field":
+            self.set_field(arg["name"], arg["on"])
+        elif action == "profile-lie":
+            self.lie_about_profile = bool(arg)
+        elif action == "capture":
+            self.tap.enabled = bool(arg)
+        elif action == "freeze":
+            self.set_frozen(bool(arg.get("on") if isinstance(arg, dict) else arg))
+        elif action == "reset-instance":
+            self.reset_instance()
+        elif action == "set-role":
+            self.accounts.set_role(arg["user"], arg["role"])
+        elif action != "state":
+            raise ValueError(f"unknown control action {action}")
+        return self.control_state()
 
     # --- server configuration, created at start (§6) ----------------------------------------
     def _configure(self) -> None:

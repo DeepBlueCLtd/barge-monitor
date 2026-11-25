@@ -84,7 +84,7 @@ class Rig:
     def step(self, real: float = 1.0) -> None:
         """One real second: the replay clock, the state, every model."""
         self.clock.advance(real)
-        self.run(self.rt.tick())
+        self.rt.tick()
         if self.local:
             self.run(self.local.step())
         self.spin(5)
@@ -95,6 +95,19 @@ class Rig:
         for _ in range(30):
             if self.rt.replay.models_ready or not self.rt.replay.dataset:
                 return
+            self.step(1.0)
+
+    def control(self, action, arg=None):
+        async def go():
+            return self.rt.control(action, arg)
+        out = self.run(go())
+        self.spin(5)
+        return out
+
+    def restart(self, steps: int = 3):
+        """Restart the server and let it start; the models resubscribe."""
+        self.control("restart-server")
+        for _ in range(steps):
             self.step(1.0)
 
     def close(self):
