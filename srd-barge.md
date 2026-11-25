@@ -911,11 +911,25 @@ pace), and in 4.4 and 4.6:
 
 ## 15. Open questions
 
-- **The CSV importer as an OpenSensorHub module (next spike).** Can a module write a file of
+- **The CSV importer as an OpenSensorHub module (answered 2026-11-25: feasible, at about
+  300,000 rows/s, through internal classes that need a retest on each upgrade; see the
+  finding of that date).** The question was: Can a module write a file of
   about half a million observations into the store in bulk, and how fast? This replaces
   4.3's in-place store-adapter spike. Fallback: an importer outside the server writing over
   HTTP, accepting the import time, with progress shown.
-- **Authentication and permissions in OpenSensorHub (spike, 4.5).** Confirm, in this
+- **Authentication and permissions in OpenSensorHub (answered 2026-11-25; see the finding of
+  that date and decisions D-150 to D-153).** Answers in brief:
+  1. Not hidden: OpenSensorHub answers 403, so the access gateway fallback is taken.
+  2. Denies are not inherited.
+  3. Roles work, but they name server ids.
+  4. The sender's user id is carried, but not the role. Subscriptions close with access
+     control on.
+  5. The administration screen is generic.
+  6. 401 with `WWW-Authenticate: basic`; workspaces are only half enforced.
+  7. Changes take effect on the next request, so FR-116's "at next login" is to be
+     reworded.
+
+  The original question: Confirm, in this
   order of risk:
   1. restricted systems are **hidden from discovery**, not only refused (FR-93);
   2. permissions per system, **inherited** by datastreams and control streams;
