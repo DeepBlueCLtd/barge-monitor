@@ -75,8 +75,12 @@ function Shell({ failure }: { failure: string | null }) {
       <header className="topbar">
         <div className="brand">
           <h1>{TITLE}</h1>
-          {running && <p className="subtitle">Architecture view · click a component or a message to see it on the right</p>}
+          {running ? <p className="subtitle">Architecture view · click a component or a message to see it on the right</p>
+            : <p className="subtitle placeholder" aria-hidden="true">&nbsp;</p>}
           {running && runtime.kind === 'standin' && <p className="standin-notice" data-testid="standin-notice">{STANDIN_NOTICE}</p>}
+          {/* Before hand-over the lines below the title are empty, not absent: the top bar keeps its height,
+              so the flowchart does not move or rescale when the controls and banner appear (FR-125). */}
+          {!running && runtime.kind === 'standin' && <p className="standin-notice placeholder" aria-hidden="true">&nbsp;</p>}
         </div>
         {running && <TopControls />}
         {running && <HandOverProgress failure={failure} />}

@@ -374,3 +374,6 @@ h1, h2, h3, h4 { margin: 0; font-weight: 400; }
 .opening-table .tick { text-align: center; color: #11703a; font-size: 20px; font-weight: 700; line-height: 1; }
 .opening-panel section { border: 1px solid var(--line); border-radius: 10px; padding: 10px 16px 12px; }
 .opening-panel ul.either-way { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 28px; }
+.topbar { position: relative; }
+.topbar .placeholder { visibility: hidden; }
+.handover-progress { position: absolute; right: 24px; top: 58px; flex: none; z-index: 5; background: var(--paper); padding: 2px 0; }
