@@ -83,7 +83,9 @@
               "enum": [
                 "graphs",
                 "changes",
-                "clusters"
+                "clusters",
+                "datasets",
+                "replay"
               ]
             }
           },
