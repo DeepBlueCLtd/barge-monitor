@@ -44,6 +44,30 @@ Commands, restart recognition and replacing a result do not, and need design cha
 | The extension interface the store adapter is written against | FR-20, FR-21 | Not tried | **Open.** Needs a spike of its own |
 | *Found by the spike:* commands polled by a model | FR-27 | Not possible: commands are pushed to a receiver, and dropped without one; the sender waits 5 s; bounds are not enforced | **Open.** FR-27 must be revised, and with it the exclusion of push delivery |
 
+**Spikes, 2026-11-25** (SRD 4.6).
+
+- **Bulk import as a module**
+  (`docs/findings/FINDING-2026-11-25-opensensorhub-bulk-import.md`). **Feasible.**
+  - A Java module inside osh-core 2.0.4 imported 500,000 rows in about 2 s, roughly
+    300,000 rows/s. It uses the same transaction handlers as the Connected Systems
+    service.
+  - An `import` control stream and an append-only catalogue datastream both work.
+  - Caveat: those handlers are internal classes, so every OpenSensorHub upgrade needs a
+    retest.
+- **Authentication and permissions**
+  (`docs/findings/FINDING-2026-11-25-opensensorhub-auth.md`). **Partly.**
+  - Users, roles and Basic authentication work. There is no session, and a permission
+    change applies on the next request.
+  - Pushed commands carry the sender's user id.
+  - But a denied system answers 403, and its datastreams and streams stay readable.
+    Denies are not inherited.
+  - With access control on, command subscriptions close at once.
+  - Restriction that hides (FR-93) therefore needs an **access gateway** in front of
+    OpenSensorHub (decision D-150).
+  - This is the second piece of code written for this system that touches the server,
+    after the importer module. It **weakens "used as shipped"** for the access-control
+    part, though not for sensing, storage, discovery or commands.
+
 **Consequences.**
 
 * Less is written for this system: the display client, the models and the store adapter.

@@ -1,0 +1,14 @@
+{
+  "objClass": "org.bargemonitor.osh.importer.CsvImportConfig",
+  "moduleClass": "org.bargemonitor.osh.importer.CsvImportModule",
+  "id": "b4c3e1a0-0000-4000-8000-00000000c5v1",
+  "name": "CSV Importer",
+  "autoStart": true,
+  "databaseID": "0309491d-d5cb-4f2f-9b95-166179c66746",
+  "dataFolder": "/path/to/data-folder",
+  "systemUID": "urn:barge-monitor:importer",
+  "importOnStart": [],
+  "writeMode": "direct",
+  "batchSize": 1000,
+  "commitEvery": 0
+}

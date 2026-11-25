@@ -167,3 +167,4 @@ web/e2e-results.json
 __pycache__/
 .pytest_cache/
 web/public/data/
+.claude/worktrees/
