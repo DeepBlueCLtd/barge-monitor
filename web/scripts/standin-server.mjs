@@ -11,7 +11,8 @@
 //   DIR holds the CSV files (*.csv or *.csv.gz) and optionally index.json; by default
 //   web/public/data/folder, as scripts/build_data_folder.py writes it.
 //
-// Harness only (not part of the API): GET /demonstrator/harness -> {"version":"4.6"}.
+// Harness only (not part of the API): GET /demonstrator/harness -> {"version":"4.6"};
+// GET /demonstrator/captured -> the captured messages so far; POST /demonstrator/control.
 // When ready it prints one line, `READY <port> <startup ms>`. Control actions
 // (docs/v4-interfaces.md §13.3) are read from stdin, one JSON object a line,
 // {"action": "restart-server", "arg": …}; each is answered on stdout with
@@ -93,12 +94,14 @@ const rt = await mod.createStandin(localFolder(folderDir), (p) => console.error(
 const tReady = performance.now();
 
 let last = performance.now();
+const captured = [];
 setInterval(() => {
   try {
     const now = performance.now();
     rt.tick((now - last) / 1000);
     last = now;
-    rt.tap.drain(); // nobody draws them here
+    for (const m of rt.tap.drain()) captured.push(m); // nobody draws them here; kept for standin-check
+    if (captured.length > 50000) captured.splice(0, captured.length - 50000);
   } catch (e) {
     console.error(e);
   }
@@ -112,6 +115,11 @@ const server = createServer((req, res) => {
     if (u.pathname === '/demonstrator/harness') {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ version: '4.6' }));
+      return;
+    }
+    if (u.pathname === '/demonstrator/captured') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(captured));
       return;
     }
     if (u.pathname === '/demonstrator/control' && req.method === 'POST') {
