@@ -75,3 +75,17 @@ def test_co2_follows_engine_load(folder):
     assert moving > dwell + 100
     stern = np.array([int(x[head.index("STN_CO2[ppm]")]) for x in rs], dtype=float)
     assert stern[kind == DF.KIND_CODES["move"]].mean() > moving
+
+
+def test_at28_the_built_folder_reproduces_exactly():
+    """AT-28, FR-15a: scripts/build_data_folder.py --check against the folder the tests read."""
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    from tests.helpers import folder_path
+
+    root = Path(__file__).resolve().parents[2]
+    r = subprocess.run([sys.executable, str(root / "scripts" / "build_data_folder.py"), "--check", str(folder_path())],
+                       capture_output=True, text=True)
+    assert r.returncode == 0, r.stdout + r.stderr
