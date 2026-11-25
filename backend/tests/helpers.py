@@ -130,6 +130,10 @@ class Rig:
 
     # --- HTTP, as the display client sends it ---------------------------------------------------
     def request(self, method, path, params=None, body=None, user="owner", password=None, headers=None, ctype=None):
+        return self.run(self.app_request(method, path, params, body, user, password, headers, ctype))
+
+    async def app_request(self, method, path, params=None, body=None, user="owner", password=None, headers=None,
+                          ctype=None):
         q = "&".join(f"{k}={v}" for k, v in (params or {}).items())
         hs = list((headers or {}).items())
         if user is not None:
@@ -139,7 +143,7 @@ class Rig:
         if body is not None:
             raw = body if isinstance(body, bytes) else json.dumps(body).encode()
             hs.append(("content-type", ctype or "application/json"))
-        r = self.run(asgi.call(self.app, method, path, q, raw, "", hs, "http://t"))
+        r = await asgi.call(self.app, method, path, q, raw, "", hs, "http://t")
         return None if r is None else Response(*r)
 
     def get(self, path, params=None, **kw):
