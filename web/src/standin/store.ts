@@ -271,8 +271,6 @@ export interface SystemRec {
   smlType: string; // PhysicalSystem, SimpleProcess, AggregateProcess
   parent: string | null;
   owner: string; // the account that created it ('server' for server configuration)
-  restricted: boolean;
-  workspaceOf: string | null;
   characteristics?: unknown;
   extra: Record<string, unknown>;
 }

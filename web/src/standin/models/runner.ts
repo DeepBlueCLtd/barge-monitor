@@ -74,7 +74,10 @@ export class Runner {
       }
       const ds: DatasetCtx = { id: st.dataset, start: st.start, end: st.end };
       if (!this.prepared.has(ds.id)) {
-        await m.prepare(api, ds);
+        if ((await m.prepare(api, ds)) === false) {
+          this.detail = `${ds.id}: waiting for its inputs`;
+          return;
+        }
         this.prepared.add(ds.id);
       }
       let p = this.progress.get(ds.id);

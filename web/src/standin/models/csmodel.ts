@@ -405,7 +405,8 @@ export abstract class Model {
   }
 
   /** Create every datastream this model publishes for a dataset, restricted ones included. */
-  abstract prepare(api: Api, ds: DatasetCtx): Promise<void>;
+  /** Returns false when its inputs are not there yet (the runner asks again next second). */
+  abstract prepare(api: Api, ds: DatasetCtx): Promise<boolean | void>;
 
   /** One window (t0, t1] of a dataset under a replay run. Return false when its inputs are not there yet. */
   abstract process(api: Api, ds: DatasetCtx, t0: number, t1: number, run: string): Promise<boolean>;

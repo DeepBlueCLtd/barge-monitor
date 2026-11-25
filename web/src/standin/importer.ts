@@ -95,7 +95,7 @@ export class Importer {
       schema: M.record('Import', [M.category('action', 'Action', ['import', 'rescan']), M.text('file', 'File (empty for rescan)')]),
     });
     this.control = server.store.controlstreams.get(cs.id)!;
-    const stream = server.subscribe(a, this.control);
+    const stream = server.subscribe(a, this.control, 'importer');
     const reader = new LineReader((line) => void this.onCommand(line));
     stream.attach({ chunk: (b) => reader.push(b), end: () => { /* the server stopped: attach() again at its next start */ } });
     this.tap.emit('importer', 'server', 'I', 'register: catalogue datastream, import control stream; subscribed',

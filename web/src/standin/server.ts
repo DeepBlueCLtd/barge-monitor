@@ -4,12 +4,12 @@
 // subscription when it stops. The store outlives it (§9.1: identifiers and
 // resources persist across restarts), until Reset instance.
 //
-// This module holds what the server decides: permissions (§9.3), the server's
-// own configuration (the platform, sensors, CO₂ analysers, Models and the
+// It applies no permission per system: behind the access gateway (§9.5), as
+// OpenSensorHub would be. This module holds the server's own configuration (the platform, sensors, CO₂ analysers, Models and the
 // workspaces), resource creation, and command delivery to subscribers (§9.2).
 // api.ts turns HTTP into calls here.
 import profileJson from '../../../contracts/profile.json';
-import { Account, Accounts, isService, readsEmissions } from './accounts';
+import { Account, Accounts, isService } from './accounts';
 import { COMMAND_HOLD_S, SENSORS, SOSA, UID } from './constants';
 import { Offering } from './fields';
 import { CommandRec, ControlstreamRec, DatastreamRec, Series, Store, SystemRec } from './store';
@@ -47,14 +47,11 @@ export function componentOf(user: string): { id: ComponentId; model?: string } {
   return { id: 'client' };
 }
 
-/** Restricted systems (FR-111): the CO₂ analysers and every model's restricted subsystem. */
-export function isRestrictedUid(uid: string): boolean {
-  return /^urn:x-barge:sensor:[^:]+:co2$/.test(uid) || /^urn:x-barge:process:[^:]+:restricted$/.test(uid);
-}
-
 interface Subscription {
   stream: PushStream;
   account: Account;
+  /** Who is at the other end of the HTTP connection: the gateway, or a module inside the server. */
+  via: ComponentId;
 }
 
 export interface SystemBody {
@@ -99,7 +96,7 @@ export class Server {
       description: 'A home for models that turn sensor data into insight. Each model is a process system of its own, created by the model itself.' }, null);
     for (const a of this.host.accounts.users()) {
       const w = sys({ uid: UID.workspace(a.user), label: `Workspace of ${a.user}`, featureType: SOSA + 'System', assetType: 'Other', smlType: 'PhysicalSystem',
-        description: `Data of interest kept by ${a.user} (FR-95).` }, null, { workspaceOf: a.user });
+        description: `Data of interest kept by ${a.user} (FR-95).` }, null);
       this.createDatastream(null, w, {
         name: 'Data of interest', outputName: 'data-of-interest', schema: M.record('Data of interest', [
           M.time('time', 'Saved'), M.text('doi_id', 'Data of interest'), M.category('action', 'Action', ['save', 'remove']),
@@ -108,65 +105,33 @@ export class Server {
     }
   }
 
-  // --- permissions (§9.3) ------------------------------------------------------------------------
-  /** Whether an account may read a system: inherited down the system tree. */
-  canRead(a: Account, systemId: string): boolean {
-    const line = this.store.lineage(systemId);
-    if (!line.length) return false;
-    for (const s of line) {
-      if (s.workspaceOf && s.workspaceOf !== a.user) return false;
-      if (s.restricted && !readsEmissions(a.role)) return false;
-    }
-    return true;
-  }
-
-  /** Whether an account may create and append under a system. */
-  canWrite(a: Account, systemId: string): boolean {
-    if (!this.canRead(a, systemId)) return false;
-    const line = this.store.lineage(systemId);
-    if (!isService(a.user)) return line.some((s) => s.workspaceOf === a.user);
-    if (line.some((s) => s.owner === a.user)) return true;
-    // The importer writes the sensors' and CO₂ analysers' datastreams (inside the server).
-    return a.user === 'svc-importer' && line.some((s) => s.uid === UID.barge);
-  }
-
-  /** Whether an account may create a subsystem under a system (null: a top-level system). */
-  canCreateSystem(a: Account, parentId: string | null): boolean {
-    if (!isService(a.user)) return false;
-    if (parentId === null) return a.user === 'svc-importer' || a.user === 'svc-replay';
-    const p = this.store.systems.get(parentId);
-    if (!p) return false;
-    if (p.uid === UID.models) return a.user !== 'svc-importer' && a.user !== 'svc-replay';
-    return this.canWrite(a, parentId);
-  }
-
-  readableSystems(a: Account): SystemRec[] {
-    return [...this.store.systems.values()].filter((s) => this.canRead(a, s.id));
-  }
-
-  /** A system the account may read, else 404: a hidden system is absent (FR-93). */
-  system(a: Account, id: string): SystemRec {
+  // --- reading (no permission per system: that is the gateway's, §9.5) -----------------------------
+  system(id: string): SystemRec {
     const s = this.store.systems.get(id);
-    if (!s || !this.canRead(a, id)) throw new HttpError(404, `no system ${id}`);
+    if (!s) throw new HttpError(404, `no system ${id}`);
     return s;
   }
 
-  datastream(a: Account, id: string): DatastreamRec {
+  datastream(id: string): DatastreamRec {
     const d = this.store.datastreams.get(this.baseId(id));
-    if (!d || !this.canRead(a, d.system) || this.viewId(d) !== id) throw new HttpError(404, `no datastream ${id}`);
+    if (!d || this.viewId(d) !== id) throw new HttpError(404, `no datastream ${id}`);
     return d;
   }
 
-  controlstream(a: Account, id: string): ControlstreamRec {
+  /** The datastream behind a served id, whatever offering it was served under (for the gateway). */
+  datastreamAny(id: string): DatastreamRec | undefined {
+    return this.store.datastreams.get(this.baseId(id));
+  }
+
+  controlstream(id: string): ControlstreamRec {
     const c = this.store.controlstreams.get(id);
-    if (!c || !this.canRead(a, c.system)) throw new HttpError(404, `no control stream ${id}`);
+    if (!c) throw new HttpError(404, `no control stream ${id}`);
     return c;
   }
 
-  command(a: Account, id: string): CommandRec {
+  command(id: string): CommandRec {
     const c = this.store.commands.get(id);
     if (!c) throw new HttpError(404, `no command ${id}`);
-    this.controlstream(a, c.cs);
     return c;
   }
 
@@ -193,9 +158,9 @@ export class Server {
     return id;
   }
 
-  /** Datastreams the account may read, with every field switched off: nothing to publish (FR-52). */
-  readableDatastreams(a: Account): DatastreamRec[] {
-    return [...this.store.datastreams.values()].filter((d) => this.canRead(a, d.system) && this.visible(d).fields.length > 1);
+  /** Datastreams served: one with every field switched off has nothing to publish (FR-52). */
+  servedDatastreams(): DatastreamRec[] {
+    return [...this.store.datastreams.values()].filter((d) => this.visible(d).fields.length > 1);
   }
 
   // --- creating resources (§9.1: 201 with the existing Location) ---------------------------------
@@ -206,8 +171,7 @@ export class Server {
     const id = this.store.newId();
     this.store.systems.set(id, {
       id, uid: b.uid, label: b.label, description: b.description, featureType: b.featureType, assetType: b.assetType,
-      smlType: b.smlType, parent: parentId, owner: a ? a.user : 'server', restricted: isRestrictedUid(b.uid),
-      workspaceOf: null, characteristics: b.characteristics, extra: {}, ...extra,
+      smlType: b.smlType, parent: parentId, owner: a ? a.user : 'server', characteristics: b.characteristics, extra: {}, ...extra,
     });
     return { id, existed: false };
   }
@@ -237,13 +201,13 @@ export class Server {
 
   // --- commands (§9.1, §9.2) ----------------------------------------------------------------------
   /** Open a push subscription to a control stream. It ends when this instance stops. */
-  subscribe(a: Account, cs: ControlstreamRec): PushStream {
+  subscribe(a: Account, cs: ControlstreamRec, via: ComponentId): PushStream {
     const stream = new PushStream();
     if (this.stopped) {
       stream.end();
       return stream;
     }
-    const sub = { stream, account: a };
+    const sub = { stream, account: a, via };
     let set = this.subs.get(cs.id);
     if (!set) this.subs.set(cs.id, (set = new Set()));
     set.add(sub);
@@ -275,7 +239,7 @@ export class Server {
     for (const s of subs) {
       void this.host.thawed().then(() => {
         if (s.stream.ended) return;
-        const to = componentOf(s.account.user);
+        const to = s.via === 'gateway' ? { id: 'gateway' as const, model: componentOf(s.account.user).model } : componentOf(s.account.user);
         this.tap.emit('server', to.id, 'K', `push ${cs.inputName} to ${sys?.label ?? cs.system}: ${summarise(parameters)}`, line.trim(),
           { push: true, model: to.model, quiet: false });
         s.stream.write(line);

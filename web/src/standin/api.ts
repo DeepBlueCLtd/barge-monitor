@@ -8,7 +8,6 @@
 // captured at the boundary (FR-66), with credentials redacted (§9.4).
 import type { Account } from './accounts';
 import { DEFAULT_LIMIT, PROFILE_URI } from './constants';
-import { CATALOGUE } from './fields';
 import { parseQs, qsDict } from './py';
 import { componentOf, HttpError, Server, SystemBody } from './server';
 import { ControlstreamRec, DatastreamRec, Pick, storedAsNumber, SystemRec } from './store';
@@ -39,7 +38,7 @@ export interface HttpResponse {
 export interface ApiRuntime {
   server: Server;
   tap: Tap;
-  accounts: { authenticate(h: string | undefined, now: number): Account | null };
+  accounts: { authenticate(h: string | undefined): Account | null };
 }
 
 const STATUS_TEXT: Record<number, string> = {
@@ -67,6 +66,7 @@ interface Ctx {
   base: string;
   body: Uint8Array;
   account: Account;
+  from: ComponentId;
 }
 
 function esc(s: string): string {
@@ -154,20 +154,21 @@ export class Api {
   }
 
   /** One request through the server. The runtime has already decided the server is up and not frozen. */
-  async handle(req: HttpRequest): Promise<HttpResponse> {
+  async handle(req: HttpRequest, via: { from?: { id: ComponentId; model?: string }; chain?: Chain } = {}): Promise<HttpResponse> {
     const tap = this.rt.tap;
     const method = req.method.toUpperCase();
     const rel = req.path || '/';
     const headers = new Map<string, string>();
     for (const [k, v] of req.headers) headers.set(k.toLowerCase(), v);
     const body = req.body ?? new Uint8Array(0);
-    const account = this.rt.accounts.authenticate(headers.get('authorization'), realNow());
-    // Who is asking, for capture only (§2): a model says so; the importer and replay controller are known by their accounts.
+    const account = this.rt.accounts.authenticate(headers.get('authorization'));
+    // Who is asking, for capture only (§2): the gateway, or a module inside the server known by its account.
     const model = headers.get('x-tap-model') || undefined;
-    const who: { id: ComponentId; model?: string } = model ? { id: 'models', model } : account ? componentOf(account.user) : { id: 'client' };
+    const who: { id: ComponentId; model?: string } = via.from
+      ?? (model ? { id: 'models', model } : account ? componentOf(account.user) : { id: 'client' });
     const quiet = headers.get('x-tap-quiet') === '1';
     const hopText = headers.get('x-tap-hop') ?? '0';
-    const chain = tap.newChain(headers.get('x-tap-chain') ?? null, /^\d+$/.test(hopText) ? parseInt(hopText, 10) : 0);
+    const chain = via.chain ?? tap.newChain(headers.get('x-tap-chain') ?? null, /^\d+$/.test(hopText) ? parseInt(hopText, 10) : 0);
     const opts = { model: who.model, quiet, chain };
     const ask = `${method} ${rel}${req.query ? '?' + req.query : ''}`;
     const shownHeaders = [...headers].filter(([k]) => k === 'authorization' || k === 'content-type').map(([k, v]) => `${k}: ${v}`);
@@ -176,11 +177,12 @@ export class Api {
       [ask, ...shownHeaders].join('\n') + (text ? '\n\n' + text : ''), opts);
     let resp: Reply;
     if (!account) {
-      resp = htmlError(401, 'valid credentials are needed'); // no WWW-Authenticate header (D-124)
+      resp = htmlError(401, 'valid credentials are needed');
+      resp.headers.push(['www-authenticate', 'Basic realm="OpenSensorHub"']); // as OpenSensorHub sends it; the gateway strips it (D-153)
     } else {
       const pairs = parseQs(req.query || '');
       const ctx: Ctx = {
-        method, rel, q: qsDict(pairs), headers, body, account,
+        method, rel, q: qsDict(pairs), headers, body, account, from: who.id,
         base: (req.origin + (req.rootPath || '')).replace(/\/+$/, ''),
       };
       try {
@@ -228,24 +230,24 @@ export class Api {
         return this.collections(c, b, d);
       case 'systems':
         if (seg.length === 1) {
-          if (get) return this.systemsList(c, this.srv.readableSystems(c.account).filter((s) => !s.parent));
+          if (get) return this.systemsList(c, [...this.srv.store.systems.values()].filter((s) => !s.parent));
           if (m === 'POST') return this.createSystem(c, null);
           throw no('GET, POST');
         }
         if (seg.length === 2) {
-          const s = this.srv.system(c.account, b);
+          const s = this.srv.system(b);
           if (get) return this.systemOne(c, s);
           throw no('GET');
         }
         if (seg.length === 3) {
-          const s = this.srv.system(c.account, b);
+          const s = this.srv.system(b);
           if (d === 'subsystems') {
-            if (get) return this.systemsList(c, this.srv.readableSystems(c.account).filter((x) => x.parent === s.id));
+            if (get) return this.systemsList(c, [...this.srv.store.systems.values()].filter((x) => x.parent === s.id));
             if (m === 'POST') return this.createSystem(c, s);
             throw no('GET, POST');
           }
           if (d === 'datastreams') {
-            if (get) return this.dsList(c, this.srv.readableDatastreams(c.account).filter((x) => x.system === s.id));
+            if (get) return this.dsList(c, this.srv.servedDatastreams().filter((x) => x.system === s.id));
             if (m === 'POST') return this.createDatastream(c, s);
             throw no('GET, POST');
           }
@@ -258,11 +260,11 @@ export class Api {
         break;
       case 'datastreams':
         if (seg.length === 1) {
-          if (get) return this.dsList(c, this.srv.readableDatastreams(c.account));
+          if (get) return this.dsList(c, this.srv.servedDatastreams());
           throw no('GET');
         }
         {
-          const ds = this.srv.datastream(c.account, b);
+          const ds = this.srv.datastream(b);
           if (seg.length === 2) return get ? this.dsOne(c, ds) : Promise.reject(no('GET'));
           if (seg.length === 3 && d === 'schema') return get ? this.dsSchema(c, ds) : Promise.reject(no('GET'));
           if (seg.length === 3 && d === 'observations') {
@@ -281,7 +283,7 @@ export class Api {
           throw no('GET');
         }
         {
-          const cs = this.srv.controlstream(c.account, b);
+          const cs = this.srv.controlstream(b);
           if (seg.length === 2) return get ? this.csOne(c, cs) : Promise.reject(no('GET'));
           if (seg.length === 3 && d === 'schema') {
             if (!get) throw no('GET');
@@ -300,7 +302,7 @@ export class Api {
         }
         break;
       case 'commands': {
-        const cmd = this.srv.command(c.account, b);
+        const cmd = this.srv.command(b);
         if (seg.length === 2) return get ? json(this.commandJson(c, cmd)) : Promise.reject(no('GET'));
         if (seg.length === 3 && d === 'status') return get ? json({ items: cmd.status, links: [] }) : Promise.reject(no('GET'));
         break;
@@ -394,7 +396,7 @@ export class Api {
     if (!(cid in all)) throw new HttpError(404, `no collection ${cid}`);
     if (!items) return json(one(cid));
     if (items !== 'items') throw new HttpError(404, `no resource ${items}`);
-    return cid === 'all_systems' ? this.systemsList(c, this.srv.readableSystems(c.account)) : this.dsList(c, this.srv.readableDatastreams(c.account));
+    return cid === 'all_systems' ? this.systemsList(c, [...this.srv.store.systems.values()]) : this.dsList(c, this.srv.servedDatastreams());
   }
 
   // --- systems ----------------------------------------------------------------------------------------
@@ -429,7 +431,6 @@ export class Api {
   }
 
   private createSystem(c: Ctx, parent: SystemRec | null): Reply {
-    if (!this.srv.canCreateSystem(c.account, parent ? parent.id : null)) throw new HttpError(403, 'not allowed to create a system here');
     const b = this.jsonBody(c);
     if (!b || typeof b !== 'object' || Array.isArray(b)) throw new HttpError(400, 'a system must be a JSON object');
     let body: SystemBody;
@@ -478,7 +479,6 @@ export class Api {
   }
 
   private createDatastream(c: Ctx, s: SystemRec): Reply {
-    if (!this.srv.canWrite(c.account, s.id)) throw new HttpError(403, 'not allowed to create a datastream here');
     const b = this.jsonBody(c);
     const rec = b?.schema?.recordSchema ?? b?.schema?.resultSchema;
     checkRecord(rec);
@@ -549,7 +549,7 @@ export class Api {
   private observationOne(c: Ctx, id: string): Reply {
     const i = id.lastIndexOf('-');
     if (i < 0) throw new HttpError(404, `no observation ${id}`);
-    const d = this.srv.datastream(c.account, id.slice(0, i));
+    const d = this.srv.datastream(id.slice(0, i));
     const ord = parseInt(id.slice(i + 1), 32);
     const pick = Number.isFinite(ord) ? d.series.byOrdinal(ord) : null;
     if (!pick) throw new HttpError(404, `no observation ${id}`);
@@ -561,7 +561,6 @@ export class Api {
 
   /** One observation per POST (§9.1): an array is refused. */
   private postObservation(c: Ctx, d: DatastreamRec): Reply {
-    if (!this.srv.canWrite(c.account, d.system)) throw new HttpError(403, 'not allowed to add observations here');
     const b = this.jsonBody(c);
     if (Array.isArray(b)) throw new HttpError(400, 'one observation per request: an array is not accepted');
     if (!b || typeof b !== 'object') throw new HttpError(400, 'an observation must be a JSON object');
@@ -600,7 +599,7 @@ export class Api {
   }
 
   private csList(c: Ctx, list: ControlstreamRec[]): Reply {
-    return this.page(c, list.filter((x) => this.srv.canRead(c.account, x.system)).map((x) => this.csJson(c, x)), c.rel);
+    return this.page(c, list.map((x) => this.csJson(c, x)), c.rel);
   }
 
   private csOne(c: Ctx, cs: ControlstreamRec): Reply {
@@ -608,7 +607,6 @@ export class Api {
   }
 
   private createControlstream(c: Ctx, s: SystemRec): Reply {
-    if (!this.srv.canWrite(c.account, s.id)) throw new HttpError(403, 'not allowed to create a control stream here');
     const b = this.jsonBody(c);
     const rec = b?.schema?.parametersSchema ?? b?.schema?.recordSchema;
     checkRecord(rec);
@@ -648,8 +646,7 @@ export class Api {
 
   /** A push subscription (§9.2): 200, application/x-ndjson, a body that never ends. */
   private subscribe(c: Ctx, cs: ControlstreamRec): Reply {
-    if (!this.srv.canWrite(c.account, cs.system)) throw new HttpError(403, 'only the receiver subscribes to its control stream');
-    const stream = this.srv.subscribe(c.account, cs);
+    const stream = this.srv.subscribe(c.account, cs, c.from);
     return { status: 200, headers: [['content-type', NDJSON], ['cache-control', 'no-store']], body: '', stream };
   }
 
@@ -659,7 +656,6 @@ export class Api {
   }
 
   private postStatus(c: Ctx, cs: ControlstreamRec): Reply {
-    if (!this.srv.canWrite(c.account, cs.system)) throw new HttpError(403, 'only the receiver reports a command\'s status');
     const b = this.jsonBody(c);
     if (!b || typeof b !== 'object' || Array.isArray(b)) throw new HttpError(400, 'a status report must be a JSON object');
     const cmd = this.srv.reportStatus(cs, b);
@@ -699,4 +695,3 @@ function checkRecord(rec: any): asserts rec is DataRecord {
   }
 }
 
-export { CATALOGUE };

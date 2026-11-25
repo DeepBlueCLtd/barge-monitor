@@ -6,7 +6,7 @@
 import { pyJson } from './py';
 import { realNow } from './time';
 
-export type ComponentId = 'folder' | 'importer' | 'replay' | 'server' | 'models' | 'scilibs' | 'client';
+export type ComponentId = 'folder' | 'importer' | 'replay' | 'server' | 'gateway' | 'models' | 'scilibs' | 'client';
 export type Letter = 'Q' | 'D' | 'O' | 'K' | 'P' | 'H' | 'S' | 'L' | 'I';
 
 export interface Captured {
