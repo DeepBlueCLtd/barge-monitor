@@ -179,6 +179,11 @@ async def every_essential_of_the_loaded_dataset_is_found(x: Ctx):
     st, _, prof = await x.get("profile.json")
     prof = json.loads(prof) if isinstance(prof, str) else prof
     state = await x.replay_state()
+    for _ in range(60):  # a client checks a dataset only once the models are ready for it (§8)
+        if state.get("models_ready"):
+            break
+        await asyncio.sleep(0.5)
+        state = await x.replay_state()
     dataset = state["dataset"]
     missing = []
     for e in prof["essentials"]:

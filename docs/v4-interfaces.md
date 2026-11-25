@@ -157,7 +157,8 @@ empty fields. Only the importer may change to read it.
 adds load × 180 ppm, where load is 1 under way, 0.35 in a lock, and 0.05 at a wharf
 (`World.boat(t)` gives the kind of each period). The stern sits nearer the motor, so its
 gain is 1.25. Noise has σ 6 ppm, and there are occasional spikes. QC is computed on
-import, like every other field.
+import, like every other field, with a range of 250–5000 ppm and a 60 ppm spike test
+(D-144); both back ends use these values.
 
 ## 6. Datasets and names
 

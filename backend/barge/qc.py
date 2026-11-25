@@ -11,7 +11,7 @@ import numpy as np
 QC_RANGE = {
     "air_temperature": (-30.0, 50.0), "relative_humidity": (0.0, 100.0), "pressure": (900.0, 1100.0),
     "apparent_wind_speed": (0.0, 60.0), "apparent_wind_direction": (0.0, 360.0),
-    "solar_irradiance": (0.0, 1500.0), "water_temperature": (-2.0, 35.0), "co2": (300.0, 5000.0),
+    "solar_irradiance": (0.0, 1500.0), "water_temperature": (-2.0, 35.0), "co2": (250.0, 5000.0),
 }
 # A reading further than this from the mean of its two neighbours is suspect (QARTOD spike test).
 QC_SPIKE = {"air_temperature": 0.8, "relative_humidity": 6.0, "pressure": 0.5, "apparent_wind_speed": 3.5,
