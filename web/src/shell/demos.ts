@@ -28,7 +28,7 @@ export interface Demo {
 }
 
 const EXTRAS = ['pressure_tendency_3h'];
-const control = (action: string, arg?: unknown) => runtime.control(action, arg).catch(() => runtime.control.value);
+const control = (action: string, arg?: unknown) => runtime.control(action, arg).catch(() => runtime.controlState.value);
 const field = (name: string, on: boolean) => control('field', { name, on });
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const demo = (user: string) => DEMO_LOGINS.find((a) => a.user === user)!;
@@ -69,9 +69,9 @@ async function openFile(prefix: RegExp) {
 /** Every switch back to how the page started. */
 export async function putEverythingBack() {
   clientSession.idleMs = IDLE_LOCK_MS;
-  if (runtime.control.value?.frozen) await runtime.freeze(false);
+  if (runtime.controlState.value?.frozen) await runtime.freeze(false);
   await control('profile-lie', { on: false });
-  for (const f of runtime.control.value?.fields ?? []) {
+  for (const f of runtime.controlState.value?.fields ?? []) {
     if (f.on_next_start !== !f.extra) await field(f.name, !f.extra);
   }
   await control(runtime.server.value === 'down' ? 'up' : 'restart-server');

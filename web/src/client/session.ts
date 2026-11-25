@@ -201,6 +201,7 @@ export class DisplayClientSession {
   private watchUntil = 0;
   private statusWatch: { cs: string; since: number; until: number; seen: Set<string> }[] = [];
   private runsSeen = new Map<string, string>();
+  private statusSeen = new Set<string>();
   private wantHandshake = false;
   private lastRetry = 0;
 
@@ -620,8 +621,9 @@ export class DisplayClientSession {
       for (const w of this.statusWatch.filter((x) => x.cs === cs)) {
         for (const it of items) {
           const at = Date.parse(it.reportTime ?? '') || 0;
-          if (at < w.since || w.seen.has(it.id)) continue;
+          if (at < w.since || w.seen.has(it.id) || this.statusSeen.has(it.id)) continue;
           w.seen.add(it.id);
+          this.statusSeen.add(it.id);
           if (it.statusCode === 'REJECTED' || it.statusCode === 'FAILED') {
             this.notify(`${it.statusCode === 'REJECTED' ? 'Rejected' : 'Failed'}: ${it.message ?? 'no reason given'}`, true);
             this.sent.set(null);

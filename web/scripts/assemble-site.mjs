@@ -9,7 +9,8 @@ import { fileURLToPath } from 'node:url';
 
 const VERSION = '0.29.5';
 const here = dirname(fileURLToPath(import.meta.url));
-const out = resolve(process.argv[2] ?? join(here, '..', '..', 'dist-site'));
+const outArg = process.argv.slice(2).find((a) => !a.startsWith('--'));
+const out = resolve(outArg ?? join(here, '..', '..', 'dist-site'));
 const dist = join(here, '..', 'dist');
 if (!existsSync(dist)) throw new Error('build the web app first: npm run build');
 rmSync(join(out, 'demo'), { recursive: true, force: true });

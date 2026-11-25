@@ -113,7 +113,7 @@ function HandOverProgress({ failure }: { failure: string | null }) {
 function TopControls() {
   const replay = useStore(clientSession.replay);
   const phase = useStore(clientSession.phase);
-  const control = useStore(runtime.control);
+  const control = useStore(runtime.controlState);
   const frozen = useStore(drawClock.frozen);
   const [drawer, setDrawer] = useState(false);
   const playing = replay?.playing ?? false;

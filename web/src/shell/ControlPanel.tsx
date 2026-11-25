@@ -13,7 +13,7 @@ export const captureOn = new Store(true);
 const ROLES: [string, string][] = [['owner', 'Owner'], ['viewer-emissions', 'Viewer with emissions'], ['viewer', 'Viewer (weather only)']];
 
 export function ControlPanel({ onClose }: { onClose: () => void }) {
-  const st = useStore(runtime.control);
+  const st = useStore(runtime.controlState);
   const server = useStore(runtime.server);
   const [confirm, setConfirm] = useState(false);
   const byName = new Map((st?.fields ?? []).map((r) => [r.name, r]));

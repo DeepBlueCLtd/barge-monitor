@@ -1,0 +1,21 @@
+import { expect, test } from '@playwright/test';
+test('smoke', async ({ page }) => {
+  page.on('console', (m) => (m.type() === 'error' || m.type() === 'warning' ? console.log('CONSOLE', m.text()) : null));
+  page.on('pageerror', (e) => console.log('PAGEERROR', e.message));
+  const t0 = Date.now();
+  await page.goto('demo/');
+  await page.getByTestId('card-client').click({ timeout: 60000 });
+  console.log('ready', Date.now() - t0);
+  await page.getByTestId('demo-login-owner').click();
+  await expect(page.getByTestId('chips')).toBeVisible({ timeout: 60000 });
+  console.log('configured', Date.now() - t0);
+  console.log(await page.getByTestId('dc').innerText());
+  await page.getByTestId('dc-play').click();
+  await page.waitForTimeout(4000);
+  console.log(await page.getByTestId('replay-bar').getAttribute('data-playing'), await page.getByTestId('chart-line').getAttribute('data-points').catch(() => 'none'));
+  await page.getByTestId('dc-rate-100').click();
+  await page.waitForTimeout(3000);
+  console.log(await page.getByTestId('status-box').innerText());
+  console.log((await page.getByTestId('dc-notice').allInnerTexts()).join('|'));
+  await page.screenshot({ path: 'e2e/tmp/s1.png' });
+});

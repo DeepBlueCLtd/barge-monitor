@@ -93,6 +93,8 @@ export interface ModelWorkerStatus {
 // FR-06b: the stand-in is the default because it starts in seconds; `?backend=python` runs
 // Pyodide. Set this to true to make Python the default wherever WebAssembly runs.
 const PYTHON_BY_DEFAULT = false;
+/** The models' service accounts share one demo password (labelled demo credentials, PR-07). */
+const SERVICE_PASSWORD = 'svc-demo';
 
 function chooseBackend(): BackendKind {
   const asked = urlParam('backend');
@@ -104,7 +106,7 @@ function chooseBackend(): BackendKind {
 class Runtime {
   readonly kind: BackendKind = chooseBackend();
   progress = new Store<Progress>({ stage: 'page', detail: 'starting', pct: 0 });
-  control = new Store<ControlState | null>(null);
+  controlState = new Store<ControlState | null>(null);
   server = new Store<ServerStatus>('starting');
   /** The latest replay state from the tick (§13.2): the shell's status only; the display client reads it over HTTP. */
   replay = new Store<ReplayView | null>(null);
@@ -162,7 +164,7 @@ class Runtime {
         break;
       }
       case 'state':
-        this.control.set(d.state);
+        this.controlState.set(d.state);
         if (d.state?.server) this.server.set(d.state.server === 'waiting' ? 'starting' : d.state.server);
         this.waiting.shift()?.resolve(d.state);
         break;
@@ -223,7 +225,9 @@ class Runtime {
     w.onerror = (e) => this.setModel(model, { phase: 'failed', detail: String(e.message ?? e) });
     const ch = new MessageChannel();
     this.backend.postMessage({ type: 'model-connect', model }, [ch.port1]);
-    w.postMessage({ type: 'start', pyodideUrl: resolve(PYODIDE_PATH), pyZipUrl: resolve(PY_ZIP), model, apiUrl: resolve('api'), ...(code ? { code } : {}) }, [ch.port2]);
+    // Each model authenticates as its own service account (docs/v4-interfaces.md §9.3); these are demo credentials (PR-07).
+    w.postMessage({ type: 'start', pyodideUrl: resolve(PYODIDE_PATH), pyZipUrl: resolve(PY_ZIP), model, apiUrl: resolve('api'), ...(code ? { code } : {}),
+      user: `svc-${model}`, password: SERVICE_PASSWORD }, [ch.port2]);
     return true;
   }
 

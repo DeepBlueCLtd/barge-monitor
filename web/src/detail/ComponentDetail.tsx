@@ -6,10 +6,11 @@ import { Glyph } from '../shell/Glyph';
 import { bus } from '../shell/messages';
 import { runtime } from '../shell/runtime';
 import { useStore } from '../shell/store';
+import { GatewayDetail, ImporterDetail, ReplayDetail } from './BackEndDetails';
 
 export function ComponentDetail({ id }: { id: ComponentId }) {
   const c = COMPONENTS[id];
-  const control = useStore(runtime.control) as (Record<string, unknown> & { folder?: FolderFile[]; import_rate?: number | null }) | null;
+  const control = useStore(runtime.controlState) as (Record<string, unknown> & { folder?: FolderFile[]; import_rate?: number | null }) | null;
   // The 4.6 control state (docs/v4-interfaces.md §13.4); read defensively while the back ends move to it.
   const folder = Array.isArray(control?.folder) ? control!.folder : null;
   return (
@@ -22,9 +23,9 @@ export function ComponentDetail({ id }: { id: ComponentId }) {
         <p className="standin-note">In this session it runs in the JavaScript stand-in, which serves the same interface; the stand-in is demonstrator scaffolding, not part of the system.</p>
       )}
       {id === 'folder' && <FolderFiles files={folder} />}
-      {id === 'importer' && typeof control?.import_rate === 'number' && (
-        <p className="live" data-testid="import-rate">Last import: {Math.round(control.import_rate).toLocaleString()} rows a second.</p>
-      )}
+      {id === 'importer' && <ImporterDetail />}
+      {id === 'replay' && <ReplayDetail />}
+      {id === 'gateway' && <GatewayDetail />}
       <h3>Messages</h3>
       <Counters id={id} />
     </div>

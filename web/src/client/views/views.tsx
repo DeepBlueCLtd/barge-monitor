@@ -96,12 +96,12 @@ export function LineView({ session }: { session: DisplayClientSession }) {
       legend: { top: 0, textStyle: { ...AXIS, fontSize: 12 }, itemHeight: 8 },
       tooltip: { trigger: 'axis', valueFormatter: (v: unknown) => fmt(v) },
       xAxis: timeAxis(w),
-      yAxis: { type: 'value', scale: true, name: shared ? [...units][0] : 'each field scaled to its range', nameTextStyle: AXIS, axisLabel: AXIS },
+      yAxis: { type: 'value', scale: true, name: shared ? [...units][0] : '', nameTextStyle: AXIS, axisLabel: AXIS },
       series,
     } as EChartsOption;
   }, [lines, w, shared]);
   return (
-    <ViewFrame title="Line" sub={lines.length ? lines.map((l) => `${l.prop.label}${unit(l.prop.uom)}`).join(', ') : 'No field selected'} testid="view-line">
+    <ViewFrame title="Line" sub={lines.length ? lines.map((l) => `${l.prop.label}${unit(l.prop.uom)}`).join(', ') + (shared ? '' : ' · each scaled to its own range') : 'No field selected'} testid="view-line">
       {!option ? <Empty>No field is selected. Choose one above.</Empty>
         : lines.every((l) => !l.rows.length) ? <Empty>No readings in this period yet.</Empty>
           : <EChart option={option} testid="chart-line" extra={{ 'data-points': String(lines.reduce((n, l) => n + l.rows.length, 0)) }} />}
