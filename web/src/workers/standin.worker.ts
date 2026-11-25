@@ -87,7 +87,7 @@ self.onmessage = (e: MessageEvent) => {
   } else if (d.type === 'control') {
     if (!rt) return;
     rt.control(d.action, d.arg ?? null)
-      .then((state) => self.postMessage({ type: 'state', state }))
-      .catch((err) => self.postMessage({ type: 'control-error', error: String(err) }));
+      .then((state) => self.postMessage({ type: 'state', id: d.id, state }))
+      .catch((err) => self.postMessage({ type: 'control-error', id: d.id, error: String(err) }));
   }
 };

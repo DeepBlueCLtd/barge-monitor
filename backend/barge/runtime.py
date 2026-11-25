@@ -138,11 +138,11 @@ class Runtime:
         elif action == "field":
             self.set_field(arg["name"], arg["on"])
         elif action == "profile-lie":
-            self.lie_about_profile = bool(arg)
+            self.lie_about_profile = _on(arg)
         elif action == "capture":
-            self.tap.enabled = bool(arg)
+            self.tap.enabled = _on(arg)
         elif action == "freeze":
-            self.set_frozen(bool(arg.get("on") if isinstance(arg, dict) else arg))
+            self.set_frozen(_on(arg))
         elif action == "reset-instance":
             self.reset_instance()
         elif action == "set-role":
@@ -295,3 +295,8 @@ def _iso_now(rt) -> str:
 def _summary(cmd: dict) -> str:
     p = cmd.get("parameters", {})
     return ", ".join(f"{k}={v}" for k, v in p.items() if k != "doi" and v not in ("", None))[:120]
+
+
+def _on(arg) -> bool:
+    """A switch action's argument: {"on": bool} from the shell, or a bare bool (§13.3)."""
+    return bool(arg.get("on")) if isinstance(arg, dict) else bool(arg)

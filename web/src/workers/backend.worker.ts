@@ -127,9 +127,9 @@ self.onmessage = (e: MessageEvent) => {
     else queue.push(attach);
   } else if (d.type === 'control' && bridge) {
     try {
-      self.postMessage({ type: 'state', state: JSON.parse(bridge.control(d.action, py.toPy(d.arg ?? null))) });
+      self.postMessage({ type: 'state', id: d.id, state: JSON.parse(bridge.control(d.action, py.toPy(d.arg ?? null))) });
     } catch (err) {
-      self.postMessage({ type: 'control-error', error: String(err) });
+      self.postMessage({ type: 'control-error', id: d.id, error: String(err) });
     }
   }
 };

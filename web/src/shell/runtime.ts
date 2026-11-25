@@ -121,8 +121,9 @@ class Runtime {
   private backend: Worker | null = null;
   private models = new Map<string, Worker>();
   private started = false;
-  /** Control actions awaiting the worker's answer, in the order sent (§13.3). */
-  private waiting: { resolve: (s: ControlState) => void; reject: (e: Error) => void }[] = [];
+  /** Control actions awaiting the worker's answer, by request id (§13.3). */
+  private waiting = new Map<number, { resolve: (s: ControlState) => void; reject: (e: Error) => void }>();
+  private nextId = 1;
 
   async start() {
     if (this.started) return; // React's development double-invoke must not start two back ends
@@ -167,10 +168,10 @@ class Runtime {
       case 'state':
         this.controlState.set(d.state);
         if (d.state?.server) this.server.set(d.state.server === 'waiting' ? 'starting' : d.state.server);
-        this.waiting.shift()?.resolve(d.state);
+        if (d.id != null) { this.waiting.get(d.id)?.resolve(d.state); this.waiting.delete(d.id); }
         break;
       case 'control-error':
-        this.waiting.shift()?.reject(new Error(String(d.error)));
+        if (d.id != null) { this.waiting.get(d.id)?.reject(new Error(String(d.error))); this.waiting.delete(d.id); }
         console.warn('control action refused by the back end:', d.error);
         break;
       case 'relay-failed': {
@@ -200,8 +201,9 @@ class Runtime {
    */
   control(action: string, arg?: unknown): Promise<ControlState> {
     if (!this.backend) return Promise.reject(new Error('the back end has not started'));
-    const p = new Promise<ControlState>((resolve, reject) => this.waiting.push({ resolve, reject }));
-    this.backend.postMessage({ type: 'control', action, arg });
+    const id = this.nextId++;  // answers carry the id, so a periodic state never resolves an action (D-167)
+    const p = new Promise<ControlState>((resolve, reject) => this.waiting.set(id, { resolve, reject }));
+    this.backend.postMessage({ type: 'control', id, action, arg });
     return p;
   }
 

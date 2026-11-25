@@ -1,7 +1,7 @@
 {
  "id": "https://deepbluecltd.github.io/barge-monitor/profile/v4.6",
  "title": "Canal barge weather display: declared profile, Version 4.6",
- "description": "The essential sources the display client needs (SRD FR-40, FR-40a). Published beside the server at profile.json (FR-41). An essential with scope 'dataset' is a template: '{dataset}' in its datastream stands for a dataset id, and the client checks every dataset against it when the dataset is loaded; one missing makes that dataset degraded (FR-45). 'fixed' essentials are checked at the handshake. CO2 is never essential (FR-40).",
+ "description": "The essential sources the display client needs (SRD FR-40, FR-40a). Published beside the server at profile.json (FR-41). An essential with scope 'dataset' is a template: '{dataset}' in its datastream stands for a dataset id, and the client checks every dataset against it when the dataset is loaded; one missing makes that dataset degraded (FR-45). 'fixed' essentials are checked at the handshake. Only weather sources are essential (FR-40).",
  "essentials": [
   {
    "id": "bow-air-temperature",
