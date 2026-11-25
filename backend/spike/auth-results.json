@@ -831,8 +831,8 @@
      "received": [
       {
        "datastream@id": "0410",
-       "phenomenonTime": "2031-04-08T10:51:30Z",
-       "resultTime": "2031-04-08T10:51:30Z",
+       "phenomenonTime": "2031-04-08T10:01:30Z",
+       "resultTime": "2031-04-08T10:01:30Z",
        "result": {
         "co2": 420.0
        }
@@ -844,8 +844,8 @@
      "received": [
       {
        "datastream@id": "0410",
-       "phenomenonTime": "2031-04-08T11:56:30Z",
-       "resultTime": "2031-04-08T11:56:30Z",
+       "phenomenonTime": "2031-04-08T11:06:30Z",
+       "resultTime": "2031-04-08T11:06:30Z",
        "result": {
         "co2": 421.0
        }
@@ -857,8 +857,8 @@
      "received": [
       {
        "datastream@id": "0410",
-       "phenomenonTime": "2031-04-08T12:01:30Z",
-       "resultTime": "2031-04-08T12:01:30Z",
+       "phenomenonTime": "2031-04-08T12:11:30Z",
+       "resultTime": "2031-04-08T12:11:30Z",
        "result": {
         "co2": 422.0
        }
@@ -870,8 +870,8 @@
   },
   {
    "question": 1,
-   "check": "viewer with emissions (control): is CO2 hidden from emi?",
-   "expected": "absent from every listing, 404 by id",
+   "check": "viewer with emissions (control): does emi still see CO2?",
+   "expected": "listed and readable",
    "observed": {
     "/systems": [
      "040g",
@@ -909,7 +909,7 @@
     "GET /systems/{analysis-co2}": "200 auto: { \"type\": \"Feature\", \"id\": \"042g\", \"geom",
     "GET /datastreams/{ds-bow-co2}": "200 auto: { \"id\": \"0410\", \"name\": \"co2\", \"system@i",
     "GET /datastreams/{ds-bow-co2}/schema": "200 auto: { \"obsFormat\": \"application/om+json\", \"r",
-    "GET /datastreams/{ds-bow-co2}/observations": "200 application/json: { \"items\": [ { \"id\": \"041b5vflj43g000000\", \"datastream@id\": ",
+    "GET /datastreams/{ds-bow-co2}/observations": "200 application/json: { \"items\": [ { \"id\": \"041flt7lj43g000000\", \"datastream@id\": ",
     "GET /datastreams/{ds-clusters-co2}": "200 auto: { \"id\": \"041g\", \"name\": \"clusters co2\", ",
     "GET /datastreams/{ds-clusters-co2}/schema": "200 auto: { \"obsFormat\": \"application/om+json\", \"r",
     "GET /datastreams/{ds-clusters-co2}/observations": "200 application/json: { \"items\": [ { \"id\": \"041s1b7mj43g000000\", \"datastream@id\": ",
@@ -922,7 +922,7 @@
      "system 042g"
     ]
    },
-   "as_needed": false
+   "as_needed": true
   }
  ],
  "phase 3: deny entries also on every ancestor (parent=) form, after a restart": [
