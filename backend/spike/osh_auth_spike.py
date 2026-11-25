@@ -133,7 +133,7 @@ class Spike:
         self.note(0, "owner publishes one observation to each datastream", "201", codes, set(codes) == {201})
 
     # ---- 1 and 2: hidden? inherited? -----------------------------------------------------
-    def visibility(self, user, ep, label):
+    def visibility(self, user, ep, label, should_see=False):
         i = self.ids
         out = {
             "/systems": self.ids_in(user, "/systems", ep),
@@ -160,7 +160,10 @@ class Spike:
         by_id_404 = all(out[k].startswith("404") for k in out if k.startswith("GET ") and ("co2" in k or "clusters" in k))
         out["restricted ids still listed"] = sorted(listed)
         hidden = not listed and by_id_404
-        self.note(1, f"{label}: is CO2 hidden from {user}?", "absent from every listing, 404 by id", out, hidden)
+        if should_see:
+            self.note(1, f"{label}: does {user} still see CO2?", "listed and readable", out, not hidden and len(listed) == 4)
+        else:
+            self.note(1, f"{label}: is CO2 hidden from {user}?", "absent from every listing, 404 by id", out, hidden)
         return out
 
     async def ws_stream(self, user, path, ep="/api", post=None, wait=3.0):
@@ -321,7 +324,7 @@ class Spike:
             r = self.c["friend"].get("/api/systems/zzzz")
             self.note(1, "for comparison: an id that does not exist", "404", self.brief(r, 60), r.status_code == 404)
         self.stream_restricted("friend", "/api", "deny entries")
-        self.visibility("emi", "/api", "viewer with emissions (control)")
+        self.visibility("emi", "/api", "viewer with emissions (control)", should_see=True)
 
 
 def write_deny(results: Path, src: Path, dst: Path, ancestors=False):
