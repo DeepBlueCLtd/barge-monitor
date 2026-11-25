@@ -1,181 +1,270 @@
-"""The running back end: the world and store, the data server's lifecycle, the models' host.
+"""The running back end: the data server's stand-in and its lifecycle, the importer, the replay controller.
 
-The world, the clock, the sensors and the logger store run continuously; the
-data server is started, restarted, taken down and brought up around them
-(FR-18, FR-47, FR-49). The control panel's field toggles are kept here as
-*pending* until the next server start (FR-51).
+There is no live world here (4.6): the data come from the data folder through the CSV
+importer, and time is the replay controller's (docs/v4-interfaces.md §4, §7, §8).
 
-Models run elsewhere: each in its own worker in the browser (FR-33), using the
-data server's HTTP interface like any other client (FR-28). In CPython (tests,
-an ordinary ASGI server) ``local_models=True`` runs the core models in-process
-instead, making the same HTTP requests of the same application.
+The server **behaves as a stock OpenSensorHub** (§9.1): a start takes about one real second,
+during which it answers nothing (the bridge returns no answer and the relay reports a network
+failure); its store persists across restarts, and only Reset instance empties it (FR-50a).
+The control panel's field toggles are pending until the next start (FR-51).
+
+``tick()`` is called by the host about ten times a real second: in Pyodide by the back-end
+worker, under uvicorn by a background task (``serve.py``), in tests by hand.
 """
 from __future__ import annotations
 
+import asyncio
+import json
+from pathlib import Path
+
+from . import accounts as A
+from . import clock
 from . import config as C
-from .clock import SimClock
+from . import swe
 from .fields import CATALOGUE, Offering
-from .registry import Registry
-from .logger import Logger
-from .sensors import Sensors
-from .server import Server
+from .importer import Importer
+from .replay import Replay
+from .store import URN, Hub, Store, Subscription
 from .tap import Tap
-from .truth import World
-from .world import generate
+
+SOSA = "http://www.w3.org/ns/sosa/"
+
+
+def contracts_dir() -> Path:
+    here = Path(__file__).resolve().parent
+    for cand in (here.parent / "contracts", here.parent.parent / "contracts"):
+        if cand.is_dir():
+            return cand
+    raise FileNotFoundError("contracts directory not found")
 
 
 class Runtime:
-    def __init__(self, seed: int = 1, clock=None, pregen_days: float = C.PREGEN_DAYS, capture: bool = True,
-                 progress=None, history: dict | None = None, local_models: bool = False,
-                 store_format=None, adapter_class=None):
-        self.seed = seed
-        self.manifest = generate(seed)
-        self.world = World(self.manifest)
-        self.clock = clock if clock is not None else SimClock(start=pregen_days * 86400.0)
-        self.tap = Tap(now=self.now)
+    def __init__(self, folder, real=clock.real, capture: bool = True, hold_s: float = C.COMMAND_HOLD_S,
+                 start_s: float = C.START_S, parser=None, silent_import: bool = True):
+        self.real = real
+        self.folder = folder
+        self.tap = Tap(now=real, replay_now=lambda: self.replay.time if self.replay.dataset else None)
         self.tap.enabled = capture
-        self.logger = Logger()
-        # The store's format and the adapter that reads it are a port (SRD §2.2): AT-03 swaps both, and nothing else.
-        self.adapter_class = adapter_class
-        self.sensors = Sensors(self.world, self.logger, self.tap, **({"fmt": store_format} if store_format else {}))
-        self.registry = Registry()
-        self.phases: dict[str, dict] = {}  # model -> {label, phase, detail}: what each model says of itself, for the shell
-        self.local = None
-        self.offering = Offering()  # what the next server start will publish
-        self.lie_about_profile = False  # a misconfigured server, for AT-07
-        self.server: Server | None = None
-        self.server_starts = 0
-        self.down = False
-        self.history_source = "generated"
-        if history is not None and self.load_history(history, pregen_days):
-            self.history_source = "pre-built"
-        else:
-            self.pregenerate(pregen_days, progress)
-        self.start_server()
-        if local_models:
-            from .local_models import LocalModels
+        self.accounts = A.Accounts()
+        self.store = Store()
+        self.hub = Hub()
+        self.offering = Offering()  # what the next start publishes
+        self.live_offering = self.offering.copy()
+        self.lie_about_profile = False  # a misconfigured server (FR-79a)
+        self.live_lie = False
+        self.hold_s = hold_s
+        self.start_s = start_s
+        self.status = "down"  # down | starting | running
+        self.ready_at = 0.0
+        self.boots = 0
+        self.frozen = False
+        self._unfrozen: asyncio.Event | None = None
+        self.profile = json.loads((contracts_dir() / "profile.json").read_text())
+        self.importer = Importer(self, folder, parser)
+        self.replay = Replay(self)
+        self.silent_import = silent_import  # once per page load (FR-15)
+        self.phases: dict[str, dict] = {}  # model -> what it says of itself, for the shell
+        self._world = None
+        self._boot_task = None
 
-            self.local = LocalModels(self)
+    # --- lifecycle (FR-47, FR-49, FR-50a) ---------------------------------------------------
+    async def start(self) -> None:
+        """Start the server: it answers nothing until it has started (§9.1)."""
+        self.status = "starting"
+        self.boots += 1
+        self.ready_at = self.real() + self.start_s
+        self.live_offering = self.offering.copy()
+        self.live_lie = self.lie_about_profile
+        quiet = self.boots == 1  # nothing is drawn before the first login (FR-77)
+        self._configure()
+        await self.importer.start(quiet=quiet)
+        if self.silent_import:
+            self.silent_import = False
+            await self.importer.silent_import()
+        await self.replay.start(quiet=quiet)
+        if self.real() >= self.ready_at:
+            self.status = "running"
 
-    def now(self) -> float:
-        return self.clock.now()
+    def begin_start(self):
+        """Start without waiting (the host's tick carries it on)."""
+        self._boot_task = asyncio.ensure_future(self.start())
+        return self._boot_task
 
-    # --- FR-16: four weeks of history, through the same sensor-to-logger path --
-    def pregenerate(self, days: float, progress=None) -> None:
-        self.tap.recording = False
-        end = days * 86400.0
-        while self.sensors.next_t < end:
-            self.sensors.sample_until(min(end, self.sensors.next_t + 86400))
-            if progress:
-                progress(self.sensors.next_t / end)
-        self.tap.recording = True
-
-    def load_history(self, history: dict, days: float) -> bool:
-        """Load pre-built logger files instead of generating them (SRD §13).
-
-        `history` is {"manifest": {...}, "files": {name: bytes}}. Refused, and
-        False returned, unless it was made from this seed by this exact code.
-        """
-        from .history import code_hash
-
-        m = history["manifest"]
-        if m.get("seed") != self.seed or m.get("code_hash") != code_hash() or m.get("days") != days:
-            return False
-        for name in sorted(history["files"]):
-            data = history["files"][name]
-            self.logger._files[name] = data if isinstance(data, bytearray) else bytearray(data)
-        self.sensors.next_t = int(m["end_t"])
-        for k, v in m.get("capture_counts", {}).items():
-            self.tap.counts[k] = self.tap.counts.get(k, 0) + v
-        return True
-
-    # --- the running system ---------------------------------------------------------
-    def tick(self) -> None:
-        """Bring the store up to the clock; let a starting server rebuild its index; step local models."""
-        if self.clock.playing:
-            self.sensors.sample_until(self.clock.now() + 1)
-        if self.server and not self.down:
-            if not self.server.ready:
-                self.server.index_step()
-            else:
-                self.server.adapter.index_step()  # the adapter's index follows the growing store (FR-21)
-        if self.local:
-            self.local.tick()
-
-    def play(self):
-        self.clock.play()
-
-    def pause(self):
-        self.clock.pause()
-
-    def set_rate(self, rate):
-        self.clock.set_rate(rate)
-
-    # --- server lifecycle (FR-43..FR-46e) ----------------------------------------
-    def start_server(self) -> None:
-        self.server_starts += 1
-        self.down = False
-        self.server = Server(self, self.server_starts, self.offering, self.tap)
-
-    def restart_server(self) -> None:
-        self.start_server()
+    def stop(self) -> None:
+        self.status = "down"
+        self.hub.close_all()  # every subscription ends (§9.2)
+        self.importer.stopped()
+        self.replay.stopped()
 
     def take_down(self) -> None:
-        self.down = True
-        self.server = None
+        self.stop()
 
-    def bring_up(self) -> None:
-        self.start_server()
+    def restart(self):
+        self.stop()
+        return self.begin_start()
 
+    def reset_instance(self):
+        """Stop, delete the whole store, start empty (FR-50a). The data folder is untouched; the silent
+        import does not run again until the page is reloaded."""
+        self.stop()
+        self.store = Store()
+        self.importer.reset()
+        self.replay.reset()
+        return self.begin_start()
+
+    @property
+    def running(self) -> bool:
+        return self.status == "running"
+
+    async def tick(self) -> None:
+        if self.status == "starting" and self.real() >= self.ready_at and (self._boot_task is None or self._boot_task.done()):
+            if self._boot_task is not None and self._boot_task.exception() is not None:
+                raise self._boot_task.exception()
+            self.status = "running"
+        if self.running:
+            await self.replay.tick()
+
+    # --- server configuration, created at start (§6) ----------------------------------------
+    def _configure(self) -> None:
+        st = self.store
+        barge, _ = st.add_system(URN + "platform:barge", "Collection platform", "The uncrewed electric cargo barge. "
+                                 "It records no position.", feature=SOSA + "Platform", asset="Platform")
+        for s, label in (("bow", "Bow sensor"), ("stern", "Stern sensor")):
+            sen, _ = st.add_system(f"{URN}sensor:{s}", label, "Seven parameters at 1 Hz.", SOSA + "Sensor",
+                                   "Equipment", parent=barge["id"])
+            st.add_system(f"{URN}sensor:{s}:co2", f"{s.capitalize()} CO₂ analyser", "CO₂ in ppm at 1 Hz. Restricted.",
+                          SOSA + "Sensor", "Equipment", parent=sen["id"], restricted=True)
+        st.add_system(URN + "process:models", "Models", "A home for models that turn sensor data into insight. "
+                      "Each model is a process system of its own, created by the model itself.", SOSA + "System", "Process")
+        for user in A.USERS:
+            ws, _ = st.add_system(f"{URN}workspace:{user}", f"Workspace of {user}", "Data of interest, kept per analyst "
+                                  "(FR-95).", SOSA + "System", "Other", owner=user, workspace_of=user)
+            st.add_datastream(ws["id"], "data-of-interest", "Data of interest", swe.record([
+                swe.time_field("time", "Saved at"), swe.text("doi_id", "Data of interest"),
+                swe.category("action", "Action", ["save", "remove"]), swe.text("record", "Record (JSON)")],
+                "Data of interest"), owner=user)
+
+    # --- freeze (FR-92, §4) ----------------------------------------------------------------------
+    def set_frozen(self, on: bool) -> None:
+        self.frozen = bool(on)
+        ev = self._event()
+        if self.frozen:
+            ev.clear()
+        else:
+            ev.set()
+        self.replay.frozen(self.frozen)
+
+    def _event(self) -> asyncio.Event:
+        if self._unfrozen is None:
+            self._unfrozen = asyncio.Event()
+            self._unfrozen.set()
+        return self._unfrozen
+
+    async def wait_unfrozen(self) -> None:
+        if self.frozen:
+            await self._event().wait()
+
+    # --- commands: pushed to subscribers, dropped without one (§9.1, §9.2) ----------------------
+    def push(self, cs: dict, cmd: dict) -> int:
+        subs = self.hub.subscribers(cs["id"])
+        for s in subs:
+            s.queue.put_nowait(cmd)
+        return len(subs)
+
+    async def next_push(self, sub: Subscription) -> dict | None:
+        """The next command for a subscriber, captured as it is written to the stream (§9.2)."""
+        cmd = await sub.queue.get()
+        if cmd is None:
+            return None
+        await self.wait_unfrozen()
+        if sub.closed:
+            return None
+        cs = self.store.controlstreams.get(sub.cs_id, {})
+        self.tap.emit("server", sub.component, "K", f"push {cs.get('inputName', '?')}: {_summary(cmd)}",
+                      json.dumps(cmd), model=sub.model, push=True)
+        return cmd
+
+    def subscribe_internal(self, cs: dict, user: str) -> Subscription:
+        acct = self.accounts.by_user[user]
+        return self.hub.subscribe(Subscription(cs["id"], acct, acct.component, None))
+
+    def command_status(self, cmd_id: str, code: str, message: str = "", src: str | None = None, quiet=False) -> None:
+        cmd = self.store.commands.get(cmd_id)
+        if cmd is None:
+            return
+        rep = {"command@id": cmd_id, "statusCode": code, "reportTime": _iso_now(self)}
+        if message:
+            rep["message"] = message
+        cmd["status"].append(rep)
+        self.store.status_reports.setdefault(cmd["controlstream@id"], []).append(rep)
+        if src:
+            self.tap.emit(src, "server", "O" if src == "replay" else "I", f"status {code}: {cmd_id}", rep, quiet=quiet)
+
+    # --- the profile and the offering (FR-40, FR-50..52) --------------------------------------
+    def satisfies_profile(self) -> bool:
+        off = self.live_offering
+        return all(off.keep(e["field"]) for e in self.profile["essentials"] if e["field"] in CATALOGUE)
+
+    def claims_profile(self) -> bool:
+        return self.live_lie or self.satisfies_profile()
+
+    # --- the referee's ground truth: the data folder's manifest (FR-12) -------------------------
+    async def world(self):
+        if self._world is None:
+            from .truth import World
+
+            m = await self.folder.manifest()
+            self._world = World(m["world"])
+        return self._world
+
+    # --- the shell (§13) ---------------------------------------------------------------------
     def set_phase(self, model: str, phase: str, detail: str = "", label: str | None = None) -> None:
         cur = self.phases.setdefault(model, {"label": label or model})
         cur.update(phase=phase, detail=detail)
         if label:
             cur["label"] = label
 
-    def pending_commands(self) -> dict:
-        """System id -> commands still PENDING. The shell uses it to let a viewer's click through while paused."""
-        out: dict[str, int] = {}
-        for c in self.registry.commands.values():
-            if c["status"][-1]["statusCode"] == "PENDING":
-                sysid = c["cs_key"].split(":", 1)[0]
-                out[sysid] = out.get(sysid, 0) + 1
-        return out
-
     def set_field(self, name: str, on: bool) -> None:
         if name not in CATALOGUE:
             raise KeyError(name)
         self.offering.on[name] = bool(on)
 
-    def set_profile_lie(self, on: bool) -> None:
-        self.lie_about_profile = bool(on)
-
     def control_state(self) -> dict:
-        """What the control panel and status show (FR-49..FR-52)."""
-        live = self.server.offering if self.server else None
+        live = self.live_offering
         rows = []
         for name, f in CATALOGUE.items():
-            rows.append({
-                "name": name, "label": f.label, "kind": f.kind, "inputs": list(f.inputs), "extra": f.extra,
-                "essential": f.essential, "type": f.swe_type,
-                "on_next_start": self.offering.on[name],
-                "published_next_start": self.offering.published(name),
-                "published_now": bool(live and live.published(name)),
-            })
-        pending = any(r["published_now"] != r["published_next_start"] for r in rows) or (
-            self.server is not None and self.server.lie_about_profile != self.lie_about_profile)
-        models = [{"id": sid, "label": sysm["label"], **self.phases.get(sid, {}),
-                   "datastreams": [d["outputName"] for d in self.registry.datastreams.values() if d["system"] == sid]}
-                  for sid, sysm in self.registry.systems.items()]
+            rows.append({"name": name, "label": f.label, "kind": f.kind, "inputs": list(f.inputs), "extra": f.extra,
+                         "essential": f.essential, "type": f.swe_type, "on_next_start": self.offering.on[name],
+                         "published_next_start": self.offering.published(name),
+                         "published_now": self.status != "down" and live.published(name)})
+        pending = any(r["published_now"] != r["published_next_start"] for r in rows) or self.live_lie != self.lie_about_profile
+        models_sys = self.store.system_by_uid(URN + "process:models")
+        models = []
+        if models_sys:
+            for s in self.store.systems.values():
+                if s["parent"] != models_sys["id"]:
+                    continue
+                mid = s["uid"].rsplit(":", 1)[-1]
+                own = {x["id"] for x in self.store.systems.values() if x["parent"] == s["id"]} | {s["id"]}
+                models.append({"id": mid, "label": s["label"], "max_rate": s["characteristics"].get("max_rate"),
+                               **{k: v for k, v in self.phases.get(mid, {}).items() if k != "label"},
+                               "datastreams": [d["outputName"] for d in self.store.datastreams.values()
+                                               if d["system"] in own and not d["replaced"]]})
         return {
-            "server": "down" if self.down else ("waiting" if not self.server.ready else "running"),
-            "instance": self.server.instance if self.server else None,
-            "progress": self.server.progress() if self.server else None,
-            "fields": rows, "pending": pending, "lie_about_profile": self.lie_about_profile,
-            "clock": self.clock.state(),
-            "store": {"bytes": self.logger.total_bytes(), "files": len(self.logger.list_files()),
-                      "records": self.sensors.next_t * 2},
-            "capture_counts": self.tap.counts,
-            "models": models,
-            "backend": "python",
+            "server": self.status, "fields": rows, "pending": pending, "lie_about_profile": self.lie_about_profile,
+            "folder": self.importer.folder_state(), "datasets": self.importer.datasets_state(),
+            "replay": self.replay.state(), "models": models, "accounts": self.accounts.state(),
+            "capture_counts": self.tap.counts, "backend": "python", "frozen": self.frozen,
+            "import_rate": self.importer.rate,
         }
+
+
+def _iso_now(rt) -> str:
+    from .times import iso
+
+    return iso(round(rt.real(), 3))
+
+
+def _summary(cmd: dict) -> str:
+    p = cmd.get("parameters", {})
+    return ", ".join(f"{k}={v}" for k, v in p.items() if k != "doi" and v not in ("", None))[:120]
