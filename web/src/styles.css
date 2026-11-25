@@ -70,7 +70,7 @@ h1, h2, h3, h4 { margin: 0; font-weight: 400; }
 .zone-label { position: absolute; top: 6px; font-family: var(--hand-sc); font-size: 16px; letter-spacing: 0.06em; }
 .zone-label.left { left: 14px; }
 .zone-label.right { right: 12px; }
-.card { position: relative; background: var(--card); border-radius: 9px 7px 10px 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 4px 8px; }
+.card { position: relative; background: var(--card); border-radius: 9px 7px 10px 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 4px 5px; }
 .sketch-off .card { border: 1.7px solid var(--ink); }
 .card.gold { background: var(--gold-fill); }
 .sketch-off .card.gold { border-color: var(--gold-outline); }
@@ -328,7 +328,7 @@ h1, h2, h3, h4 { margin: 0; font-weight: 400; }
 .detail-empty { container-type: inline-size; }
 .overview th:nth-child(1) { width: 27%; }
 .overview th:nth-child(2) { width: 37%; }
-.overview .written { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.overview .written { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .overview .not-here { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 
 /* ---------- The adoption opening (SRD §9.8, VS-25) ---------- */

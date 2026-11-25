@@ -4,7 +4,7 @@
 // system and no message ever names them.
 import type { ZoneId } from './palette';
 
-export type ComponentId = 'folder' | 'importer' | 'replay' | 'server' | 'models' | 'scilibs' | 'client';
+export type ComponentId = 'folder' | 'importer' | 'replay' | 'gateway' | 'server' | 'models' | 'scilibs' | 'client';
 
 export interface ComponentInfo {
   id: ComponentId;
@@ -37,9 +37,14 @@ export const COMPONENTS: Record<ComponentId, ComponentInfo> = {
     does: 'Holds the current dataset and the replay clock. It takes load, play, pause, rate and seek as commands pushed on its control stream, and publishes its state (dataset, span, replay time, rate) and a log of every command it applied. Live views and models read "up to replay time".',
     why: 'New build · back end: written for this system, a separate process with its own service account in a developed system, subscribed to its control stream like any receiver.',
   },
+  gateway: {
+    id: 'gateway', code: 'C-10', name: 'Access gateway', role: 'hides what a user may not see', zone: 'back', valueAdd: false,
+    does: "Sits in front of the data server: every request from the display client and the models passes it, and the answers and pushed commands come back through it. It checks each request's credentials against the accounts, answering 401 itself; it removes restricted resources (the CO₂ sensors, restricted model outputs, other users' workspaces) from every listing and answers 404 under them; it lets users create and append only under their own systems; and it reads each user's role on every request, so a role change takes effect at once.",
+    why: 'New build · back end: written for this system, because a stock OpenSensorHub cannot hide a system from a user (S-AUTH finding). The importer and the replay controller are modules inside the server and do not pass it.',
+  },
   server: {
     id: 'server', code: 'C-04', name: 'Data server', role: 'OpenSensorHub · OGC Connected Systems', zone: 'third', valueAdd: false,
-    does: 'OpenSensorHub, an open-source server for OGC API – Connected Systems: authentication, discovery, systems, datastreams, observations, control streams and command delivery, and the store behind them, served over HTTP to the display client, the replay controller and the models alike. A Java server cannot run in a browser, so here a stand-in takes its place and serves the same interface.',
+    does: 'OpenSensorHub, an open-source server for OGC API – Connected Systems: authentication, discovery, systems, datastreams, observations, control streams and command delivery, and the store behind them, served over HTTP, through the access gateway, to the display client and the models alike. A Java server cannot run in a browser, so here a stand-in takes its place and serves the same interface.',
     why: 'Third-party libraries: off the shelf, openly maintained, not our code. The system adopts it as shipped; the CSV importer is the module written for it.',
   },
   models: {
@@ -71,12 +76,15 @@ export const FLOWS: { src: ComponentId; dst: ComponentId; letters: string[]; via
   { src: 'folder', dst: 'importer', letters: ['L'], via: 'file contents' },
   { src: 'importer', dst: 'server', letters: ['I'], via: 'inside the server' },
   { src: 'server', dst: 'importer', letters: ['K'], via: 'push' },
-  { src: 'client', dst: 'server', letters: ['Q', 'K'], via: 'HTTP' },
-  { src: 'server', dst: 'client', letters: ['D', 'P', 'O', 'H'], via: 'HTTP' },
+  // The display client and the models reach the server only through the access gateway (interfaces §2, §9.5).
+  { src: 'client', dst: 'gateway', letters: ['Q', 'K'], via: 'HTTP' },
+  { src: 'gateway', dst: 'client', letters: ['D', 'P', 'O', 'H'], via: 'HTTP' },
+  { src: 'models', dst: 'gateway', letters: ['Q', 'O', 'I'], via: 'HTTP' },
+  { src: 'gateway', dst: 'models', letters: ['D', 'O', 'H', 'K'], via: 'HTTP; K pushed' },
+  { src: 'gateway', dst: 'server', letters: ['Q', 'K', 'O', 'I'], via: 'HTTP' },
+  { src: 'server', dst: 'gateway', letters: ['D', 'P', 'O', 'H', 'K'], via: 'HTTP; K pushed' },
   { src: 'server', dst: 'replay', letters: ['K'], via: 'push' },
   { src: 'replay', dst: 'server', letters: ['Q', 'O'], via: 'HTTP' },
-  { src: 'server', dst: 'models', letters: ['D', 'O', 'H', 'K'], via: 'HTTP; K pushed' },
-  { src: 'models', dst: 'server', letters: ['Q', 'O', 'I'], via: 'HTTP' },
   { src: 'models', dst: 'scilibs', letters: ['I'], via: 'calls' },
   { src: 'scilibs', dst: 'models', letters: ['I'], via: 'results' },
 ];

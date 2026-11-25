@@ -1,5 +1,5 @@
 {
- "comment": "The adoption opening (SRD 9.8, docs/v4-interfaces.md 12): the back-end band in two rows, six cards and five, every card the same size on one grid (FR-120, VS-25); the third-party zone holds the scientific libraries only; the zones below move down by one card row. Lines are the flows of FR-120a, plain, without letters; \"both\" draws a head at each end. Segments never cross a card.",
+ "comment": "The adoption opening (SRD 9.8, docs/v4-interfaces.md 12): the back-end band in two rows of six, every card the same size on one grid (FR-120, VS-25): the importer, replay controller, Models and access gateway, written by us either way, beside the eight subsystems; the third-party zone holds the scientific libraries only; the zones below move down by one card row. Lines are the flows of FR-120a, plain, without letters; \"both\" draws a head at each end. Segments never cross a card.",
  "size": [
   840,
   968
@@ -31,7 +31,7 @@
     0,
     348,
     840,
-    316
+    320
    ],
    "labelAt": "bottom-left"
   },
@@ -39,7 +39,7 @@
    "id": "legacy",
    "rect": [
     322,
-    840,
+    844,
     278,
     118
    ],
@@ -61,7 +61,7 @@
   ],
   "folder": [
    352,
-   870,
+   874,
    240,
    74
   ],
@@ -69,82 +69,118 @@
    26,
    384,
    108,
-   86
+   96
   ],
   "replay": [
    162,
    384,
    108,
-   86
+   96
   ],
   "models": [
    298,
    384,
    108,
-   86
+   96
   ],
-  "sub-webapi": [
+  "gateway": [
    434,
    384,
    108,
-   86
+   96
   ],
-  "sub-registry": [
+  "sub-webapi": [
    570,
    384,
    108,
-   86
+   96
   ],
-  "sub-obsstore": [
+  "sub-registry": [
    706,
    384,
    108,
-   86
+   96
+  ],
+  "sub-obsstore": [
+   26,
+   528,
+   108,
+   96
   ],
   "sub-query": [
-   26,
-   520,
+   162,
+   528,
    108,
-   86
+   96
   ],
   "sub-commands": [
-   162,
-   520,
+   298,
+   528,
    108,
-   86
+   96
   ],
   "sub-accounts": [
-   298,
-   520,
+   434,
+   528,
    108,
-   86
+   96
   ],
   "sub-permissions": [
-   434,
-   520,
+   570,
+   528,
    108,
-   86
+   96
   ],
   "sub-admin": [
-   570,
-   520,
+   706,
+   528,
    108,
-   86
+   96
   ]
  },
  "lines": [
   {
    "a": "client",
+   "b": "gateway",
+   "both": true,
+   "path": [
+    [
+     500,
+     112
+    ],
+    [
+     500,
+     384
+    ]
+   ]
+  },
+  {
+   "a": "models",
+   "b": "gateway",
+   "both": true,
+   "path": [
+    [
+     406,
+     432
+    ],
+    [
+     434,
+     432
+    ]
+   ]
+  },
+  {
+   "a": "gateway",
    "b": "sub-webapi",
    "both": true,
    "path": [
     [
-     506,
-     112
+     542,
+     432
     ],
     [
-     506,
-     384
+     570,
+     432
     ]
    ]
   },
@@ -162,71 +198,12 @@
      350
     ],
     [
-     474,
+     610,
      350
     ],
     [
-     474,
+     610,
      384
-    ]
-   ]
-  },
-  {
-   "a": "models",
-   "b": "sub-webapi",
-   "both": true,
-   "path": [
-    [
-     378,
-     384
-    ],
-    [
-     378,
-     366
-    ],
-    [
-     446,
-     366
-    ],
-    [
-     446,
-     384
-    ]
-   ]
-  },
-  {
-   "a": "sub-commands",
-   "b": "replay",
-   "path": [
-    [
-     192,
-     520
-    ],
-    [
-     192,
-     470
-    ]
-   ]
-  },
-  {
-   "a": "sub-commands",
-   "b": "importer",
-   "path": [
-    [
-     174,
-     520
-    ],
-    [
-     174,
-     508
-    ],
-    [
-     106,
-     508
-    ],
-    [
-     106,
-     470
     ]
    ]
   },
@@ -235,20 +212,56 @@
    "b": "models",
    "path": [
     [
-     258,
-     520
+     360,
+     528
     ],
     [
-     258,
-     508
+     360,
+     480
+    ]
+   ]
+  },
+  {
+   "a": "sub-commands",
+   "b": "replay",
+   "path": [
+    [
+     320,
+     528
     ],
     [
-     348,
-     508
+     320,
+     504
     ],
     [
-     348,
-     470
+     230,
+     504
+    ],
+    [
+     230,
+     480
+    ]
+   ]
+  },
+  {
+   "a": "sub-commands",
+   "b": "importer",
+   "path": [
+    [
+     306,
+     528
+    ],
+    [
+     306,
+     514
+    ],
+    [
+     100,
+     514
+    ],
+    [
+     100,
+     480
     ]
    ]
   },
@@ -257,20 +270,12 @@
    "b": "sub-obsstore",
    "path": [
     [
-     46,
-     384
+     60,
+     480
     ],
     [
-     46,
-     314
-    ],
-    [
-     760,
-     314
-    ],
-    [
-     760,
-     384
+     60,
+     528
     ]
    ]
   },
@@ -279,19 +284,19 @@
    "b": "sub-registry",
    "path": [
     [
-     76,
+     56,
      384
     ],
     [
-     76,
-     330
+     56,
+     316
     ],
     [
-     624,
-     330
+     760,
+     316
     ],
     [
-     624,
+     760,
      384
     ]
    ]
@@ -301,20 +306,20 @@
    "b": "sub-query",
    "path": [
     [
-     448,
-     470
+     590,
+     480
     ],
     [
-     448,
-     482
+     590,
+     488
     ],
     [
-     80,
-     482
+     216,
+     488
     ],
     [
-     80,
-     520
+     216,
+     528
     ]
    ]
   },
@@ -323,12 +328,12 @@
    "b": "sub-registry",
    "path": [
     [
-     542,
-     427
+     678,
+     432
     ],
     [
-     570,
-     427
+     706,
+     432
     ]
    ]
   },
@@ -337,20 +342,20 @@
    "b": "sub-commands",
    "path": [
     [
-     464,
-     470
+     602,
+     480
     ],
     [
-     464,
-     494
+     602,
+     496
     ],
     [
-     228,
-     494
+     382,
+     496
     ],
     [
-     228,
-     520
+     382,
+     528
     ]
    ]
   },
@@ -359,12 +364,12 @@
    "b": "sub-permissions",
    "path": [
     [
-     488,
-     470
+     624,
+     480
     ],
     [
-     488,
-     520
+     624,
+     528
     ]
    ]
   },
@@ -373,20 +378,12 @@
    "b": "sub-obsstore",
    "path": [
     [
-     80,
-     606
+     162,
+     576
     ],
     [
-     80,
-     620
-    ],
-    [
-     760,
-     620
-    ],
-    [
-     760,
-     470
+     134,
+     576
     ]
    ]
   },
@@ -396,12 +393,12 @@
    "both": true,
    "path": [
     [
-     406,
-     563
+     542,
+     576
     ],
     [
-     434,
-     563
+     570,
+     576
     ]
    ]
   },
@@ -410,20 +407,20 @@
    "b": "sub-webapi",
    "path": [
     [
-     600,
-     520
+     730,
+     528
     ],
     [
-     600,
-     506
+     730,
+     508
     ],
     [
-     526,
-     506
+     660,
+     508
     ],
     [
-     526,
-     470
+     660,
+     480
     ]
    ]
   },
@@ -438,11 +435,11 @@
     ],
     [
      318,
-     342
+     366
     ],
     [
      200,
-     342
+     366
     ],
     [
      200,
@@ -457,23 +454,23 @@
    "path": [
     [
      26,
-     427
+     432
     ],
     [
      12,
-     427
+     432
     ],
     [
      12,
-     632
+     636
     ],
     [
      400,
-     632
+     636
     ],
     [
      400,
-     870
+     874
     ]
    ]
   }

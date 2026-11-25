@@ -15,7 +15,8 @@ const openingLayout = readJson('../src/shell/layout-opening.json') as {
 const BASE = process.env.OPENING_BASE ?? 'demo/';
 const FLAG = `${BASE}?hand-made`;
 const SUBS = ['sub-webapi', 'sub-registry', 'sub-obsstore', 'sub-query', 'sub-commands', 'sub-accounts', 'sub-permissions', 'sub-admin'];
-const BACK = ['importer', 'replay', 'models'];
+/** Written by us either way: in the opening's back-end band beside the eight (FR-120, the gateway of interfaces §9.5). */
+const BACK = ['importer', 'replay', 'models', 'gateway'];
 const CONTROLS = ['play', 'speed', 'restart-client', 'restart-server', 'demo-menu', 'control-panel-toggle', 'overview-button'];
 
 type Rect = [number, number, number, number];
@@ -85,13 +86,13 @@ test('the fixed layouts: no line crosses a card, no cards overlap (VS-13, FR-120
       }
     }
   }
-  // FR-120: two rows, six and five, every back-end card the same size; no data server.
+  // FR-120: two rows of six (with the gateway), every back-end card the same size; no data server.
   const oc = openingLayout.cards as Record<string, Rect>;
   expect(oc.server).toBeUndefined();
   const ids = [...BACK, ...SUBS];
   expect(new Set(ids.map((id) => `${oc[id][2]}x${oc[id][3]}`)).size).toBe(1);
   expect(new Set(ids.map((id) => oc[id][1])).size).toBe(2);
-  // ...and the same size as the importer, replay controller and Models in the normal layout.
+  // ...and the same size as the importer, replay controller, gateway and Models in the normal layout.
   for (const id of BACK) expect((layout.cards as Record<string, Rect>)[id].slice(2)).toEqual(oc[id].slice(2));
 });
 
@@ -152,7 +153,7 @@ test('AT-63: nothing runs, nothing is gold, and clicks reveal nothing in the ope
   };
   await noGold();
   // Clicking the display client or Models reveals nothing and changes nothing (FR-121, FR-123).
-  for (const id of ['client', 'models', 'importer', 'scilibs', 'folder']) {
+  for (const id of ['client', 'models', 'importer', 'gateway', 'scilibs', 'folder']) {
     await page.getByTestId(`card-${id}`).click();
     await expect(page.getByTestId('detail-panel')).toHaveAttribute('data-showing', 'opening');
     await expect(page.locator('.opening-table tr.highlighted')).toHaveCount(0);
@@ -165,11 +166,11 @@ test('AT-63: nothing runs, nothing is gold, and clicks reveal nothing in the ope
   await expect(page.getByTestId('row-sub-accounts')).toHaveClass(/highlighted/);
   await expect(page.locator('.opening-table tr.highlighted')).toHaveCount(1);
   // "Written by us either way", in plain style.
-  await expect(page.getByTestId('written-either-way')).toHaveText(/CSV importer.*Replay controller.*Models.*Display client/s);
+  await expect(page.getByTestId('written-either-way')).toHaveText(/CSV importer.*Replay controller.*Access gateway.*Models.*Display client/s);
   await noGold();
 });
 
-test('AT-64: the eight subsystem cards are the equals of the importer, replay controller and Models', async ({ page }) => {
+test('AT-64: the eight subsystem cards are the equals of the importer, replay controller, gateway and Models', async ({ page }) => {
   await openOpening(page);
   const ids = [...BACK, ...SUBS];
   const boxes = await Promise.all(ids.map((id) => box(page, `card-${id}`)));
@@ -177,10 +178,13 @@ test('AT-64: the eight subsystem cards are the equals of the importer, replay co
     expect(Math.abs(b.width - boxes[0].width)).toBeLessThan(0.5);
     expect(Math.abs(b.height - boxes[0].height)).toBeLessThan(0.5);
   }
-  // Two rows on one grid: six and five (FR-120).
+  // Every card's name and role fit inside it.
+  const overflowing = await page.locator('.card').evaluateAll((els) => els.filter((e) => e.scrollHeight > e.clientHeight + 1 || e.scrollWidth > e.clientWidth + 1).map((e) => e.getAttribute('data-testid')));
+  expect(overflowing).toEqual([]);
+  // Two rows of six on one grid (FR-120, with the gateway).
   const rows = new Map<number, number>();
   for (const b of boxes) rows.set(Math.round(b.y), (rows.get(Math.round(b.y)) ?? 0) + 1);
-  expect([...rows.values()].sort()).toEqual([5, 6]);
+  expect([...rows.values()].sort()).toEqual([6, 6]);
   // The same card style: fill, font, outline (VS-25).
   const style = (id: string) => page.getByTestId(`card-${id}`).evaluate((el) => {
     const s = getComputedStyle(el), n = getComputedStyle(el.querySelector('.card-name')!), r = getComputedStyle(el.querySelector('.card-role')!);

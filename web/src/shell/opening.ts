@@ -1,6 +1,7 @@
 // The adoption opening (SRD 4.6 §9.8, docs/v4-interfaces.md §12). With `?hand-made` in
 // the URL the demonstrator opens on the data server drawn as eight subsystems we would
-// write ourselves, beside the CSV importer, the replay controller and Models. Choosing
+// write ourselves, beside the CSV importer, the replay controller, the access gateway
+// and Models, which we write either way. Choosing
 // "Adopt OpenSensorHub" merges them into the single Data server card, then hands over to
 // the normal startup (FR-77) and starts the back end. Nothing runs before that (FR-122).
 //
@@ -43,7 +44,7 @@ export const isSubsystem = (id: unknown): id is SubsystemId => typeof id === 'st
 export const subsystem = (id: SubsystemId) => SUBSYSTEMS.find((s) => s.id === id)!;
 
 /** FR-123: written by us either way, in plain style (nothing marked: the reveal comes later, FR-74a). */
-export const WRITTEN_EITHER_WAY = ['CSV importer', 'Replay controller', 'Models', 'Display client'];
+export const WRITTEN_EITHER_WAY = ['CSV importer', 'Replay controller', 'Access gateway', 'Models', 'Display client'];
 
 export interface OpeningFlow {
   a: string;
