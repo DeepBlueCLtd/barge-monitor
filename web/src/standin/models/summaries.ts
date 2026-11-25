@@ -1,237 +1,159 @@
-// Summaries, stand-in: summaries and derived values (FR-29, FR-34; the split
-// is ADR 0003). From Data cleanse's output only (AT-15) it publishes, with
-// the same datastreams and schemas as backend/models/summaries.py:
-//   * summary datastreams per sensor: 1-minute and hourly means of the seven
-//     parameters, readings removed, most frequent precipitation type;
-//   * derived values at both resolutions: dew point, bow minus stern air
-//     temperature, pressure tendency.
-// A minute is published once it is complete; an hour once its sixty minutes are.
-import type { Cols } from '../registry';
+// Summaries, stand-in (FR-29, FR-34): from Data cleanse's output only (AT-15),
+// per dataset and per replay run, it publishes the minimum, mean and maximum of
+// each quantity over each minute and each hour (`<f>_min`, `<f>`, `<f>_max`),
+// and derived values: dew point, bow minus stern air temperature and the
+// pressure tendency. CO₂ summaries go under its restricted subsystem (FR-112).
+// A minute is published once Data cleanse has published it for the same run.
+import { SENSORS } from '../constants';
 import { M } from '../swe';
-import { Command, measurementFields, Model, ModelApi, PRECIP, QUANTITIES, roundArr } from './csmodel';
+import { Api, Cols, Command, DatasetCtx, LABELS, Model, Rejected, round, runField, UNITS } from './csmodel';
+import { WEATHER_FIELDS } from './dataCleanse';
 
-const SENSORS = ['bow', 'stern'] as const;
+const DC = 'urn:x-barge:process:data-cleanse';
+const DC_R = 'urn:x-barge:process:data-cleanse:restricted';
 
-export function dewPoint(T: Float64Array, RH: Float64Array): Float64Array {
+export function dewPoint(T: number, RH: number): number {
   const a = 17.62;
   const b = 243.12;
-  return T.map((t, i) => {
-    const rh = Math.min(Math.max(RH[i], 1), 100);
-    const g = Math.log(rh / 100) + (a * t) / (b + t);
-    return (b * g) / (a - g);
-  });
+  const rh = Math.min(Math.max(RH, 1), 100);
+  const g = Math.log(rh / 100) + (a * T) / (b + T);
+  return (b * g) / (a - g);
 }
 
-type Rows = Record<string, any> & { t: Float64Array };
-
-/** Means of each quantity over n bins of `width` seconds from `start`, ignoring removed readings. */
-export function binMeans(t: Float64Array, cols: Record<string, unknown>, start: number, width: number, n: number): Rows {
-  const idx = new Int32Array(t.length);
-  const present = new Float64Array(n);
-  for (let i = 0; i < t.length; i++) {
-    const k = Math.floor((t[i] - start) / width);
-    idx[i] = k >= 0 && k < n ? k : -1;
-    if (idx[i] >= 0) present[idx[i]]++;
+/** Min, mean and max of the values of one run, NaN when there are none. */
+function stats(v: Float64Array, keep: (i: number) => boolean): [number, number, number] {
+  let lo = Infinity;
+  let hi = -Infinity;
+  let s = 0;
+  let n = 0;
+  for (let i = 0; i < v.length; i++) {
+    if (!keep(i) || !Number.isFinite(v[i])) continue;
+    lo = Math.min(lo, v[i]);
+    hi = Math.max(hi, v[i]);
+    s += v[i];
+    n++;
   }
-  const out: Rows = { t: Float64Array.from({ length: n }, (_, k) => start + width * k) };
-  const removed = new Float64Array(n);
-  for (const p of QUANTITIES) {
-    if (!(p in cols)) continue;
-    const v = cols[p] as Float64Array;
-    const s = new Float64Array(n);
-    const c = new Float64Array(n);
-    for (let i = 0; i < t.length; i++) {
-      if (idx[i] < 0 || !Number.isFinite(v[i])) continue;
-      s[idx[i]] += v[i];
-      c[idx[i]]++;
-    }
-    for (let k = 0; k < n; k++) removed[k] += present[k] - c[k];
-    out[p] = s.map((x, k) => (c[k] > 0 ? x / c[k] : NaN));
-  }
-  out.readings_removed = removed;
-  if ('precipitation_type' in cols) {
-    const cats = cols.precipitation_type as unknown[];
-    const counts: Map<string, number>[] = Array.from({ length: n }, () => new Map());
-    for (let i = 0; i < t.length; i++) {
-      const c = cats[i];
-      if (idx[i] < 0 || c === null || c === undefined) continue;
-      counts[idx[i]].set(c as string, (counts[idx[i]].get(c as string) ?? 0) + 1);
-    }
-    out.precipitation_type = counts.map((m) => {
-      let best: string | null = null;
-      let bn = 0;
-      for (const [k, v] of m) if (v > bn) [best, bn] = [k, v];
-      return best;
-    });
-  }
-  return out;
+  return n ? [round(lo, 3), round(s / n, 3), round(hi, 3)] : [NaN, NaN, NaN];
 }
 
-function concat(a: Float64Array, b: Float64Array): Float64Array {
-  const out = new Float64Array(a.length + b.length);
-  out.set(a);
-  out.set(b, a.length);
-  return out;
+function statFields(names: string[]) {
+  return names.flatMap((f) => [M.quantity(`${f}_min`, `${LABELS[f]}, minimum`, UNITS[f]), M.quantity(f, `${LABELS[f]}, mean`, UNITS[f]),
+    M.quantity(`${f}_max`, `${LABELS[f]}, maximum`, UNITS[f])]);
 }
 
 export class Summaries extends Model {
   readonly id = 'summaries';
   readonly label = 'Summaries';
-  description = 'Core model: publishes its own datastreams.';
-  interval = 60;
-  settings: Record<string, any> = { tendency_hours: 3.0 };
-  cleaned: Record<string, string | null> = {};
-  out: Record<string, string> = {};
-  /** Minute rows not yet summarised into hours, per sensor. */
-  private minutes: Record<string, Rows[]> = { bow: [], stern: [] };
-  /** Recent bow minute pressures (for the 1-minute tendency) and hourly pressures (for the hourly one). */
-  private minuteP: number[] = [];
-  private hourP: number[] = [];
-  private hourDone = -1;
+  description = 'Core model: 1-minute and hourly minimum, mean and maximum, and derived values.';
+  readonly maxRate = 100;
+  window = 60;
+  settings = { tendency_hours: 3.0 };
+  private fields = new Map<string, string[]>(); // `${ds}|${sensor}` -> quantities in Data cleanse's output
 
-  setup(api: ModelApi): void {
-    super.setup(api);
-    const summary = [M.time('time', 'Start of the interval'), ...measurementFields(),
-      M.count('readings_removed', 'Readings removed'), M.category('precipitation_type', 'Precipitation', PRECIP)];
-    const derived = [M.time('time', 'Start of the interval'), M.quantity('dew_point', 'Dew point', 'Cel'),
-      M.quantity('bow_minus_stern', 'Bow − stern', 'Cel'), M.quantity('pressure_tendency_3h', 'Pressure tendency', 'hPa')];
-    for (const [res, label] of [['1min', '1-minute'], ['1h', 'hourly']]) {
-      for (const s of SENSORS) {
-        const cap = s.charAt(0).toUpperCase() + s.slice(1);
-        this.out[`summary-${res}-${s}`] = api.createDatastream(this.system, {
-          name: `${cap} ${label} means`, outputName: `summary-${res}-${s}`, schema: M.record(`${cap} ${label} means`, summary),
-        });
-      }
-      this.out[`derived-${res}`] = api.createDatastream(this.system, {
-        name: `Derived values, ${label}`, outputName: `derived-${res}`, schema: M.record(`Derived values, ${label}`, derived),
-      });
-    }
-    this.controlKey = api.createControlstream(this.system, {
+  async setup(api: Api): Promise<void> {
+    await super.setup(api);
+    this.controlKey = await api.createControlstream(this.uid, {
       name: 'Summaries settings', inputName: 'settings',
       schema: M.record('Summaries settings', [M.quantity('tendency_hours', 'Pressure tendency span', 'h', 1, 6)]),
     });
   }
 
-  onCommand(_api: ModelApi, cmd: Command): string {
-    Object.assign(this.settings, cmd.parameters);
+  async prepare(api: Api, ds: DatasetCtx): Promise<boolean> {
+    for (const s of SENSORS) {
+      const key = await api.find(DC, `cleaned-${s}__${ds.id}`);
+      if (!key) return false; // Data cleanse has not created it yet
+      const types = await api.fieldTypes(key);
+      this.fields.set(`${ds.id}|${s}`, WEATHER_FIELDS.filter((f) => types.has(f)));
+    }
+    for (const [res, label] of [['1min', '1-minute'], ['1h', 'hourly']]) {
+      for (const s of SENSORS) {
+        const cap = s === 'bow' ? 'Bow' : 'Stern';
+        const names = this.fields.get(`${ds.id}|${s}`)!;
+        await api.createDatastream(this.uid, {
+          name: `${cap} ${label} summary, ${ds.id}`, outputName: `summary-${res}-${s}__${ds.id}`,
+          schema: M.record(`${cap} ${label} summary`, [M.time('time', 'Start of the interval'), ...statFields(names), runField()]),
+        });
+        await api.createDatastream(this.restrictedUid, {
+          name: `${cap} ${label} CO₂ summary, ${ds.id}`, outputName: `summary-${res}-co2-${s}__${ds.id}`,
+          schema: M.record(`${cap} ${label} CO₂ summary`, [M.time('time', 'Start of the interval'), ...statFields(['co2']), runField()]),
+        });
+      }
+      await api.createDatastream(this.uid, {
+        name: `Derived values, ${label}, ${ds.id}`, outputName: `derived-${res}__${ds.id}`,
+        schema: M.record(`Derived values, ${label}`, [M.time('time', 'Start of the interval'), M.quantity('dew_point', 'Dew point', 'Cel'),
+          M.quantity('bow_minus_stern', 'Bow − stern', 'Cel'), M.quantity('pressure_tendency_3h', 'Pressure tendency', 'hPa'), runField()]),
+      });
+    }
+    return true;
+  }
+
+  async validate(_api: Api, cmd: Command): Promise<void> {
+    const v = cmd.parameters.tendency_hours;
+    if (typeof v !== 'number' || !(v >= 1 && v <= 6)) throw new Rejected(`tendency_hours ${JSON.stringify(v)} is outside its bounds, 1 to 6`);
+  }
+
+  async apply(_api: Api, cmd: Command): Promise<string> {
+    this.settings.tendency_hours = Number(cmd.parameters.tendency_hours);
     return `tendency over ${this.settings.tendency_hours} h`;
   }
 
-  private sources(api: ModelApi): boolean {
-    for (const s of SENSORS) if (!this.cleaned[s]) this.cleaned[s] = api.find('urn:x-barge:process:data-cleanse', `cleaned-${s}`);
-    return SENSORS.every((s) => this.cleaned[s]);
-  }
-
-  private derivedRows(rows: Record<string, Rows>, span: number, history: number[]): Rows {
-    const b = rows.bow;
-    const s = rows.stern;
-    const n = b.t.length;
-    const T = b.air_temperature as Float64Array | undefined;
-    const RH = b.relative_humidity as Float64Array | undefined;
-    const out: Rows = { t: b.t };
-    out.dew_point = roundArr(T && RH ? dewPoint(T, RH) : new Float64Array(n).fill(NaN), 3);
-    if (T && s.air_temperature) out.bow_minus_stern = roundArr(T.map((x, i) => x - (s.air_temperature as Float64Array)[i]), 3);
-    if (b.pressure) {
-      const p = concat(Float64Array.from(history), b.pressure as Float64Array);
-      const tend = new Float64Array(n);
-      for (let i = 0; i < n; i++) {
-        const j = history.length + i;
-        tend[i] = span < p.length && j >= span ? p[j] - p[j - span] : NaN;
-      }
-      out.pressure_tendency_3h = roundArr(tend, 3);
+  async process(api: Api, ds: DatasetCtx, t0: number, t1: number, run: string): Promise<boolean> {
+    const minute = await this.interval(api, ds, t0, t1, run, '1min');
+    if (!minute) return false;
+    if ((t1 - ds.start) % 3600 === 0 || t1 === ds.end) {
+      const h0 = Math.max(ds.start, t1 - (((t1 - ds.start) % 3600) || 3600));
+      await this.interval(api, ds, h0, t1, run, '1h');
     }
-    return out;
+    return true;
   }
 
-  step(api: ModelApi, t0: number, t1: number): number {
-    if (!this.sources(api)) return t0;
-    const start = Math.floor(t0 / 60) * 60;
+  /** One interval (t0, t1] at one resolution. False when Data cleanse has not reached t1 for this run. */
+  private async interval(api: Api, ds: DatasetCtx, t0: number, t1: number, run: string, res: string): Promise<boolean> {
+    const from = t0 === ds.start ? t0 : t0 + 1;
     const data: Record<string, Cols> = {};
-    for (const s of SENSORS) data[s] = api.read(this.cleaned[s]!, start, t1);
-    const avail = Math.min(...SENSORS.map((s) => (data[s].t.length ? data[s].t[data[s].t.length - 1] : start)));
-    const end = Math.floor((avail + 1) / 60) * 60;
-    const n = Math.floor((end - start) / 60);
-    if (n <= 0) return t0;
-    api.tap('scilibs', `stand-in: ${n} minute means`, { calls: ['bin means', 'dew point'], minutes: n });
-    const rows: Record<string, Rows> = {};
-    for (const s of SENSORS) rows[s] = binMeans(data[s].t, data[s], start, 60, n);
-    const span = Math.trunc(this.settings.tendency_hours * 60);
-    const derived = this.derivedRows(rows, span, this.minuteP.slice(-span));
-    api.tap('models', `stand-in: ${n} minutes summarised`, { rows: n });
-    for (const s of SENSORS) api.publish(this.out[`summary-1min-${s}`], rows[s]);
-    api.publish(this.out['derived-1min'], derived);
-    const bp = rows.bow.pressure as Float64Array | undefined;
-    for (let i = 0; i < n; i++) this.minuteP.push(bp ? bp[i] : NaN);
-    if (this.minuteP.length > 6 * 60) this.minuteP.splice(0, this.minuteP.length - 6 * 60);
-    for (const s of SENSORS) this.minutes[s].push(rows[s]);
-    this.hours(api, end);
-    return end;
-  }
-
-  /** Hours: from the minute means, once all sixty minutes of an hour are in. */
-  private hours(api: ModelApi, end: number) {
-    const mins: Record<string, Rows> = {};
-    for (const s of SENSORS) mins[s] = mergeRows(this.minutes[s]);
-    if (!mins.bow.t.length) return;
-    const first = Math.ceil(mins.bow.t[0] / 3600) * 3600;
-    const hEnd = Math.floor(end / 3600) * 3600;
-    const hours: number[] = [];
-    for (let h = first; h < hEnd; h += 3600) if (h > this.hourDone) hours.push(h);
-    if (!hours.length) return;
-    const rows: Record<string, Rows> = {};
     for (const s of SENSORS) {
-      const m = mins[s];
-      const r = binMeans(m.t, m, hours[0], 3600, hours.length);
-      const removed = new Float64Array(hours.length);
-      const mr = m.readings_removed as Float64Array;
-      for (let i = 0; i < m.t.length; i++) {
-        const k = Math.floor((m.t[i] - hours[0]) / 3600);
-        if (k >= 0 && k < hours.length) removed[k] += mr[i];
-      }
-      r.readings_removed = removed;
-      rows[s] = r;
+      const c = await api.read(`${DC}|cleaned-${s}__${ds.id}`, from, t1);
+      const runs = c.run as unknown[];
+      let reached = false;
+      for (let i = 0; i < c.t.length; i++) if (runs[i] === run && c.t[i] >= t1) reached = true;
+      if (!reached) return false;
+      data[s] = c;
     }
-    const span = Math.round(this.settings.tendency_hours);
-    const derived = this.derivedRows(rows, span, this.hourP.slice(-span));
-    const hp = rows.bow.pressure as Float64Array | undefined;
-    for (let i = 0; i < hours.length; i++) this.hourP.push(hp ? hp[i] : NaN);
-    if (this.hourP.length > 12) this.hourP.splice(0, this.hourP.length - 12);
-    api.tap('scilibs', `stand-in: ${hours.length} hourly means`, { calls: ['bin means'], hours: hours.length });
-    api.tap('models', `stand-in: ${hours.length} hours summarised`, { rows: hours.length });
-    for (const s of SENSORS) api.publish(this.out[`summary-1h-${s}`], rows[s]);
-    api.publish(this.out['derived-1h'], derived);
-    this.hourDone = hours[hours.length - 1];
-    // Minutes of summarised hours are no longer needed.
-    const keepFrom = this.hourDone + 3600;
-    for (const s of SENSORS) this.minutes[s] = [sliceRows(mins[s], keepFrom)];
-  }
-}
-
-function mergeRows(parts: Rows[]): Rows {
-  if (parts.length === 1) return parts[0];
-  const out: Rows = { t: new Float64Array(0) };
-  const keys = new Set(parts.flatMap((p) => Object.keys(p)));
-  for (const k of keys) {
-    if (parts.every((p) => p[k] instanceof Float64Array)) {
-      const n = parts.reduce((a, p) => a + p[k].length, 0);
-      const arr = new Float64Array(n);
-      let o = 0;
-      for (const p of parts) {
-        arr.set(p[k], o);
-        o += p[k].length;
+    api.sci('call', `${res === '1min' ? 'minute' : 'hourly'} statistics, ${ds.id}`, { calls: ['min', 'mean', 'max', 'dew point'], from: t0, to: t1 });
+    const means: Record<string, Record<string, number>> = { bow: {}, stern: {} };
+    for (const s of SENSORS) {
+      const c = data[s];
+      const runs = c.run as unknown[];
+      const keep = (i: number) => runs[i] === run;
+      const row: Record<string, unknown> = { time: t0, run };
+      for (const f of this.fields.get(`${ds.id}|${s}`) ?? []) {
+        const [lo, mean, hi] = stats(c[f] as Float64Array, keep);
+        Object.assign(row, { [`${f}_min`]: lo, [f]: mean, [`${f}_max`]: hi });
+        means[s][f] = mean;
       }
-      out[k] = arr;
-    } else {
-      out[k] = parts.flatMap((p) => (p[k] ? Array.from(p[k] as ArrayLike<unknown>) : new Array(p.t.length).fill(null)));
+      await api.publish(`${this.uid}|summary-${res}-${s}__${ds.id}`, row);
+      // CO₂ summaries, restricted (FR-112)
+      const co2 = await api.read(`${DC_R}|cleaned-co2-${s}__${ds.id}`, from, t1).catch(() => null);
+      if (co2 && co2.t.length) {
+        const cr = co2.run as unknown[];
+        const [lo, mean, hi] = stats(co2.co2 as Float64Array, (i) => cr[i] === run);
+        await api.publish(`${this.restrictedUid}|summary-${res}-co2-${s}__${ds.id}`, { time: t0, run, co2_min: lo, co2: mean, co2_max: hi });
+      }
     }
+    const T = means.bow.air_temperature;
+    const RH = means.bow.relative_humidity;
+    const span = Math.round(this.settings.tendency_hours * 3600);
+    let tendency = NaN;
+    if (Number.isFinite(means.bow.pressure) && t0 - span >= ds.start) {
+      const past = await api.read(`${DC}|cleaned-bow__${ds.id}`, t0 - span + 1, t0 - span + (t1 - t0), ['pressure']);
+      const [, pm] = stats(past.pressure as Float64Array, () => true);
+      tendency = round(means.bow.pressure - pm, 3);
+    }
+    api.sci('result', `derived values at ${res}`, { dew_point: round(dewPoint(T, RH), 3) });
+    await api.publish(`${this.uid}|derived-${res}__${ds.id}`, {
+      time: t0, run, dew_point: Number.isFinite(T) && Number.isFinite(RH) ? round(dewPoint(T, RH), 3) : NaN,
+      bow_minus_stern: round(T - means.stern.air_temperature, 3), pressure_tendency_3h: tendency,
+    });
+    return true;
   }
-  return out;
-}
-
-function sliceRows(r: Rows, from: number): Rows {
-  let i = 0;
-  while (i < r.t.length && r.t[i] < from) i++;
-  const out: Rows = { t: r.t.slice(i) };
-  for (const [k, v] of Object.entries(r)) if (k !== 't') out[k] = v.slice(i);
-  return out;
 }

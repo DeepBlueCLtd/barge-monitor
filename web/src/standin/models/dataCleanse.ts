@@ -1,18 +1,18 @@
-// Data cleanse, stand-in (FR-34, FR-06e): the core model that runs first.
-// It reads each sensor's raw records from the data server, removes readings
-// the server's QC flags mark as anything but "pass" and readings that stand
-// out from their neighbours by more than `spike_threshold` times a simple
-// noise estimate, then smooths what is left with a 5-point mean. It publishes
-// one cleaned datastream per sensor, with the same schema as the Python model;
-// every other model reads these (AT-15). The method is simpler than the
-// Python model's (median-based noise): its results are illustrative.
-import type { Cols } from '../registry';
+// Data cleanse, stand-in (FR-34, FR-06e): the core model that runs first and
+// the only one that reads the raw records (AT-15). Per window of a dataset it
+// reads each sensor's weather record (and its CO₂ record), removes readings
+// whose QC flag is not "pass" and readings that stand out from their
+// neighbours by more than `spike_threshold` times a simple noise estimate,
+// and smooths what is left with a 5-point mean inside the window. Cleaned
+// CO₂ is published only under its restricted subsystem (FR-112). Simpler
+// than the Python model: its results are illustrative.
+import { SENSORS } from '../constants';
 import { M } from '../swe';
-import { Command, measurementFields, Model, ModelApi, PRECIP, QUANTITIES, roundArr } from './csmodel';
+import { Api, Cols, Command, DatasetCtx, LABELS, Model, Rejected, round, runField, UNITS } from './csmodel';
 
-const SENSORS = ['bow', 'stern'];
-const LAG_S = 2;
 const SMOOTH = 5;
+export const WEATHER_FIELDS = ['air_temperature', 'apparent_wind_speed', 'relative_humidity', 'pressure',
+  'apparent_wind_direction', 'solar_irradiance', 'water_temperature'];
 
 /** Mean absolute step between neighbours, as a noise scale (≈ σ for Gaussian noise). */
 function noiseScale(v: Float64Array): number {
@@ -28,48 +28,37 @@ function noiseScale(v: Float64Array): number {
   return n < 10 ? Infinity : (0.886 * s) / n + 1e-9;
 }
 
-export function clean(cols: Cols, threshold: number): [Record<string, unknown> & { t: Float64Array }, number] {
-  const out: Record<string, unknown> & { t: Float64Array } = { t: cols.t };
-  let removed = 0;
-  for (const p of QUANTITIES) {
-    if (!(p in cols)) continue;
-    const v = Float64Array.from(cols[p] as Float64Array);
-    const flag = (cols[`${p}_qc`] as ArrayLike<unknown> | undefined) ?? new Float64Array(v.length).fill(1);
-    const bad = new Uint8Array(v.length);
-    for (let i = 0; i < v.length; i++) if (Number(flag[i]) !== 1) bad[i] = 1;
-    if (v.length >= 3 && p !== 'apparent_wind_direction') {
-      const lim = threshold * noiseScale(v);
-      for (let i = 1; i < v.length - 1; i++) if (Math.abs(v[i] - 0.5 * (v[i - 1] + v[i + 1])) > lim) bad[i] = 1;
-    }
-    for (let i = 0; i < v.length; i++) {
-      if (bad[i]) {
-        v[i] = NaN;
-        removed++;
-      }
-    }
-    let res = v;
-    if (p !== 'apparent_wind_direction') { // an angle is not averaged across north
-      // moving mean of the readings kept, by prefix sums (numpy.cumsum in the Python model)
-      const n = v.length;
-      const cs = new Float64Array(n + 1);
-      const cn = new Float64Array(n + 1);
-      for (let i = 0; i < n; i++) {
-        const ok = Number.isFinite(v[i]);
-        cs[i + 1] = cs[i] + (ok ? v[i] : 0);
-        cn[i + 1] = cn[i] + (ok ? 1 : 0);
-      }
-      const h = SMOOTH >> 1;
-      res = new Float64Array(n);
-      for (let i = 0; i < n; i++) {
-        const lo = Math.max(0, i - h);
-        const hi = Math.min(n, i + h + 1);
-        res[i] = Number.isFinite(v[i]) ? (cs[hi] - cs[lo]) / (cn[hi] - cn[lo]) : NaN;
-      }
-    }
-    out[p] = roundArr(res, 3);
+/** One field cleaned; returns the values and how many were removed. */
+export function cleanField(name: string, v0: Float64Array, flags: ArrayLike<unknown> | undefined, threshold: number): [Float64Array, number] {
+  const v = Float64Array.from(v0);
+  const bad = new Uint8Array(v.length);
+  if (flags) for (let i = 0; i < v.length; i++) if (String(flags[i]) !== '1') bad[i] = 1;
+  if (v.length >= 3 && name !== 'apparent_wind_direction') {
+    const lim = threshold * noiseScale(v);
+    for (let i = 1; i < v.length - 1; i++) if (Math.abs(v[i] - 0.5 * (v[i - 1] + v[i + 1])) > lim) bad[i] = 1;
   }
-  if ('precipitation_type' in cols) {
-    out.precipitation_type = Array.from(cols.precipitation_type as unknown[]);
+  let removed = 0;
+  for (let i = 0; i < v.length; i++) {
+    if (bad[i] || !Number.isFinite(v[i])) {
+      if (Number.isFinite(v[i])) removed++;
+      v[i] = NaN;
+    }
+  }
+  if (name === 'apparent_wind_direction') return [v, removed]; // an angle is not averaged across north
+  const n = v.length;
+  const cs = new Float64Array(n + 1);
+  const cn = new Float64Array(n + 1);
+  for (let i = 0; i < n; i++) {
+    const ok = Number.isFinite(v[i]);
+    cs[i + 1] = cs[i] + (ok ? v[i] : 0);
+    cn[i + 1] = cn[i] + (ok ? 1 : 0);
+  }
+  const h = SMOOTH >> 1;
+  const out = new Float64Array(n);
+  for (let i = 0; i < n; i++) {
+    const lo = Math.max(0, i - h);
+    const hi = Math.min(n, i + h + 1);
+    out[i] = Number.isFinite(v[i]) ? round((cs[hi] - cs[lo]) / (cn[hi] - cn[lo]), 3) : NaN;
   }
   return [out, removed];
 }
@@ -78,53 +67,85 @@ export class DataCleanse extends Model {
   readonly id = 'data-cleanse';
   readonly label = 'Data cleanse';
   description = 'Core model, runs first: flags and removes noise before any other model sees the data.';
-  interval = 10;
-  catchUpMargin = 30; // the models that read its output must be able to come within their own margin of now
-  settings: Record<string, any> = { spike_threshold: 6.0 };
-  raw: Record<string, string | null> = {};
-  out: Record<string, string> = {};
+  readonly maxRate = 100;
+  window = 60;
+  settings = { spike_threshold: 6.0 };
+  private fields = new Map<string, string[]>(); // `${ds}|${sensor}` -> weather fields present
 
-  setup(api: ModelApi): void {
-    super.setup(api);
-    const fields = [M.time(), ...measurementFields(), M.category('precipitation_type', 'Precipitation', PRECIP)];
-    for (const s of SENSORS) {
-      this.raw[s] = api.find(`urn:x-barge:sensor:${s}`, 'weather');
-      this.out[s] = api.createDatastream(this.system, {
-        name: `Cleaned ${s} record`, outputName: `cleaned-${s}`, schema: M.record(`Cleaned ${s} record`, fields),
-      });
-    }
-    this.controlKey = api.createControlstream(this.system, {
+  async setup(api: Api): Promise<void> {
+    await super.setup(api);
+    this.controlKey = await api.createControlstream(this.uid, {
       name: 'Data cleanse settings', inputName: 'settings', schema: M.record('Data cleanse settings', [
         M.quantity('spike_threshold', 'Spike threshold, in multiples of the local noise', '1', 1, 10)]),
     });
   }
 
-  onCommand(_api: ModelApi, cmd: Command): string {
-    Object.assign(this.settings, cmd.parameters);
+  async prepare(api: Api, ds: DatasetCtx): Promise<void> {
+    for (const s of SENSORS) {
+      const raw = await api.find(`urn:x-barge:sensor:${s}`, `weather__${ds.id}`);
+      const present = raw ? WEATHER_FIELDS.filter((f) => false || true).filter(async () => true) : [];
+      let names: string[] = [];
+      if (raw) {
+        const types = await api.fieldTypes(raw);
+        names = WEATHER_FIELDS.filter((f) => types.has(f));
+      }
+      void present;
+      this.fields.set(`${ds.id}|${s}`, names);
+      const label = `Cleaned ${s} record, ${ds.id}`;
+      await api.createDatastream(this.uid, {
+        name: label, outputName: `cleaned-${s}__${ds.id}`,
+        schema: M.record(label, [M.time(), ...names.map((f) => M.quantity(f, LABELS[f], UNITS[f])), runField()]),
+      });
+      const co2Label = `Cleaned ${s} CO₂, ${ds.id}`;
+      await api.createDatastream(this.restrictedUid, {
+        name: co2Label, outputName: `cleaned-co2-${s}__${ds.id}`,
+        schema: M.record(co2Label, [M.time(), M.quantity('co2', LABELS.co2, UNITS.co2), runField()]),
+      });
+    }
+  }
+
+  async validate(_api: Api, cmd: Command): Promise<void> {
+    const v = cmd.parameters.spike_threshold;
+    if (typeof v !== 'number' || !(v >= 1 && v <= 10)) throw new Rejected(`spike_threshold ${JSON.stringify(v)} is outside its bounds, 1 to 10`);
+  }
+
+  async apply(_api: Api, cmd: Command): Promise<string> {
+    this.settings.spike_threshold = Number(cmd.parameters.spike_threshold);
     return `spike threshold ${this.settings.spike_threshold}`;
   }
 
-  step(api: ModelApi, t0: number, t1: number): number {
-    let done = t1;
+  async process(api: Api, ds: DatasetCtx, t0: number, t1: number, run: string): Promise<boolean> {
+    const from = t0 === ds.start ? t0 : t0 + 1;
     for (const s of SENSORS) {
-      const cols = api.read(this.raw[s]!, t0 - LAG_S, t1);
-      const t = cols.t;
-      if (t.length < 3) return t0;
-      api.tap('scilibs', `stand-in: clean ${t.length} ${s} readings`,
-        { calls: ['QC flags', 'spike test', '5-point mean'], readings: t.length, spike_threshold: this.settings.spike_threshold });
-      const [out, removed] = clean(cols, Number(this.settings.spike_threshold));
-      const last = t[t.length - 1] - LAG_S;
-      // Times are sorted: the rows kept, (t0, last], are one run.
-      let a = 0;
-      while (a < t.length && !(t0 > 0 ? t[a] > t0 : t[a] >= 0)) a++;
-      let b = t.length;
-      while (b > a && t[b - 1] > last) b--;
-      const sel: Record<string, unknown> = {};
-      for (const [k, v] of Object.entries(out)) sel[k] = (v as Float64Array | unknown[]).slice(a, b);
-      api.tap('models', `stand-in: ${b - a} cleaned, ${removed} removed`, { rows: b - a, removed });
-      api.publish(this.out[s], sel);
-      done = Math.min(done, last);
+      const names = this.fields.get(`${ds.id}|${s}`) ?? [];
+      const raw = await api.find(`urn:x-barge:sensor:${s}`, `weather__${ds.id}`);
+      if (raw && names.length) {
+        const cols = await api.read(raw, from, t1);
+        await this.publish(api, `urn:x-barge:process:data-cleanse|cleaned-${s}__${ds.id}`, cols, names, run, s);
+      }
+      const co2 = await api.find(`urn:x-barge:sensor:${s}:co2`, `co2__${ds.id}`);
+      if (co2) {
+        const cols = await api.read(co2, from, t1);
+        await this.publish(api, `${this.restrictedUid}|cleaned-co2-${s}__${ds.id}`, cols, ['co2'], run, s);
+      }
     }
-    return done;
+    return true;
+  }
+
+  private async publish(api: Api, key: string, cols: Cols, names: string[], run: string, sensor: string): Promise<void> {
+    if (!cols.t.length) return;
+    api.sci('call', `clean ${cols.t.length} ${sensor} readings`, { calls: ['QC flags', 'spike test', '5-point mean'], fields: names, readings: cols.t.length,
+      spike_threshold: this.settings.spike_threshold });
+    const out: Cols = { t: cols.t };
+    let removed = 0;
+    for (const f of names) {
+      if (!(f in cols)) continue;
+      const [v, r] = cleanField(f, cols[f] as Float64Array, cols[`${f}_qc`] as ArrayLike<unknown> | undefined, this.settings.spike_threshold);
+      out[f] = v;
+      removed += r;
+    }
+    out.run = new Array(cols.t.length).fill(run);
+    api.sci('result', `${cols.t.length} cleaned, ${removed} removed`, { rows: cols.t.length, removed });
+    await api.publishMany(key, out);
   }
 }

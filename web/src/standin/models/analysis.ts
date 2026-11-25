@@ -1,26 +1,24 @@
-// Analysis, stand-in: change detection, correlation and clustering (FR-34,
-// FR-06e). The same datastreams, schemas and control stream as
-// backend/models/analysis.py, and the same reading plan:
-//   PT1H: cleaned 1 s records, every 5 s; PT6H, P1D: 1-minute means;
-//   P7D, P28D: hourly means.
-// Simpler methods: all three algorithms are k-means, each with its own seed;
-// changes come from a plain step detector. Every run is marked illustrative,
-// and nothing is scored: the stand-in has no referee (FR-06e).
-import { PyFloat } from '../py';
-import type { Cols } from '../registry';
+// Analysis, stand-in (FR-34, FR-35a, FR-06e): change detection, correlation and
+// clustering, on Data cleanse's output only (AT-15). Per window of the current
+// dataset it runs once on the last three hours of the bow's air temperature and wind
+// speed; on a `clustering` command it runs on the data of interest the command
+// carries. Every run is appended under its own `run_id` (FR-28a); a run whose
+// selection includes CO₂ is published, with its runs-log entry, only under the
+// restricted subsystem (FR-112), and a command naming CO₂ from a sender whose
+// role lacks emissions is REJECTED (FR-112a, D-152). Simpler methods than the
+// Python model: all three algorithms are k-means with their own seeds; changes
+// come from a step detector. Every run is marked illustrative and unscored.
+import { SENSORS } from '../constants';
+import { datasetId } from '../csv';
 import { M } from '../swe';
-import { Command, interp, Model, ModelApi, NoRun, rng } from './csmodel';
+import { Api, Cols, Command, DatasetCtx, Model, Rejected, ReplayState, rng, runField } from './csmodel';
 
-const PERIODS: Record<string, number> = { PT1M: 60, PT1H: 3600, PT6H: 6 * 3600, P1D: 86400, P7D: 7 * 86400, P28D: 28 * 86400 };
-const SENSOR_FIELDS = ['air_temperature', 'apparent_wind_speed', 'relative_humidity', 'pressure',
-  'apparent_wind_direction', 'solar_irradiance', 'water_temperature'];
-const DERIVED_FIELDS = ['dew_point', 'bow_minus_stern', 'pressure_tendency_3h'];
-const KMEANS_SEED = 20310407; // Analysis's own named stream (FR-14)
+const DC = 'urn:x-barge:process:data-cleanse';
+const KMEANS_SEED = 20310407;
 const SEEDS: Record<string, number> = { A: KMEANS_SEED, B: KMEANS_SEED + 1, C: KMEANS_SEED + 2 };
 const MAX_CLUSTERS = 8;
-const SCORED_AGAINST = 'stand-in: not scored';
+const RESOLUTIONS: Record<string, number> = { PT1S: 1, PT1M: 60, PT1H: 3600 };
 
-/** k-means with k-means++ seeding, from the algorithm's own seed. */
 export function kmeans(X: Float64Array[], k: number, seed: number, iters = 50): Int32Array {
   const n = X.length;
   const dim = n ? X[0].length : 0;
@@ -89,15 +87,11 @@ function relabel(labels: Int32Array): string[] {
   });
 }
 
-/**
- * Sustained steps in the standardised fields: at each sample, the mean over
- * the next `w` samples minus the mean over the previous `w`, averaged over
- * fields; peaks above 6/sensitivity standard deviations, at least 2w apart.
- */
+/** Sustained steps in the standardised fields; peaks above 6/sensitivity, at least 2w apart. */
 export function detectSteps(t: Float64Array, Z: Float64Array[], sensitivity: number, stepS: number) {
   const n = t.length;
-  const out = { t: [] as number[], scale: [] as number[], strength: [] as number[] };
-  const w = stepS <= 5 ? 24 : stepS <= 60 ? 45 : 8; // two minutes, 45 minutes or eight hours
+  const out = { t: [] as number[], scale: [] as string[], strength: [] as number[] };
+  const w = stepS <= 5 ? 24 : stepS <= 60 ? 45 : 8;
   if (n < 2 * w + 1 || !Z.length) return out;
   const score = new Float64Array(n);
   for (const col of Z) {
@@ -112,17 +106,17 @@ export function detectSteps(t: Float64Array, Z: Float64Array[], sensitivity: num
   picked.sort((a, b) => a - b);
   for (const i of picked) {
     out.t.push(t[i]);
-    out.scale.push(stepS <= 5 ? 0 : 1);
-    out.strength.push(score[i]);
+    out.scale.push(stepS <= 5 ? 'minutes' : 'hours');
+    out.strength.push(Math.round(score[i] * 100) / 100);
   }
   return out;
 }
 
-function corrcoef(X: Float64Array[], m: number): (PyFloat | null)[][] {
+function corrcoef(X: Float64Array[], m: number): number[][] {
   const n = X.length;
   const mean = new Float64Array(m);
   for (const r of X) for (let j = 0; j < m; j++) mean[j] += r[j] / n;
-  const R: (PyFloat | null)[][] = [];
+  const R: number[][] = [];
   for (let a = 0; a < m; a++) {
     R.push([]);
     for (let b = 0; b < m; b++) {
@@ -137,165 +131,228 @@ function corrcoef(X: Float64Array[], m: number): (PyFloat | null)[][] {
         sbb += db * db;
       }
       const v = sab / Math.sqrt(saa * sbb);
-      R[a].push(Number.isFinite(v) ? new PyFloat(Math.round(v * 1000) / 1000) : null); // floats, as numpy writes them
+      R[a].push(Number.isFinite(v) ? Math.round(v * 1000) / 1000 : NaN);
     }
   }
   return R;
 }
 
+export interface Source {
+  system: string;
+  output: string;
+  fields: string[];
+}
+
+export interface Doi {
+  dataset: string | { file: string; sha256: string };
+  start: string;
+  end: string;
+  resolution: string;
+  sources: Source[];
+}
+
+/** The Data cleanse output a source is read from (AT-15), and whether it is CO₂. */
+function cleanedFor(src: Source, field: string): { key: string; co2: boolean } | null {
+  const s = SENSORS.find((x) => src.system.includes(`:sensor:${x}`) || src.output.includes(`-${x}`));
+  if (!s) return null;
+  const co2 = field === 'co2' || field.startsWith('co2_') || /:co2$|:restricted$/.test(src.system) || src.output.includes('co2');
+  return co2 ? { key: `${DC}:restricted|cleaned-co2-${s}`, co2 } : { key: `${DC}|cleaned-${s}`, co2 };
+}
+
 export class Analysis extends Model {
   readonly id = 'analysis';
   readonly label = 'Analysis';
-  description = 'Core model: publishes its own datastreams.';
-  interval = 600; // re-run the latest settings every ten simulated minutes
-  startFrom = 'now' as const;
-  settings: Record<string, any> = { algorithm: 'B', fields: 'air_temperature,apparent_wind_speed', period: 'PT1M', clusters: 4, sensitivity: 5.0 };
-  private src = new Map<string, string>();
-  out: Record<string, string> = {};
-  runs = 0;
-  lastCommand = '';
+  description = 'Core model: change detection, correlation and clustering on a data of interest.';
+  readonly maxRate = 10;
+  window = 600;
+  settings = { algorithm: 'B', clusters: 4, sensitivity: 5.0 };
+  private runs = 0;
 
-  setup(api: ModelApi): void {
-    super.setup(api);
-    const defs: Record<string, ReturnType<typeof M.time>[]> = {
-      changes: [M.time(), M.text('run_id', 'Run'), M.category('scale', 'Scale of the change', ['minutes', 'hours']),
-        M.quantity('strength', 'Strength of the change', '1')],
-      clusters: [M.time(), M.text('run_id', 'Run'), M.category('cluster', 'Cluster', Array.from({ length: MAX_CLUSTERS }, (_, i) => `c${i + 1}`))],
-      correlation: [M.time(), M.text('run_id', 'Run'), M.text('fields', 'Fields, in matrix order'),
-        { type: 'Matrix', name: 'matrix', label: 'Pearson correlation', definition: 'https://deepbluecltd.github.io/barge-monitor/def/matrix',
-          elementCount: { type: 'Count' }, elementType: { type: 'DataArray', name: 'row', elementCount: { type: 'Count' },
-            elementType: { type: 'Quantity', name: 'r', uom: { code: '1' } } } }],
-      runs: [M.time('time', 'Time the run completed'), M.text('run_id', 'Run'), M.text('command_id', 'Command'),
-        M.text('algorithm', 'Algorithm'), M.text('fields', 'Fields'), M.text('period', 'Period'),
-        M.time('window_start', 'Data range: start'), M.time('window_end', 'Data range: end'),
-        M.count('records', 'Records used'), M.count('clusters', 'Clusters'),
-        M.quantity('score_changes', 'Score: changes found against the manifest', '1'),
-        M.quantity('score_clusters', 'Score: clusters against the manifest (adjusted Rand index)', '1'),
-        M.text('scored_against', 'What the clusters were scored against'),
-        M.boolean('illustrative', 'Illustrative result (stand-in)')],
-    };
-    const names: Record<string, string> = { changes: 'Detected changes', clusters: 'Clusters', correlation: 'Correlation', runs: 'Runs' };
-    for (const [out, fields] of Object.entries(defs)) {
-      this.out[out] = api.createDatastream(this.system, { name: names[out], outputName: out, schema: M.record(names[out], fields) });
-    }
-    this.controlKey = api.createControlstream(this.system, {
+  async setup(api: Api): Promise<void> {
+    await super.setup(api);
+    this.controlKey = await api.createControlstream(this.uid, {
       name: 'Clustering', inputName: 'clustering', schema: M.record('Clustering settings', [
         M.category('algorithm', 'Algorithm', ['A', 'B', 'C']),
-        M.text('fields', 'Fields, comma-separated', [...SENSOR_FIELDS, ...DERIVED_FIELDS]),
-        M.category('period', 'Period', Object.keys(PERIODS)),
+        M.text('doi', 'Data of interest (JSON): dataset, start, end, resolution, sources'),
         M.count('clusters', 'Number of clusters', 2, MAX_CLUSTERS),
         M.quantity('sensitivity', 'Change detector sensitivity', '1', 1, 10)]),
     });
   }
 
-  onCommand(api: ModelApi, cmd: Command): string {
-    Object.assign(this.settings, cmd.parameters);
-    this.lastCommand = cmd.id;
-    const r = this.run(api);
-    return `${r.run_id} over ${r.records} records`;
+  private schemas(): Record<string, ReturnType<typeof M.record>> {
+    return {
+      runs: M.record('Runs', [M.time('time', 'Data range: end'), M.text('run_id', 'Analysis run'), runField(), M.text('command_id', 'Command'),
+        M.text('algorithm', 'Algorithm'), M.text('sources', 'Sources (JSON)'), M.text('resolution', 'Resolution'),
+        M.time('start', 'Data range: start'), M.time('end', 'Data range: end'), M.count('records', 'Records used'), M.count('clusters', 'Clusters'),
+        M.quantity('sensitivity', 'Sensitivity', '1'), M.quantity('score_changes', 'Score: changes', '1'), M.quantity('score_clusters', 'Score: clusters', '1'),
+        M.boolean('illustrative', 'Illustrative result (stand-in)')]),
+      changes: M.record('Detected changes', [M.time(), M.text('run_id', 'Analysis run'), runField(),
+        M.category('scale', 'Scale of the change', ['minutes', 'hours']), M.quantity('strength', 'Strength of the change', '1')]),
+      clusters: M.record('Clusters', [M.time(), M.text('run_id', 'Analysis run'), runField(),
+        M.category('cluster', 'Cluster', Array.from({ length: MAX_CLUSTERS }, (_, i) => `c${i + 1}`))]),
+      correlation: M.record('Correlation', [M.time(), M.text('run_id', 'Analysis run'), runField(), M.text('fields', 'Fields, in matrix order'),
+        M.text('matrix', 'Pearson correlation (JSON)')]),
+    };
   }
 
-  initial(api: ModelApi): boolean {
+  async prepare(api: Api, ds: DatasetCtx): Promise<void> {
+    for (const [out, rec] of Object.entries(this.schemas())) {
+      for (const uid of [this.uid, this.restrictedUid]) {
+        await api.createDatastream(uid, { name: `${rec.label}, ${ds.id}${uid === this.uid ? '' : ', restricted'}`, outputName: `${out}__${ds.id}`, schema: rec });
+      }
+    }
+  }
+
+  /** The default run for a window: the last three hours of the bow's air temperature and wind speed, as minute means. */
+  async process(api: Api, ds: DatasetCtx, _t0: number, t1: number, run: string): Promise<boolean> {
+    const from = Math.max(ds.start, t1 - 3 * 3600);
+    const probe = await api.read(`${DC}|cleaned-bow__${ds.id}`, Math.max(from, t1 - 5), t1, ['run']);
+    if (!Array.from(probe.t).some((t, i) => t >= t1 && (probe.run as unknown[])[i] === run)) return false; // Data cleanse is behind
+    const doi: Doi = {
+      dataset: ds.id, start: '', end: '', resolution: 'PT1M',
+      sources: [{ system: 'urn:x-barge:sensor:bow', output: 'weather', fields: ['air_temperature', 'apparent_wind_speed'] }],
+    };
+    await this.run(api, ds.id, from, t1, doi, run, '', this.settings.algorithm, this.settings.clusters, this.settings.sensitivity);
+    return true;
+  }
+
+  private parseDoi(cmd: Command): Doi {
+    let doi: Doi;
     try {
-      this.run(api);
-      return true;
-    } catch (e) {
-      if (e instanceof NoRun) return false; // its inputs are not there yet
-      throw e;
+      doi = typeof cmd.parameters.doi === 'string' ? JSON.parse(cmd.parameters.doi) : (cmd.parameters.doi as Doi);
+    } catch {
+      throw new Rejected('doi is not a data of interest (JSON)');
     }
+    if (!doi || typeof doi !== 'object') throw new Rejected('doi is not a data of interest (JSON)');
+    return doi;
   }
 
-  step(api: ModelApi, _t0: number, t1: number): number {
-    try {
-      this.run(api);
-    } catch (e) {
-      if (!(e instanceof NoRun)) throw e;
-      api.tap('models', `no run: ${e.message}`, { error: e.message });
-    }
-    return t1;
+  private dsOf(doi: Doi): string {
+    const d = doi.dataset;
+    if (typeof d === 'string') return d;
+    if (d && typeof d === 'object' && d.file && d.sha256) return datasetId(d.file, d.sha256);
+    throw new Rejected('doi.dataset names no dataset');
   }
 
-  private key(api: ModelApi, system: string, output: string): string | null {
-    const k = `${system}/${output}`;
-    if (!this.src.has(k)) {
-      const found = api.find(`urn:x-barge:process:${system}`, output);
-      if (found) this.src.set(k, found); // a datastream not there yet is looked for again next time
-      return found;
+  async validate(api: Api, cmd: Command): Promise<void> {
+    const p = cmd.parameters;
+    if (!['A', 'B', 'C'].includes(String(p.algorithm))) throw new Rejected(`algorithm ${JSON.stringify(p.algorithm)} is not one of A, B, C`);
+    if (!Number.isInteger(p.clusters) || (p.clusters as number) < 2 || (p.clusters as number) > MAX_CLUSTERS) {
+      throw new Rejected(`clusters ${JSON.stringify(p.clusters)} is outside its bounds, 2 to ${MAX_CLUSTERS}`);
     }
-    return this.src.get(k)!;
+    if (typeof p.sensitivity !== 'number' || p.sensitivity < 1 || p.sensitivity > 10) {
+      throw new Rejected(`sensitivity ${JSON.stringify(p.sensitivity)} is outside its bounds, 1 to 10`);
+    }
+    const doi = this.parseDoi(cmd);
+    if (!(doi.resolution in RESOLUTIONS)) throw new Rejected(`resolution ${doi.resolution} is not available; available: PT1S, PT1M, PT1H`);
+    if (!Array.isArray(doi.sources) || !doi.sources.length) throw new Rejected('doi.sources names no source');
+    const ds = this.dsOf(doi);
+    const fields = doi.sources.flatMap((s) => (s.fields ?? []).map((f) => cleanedFor(s, f)));
+    if (fields.some((x) => x === null)) throw new Rejected('a requested source is not available');
+    // FR-112a: the receiver checks the sender's role, whatever the client sent.
+    if (fields.some((x) => x!.co2) && !this.senderReadsEmissions(cmd.sender)) throw new Rejected('a requested source is not available');
+    if (!(await api.find(DC, `cleaned-bow__${ds}`))) throw new Rejected(`dataset ${ds} has not been processed`);
+    const t0 = Date.parse(doi.start) / 1000;
+    const t1 = Date.parse(doi.end) / 1000;
+    if (!(t1 > t0)) throw new Rejected('doi.start must come before doi.end');
   }
 
-  /** Sample times and one column per field, on the source the period calls for. */
-  private series(api: ModelApi, t0: number, t1: number, fields: string[]): [Float64Array, Record<string, Float64Array>, number] {
-    const period = this.settings.period as string;
-    let key: string | null;
-    let dkey: string | null;
-    let step: number;
-    if (period === 'PT1M') [key, dkey, step] = [this.key(api, 'data-cleanse', 'cleaned-bow'), this.key(api, 'summaries', 'derived-1min'), 1];
-    else if (period === 'PT1H') [key, dkey, step] = [this.key(api, 'data-cleanse', 'cleaned-bow'), this.key(api, 'summaries', 'derived-1min'), 5];
-    else if (period === 'PT6H' || period === 'P1D') [key, dkey, step] = [this.key(api, 'summaries', 'summary-1min-bow'), this.key(api, 'summaries', 'derived-1min'), 1];
-    else [key, dkey, step] = [this.key(api, 'summaries', 'summary-1h-bow'), this.key(api, 'summaries', 'derived-1h'), 1];
-    const sf = fields.filter((f) => SENSOR_FIELDS.includes(f));
-    const df = fields.filter((f) => DERIVED_FIELDS.includes(f));
-    const base: Cols = key ? api.read(key, t0, t1, sf.length ? sf : ['air_temperature']) : { t: new Float64Array(0) };
-    const pick = (v: Float64Array) => v.filter((_, i) => i % step === 0);
-    const t = pick(base.t);
-    const cols: Record<string, Float64Array> = {};
-    for (const f of sf) if (f in base) cols[f] = pick(base[f] as Float64Array);
-    if (df.length && dkey) {
-      const d = api.read(dkey, t0 - 3600, t1, df);
-      for (const f of df) if (f in d && d.t.length) cols[f] = interp(t, d.t, d[f] as Float64Array);
-    }
-    return [t, cols, period === 'PT1M' || period === 'PT1H' ? step : period === 'PT6H' || period === 'P1D' ? 60 : 3600];
+  async apply(api: Api, cmd: Command, state: ReplayState | null): Promise<string> {
+    const p = cmd.parameters;
+    const doi = this.parseDoi(cmd);
+    const ds = this.dsOf(doi);
+    Object.assign(this.settings, { algorithm: String(p.algorithm), clusters: Number(p.clusters), sensitivity: Number(p.sensitivity) });
+    const run = state && state.dataset === ds ? state.run : '';
+    const r = await this.run(api, ds, Date.parse(doi.start) / 1000, Date.parse(doi.end) / 1000, doi, run, cmd.id,
+      String(p.algorithm), Number(p.clusters), Number(p.sensitivity));
+    return `${r.run_id} over ${r.records} records${r.restricted ? ' (restricted)' : ''}`;
   }
 
-  run(api: ModelApi): { run_id: string; records: number } {
-    const s = this.settings;
-    const t1 = api.now();
-    const t0 = Math.max(0, t1 - PERIODS[s.period]);
-    const fields = String(s.fields).split(',').map((f) => f.trim()).filter(Boolean);
-    const [tAll, cols, stepS] = this.series(api, t0, t1, fields);
-    const names = fields.filter((f) => f in cols);
-    if (!names.length) throw new NoRun(`none of the fields ${JSON.stringify(fields)} is published`);
+  /** Read the selection from Data cleanse's output, at its resolution. */
+  private async series(api: Api, ds: string, t0: number, t1: number, doi: Doi, run: string): Promise<{ t: Float64Array; cols: Map<string, Float64Array>; co2: boolean }> {
+    const step = RESOLUTIONS[doi.resolution] ?? 1;
+    const cols = new Map<string, Float64Array>();
+    let base: Float64Array | null = null;
+    let co2 = false;
+    const cache = new Map<string, Cols>();
+    for (const src of doi.sources) {
+      for (const f0 of src.fields ?? []) {
+        const f = f0.replace(/_(min|max)$/, '');
+        const c = cleanedFor(src, f)!;
+        co2 ||= c.co2;
+        const key = `${c.key}__${ds}`;
+        let data = cache.get(key);
+        if (!data) cache.set(key, (data = await api.read(key, t0, t1)));
+        // the latest run of this dataset, or the replay run asked for (FR-35)
+        const runs = data.run as unknown[];
+        const want = run && runs.includes(run) ? run : (runs.length ? runs[runs.length - 1] : '');
+        const tt: number[] = [];
+        const vv: number[] = [];
+        const v = data[f] as Float64Array | undefined;
+        if (!v) continue;
+        for (let i = 0; i < data.t.length; i++) if (runs[i] === want) {
+          tt.push(Math.floor(data.t[i] / step) * step);
+          vv.push(v[i]);
+        }
+        // bin to the resolution (means)
+        const bins = new Map<number, [number, number]>();
+        tt.forEach((t, i) => {
+          if (!Number.isFinite(vv[i])) return;
+          const b = bins.get(t) ?? [0, 0];
+          b[0] += vv[i];
+          b[1] += 1;
+          bins.set(t, b);
+        });
+        const times = Float64Array.from([...bins.keys()].sort((a, b) => a - b));
+        if (!base) base = times;
+        const label = `${src.system.split(':').slice(-1)[0]}.${f}`;
+        cols.set(label, Float64Array.from(base, (t) => {
+          const b = bins.get(t);
+          return b ? b[0] / b[1] : NaN;
+        }));
+      }
+    }
+    return { t: base ?? new Float64Array(0), cols, co2 };
+  }
+
+  private async run(api: Api, ds: string, t0: number, t1: number, doi: Doi, run: string, commandId: string,
+    algorithm: string, k: number, sensitivity: number): Promise<{ run_id: string; records: number; restricted: boolean }> {
+    const sel = await this.series(api, ds, t0, t1, doi, run);
+    const names = [...sel.cols.keys()];
     const rows: number[] = [];
-    for (let i = 0; i < tAll.length; i++) if (names.every((f) => Number.isFinite(cols[f][i]))) rows.push(i);
-    const t = Float64Array.from(rows, (i) => tAll[i]);
-    const X = rows.map((i) => Float64Array.from(names, (f) => cols[f][i]));
-    const k = Math.trunc(Number(s.clusters));
-    if (X.length < Math.max(k, 3)) throw new NoRun(`only ${X.length} records in the period: too few to cluster`);
+    for (let i = 0; i < sel.t.length; i++) if (names.every((f) => Number.isFinite(sel.cols.get(f)![i]))) rows.push(i);
+    const t = Float64Array.from(rows, (i) => sel.t[i]);
+    const X = rows.map((i) => Float64Array.from(names, (f) => sel.cols.get(f)![i]));
+    if (X.length < Math.max(k, 3)) throw new Error(`only ${X.length} records in the selection: too few to cluster`);
     const m = names.length;
     const mean = new Float64Array(m);
     const sd = new Float64Array(m);
     for (const r of X) for (let j = 0; j < m; j++) mean[j] += r[j] / X.length;
     for (const r of X) for (let j = 0; j < m; j++) sd[j] += (r[j] - mean[j]) ** 2 / X.length;
     const Z = X.map((r) => r.map((x, j) => (x - mean[j]) / (Math.sqrt(sd[j]) + 1e-9)));
-    api.tap('scilibs', `cluster ${Z.length} records, algorithm ${s.algorithm}`,
-      { algorithm: s.algorithm, fields: names, records: Z.length, clusters: k });
-    const labels = kmeans(Z, k, SEEDS[s.algorithm] ?? KMEANS_SEED);
-    const how = `stand-in: k-means (seed ${SEEDS[s.algorithm] ?? KMEANS_SEED})`;
-    const det = detectSteps(t, names.map((_, j) => Float64Array.from(Z, (r) => r[j])), Number(s.sensitivity), stepS);
-    const R = m > 1 ? corrcoef(X, m) : [[new PyFloat(1)]];
-    api.tap('models', `${how}: ${new Set(labels).size} clusters; ${det.t.length} changes`, { method: how, changes: det.t.length });
-    const sc = api.score('changes', { t: det.t, scale: det.scale, t0: t[0], t1: t[t.length - 1] });
-    const cs = api.score('clusters', { t: Array.from(t), labels: Array.from(labels) });
-    const scoreChanges = stepS <= 5 ? sc.boundary_recall : sc.front_recall;
-    const scoreClusters = cs.ari_reach_kind;
+    api.sci('call', `cluster ${Z.length} records, algorithm ${algorithm}`, { algorithm, fields: names, records: Z.length, clusters: k });
+    const labels = kmeans(Z, k, SEEDS[algorithm] ?? KMEANS_SEED);
+    const det = detectSteps(t, names.map((_, j) => Float64Array.from(Z, (r) => r[j])), sensitivity, RESOLUTIONS[doi.resolution] ?? 1);
+    const R = m > 1 ? corrcoef(X, m) : [[1]];
+    api.sci('result', `k-means: ${new Set(labels).size} clusters; ${det.t.length} changes`, { changes: det.t.length });
+    await api.score('clusters', { records: t.length }); // the referee: the stand-in is unscored (FR-06e)
     this.runs += 1;
-    const runId = `run-${this.runs}`;
-    const n = det.t.length;
-    api.publish(this.out.changes, {
-      t: Float64Array.from(det.t), run_id: new Array(n).fill(runId), scale: det.scale.map((x) => (x === 0 ? 'minutes' : 'hours')),
-      strength: Float64Array.from(det.strength, (x) => Math.round(x * 100) / 100),
-    }, true);
-    api.publish(this.out.clusters, { t, run_id: new Array(t.length).fill(runId), cluster: relabel(labels) }, true);
-    api.publish(this.out.correlation, { t: Float64Array.of(t1), run_id: [runId], fields: [names.join(',')], matrix: [R] }, true);
-    api.publish(this.out.runs, {
-      t: Float64Array.of(t1), run_id: [runId], command_id: [this.lastCommand], algorithm: [s.algorithm], fields: [names.join(',')],
-      period: [s.period], window_start: [t[0]], window_end: [t[t.length - 1]], records: Float64Array.of(t.length),
-      clusters: Float64Array.of(k), score_changes: Float64Array.of(scoreChanges ?? NaN),
-      score_clusters: Float64Array.of(scoreClusters ?? NaN), scored_against: [SCORED_AGAINST],
-      illustrative: Float64Array.of(1), // FR-06e: every stand-in result is illustrative
+    const runId = `a-${this.runs}`;
+    const uid = sel.co2 ? this.restrictedUid : this.uid; // FR-112
+    for (let i = 0; i < det.t.length; i++) {
+      await api.publish(`${uid}|changes__${ds}`, { time: det.t[i], run_id: runId, run, scale: det.scale[i], strength: det.strength[i] });
+    }
+    const cl = relabel(labels);
+    for (let i = 0; i < t.length; i++) await api.publish(`${uid}|clusters__${ds}`, { time: t[i], run_id: runId, run, cluster: cl[i] });
+    await api.publish(`${uid}|correlation__${ds}`, {
+      time: t[t.length - 1], run_id: runId, run, fields: names.join(','),
+      matrix: JSON.stringify(R.map((r) => r.map((x) => (Number.isFinite(x) ? x : null)))),
     });
-    return { run_id: runId, records: t.length };
+    await api.publish(`${uid}|runs__${ds}`, {
+      time: t[t.length - 1], run_id: runId, run, command_id: commandId, algorithm, sources: JSON.stringify(doi.sources),
+      resolution: doi.resolution, start: t[0], end: t[t.length - 1], records: t.length, clusters: k, sensitivity,
+      score_changes: NaN, score_clusters: NaN, illustrative: true,
+    });
+    return { run_id: runId, records: t.length, restricted: sel.co2 };
   }
 }
