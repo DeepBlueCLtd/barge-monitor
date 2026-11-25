@@ -1,260 +1,334 @@
-// The data server (C-04; server.py): one running instance of the Connected
-// Systems server. An instance is created at each server start: it freezes the
-// field offering (FR-51), drops the store adapter's index so the adapter
-// rebuilds it while the server waits (FR-47), and carries a fresh instance
-// identifier. The store and the registry outlive it. It holds no client
-// sessions (FR-06).
+// The data server: a stand-in for a stock OpenSensorHub (FR-06c, FR-38a,
+// docs/v4-interfaces.md §9). One Server is one running instance: it is made at
+// each server start, freezes the field offering (FR-51), and ends every push
+// subscription when it stops. The store outlives it (§9.1: identifiers and
+// resources persist across restarts), until Reset instance.
+//
+// This module holds what the server decides: permissions (§9.3), the server's
+// own configuration (the platform, sensors, CO₂ analysers, Models and the
+// workspaces), resource creation, and command delivery to subscribers (§9.2).
+// api.ts turns HTTP into calls here.
 import profileJson from '../../../contracts/profile.json';
-import { StoreAdapter } from './adapter';
-import { SENSORS, SOSA, URN } from './constants';
-import { Offering, RAW, schemaId } from './fields';
-import { pyRepr, pySlice } from './py';
-import { Cols, ControlstreamRec, Registry, Series, SystemRec } from './registry';
-import { LoggerStore } from './store';
-import { component, DataRecord, qcField, record, timeField } from './swe';
-import type { Tap } from './tap';
-import { iso } from './time';
-
-export const QC_RANGE: Record<string, [number, number]> = {
-  air_temperature: [-30, 50], relative_humidity: [0, 100], pressure: [900, 1100], apparent_wind_speed: [0, 60],
-  apparent_wind_direction: [0, 360], solar_irradiance: [0, 1500], water_temperature: [-2, 35],
-};
-/** A reading further than this from the mean of its two neighbours is suspect (QARTOD spike test). */
-export const QC_SPIKE: Record<string, number> = {
-  air_temperature: 0.8, relative_humidity: 6.0, pressure: 0.5, apparent_wind_speed: 3.5, solar_irradiance: 150.0,
-  water_temperature: 0.4,
-};
+import { Account, Accounts, isService, readsEmissions } from './accounts';
+import { COMMAND_HOLD_S, SENSORS, SOSA, UID } from './constants';
+import { Offering } from './fields';
+import { CommandRec, ControlstreamRec, DatastreamRec, Series, Store, SystemRec } from './store';
+import { PushStream } from './stream';
+import { DataRecord, M } from './swe';
+import type { ComponentId, Tap } from './tap';
+import { iso, realNow, sleep } from './time';
 
 export interface Profile {
   id: string;
-  essentials: { id: string; system: string; datastream: string; field: string; type: string; uom?: string }[];
+  essentials: { id: string; system: string; datastream: string; field: string; type: string; uom?: string; scope?: string }[];
   [k: string]: unknown;
 }
 export const PROFILE = profileJson as unknown as Profile;
 
-/** QARTOD flags, computed on the way out; stored records are never altered (FR-32). */
-export function qcFlags(name: string, v: Float64Array, wdVariable: Float64Array | null = null): Float64Array {
-  const n = v.length;
-  const flag = new Float64Array(n).fill(1);
-  const [lo, hi] = QC_RANGE[name];
-  for (let i = 0; i < n; i++) if (v[i] < lo || v[i] > hi) flag[i] = 4;
-  const sp = QC_SPIKE[name];
-  if (sp !== undefined && n >= 3) {
-    for (let i = 1; i < n - 1; i++) {
-      if (Math.abs(v[i] - 0.5 * (v[i - 1] + v[i + 1])) > sp && flag[i] === 1) flag[i] = 3;
-    }
-  }
-  if (wdVariable) for (let i = 0; i < n; i++) if (wdVariable[i] === 1) flag[i] = 2;
-  for (let i = 0; i < n; i++) if (Number.isNaN(v[i]) && flag[i] !== 2) flag[i] = 9;
-  return flag;
-}
-
-export interface DsView {
-  id: string;
-  key: string;
-  name: string;
-  outputName: string;
-  system: string;
-  kind: 'sensor' | 'model';
-  sensor?: string;
-  schema: DataRecord;
-  series?: Series;
-}
-
+/** What the server needs of the runtime around it. */
 export interface ServerHost {
-  seed: number;
-  logger: LoggerStore;
-  registry: Registry;
-  lieAboutProfile: boolean;
-  now(): number;
+  tap: Tap;
+  accounts: Accounts;
+  /** Resolves at once, or when Freeze is released (§4): pushes are held while frozen. */
+  thawed(): Promise<void>;
 }
 
-function capitalize(s: string) {
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
-
-export class Server {
-  readonly offering: Offering;
-  readonly instance: string;
-  readonly adapter: StoreAdapter;
-  ready = false;
-  readonly registry: Registry;
-  readonly lieAboutProfile: boolean;
-  readonly profile = PROFILE;
-  readonly sensorSchema: Record<string, DataRecord> = {};
-  readonly systems: Record<string, SystemRec>;
-
-  constructor(readonly rt: ServerHost, number: number, offering: Offering, readonly tap: Tap) {
-    this.offering = offering.copy();
-    this.instance = `${rt.seed}-${number}`;
-    this.adapter = new StoreAdapter(rt.logger, tap);
-    this.registry = rt.registry;
-    this.lieAboutProfile = rt.lieAboutProfile;
-    const fields = [timeField()];
-    for (const f of this.offering.raw()) {
-      fields.push(component(f, f.swe_type === 'Quantity'));
-      if (f.swe_type === 'Quantity') fields.push(qcField(f));
-    }
-    for (const s of SENSORS) this.sensorSchema[s] = record(fields, `${capitalize(s)} sensor record`);
-    this.systems = {
-      barge: sys('barge', 'Platform', 'Collection platform', 'PhysicalSystem', 'The uncrewed electric cargo barge. It records no position.'),
-      bow: sys('bow', 'Sensor', 'Bow sensor', 'PhysicalSystem', 'Seven parameters at 1 Hz.', 'barge'),
-      stern: sys('stern', 'Sensor', 'Stern sensor', 'PhysicalSystem', 'Seven parameters at 1 Hz.', 'barge'),
-      models: sys('models', 'System', 'Models', 'AggregateProcess',
-        'A home for models that turn sensor data into insight. Each model is a process system of its own, created by the model itself.',
-        undefined, 'Process'),
-    };
-  }
-
-  // --- start-up: waiting mode while the index is rebuilt (FR-47) -----------------------
-  indexStep(): boolean {
-    const done = this.adapter.indexStep();
-    if (done) this.ready = true;
-    return done;
-  }
-
-  progress(): { indexed: number; stored: number } {
-    return { indexed: this.adapter.indexedRecords(), stored: this.adapter.storeRecords() };
-  }
-
-  allSystems(): Map<string, SystemRec> {
-    return new Map([...Object.entries(this.systems), ...this.registry.systems]);
-  }
-
-  // --- datastreams: the offering applied to every schema (FR-50..52) ---------------------
-  private visible(rec: DataRecord): DataRecord {
-    return { ...rec, fields: rec.fields.filter((f) => f.name === 'time' || this.offering.keep(f.name)) };
-  }
-
-  /** Public id -> datastream, for this instance's offering. */
-  datastreams(hidden = false): Map<string, DsView> {
-    const out = new Map<string, DsView>();
-    for (const s of SENSORS) {
-      const rec = this.visible(this.sensorSchema[s]);
-      const id = schemaId(`${s}-weather`, rec.fields.map((f) => f.name));
-      out.set(id, { id, key: `${s}:weather`, name: `${capitalize(s)} sensor record`, outputName: 'weather', system: s, kind: 'sensor', sensor: s, schema: rec });
-    }
-    for (const [key, d] of this.registry.datastreams) {
-      if (!this.registry.systems.has(d.system)) continue;
-      const rec = this.visible(d.schema);
-      if (rec.fields.length < 2 && !hidden) continue; // every output switched off: nothing to publish (FR-52)
-      const id = schemaId(`${d.system}-${d.outputName}`, rec.fields.map((f) => f.name));
-      out.set(id, { id, key, name: d.name, outputName: d.outputName, system: d.system, kind: 'model', schema: rec, series: d.series });
-    }
-    return out;
-  }
-
-  controlstreams(): Map<string, ControlstreamRec & { id: string }> {
-    const out = new Map<string, ControlstreamRec & { id: string }>();
-    for (const c of this.registry.controlstreams.values()) {
-      if (!this.registry.systems.has(c.system)) continue;
-      const id = schemaId(`${c.system}-${c.inputName}`, c.schema.fields.map((f) => f.name));
-      out.set(id, { ...c, id });
-    }
-    return out;
-  }
-
-  timeRange(d: DsView): [number, number] | null {
-    if (d.kind === 'sensor') return this.adapter.timeRange(d.sensor!);
-    const s = d.series!;
-    return s.length ? [s.tAt(0), s.tAt(s.length - 1)] : null;
-  }
-
-  // --- profile (FR-40, FR-41) ----------------------------------------------------------------
-  satisfiesProfile(): { id: string; reason: string }[] {
-    const problems: { id: string; reason: string }[] = [];
-    const systems = [...this.allSystems().values()];
-    const dss = [...this.datastreams().values()];
-    for (const e of this.profile.essentials) {
-      const sysm = systems.find((s) => s.uniqueId === e.system);
-      const ds = sysm && dss.find((d) => d.system === sysm.id && d.outputName === e.datastream);
-      const fld = ds && ds.schema.fields.find((f) => f.name === e.field);
-      if (!fld) problems.push({ id: e.id, reason: 'missing' });
-      else if (fld.type !== e.type) problems.push({ id: e.id, reason: 'wrong type' });
-      else if ((fld.uom?.code ?? null) !== (e.uom ?? null)) problems.push({ id: e.id, reason: 'wrong unit' });
-    }
-    return problems;
-  }
-
-  claimsProfile(): boolean {
-    return this.lieAboutProfile || !this.satisfiesProfile().length;
-  }
-
-  // --- reading the store through the adapter (FR-21) -------------------------------------
-  /** Records from the store, with QARTOD flags computed on the way out (FR-32). */
-  sensorRecords(sensor: string, t0: number, t1: number, limit: number | null = null, offset = 0, fields: string[] | null = null,
-    why = 'observation request', quiet = false): Cols {
-    const rawNames = RAW.map((f) => f.name);
-    const names = fields === null ? rawNames : fields.filter((n) => rawNames.includes(n));
-    this.tap.emit('server', 'adapter', 'S', `store query: ${sensor}, ${names.length} fields`, {
-      op: 'read', sensors: [sensor], fields: names,
-      period: [Number.isFinite(t0) ? iso(Math.max(t0, 0)) : '..', Number.isFinite(t1) ? iso(t1) : '..'],
-      limit, offset, source: 'raw records', for: why,
-    }, { quiet });
-    const pad = 1;
-    const loOff = Math.max(0, offset - pad);
-    const lead = offset - loOff;
-    const r = this.adapter.read(sensor, t0, t1, limit === null ? null : limit + lead + pad, loOff, quiet);
-    const len = r.t.length;
-    const n = Math.max(0, Math.min(len - lead, limit !== null ? limit : len));
-    const [a, b] = pySlice(len, lead, lead + n);
-    const out: Cols = { t: r.t.slice(a, b) };
-    for (const name of names) {
-      const v = (r as unknown as Record<string, Float64Array>)[name];
-      out[name] = v.slice(a, b);
-      if (name === 'precipitation_type') continue;
-      const flags = qcFlags(name, v, name === 'apparent_wind_direction' ? r.wd_variable : null);
-      out[`${name}_qc`] = flags.slice(a, b);
-    }
-    const rows = b - a;
-    this.tap.emit('adapter', 'server', 'I', `${rows} ${sensor} records as columns`, { columns: Object.keys(out), records: rows }, { quiet });
-    return out;
-  }
-
-  // --- commands (FR-27) ---------------------------------------------------------------------
-  /** Check a command against its control stream's schema; throws [name, message]. */
-  validateCommand(cs: ControlstreamRec, params: Record<string, unknown>): void {
-    const fields = new Map(cs.schema.fields.map((f) => [f.name, f]));
-    for (const [k, v] of Object.entries(params)) {
-      const f = fields.get(k);
-      if (!f) throw new CommandError(k, `unknown parameter ${k}; the control stream's schema accepts ${[...fields.keys()].join(', ')}`);
-      const con = f.constraint ?? {};
-      const t = f.type;
-      if (t === 'Boolean') {
-        if (typeof v !== 'boolean') throw new CommandError(k, `${k} must be true or false`);
-      } else if (t === 'Quantity' || t === 'Count') {
-        if (typeof v !== 'number') throw new CommandError(k, `${k} must be a number`);
-        if (t === 'Count' && !Number.isInteger(v)) throw new CommandError(k, `${k} must be a whole number`);
-        if (con.intervals?.length) {
-          const [lo, hi] = con.intervals[0];
-          if (!(lo <= v && v <= hi)) throw new CommandError(k, `${k}=${v} is outside the schema's AllowedValues interval [${lo}, ${hi}]`);
-        }
-      } else if (t === 'Category' || t === 'Text') {
-        if (typeof v !== 'string') throw new CommandError(k, `${k} must be text`);
-        const allowed: string[] | undefined = con.values;
-        const items = t === 'Text' ? v.split(',').map((x) => x.trim()) : [v];
-        if (allowed?.length) {
-          const bad = items.filter((x) => !allowed.includes(x));
-          if (bad.length || !items.length || (items.length === 1 && items[0] === '')) {
-            throw new CommandError(k, `${k}=${pyRepr(v)}: ${bad.join(', ') || 'nothing'} not in the schema's AllowedTokens ${pyRepr(allowed)}`);
-          }
-        }
-      }
-    }
-  }
-}
-
-export class CommandError extends Error {
-  constructor(readonly field: string, message: string) {
+export class HttpError extends Error {
+  constructor(readonly status: number, message: string) {
     super(message);
   }
 }
 
-function sys(sid: string, stype: string, label: string, smlType: string, desc: string, parent?: string, asset?: string): SystemRec {
-  const s: SystemRec = {
-    type: smlType, id: sid, uniqueId: `${URN}${asset ? 'process' : stype.toLowerCase()}:${sid}`, label, description: desc,
-    definition: SOSA + stype, systemType: SOSA + stype, assetType: asset ?? 'Equipment',
-  };
-  if (parent) s.parent = parent;
-  return s;
+/** Which component an account is, for capture (docs/v4-interfaces.md §2). */
+export function componentOf(user: string): { id: ComponentId; model?: string } {
+  if (user === 'svc-importer') return { id: 'importer' };
+  if (user === 'svc-replay') return { id: 'replay' };
+  if (isService(user)) return { id: 'models', model: user.slice(4) };
+  return { id: 'client' };
+}
+
+/** Restricted systems (FR-111): the CO₂ analysers and every model's restricted subsystem. */
+export function isRestrictedUid(uid: string): boolean {
+  return /^urn:x-barge:sensor:[^:]+:co2$/.test(uid) || /^urn:x-barge:process:[^:]+:restricted$/.test(uid);
+}
+
+interface Subscription {
+  stream: PushStream;
+  account: Account;
+}
+
+export interface SystemBody {
+  uid: string;
+  label: string;
+  description: string;
+  featureType: string;
+  assetType: string;
+  smlType: string;
+  characteristics?: unknown;
+}
+
+export class Server {
+  readonly offering: Offering;
+  readonly profile = PROFILE;
+  stopped = false;
+  private subs = new Map<string, Set<Subscription>>(); // control stream id -> subscriptions
+
+  constructor(readonly host: ServerHost, readonly store: Store, offering: Offering, readonly lieAboutProfile: boolean) {
+    this.offering = offering.copy();
+    this.configure();
+  }
+
+  get tap(): Tap {
+    return this.host.tap;
+  }
+
+  // --- the server's configuration: systems that exist before anyone logs in -------------------
+  private configure(): void {
+    const sys = (b: Omit<SystemBody, 'description'> & { description?: string }, parent: string | null, extra: Partial<SystemRec> = {}) =>
+      this.createSystem(null, { description: '', ...b }, parent, extra).id;
+    const barge = sys({ uid: UID.barge, label: 'Collection platform', featureType: SOSA + 'Platform', assetType: 'Platform', smlType: 'PhysicalSystem',
+      description: 'The uncrewed electric cargo barge that made the recordings. It records no position.' }, null);
+    for (const s of SENSORS) {
+      const cap = s === 'bow' ? 'Bow' : 'Stern';
+      const sid = sys({ uid: UID.sensor(s), label: `${cap} sensor`, featureType: SOSA + 'Sensor', assetType: 'Equipment', smlType: 'PhysicalSystem',
+        description: 'Seven weather parameters at 1 Hz.' }, barge);
+      sys({ uid: UID.co2(s), label: `${cap} CO₂ analyser`, featureType: SOSA + 'Sensor', assetType: 'Equipment', smlType: 'PhysicalSystem',
+        description: 'CO₂ in ppm at 1 Hz. Restricted.' }, sid);
+    }
+    sys({ uid: UID.models, label: 'Models', featureType: SOSA + 'System', assetType: 'Process', smlType: 'AggregateProcess',
+      description: 'A home for models that turn sensor data into insight. Each model is a process system of its own, created by the model itself.' }, null);
+    for (const a of this.host.accounts.users()) {
+      const w = sys({ uid: UID.workspace(a.user), label: `Workspace of ${a.user}`, featureType: SOSA + 'System', assetType: 'Other', smlType: 'PhysicalSystem',
+        description: `Data of interest kept by ${a.user} (FR-95).` }, null, { workspaceOf: a.user });
+      this.createDatastream(null, w, {
+        name: 'Data of interest', outputName: 'data-of-interest', schema: M.record('Data of interest', [
+          M.time('time', 'Saved'), M.text('doi_id', 'Data of interest'), M.category('action', 'Action', ['save', 'remove']),
+          M.text('record', 'The record (JSON)')]),
+      });
+    }
+  }
+
+  // --- permissions (§9.3) ------------------------------------------------------------------------
+  /** Whether an account may read a system: inherited down the system tree. */
+  canRead(a: Account, systemId: string): boolean {
+    const line = this.store.lineage(systemId);
+    if (!line.length) return false;
+    for (const s of line) {
+      if (s.workspaceOf && s.workspaceOf !== a.user) return false;
+      if (s.restricted && !readsEmissions(a.role)) return false;
+    }
+    return true;
+  }
+
+  /** Whether an account may create and append under a system. */
+  canWrite(a: Account, systemId: string): boolean {
+    if (!this.canRead(a, systemId)) return false;
+    const line = this.store.lineage(systemId);
+    if (!isService(a.user)) return line.some((s) => s.workspaceOf === a.user);
+    if (line.some((s) => s.owner === a.user)) return true;
+    // The importer writes the sensors' and CO₂ analysers' datastreams (inside the server).
+    return a.user === 'svc-importer' && line.some((s) => s.uid === UID.barge);
+  }
+
+  /** Whether an account may create a subsystem under a system (null: a top-level system). */
+  canCreateSystem(a: Account, parentId: string | null): boolean {
+    if (!isService(a.user)) return false;
+    if (parentId === null) return a.user === 'svc-importer' || a.user === 'svc-replay';
+    const p = this.store.systems.get(parentId);
+    if (!p) return false;
+    if (p.uid === UID.models) return a.user !== 'svc-importer' && a.user !== 'svc-replay';
+    return this.canWrite(a, parentId);
+  }
+
+  readableSystems(a: Account): SystemRec[] {
+    return [...this.store.systems.values()].filter((s) => this.canRead(a, s.id));
+  }
+
+  /** A system the account may read, else 404: a hidden system is absent (FR-93). */
+  system(a: Account, id: string): SystemRec {
+    const s = this.store.systems.get(id);
+    if (!s || !this.canRead(a, id)) throw new HttpError(404, `no system ${id}`);
+    return s;
+  }
+
+  datastream(a: Account, id: string): DatastreamRec {
+    const d = this.store.datastreams.get(this.baseId(id));
+    if (!d || !this.canRead(a, d.system) || this.viewId(d) !== id) throw new HttpError(404, `no datastream ${id}`);
+    return d;
+  }
+
+  controlstream(a: Account, id: string): ControlstreamRec {
+    const c = this.store.controlstreams.get(id);
+    if (!c || !this.canRead(a, c.system)) throw new HttpError(404, `no control stream ${id}`);
+    return c;
+  }
+
+  command(a: Account, id: string): CommandRec {
+    const c = this.store.commands.get(id);
+    if (!c) throw new HttpError(404, `no command ${id}`);
+    this.controlstream(a, c.cs);
+    return c;
+  }
+
+  // --- the field offering (FR-50..FR-52): a datastream's served schema and id ----------------------
+  /** The schema as this instance serves it: fields switched off are left out. */
+  visible(d: DatastreamRec): DataRecord {
+    const fields = d.schema.fields.filter((f) => f.name === 'time' || this.offering.keep(f.name));
+    return fields.length === d.schema.fields.length ? d.schema : { ...d.schema, fields };
+  }
+
+  /** The id a datastream is served under: a schema with fields hidden is a different datastream (FR-51). */
+  viewId(d: DatastreamRec): string {
+    const v = this.visible(d);
+    if (v === d.schema) return d.id;
+    const key = `${d.id}|${v.fields.map((f) => f.name).join(',')}`;
+    let id = this.store.views.get(key);
+    if (!id) this.store.views.set(key, (id = this.store.newId()));
+    return id;
+  }
+
+  private baseId(id: string): string {
+    if (this.store.datastreams.has(id)) return id;
+    for (const [k, v] of this.store.views) if (v === id) return k.slice(0, k.indexOf('|'));
+    return id;
+  }
+
+  /** Datastreams the account may read, with every field switched off: nothing to publish (FR-52). */
+  readableDatastreams(a: Account): DatastreamRec[] {
+    return [...this.store.datastreams.values()].filter((d) => this.canRead(a, d.system) && this.visible(d).fields.length > 1);
+  }
+
+  // --- creating resources (§9.1: 201 with the existing Location) ---------------------------------
+  /** A new system, or the existing one with that unique id. `a` null: the server's own configuration. */
+  createSystem(a: Account | null, b: SystemBody, parentId: string | null, extra: Partial<SystemRec> = {}): { id: string; existed: boolean } {
+    const old = this.store.systemByUid(b.uid);
+    if (old) return { id: old.id, existed: true };
+    const id = this.store.newId();
+    this.store.systems.set(id, {
+      id, uid: b.uid, label: b.label, description: b.description, featureType: b.featureType, assetType: b.assetType,
+      smlType: b.smlType, parent: parentId, owner: a ? a.user : 'server', restricted: isRestrictedUid(b.uid),
+      workspaceOf: null, characteristics: b.characteristics, extra: {}, ...extra,
+    });
+    return { id, existed: false };
+  }
+
+  /** A datastream; the same output name with the same fields is the existing one (FR-28, FR-51). */
+  createDatastream(_a: Account | null, systemId: string, body: { name?: string; outputName: string; description?: string; schema: DataRecord }): { id: string; existed: boolean } {
+    const sig = body.schema.fields.map((f) => `${f.name}:${f.type}`).join(',');
+    const old = this.store.datastream(systemId, body.outputName);
+    if (old && old.sig === sig) return { id: old.id, existed: true };
+    const id = this.store.newId();
+    this.store.datastreams.set(id, {
+      id, system: systemId, outputName: body.outputName, name: body.name ?? body.outputName, description: body.description ?? '',
+      schema: body.schema, series: new Series(body.schema.fields), sig,
+    });
+    return { id, existed: false };
+  }
+
+  createControlstream(_a: Account | null, systemId: string, body: { name?: string; inputName: string; description?: string; schema: DataRecord }): { id: string; existed: boolean } {
+    const old = this.store.controlstream(systemId, body.inputName);
+    if (old) return { id: old.id, existed: true };
+    const id = this.store.newId();
+    this.store.controlstreams.set(id, {
+      id, system: systemId, inputName: body.inputName, name: body.name ?? body.inputName, description: body.description ?? '', schema: body.schema,
+    });
+    return { id, existed: false };
+  }
+
+  // --- commands (§9.1, §9.2) ----------------------------------------------------------------------
+  /** Open a push subscription to a control stream. It ends when this instance stops. */
+  subscribe(a: Account, cs: ControlstreamRec): PushStream {
+    const stream = new PushStream();
+    if (this.stopped) {
+      stream.end();
+      return stream;
+    }
+    const sub = { stream, account: a };
+    let set = this.subs.get(cs.id);
+    if (!set) this.subs.set(cs.id, (set = new Set()));
+    set.add(sub);
+    stream.onCancel = () => set!.delete(sub);
+    return stream;
+  }
+
+  subscribers(csId: string): number {
+    return this.subs.get(csId)?.size ?? 0;
+  }
+
+  /**
+   * Send a command (§9.1). With no subscriber it is dropped: 202 after the hold. With one,
+   * it is pushed at once and kept; the answer is 200, PENDING, after the hold. The sender
+   * never waits for this answer (AT-39).
+   */
+  async sendCommand(a: Account, cs: ControlstreamRec, parameters: Record<string, unknown>): Promise<{ status: number; cmd: CommandRec | null }> {
+    const subs = [...(this.subs.get(cs.id) ?? [])];
+    if (!subs.length) {
+      await sleep(COMMAND_HOLD_S);
+      return { status: 202, cmd: null };
+    }
+    const id = this.store.newId();
+    const cmd: CommandRec = { id, cs: cs.id, issueTime: iso(realNow()), parameters, sender: a.user, status: [] };
+    this.store.commands.set(id, cmd);
+    // D-127: `sender` is the user name, until S-AUTH says what OpenSensorHub provides.
+    const line = JSON.stringify({ id, parameters, issueTime: cmd.issueTime, sender: a.user }) + '\n';
+    const sys = this.store.systems.get(cs.system);
+    for (const s of subs) {
+      void this.host.thawed().then(() => {
+        if (s.stream.ended) return;
+        const to = componentOf(s.account.user);
+        this.tap.emit('server', to.id, 'K', `push ${cs.inputName} to ${sys?.label ?? cs.system}: ${summarise(parameters)}`, line.trim(),
+          { push: true, model: to.model, quiet: false });
+        s.stream.write(line);
+      });
+    }
+    await sleep(COMMAND_HOLD_S);
+    return { status: 200, cmd };
+  }
+
+  /** A receiver reports a command's status at /controlstreams/{id}/status. */
+  reportStatus(cs: ControlstreamRec, body: Record<string, unknown>): CommandRec {
+    const cmdId = String(body['command@id'] ?? '');
+    const cmd = this.store.commands.get(cmdId);
+    if (!cmd || cmd.cs !== cs.id) throw new HttpError(400, `no command ${cmdId} on this control stream`);
+    const code = String(body.statusCode ?? '');
+    if (!['ACCEPTED', 'EXECUTING', 'COMPLETED', 'FAILED', 'REJECTED'].includes(code)) {
+      throw new HttpError(400, `statusCode must be ACCEPTED, EXECUTING, COMPLETED, FAILED or REJECTED`);
+    }
+    cmd.status.push({
+      id: this.store.newId(), 'command@id': cmdId, statusCode: code, reportTime: iso(realNow()),
+      ...(body.message !== undefined && body.message !== '' ? { message: String(body.message) } : {}),
+    });
+    return cmd;
+  }
+
+  /** Stop: every subscription ends (§9.2), so receivers resubscribe once the server answers again. */
+  stop(): void {
+    this.stopped = true;
+    for (const set of this.subs.values()) for (const s of set) s.stream.end();
+    this.subs.clear();
+  }
+
+  // --- the profile (FR-40, FR-41) -------------------------------------------------------------------
+  /** Fixed essentials missing from the server: what conformance's profile claim rests on. */
+  missingFixedEssentials(): string[] {
+    const out: string[] = [];
+    for (const e of this.profile.essentials) {
+      if (e.scope === 'dataset') continue;
+      const sys = this.store.systemByUid(e.system);
+      const ds = sys && this.store.datastream(sys.id, e.datastream);
+      const cs = sys && this.store.controlstream(sys.id, e.datastream);
+      const fld = ds ? this.visible(ds).fields.find((f) => f.name === e.field) : cs?.schema.fields.find((f) => f.name === e.field);
+      if (!fld) out.push(e.id);
+    }
+    return out;
+  }
+
+  claimsProfile(): boolean {
+    return this.lieAboutProfile || !this.missingFixedEssentials().length;
+  }
+}
+
+function summarise(p: Record<string, unknown>): string {
+  const s = Object.entries(p).map(([k, v]) => `${k}=${typeof v === 'string' && v.length > 40 ? v.slice(0, 37) + '…' : JSON.stringify(v)}`).join(', ');
+  return s.length > 120 ? s.slice(0, 117) + '…' : s;
 }

@@ -1,6 +1,6 @@
 // SWE Common Data Model 3.0, JSON encoding: the record schemas the server
 // serves (FR-25; swe.py), and the helpers models use to declare theirs
-// (csmodel.py). Key order follows the Python reference so the JSON reads the same.
+// (csmodel.py).
 import { DEF } from './constants';
 import { Field, QARTOD_FLAGS } from './fields';
 
@@ -11,6 +11,7 @@ export const QARTOD = 'https://ioos.github.io/qartod/';
 export const SWE_JSON = 'application/swe+json';
 export const JSON_TYPE = 'application/json';
 export const OBS_FORMATS = [SWE_JSON, JSON_TYPE];
+export const NDJSON = 'application/x-ndjson';
 
 /** A SWE Common component, as JSON. */
 export type Component = Record<string, any> & { type: string; name: string };
@@ -31,9 +32,6 @@ export function component(f: Field, quality = false): Component {
   if (f.swe_type === 'Quantity') {
     c.uom = { code: f.uom };
     if (quality) c.quality = [{ href: `#${f.name}_qc` }];
-  } else if (f.swe_type === 'Category') {
-    c.codeSpace = DEF + f.name;
-    c.constraint = { type: 'AllowedTokens', values: [...f.tokens] };
   } else if (f.swe_type === 'Count' && f.uom) {
     c.uom = { code: f.uom };
   }
