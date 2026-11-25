@@ -121,7 +121,7 @@ function SelectionQuery() {
   const raw = session.plan.some((r) => r.raw);
   // Found by chain: an S the data server made while answering one of this selection's requests.
   // The selection's own read comes first; polls then repeat the chain once per simulated second.
-  const s = bus.find((m) => m.letter === 'S' && m.src === 'server' && m.dst === 'adapter' && session.http.seqOf(m.chain) >= session.planSeq)[0] ?? null;
+  const s = bus.find((m) => m.letter === 'S' && m.src === 'server' && (m.dst as string) === 'adapter' /* 4.1 store query: withdrawn in 4.6, to be removed with the display-client rework */ && session.http.seqOf(m.chain) >= session.planSeq)[0] ?? null;
   if (s) {
     const chain = bus.chain(s.chain!);
     return (
