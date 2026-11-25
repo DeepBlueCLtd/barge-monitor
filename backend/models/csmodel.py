@@ -176,6 +176,7 @@ class Api:
         self._stream = stream
         self._auth = "Basic " + base64.b64encode(f"{user}:{password}".encode()).decode()
         self.role_of = _role_of
+        self.retry_s = 1.0  # real seconds before resubscribing after the server went away
         self.reset()
 
     def reset(self) -> None:
@@ -409,7 +410,7 @@ class Api:
                 pass
             if on_open:
                 await on_open(closed=True)
-            await asyncio.sleep(1.0)
+            await asyncio.sleep(self.retry_s)
 
     async def command_status(self, cs_key: str, cmd_id: str, status: str, message: str = "") -> None:
         async def go(cs):

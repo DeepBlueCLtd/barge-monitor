@@ -24,7 +24,9 @@ def robust_noise(v: np.ndarray) -> float:
     d = np.diff(v[np.isfinite(v)])
     if len(d) < 10:
         return np.inf
-    return float(1.4826 * np.median(np.abs(d - np.median(d))) / np.sqrt(2)) + 1e-9
+    step = np.abs(d[d != 0])
+    floor = 0.5 * float(step.min()) if len(step) else 0.0  # readings written to a resolution (whole %, tenths)
+    return max(float(1.4826 * np.median(np.abs(d - np.median(d))) / np.sqrt(2)), floor) + 1e-9
 
 
 def clean(cols: dict, names: list, threshold: float) -> tuple[dict, int]:

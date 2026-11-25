@@ -72,6 +72,8 @@ class Rig:
             from barge.local_models import CORE, LocalModels
 
             self.local = self.run(self._local(LocalModels, classes or CORE))
+            for rn in self.local.runners:
+                rn.api.retry_s = 0.01  # the hand-set clock does not pace asyncio's sleeps
             self.settle()
 
     async def _local(self, cls, classes):
