@@ -202,6 +202,8 @@ export class DisplayClientSession {
   private statusWatch: { cs: string; since: number; until: number; seen: Set<string> }[] = [];
   private runsSeen = new Map<string, string>();
   private statusSeen = new Set<string>();
+  /** What the viewer's latest commands asked for, until the state shows it: the next command carries it (FR-27: every parameter). */
+  private intent: { rate?: number; dataset?: string } = {};
   private wantHandshake = false;
   private lastRetry = 0;
 
@@ -285,6 +287,7 @@ export class DisplayClientSession {
     this.stale.set(false);
     this.sent.set(null);
     this.statusWatch = [];
+    this.intent = {};
     this.runsSeen.clear();
     this.data.set(this.data.value + 1);
   }
@@ -306,6 +309,16 @@ export class DisplayClientSession {
     } finally {
       http.userAction = false;
     }
+  }
+
+  /** A command that got no answer: say so, and treat it like any other failed request. */
+  private commandFailed(e: unknown) {
+    if (e instanceof NetworkFailure) {
+      this.notify('The server did not answer the command.', true);
+      this.sent.set(null);
+      this.importing.set(null);
+    }
+    this.failed(e);
   }
 
   /** What a failed request means for the client. */
@@ -424,6 +437,8 @@ export class DisplayClientSession {
     this.replay.set(s);
     const sent = this.sent.value;
     if (sent && this.reflects(sent, s)) this.sent.set(null);
+    if (this.intent.rate === s.rate) delete this.intent.rate;
+    if (this.intent.dataset === s.dataset) delete this.intent.dataset;
     if (old && s.at_end && !old.at_end) this.notify('The replay reached the end of the dataset and paused.');
     // A new run (a seek) or another dataset: the data held no longer follows the replay.
     if (old && (old.run !== s.run || old.dataset !== s.dataset)) {
@@ -498,18 +513,18 @@ export class DisplayClientSession {
   }
 
   /** The datastreams the views use now: each selected field at the period's resolution, and its summary for error bars. */
-  inUse(): { prop: Property; src: Source; res: Resolution; role: 'line' | 'stats' }[] {
+  inUse(): { prop: Property; src: Source; res: Resolution; use: 'line' | 'stats' }[] {
     const v = this.view.value;
     if (!v) return [];
     const sel = this.selection.value;
-    const out: { prop: Property; src: Source; res: Resolution; role: 'line' | 'stats' }[] = [];
+    const out: { prop: Property; src: Source; res: Resolution; use: 'line' | 'stats' }[] = [];
     for (const key of sel.fields) {
       const p = v.props.find((x) => x.key === key);
       if (!p) continue;
       const at = sourceAt(p, periodOf(sel.period).res);
-      if (at) out.push({ prop: p, src: at.src, res: at.res, role: 'line' });
+      if (at) out.push({ prop: p, src: at.src, res: at.res, use: 'line' });
       const st = p.byRes[statsRes(sel.period)];
-      if (st?.stats) out.push({ prop: p, src: st, res: statsRes(sel.period), role: 'stats' });
+      if (st?.stats) out.push({ prop: p, src: st, res: statsRes(sel.period), use: 'stats' });
     }
     return out;
   }
@@ -543,14 +558,15 @@ export class DisplayClientSession {
       seen.add(id);
       const c = this.cache.get(id);
       const fresh = full || !c || c.from > w[0];
-      const from = fresh ? w[0] : Math.max(w[0], (c!.rows.length ? c!.rows[c!.rows.length - 1].t : c!.to) + 1);
-      if (from > w[1] && !fresh) continue;
+      const from = fresh ? w[0] : Math.min(w[1], Math.max(w[0], (c!.rows.length ? c!.rows[c!.rows.length - 1].t : c!.to) + 1));
+      // AT-37: one request per datastream in use every second, whatever the rate, even when nothing new can be there yet.
       tasks.push((async () => {
         const got: any[] = await http.get(`datastreams/${id}/observations`, { f: 'application/swe+json', phenomenonTime: `${iso(from)}/${iso(w[1])}`, limit: '200000' });
         if (!this.live(http)) return;
         const rows = (got ?? []).map(toRow);
         const old = fresh ? [] : this.cache.get(id)?.rows ?? [];
-        const merged = u.src.runs ? latestRun([...old, ...rows]) : [...old, ...rows];
+        const lastT = old.length ? old[old.length - 1].t : -Infinity;
+        const merged = u.src.runs ? latestRun([...old, ...rows]) : [...old, ...rows.filter((r) => r.t > lastT)];
         this.cache.set(id, { rows: merged.filter((r) => r.t >= w[0] - 3600), from: fresh ? w[0] : c!.from, to: w[1] });
       })());
     }
@@ -629,6 +645,7 @@ export class DisplayClientSession {
             this.sent.set(null);
             this.importing.set(null);
             this.loading.set(null);
+            this.intent = {};
             w.until = 0;
           }
         }
@@ -643,11 +660,13 @@ export class DisplayClientSession {
     if (!cs || !this.http) return;
     void this.user_(async (http) => {
       http.command(cs.id, {
-        action, dataset: over.dataset ?? s?.dataset ?? '', rate: over.rate ?? s?.rate ?? 1,
+        action, dataset: over.dataset ?? this.intent.dataset ?? s?.dataset ?? '', rate: over.rate ?? this.intent.rate ?? s?.rate ?? 1,
         position: iso(over.position ?? s?.time ?? 0),
-      });
+      }, (e) => this.commandFailed(e));
     });
     this.sent.set(label);
+    if (over.rate !== undefined) this.intent.rate = over.rate;
+    if (over.dataset !== undefined) this.intent.dataset = over.dataset;
     this.watchStatus(cs.id);
   }
 
@@ -678,7 +697,7 @@ export class DisplayClientSession {
     }
     const cs = this.importCs();
     if (!cs) return;
-    void this.user_(async (http) => http.command(cs.id, { action: 'import', file: e.file }));
+    void this.user_(async (http) => http.command(cs.id, { action: 'import', file: e.file }, (x) => this.commandFailed(x)));
     this.importing.set({ file: e.file, pct: 0, status: 'sent' });
     this.watchStatus(cs.id);
   }
@@ -686,7 +705,7 @@ export class DisplayClientSession {
   rescan() {
     const cs = this.importCs();
     if (!cs) return;
-    void this.user_(async (http) => http.command(cs.id, { action: 'rescan', file: '' }));
+    void this.user_(async (http) => http.command(cs.id, { action: 'rescan', file: '' }, (x) => this.commandFailed(x)));
     this.watchStatus(cs.id);
   }
 
@@ -759,7 +778,7 @@ export class DisplayClientSession {
 
   /** The current selection's resolution: the coarsest its fields are read at. */
   currentRes(): Resolution {
-    const rs = this.inUse().filter((u) => u.role === 'line').map((u) => u.res);
+    const rs = this.inUse().filter((u) => u.use === 'line').map((u) => u.res);
     return rs.reduce<Resolution>((a, r) => (RES_SECONDS[r] > RES_SECONDS[a] ? r : a), periodOf(this.selection.value.period).res);
   }
 
@@ -791,7 +810,7 @@ export class DisplayClientSession {
           params[f.name] = f.type === 'Count' ? Math.round(Math.min(Math.max(3, iv?.[0] ?? 3), iv?.[1] ?? 3)) : Math.round(v);
         }
       }
-      http.command(cs.id, params);
+      http.command(cs.id, params, (x) => this.commandFailed(x));
     });
     this.notify(`Clustering ${algorithm} sent to the models.`);
     this.watchStatus(cs.id);

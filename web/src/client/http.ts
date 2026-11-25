@@ -163,7 +163,7 @@ export class ClientHttp {
    * Send a command (FR-27, AT-39): every parameter, and never waited on. The server holds the
    * POST for about five seconds; the display follows the state datastream, not this answer.
    */
-  command(controlstream: string, parameters: Record<string, unknown>): void {
-    void this.request('POST', `controlstreams/${controlstream}/commands`, {}, { parameters }).catch(() => undefined);
+  command(controlstream: string, parameters: Record<string, unknown>, failed?: (e: unknown) => void): void {
+    void this.request('POST', `controlstreams/${controlstream}/commands`, {}, { parameters }).catch((e) => failed?.(e));
   }
 }

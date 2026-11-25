@@ -86,7 +86,7 @@ function Main({ session }: { session: DisplayClientSession }) {
   const loading = useStore(session.loading);
   const opened = useStore(session.opened);
   return (
-    <div className={`dc${stale ? ' is-stale' : ''}`} data-testid="dc" data-phase={phase}>
+    <div className={`dc${stale ? ' is-stale' : ''}`} data-testid="dc" data-phase={phase} data-view={view?.id ?? ''}>
       <div className="dc-status">
         <span data-testid="dc-user">Logged in as <b>{user}</b></span>
         <span className="dc-phase" data-testid="dc-phase">{phase === 'handshake' ? 'Discovering what the server offers…' : phase === 'unreachable' ? 'Server not answering' : ''}</span>

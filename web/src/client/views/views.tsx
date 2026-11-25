@@ -47,7 +47,7 @@ function useLines(session: DisplayClientSession): { lines: Line[]; window: [numb
   useStore(session.data);
   useStore(session.selection);
   useStore(session.replay);
-  const lines = session.inUse().filter((u) => u.role === 'line').map((u) => ({ prop: u.prop, src: u.src, rows: session.rows(u.src) }));
+  const lines = session.inUse().filter((u) => u.use === 'line').map((u) => ({ prop: u.prop, src: u.src, rows: session.rows(u.src) }));
   return { lines, window: session.window() };
 }
 
@@ -115,7 +115,7 @@ export function ErrorBarView({ session }: { session: DisplayClientSession }) {
   useStore(session.selection);
   useStore(session.replay);
   const w = session.window();
-  const u = session.inUse().find((x) => x.role === 'stats' && x.prop.type === 'Quantity');
+  const u = session.inUse().find((x) => x.use === 'stats' && x.prop.type === 'Quantity');
   const rows = u ? session.rows(u.src) : [];
   const option = useMemo<EChartsOption | null>(() => {
     if (!u || !w || !rows.length) return null;

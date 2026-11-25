@@ -43,10 +43,18 @@ const bar = (page: Page) => page.getByTestId('replay-bar');
 const chipLabels = async (page: Page) => (await page.getByTestId('chip').allInnerTexts()).join(' | ');
 const monitorText = (page: Page) => page.getByTestId('monitor').innerText();
 
+/** Open a file from the picker, and wait until the display client shows that dataset's field list. */
 async function openFile(page: Page, file: string) {
   await page.getByTestId(`open-${file}`).click();
-  await expect(page.locator(`[data-testid="dataset-row"][data-file="${file}"] [data-testid="current-tag"]`)).toBeVisible({ timeout: SLOW });
-  await expect(page.getByTestId('chips')).toBeVisible({ timeout: SLOW });
+  await viewing(page, file);
+}
+
+async function viewing(page: Page, file: string) {
+  const row = page.locator(`[data-testid="dataset-row"][data-file="${file}"]`).last();
+  await expect(row).toHaveAttribute('data-dataset', /./, { timeout: SLOW });
+  const id = await row.getAttribute('data-dataset');
+  await expect(page.locator(`[data-testid="dc"][data-view="${id}"]`)).toBeVisible({ timeout: SLOW });
+  await expect(page.getByTestId('chips')).toBeVisible();
 }
 
 async function demo(page: Page, id: string) {
@@ -212,8 +220,7 @@ test('import, overlapping files, degraded Mission C, and returning without a han
   const t0 = Date.now();
   await page.getByTestId('open-MISSION_B_20310414.csv').click();
   await expect(page.getByTestId('import-progress')).toBeVisible({ timeout: 10_000 });
-  await expect(page.locator('[data-file="MISSION_B_20310414.csv"] [data-testid="current-tag"]')).toBeVisible({ timeout: SLOW });
-  await expect(page.getByTestId('chips')).toBeVisible({ timeout: SLOW });
+  await viewing(page, 'MISSION_B_20310414.csv');
   expect(since(log, t0).some((x) => landing(x.url))).toBe(true);
   // The overlapping re-export: its own dataset, side by side (AT-42; the separation itself is tested in the back ends).
   await openFile(page, 'MISSION_B_20310414_REEXPORT.csv');
@@ -232,7 +239,11 @@ test('import, overlapping files, degraded Mission C, and returning without a han
   await expect(page.getByTestId('dc-degraded')).toHaveCount(0);
   expect(since(log, t1).some((x) => landing(x.url))).toBe(false);
   expect(Date.now() - t1).toBeLessThan(15_000);
-  // AT-18: every boundary of §3.1 produced captured messages.
+  // AT-18: every boundary of §3.1 produced captured messages (the models call the scientific libraries as the replay passes).
+  await page.getByTestId('dc-rate-10').click();
+  await page.getByTestId('dc-play').click();
+  await expect.poll(async () => (await messages(page)).some((m) => m.src === 'scilibs'), { timeout: 60_000 }).toBe(true);
+  await page.getByTestId('dc-play').click();
   const msgs = await messages(page);
   const pairs = new Set(msgs.map((m) => `${m.src}>${m.dst}`));
   for (const p of ['client>gateway', 'gateway>client', 'gateway>server', 'server>gateway', 'models>gateway', 'gateway>models', 'server>replay', 'replay>server',
@@ -245,6 +256,7 @@ test('import, overlapping files, degraded Mission C, and returning without a han
   const n0 = (await messages(page)).length;
   await page.getByTestId('dc-play').click();
   await page.waitForTimeout(3000);
+  await page.getByTestId('dc-play').click();
   expect((await messages(page)).length).toBe(n0);
   await page.getByTestId('capture').check();
   await expect.poll(async () => (await messages(page)).length, { timeout: 10_000 }).toBeGreaterThan(n0);
@@ -316,7 +328,8 @@ test('clustering carries the selection as an unsaved data of interest; the clust
   await login(page);
   await page.getByTestId('dc-rate-10').click();
   await page.getByTestId('dc-play').click();
-  await page.waitForTimeout(12_000);
+  // Data cleanse first: Analysis reads only its output (AT-15), so give it a few minutes of replay.
+  await page.waitForTimeout(30_000);
   await page.getByTestId('cluster-B').click();
   await expect.poll(() => posts.find((p) => p.includes('"algorithm":"B"')) ?? '').toContain('doi');
   const sent = JSON.parse(posts.find((p) => p.includes('"algorithm":"B"'))!);
@@ -324,7 +337,8 @@ test('clustering carries the selection as an unsaved data of interest; the clust
   expect(doi.dataset).toMatch(/^mission-a-/);
   expect(doi.sources.length).toBeGreaterThan(0);
   expect(Object.keys(sent.parameters).sort()).toEqual(['algorithm', 'clusters', 'doi', 'sensitivity']);
-  await expect(page.getByTestId('chart-clusters')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId('chart-clusters')).toBeVisible({ timeout: 40_000 });
+  await expect(page.getByTestId('view-clusters')).toContainText('algorithm B', { timeout: 40_000 });
 });
 
 test('lock on the button and after inactivity: blanked, credentials gone, no request; unlocking restores the place (AT-50, FR-99)', async ({ page }) => {
@@ -366,7 +380,8 @@ test('the friend: no trace of CO₂ in the client or its traffic, not degraded; 
   await expect(page.getByTestId('dc-degraded')).toHaveCount(0); // AT-60
   await page.getByTestId('dc-play').click();
   await page.waitForTimeout(4000);
-  const mine = (await messages(page)).filter((m) => /^dc\d+-/.test(m.chain ?? '') && (m.src === 'client' || m.dst === 'client'));
+  // The client's own traffic, less the declared profile: a public document of the server's whose prose says CO₂ is never essential (FR-40).
+  const mine = (await messages(page)).filter((m) => /^dc\d+-/.test(m.chain ?? '') && (m.src === 'client' || m.dst === 'client') && !/profile\.json/.test(m.summary));
   expect(mine.length).toBeGreaterThan(10);
   expect(mine.filter((m) => /co2|co₂/i.test(m.content + m.summary)).map((m) => m.summary)).toEqual([]);
   // The flowchart is a god's-eye view: the models' CO₂ traffic is still drawn (FR-68a).
@@ -469,5 +484,6 @@ test('failure demos: never-seen fields, the rate, a wrong password, the degraded
   await expect(page.getByTestId('analyst-state')).toHaveText('friend');
   expect(await chipLabels(page)).not.toContain('CO₂');
   await demo(page, 'degraded');
-  await expect(page.getByTestId('dc-degraded')).toContainText('Stern wind speed', { timeout: SLOW });
+  await viewing(page, 'MISSION_C_20310421.csv');
+  await expect(page.getByTestId('dc-degraded')).toContainText('Stern wind speed');
 });

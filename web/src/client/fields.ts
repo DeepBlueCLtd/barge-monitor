@@ -136,7 +136,7 @@ export function problemText(problems: Problem[]): string {
   return problems.map((p) => essentialLabel(p.essential)).join(', ');
 }
 
-/** The essential a view needs for a given role in the profile (`views`), for this dataset. */
+/** The essential the profile names for a view (its `views`), and a field. */
 export function essentialFor(d: Discovery, view: string, field: string): Essential | null {
   return d.profile?.essentials.find((e) => e.views?.includes(view) && e.field === field) ?? null;
 }

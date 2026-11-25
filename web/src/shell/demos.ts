@@ -45,6 +45,7 @@ async function until(test: () => boolean, ms = 20_000): Promise<boolean> {
 /** The display client on screen, logged in as `user` (the owner unless a demo says otherwise). */
 async function loggedIn(user = 'owner', s: DisplayClientSession = clientSession) {
   selectComponent('client');
+  await until(() => runtime.server.value === 'running');
   if (s.user.value !== user || s.phase.value === 'login' || s.phase.value === 'locked') {
     s.restart();
     await s.login(user, demo(user).password);
@@ -71,10 +72,10 @@ export async function putEverythingBack() {
   clientSession.idleMs = IDLE_LOCK_MS;
   if (runtime.controlState.value?.frozen) await runtime.freeze(false);
   await control('profile-lie', { on: false });
-  for (const f of runtime.controlState.value?.fields ?? []) {
-    if (f.on_next_start !== !f.extra) await field(f.name, !f.extra);
-  }
+  for (const f of runtime.controlState.value?.fields ?? []) await field(f.name, !f.extra);
   await control(runtime.server.value === 'down' ? 'up' : 'restart-server');
+  await sleep(300);
+  await until(() => runtime.server.value === 'running');
 }
 
 /** FR-79a: the friend's crafted request for CO₂, sent with the friend's credentials, as a guest at the screen might. */
