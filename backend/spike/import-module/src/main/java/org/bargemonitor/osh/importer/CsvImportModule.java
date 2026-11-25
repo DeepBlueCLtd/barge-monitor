@@ -23,6 +23,7 @@ import org.sensorhub.api.data.DataEvent;
 import org.sensorhub.api.data.IObsData;
 import org.sensorhub.api.data.ObsData;
 import org.sensorhub.api.database.IObsSystemDatabase;
+import org.sensorhub.api.datastore.obs.ObsFilter;
 import org.sensorhub.api.module.IModule;
 import org.sensorhub.api.module.ModuleEvent.ModuleState;
 import org.sensorhub.impl.module.AbstractModule;
