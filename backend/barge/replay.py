@@ -16,7 +16,6 @@ It runs inside the server under ``svc-replay``; its traffic is captured as §2 s
 from __future__ import annotations
 
 import asyncio
-import json
 
 from . import config as C
 from . import swe

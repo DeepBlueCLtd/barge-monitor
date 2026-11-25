@@ -21,7 +21,6 @@ catalogue observation), ``server → importer`` K (a pushed command).
 from __future__ import annotations
 
 import asyncio
-import json
 import re
 
 import numpy as np

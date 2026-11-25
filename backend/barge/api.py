@@ -822,7 +822,6 @@ def _obs_response(request, d, rec, cols, of, limit, offset, n):
         rows = [dict(zip(["time"] + names, vals)) for vals in zip(times, *columns)]
         return Response(json.dumps(rows, separators=(",", ":"), allow_nan=False), media_type=swe.SWE_JSON)
     rtimes = iso_many(cols["rt"])
-    seqs = d["series"]
     root = str(request.base_url).rstrip("/")
     items = [{"id": f"{d['id']}-{offset + i}", "datastream@id": d["id"], "phenomenonTime": tt, "resultTime": rr,
               "result": dict(zip(names, vals))} for i, (tt, rr, *vals) in enumerate(zip(times, rtimes, *columns))]
@@ -832,5 +831,4 @@ def _obs_response(request, d, rec, cols, of, limit, offset, n):
         q = dict(request.query_params)
         q.update({"limit": str(limit), "offset": str(offset + limit)})
         links.append({"href": f"{root}{path}?" + "&".join(f"{k}={v}" for k, v in q.items()), "rel": "next"})
-    del seqs
     return JSONResponse({"items": items, "links": links})
