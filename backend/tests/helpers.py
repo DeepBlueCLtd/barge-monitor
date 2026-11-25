@@ -57,7 +57,10 @@ class Response:
 
 
 class Rig:
+    all: list = []
+
     def __init__(self, folder=None, models=True, capture=True, parser=None, silent_import=True, classes=None):
+        Rig.all.append(self)
         self.loop = asyncio.new_event_loop()
         self.clock = ManualClock()
         self.rt = Runtime(DirFolder(folder or folder_path()), real=self.clock, hold_s=0.0, start_s=0.0, capture=capture,
@@ -111,9 +114,19 @@ class Rig:
             self.step(1.0)
 
     def close(self):
+        if self.loop.is_closed():
+            return
         if self.local:
             self.local.close()
+        self.rt.stop()
         self.spin(5)
+        tasks = [t for t in asyncio.all_tasks(self.loop) if not t.done()]
+        for t in tasks:
+            t.cancel()
+        async def drain():
+            await asyncio.gather(*tasks, return_exceptions=True)
+        self.loop.run_until_complete(drain())
+        self.loop.close()
 
     # --- HTTP, as the display client sends it ---------------------------------------------------
     def request(self, method, path, params=None, body=None, user="owner", password=None, headers=None, ctype=None):
