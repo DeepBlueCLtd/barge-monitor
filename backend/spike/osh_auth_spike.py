@@ -170,6 +170,7 @@ class Spike:
         try:
             async with websockets.connect(url, additional_headers={"Authorization": basic(user)} if user else {}, proxy=None, open_timeout=10) as ws:
                 status = 101
+                await asyncio.sleep(1)  # let the server register the subscription first
                 if post:
                     await asyncio.to_thread(post)
                 try:
