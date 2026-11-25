@@ -455,7 +455,7 @@ export class Api {
     return {
       id, name: d.name, description: d.description, outputName: d.outputName, 'system@id': d.system,
       'system@link': { href: c.base + `/systems/${d.system}` },
-      validTime: tr ? [iso(tr[0]), 'now'] : undefined,
+      validTime: tr ? [iso(tr[0]), iso(tr[1])] : [new Date().toISOString().replace(/\.\d+Z$/, 'Z'), new Date().toISOString().replace(/\.\d+Z$/, 'Z')], // closed at the data's end: the data lie in a fictional future
       phenomenonTime: tr ? [iso(tr[0]), iso(tr[1])] : undefined, resultTime: tr ? [iso(tr[0]), iso(tr[1])] : undefined,
       resultType: 'record', live: false, formats: [JSON_TYPE, SWE_JSON],
       observedProperties: rec.fields.filter((f) => f.name !== 'time').map((f) => ({ definition: f.definition ?? '', label: f.label ?? f.name })),

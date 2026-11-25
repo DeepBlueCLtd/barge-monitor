@@ -353,11 +353,15 @@ def create_server(rt) -> Gate:
         props = [{"definition": f.get("definition", ""), "label": f.get("label", f["name"]), "name": f["name"]}
                  for f in rec["fields"] if not (f["type"] == "Time" and f["name"] == "time")]
         did = d["id"]
+        # Omitted, not null, while a datastream is empty; closed at the data's end, not "now": the recordings
+        # lie in a fictional future, and a client reads "now" as its own clock (OSHConnect, AT-05).
+        span_iso = [iso(span[0]), iso(span[1])] if span else None
+        now = iso(rt.real())
+        times = ({"validTime": span_iso, "phenomenonTime": span_iso, "resultTime": span_iso} if span
+                 else {"validTime": [now, now]})  # validTime is required by clients (OSHConnect)
         return {"id": did, "name": d["name"], "outputName": d["outputName"], "system@id": d["system"],
                 "system@link": {"href": base(request) + f"/systems/{d['system']}"},
-                "validTime": [iso(span[0]) if span else iso(rt.real()), "now"],
-                "phenomenonTime": [iso(span[0]), iso(span[1])] if span else None,
-                "resultTime": [iso(span[0]), iso(span[1])] if span else None,
+                **times,
                 "resultType": "record", "live": False, "formats": list(swe.OBS_FORMATS), "observedProperties": props,
                 "links": [link(request, f"/datastreams/{did}", "self"),
                           link(request, f"/datastreams/{did}/schema?obsFormat=application%2Fswe%2Bjson", "schema"),

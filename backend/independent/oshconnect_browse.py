@@ -53,6 +53,7 @@ def main() -> int:
     from oshconnect.schema_datamodels import SWEDatastreamRecordSchema
 
     port = serve()
+    AUTH = (USER, PASSWORD)  # FR-93: the helpers carry credentials only when given them
     try:  # every request carries credentials (FR-93)
         node = Node(protocol="http", address="127.0.0.1", port=port, username=USER, password=PASSWORD)
     except TypeError:
@@ -67,13 +68,13 @@ def main() -> int:
         for ds in sysm.discover_datastreams() or []:
             discovered[ds.get_resource().ds_id] = (sysm.label, ds.get_resource().name)
     # Subsystems (bow and stern) are not top-level systems: list every datastream too.
-    listing = H.list_all_datastreams(base, api_root=api_root)
+    listing = H.list_all_datastreams(base, api_root=api_root, auth=AUTH)
     if not listing.ok:
         failures.append(f"list datastreams: HTTP {listing.status_code}")
     for item in listing.json().get("items", []):
         discovered.setdefault(item["id"], (item["system@id"], item["name"]))
     for ds_id, (owner, name) in discovered.items():
-        sch = H.retrieve_datastream_schema(base, ds_id, api_root=api_root, obs_format="application/swe+json")
+        sch = H.retrieve_datastream_schema(base, ds_id, api_root=api_root, auth=AUTH, obs_format="application/swe+json")
         note = ""
         try:
             SWEDatastreamRecordSchema.from_swejson_dict(sch.json())
@@ -92,7 +93,7 @@ def main() -> int:
             else:
                 failures.append(f"schema {ds_id}: {type(e).__name__}: {e}")
                 note = "schema failed"
-        obs = H.list_observations_from_datastream(base, ds_id, api_root=api_root)
+        obs = H.list_observations_from_datastream(base, ds_id, api_root=api_root, auth=AUTH)
         if not (obs.ok and isinstance(obs.json(), (list, dict))):
             failures.append(f"observations {ds_id}: HTTP {obs.status_code}")
         print(f"  {owner} / {name}: {note}, observations HTTP {obs.status_code}")
