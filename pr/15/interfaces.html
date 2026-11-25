@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="site.css">
 </head>
 <body>
-<div class="banner">Preview of pull request #15 (7e53aa4). Not the published document.</div>
+<div class="banner">Preview of pull request #15 (ef394ee). Not the published document.</div>
 <main>
 <p class="demo-link"><a href="demo/"><strong>Open the working demonstrator →</strong></a> It runs whole in your browser. · <a href="demo/?hand-made"><strong>Start from “before”</strong></a>: the data server as subsystems we would build ourselves, then adopting OpenSensorHub (SRD §9.8). · <a href="index.html">Requirements</a> · <a href="interfaces.html">Version 4 interfaces</a> · Mockups: <a href="mockups/mockup-1-display-client.png">1</a>, <a href="mockups/mockup-2-models.png">2</a>, <a href="mockups/mockup-3-data-server.png">3</a></p>
 <nav id="TOC" aria-label="Contents">
@@ -733,6 +733,11 @@ per real second while playing, and one on every change. Fields:</p>
 <td><code>run</code></td>
 <td>Text: the current replay run id</td>
 </tr>
+<tr>
+<td><code>models_ready</code></td>
+<td>Boolean: every model under Models has created its datastreams for
+<code>dataset</code></td>
+</tr>
 </tbody>
 </table>
 <p><code>time</code> is the replay time, so
@@ -748,6 +753,16 @@ state of a dataset readable by time.</p>
 <code>r-&lt;dataset id&gt;-&lt;n&gt;</code>. A new run starts on
 <code>load</code> of a dataset, and on every <code>seek</code> (FR-87).
 Models tag their results with it (§10).</p>
+<p><strong>Models ready.</strong> After a <code>load</code>, the
+controller lists <code>/systems/{models}/subsystems</code> and
+<code>/datastreams</code> (Q, drawn) once per real second until every
+model system has at least one datastream whose output name ends
+<code>__{dataset}</code>. It then publishes the state with
+<code>models_ready: true</code>. A model that is failing is skipped
+after 10 real seconds, and named in the log. The display client starts
+the handshake that follows an import (FR-44) only once
+<code>models_ready</code> is true for the new dataset, so its profile
+check never races the models.</p>
 <p><strong>At the end</strong> of the dataset the controller pauses,
 sets <code>at_end</code>, and publishes the state (FR-88).</p>
 <p><strong>At startup</strong>, before the first login, the controller
@@ -953,9 +968,13 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb3-1"><a hr
 <span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> process(<span class="va">self</span>, api, ds, t0, t1, run) <span class="co"># one window (t0, t1] of dataset ds, under replay run `run`</span></span>
 <span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> on_command(<span class="va">self</span>, api, cmd) <span class="op">-&gt;</span> <span class="bu">str</span>   <span class="co"># validate; raise Rejected(&quot;…bound…&quot;) to report REJECTED</span></span></code></pre></div>
 <h3 id="102-the-runner">10.2 The runner</h3>
-<p>The runner reads the replay <code>state</code> once per real second,
-and runs on what it finds:</p>
+<p>The runner reads the replay <code>state</code> once per real second
+(drawn, like every other request), and runs on what it finds:</p>
 <ul>
+<li><p><strong>On a new dataset</strong>, it first creates all of the
+model's datastreams for that dataset, including the restricted ones it
+may publish. This is what the replay controller waits for
+(<code>models_ready</code>, §8).</p></li>
 <li><p><strong>Current dataset.</strong> It follows
 <code>state.dataset</code>. On a new dataset or run, it continues from
 where it got to for that dataset if the run is the same, and otherwise
