@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="site.css">
 </head>
 <body>
-<div class="banner">Preview of pull request #15 (1567168). Not the published document.</div>
+<div class="banner">Preview of pull request #15 (aabe865). Not the published document.</div>
 <main>
 <p class="demo-link"><a href="demo/"><strong>Open the working demonstrator →</strong></a> It runs whole in your browser. · <a href="index.html">Requirements</a> · <a href="interfaces.html">Version 4 interfaces</a> · Mockups: <a href="mockups/mockup-1-display-client.png">1</a>, <a href="mockups/mockup-2-models.png">2</a>, <a href="mockups/mockup-3-data-server.png">3</a></p>
 <nav id="TOC" aria-label="Contents">
@@ -16,9 +16,9 @@
 id="toc-software-requirements-document">Software Requirements
 Document</a>
 <ul>
-<li><a href="#canal-barge-weather-demonstrator-version-45-draft"
-id="toc-canal-barge-weather-demonstrator-version-45-draft">Canal barge
-weather demonstrator, Version 4.5 (draft)</a></li>
+<li><a href="#canal-barge-weather-demonstrator-version-46-draft"
+id="toc-canal-barge-weather-demonstrator-version-46-draft">Canal barge
+weather demonstrator, Version 4.6 (draft)</a></li>
 <li><a href="#1-purpose" id="toc-1-purpose">1. Purpose</a></li>
 <li><a href="#2-runtime-architecture" id="toc-2-runtime-architecture">2.
 Runtime architecture</a></li>
@@ -51,33 +51,61 @@ style</a></li>
 <li><a href="#12-delivery" id="toc-12-delivery">12. Delivery</a></li>
 <li><a href="#13-development-process"
 id="toc-13-development-process">13. Development process</a></li>
-<li><a href="#14-acceptance-criteria-44"
-id="toc-14-acceptance-criteria-44">14. Acceptance criteria
-(4.4)</a></li>
+<li><a href="#14-acceptance-criteria-46"
+id="toc-14-acceptance-criteria-46">14. Acceptance criteria
+(4.6)</a></li>
 <li><a href="#15-open-questions" id="toc-15-open-questions">15. Open
 questions</a></li>
-<li><a href="#16-deliberate-exclusions-from-version-44"
-id="toc-16-deliberate-exclusions-from-version-44">16. Deliberate
-exclusions from Version 4.4</a></li>
+<li><a href="#16-deliberate-exclusions-from-version-46"
+id="toc-16-deliberate-exclusions-from-version-46">16. Deliberate
+exclusions from Version 4.6</a></li>
 </ul></li>
 </ul>
 </nav>
 <h1 id="software-requirements-document">Software Requirements
 Document</h1>
-<h2 id="canal-barge-weather-demonstrator-version-45-draft">Canal barge
-weather demonstrator, Version 4.5 (draft)</h2>
-<p><strong>Status:</strong> Draft. Builds on Version 4.4. Version 4.5
-adds <strong>measured CO₂</strong>. The barge owner lets friends view
-the weather data but wants <strong>CO₂ emissions, and everything derived
-from them, restricted</strong> to users he chooses, and wants to
-<strong>create and maintain the user accounts</strong> himself.
-<strong>Author:</strong> Doc <strong>Working name:</strong> to be chosen
-(§15). This document says <em>the demonstrator</em>.
-<strong>Supersedes:</strong> Version 4.4 and, through it, every earlier
-version and Annex A. Earlier change lists are in Versions 4.2, 4.3 and
-4.4 (below). Requirements marked <strong>(4.5)</strong> are new or
-changed here; <strong>(4.4)</strong> and <strong>(4.3)</strong> mark
-those changed in those versions and unchanged since.</p>
+<h2 id="canal-barge-weather-demonstrator-version-46-draft">Canal barge
+weather demonstrator, Version 4.6 (draft)</h2>
+<p><strong>Status:</strong> Draft. Builds on Version 4.5. Version 4.6
+adds an <strong>opening act</strong> for non-engineers. The demonstrator
+opens with the data server shown as the subsystems we would have to
+build. One click adopts OpenSensorHub, and only then does the
+demonstrator come alive (§9.8). <strong>Author:</strong> Doc
+<strong>Working name:</strong> to be chosen (§15). This document says
+<em>the demonstrator</em>. <strong>Supersedes:</strong> Version 4.5 and,
+through it, every earlier version and Annex A. Earlier change lists are
+in Versions 4.2 to 4.5 (below). Requirements marked
+<strong>(4.6)</strong> are new or changed here; <strong>(4.5)</strong>,
+<strong>(4.4)</strong> and <strong>(4.3)</strong> mark those changed in
+those versions and unchanged since.</p>
+<h3 id="changes-from-version-45">Changes from Version 4.5</h3>
+<ul>
+<li><strong>An adoption opening (4.6)</strong>, entered with the
+<code>hand-made</code> flag in the URL's query (FR-119). The data server
+starts out as <strong>eight subsystems</strong> in the back end, drawn
+as equals of the CSV importer, replay controller and Models
+(FR-120).</li>
+<li><strong>Nothing is gold, and nothing runs, before adoption
+(4.6).</strong> The opening comes before the value-add reveal. The top
+bar's controls are hidden and no message is sent (FR-121, FR-122).</li>
+<li><strong>Adopt OpenSensorHub (4.6)</strong> merges the eight into one
+data server in the third-party zone, shows what that saves, and hands
+over to the normal startup (FR-123 to FR-126).</li>
+<li><strong>Savings only (4.6):</strong> the opening shows no costs
+(§16).</li>
+<li><strong>Settled in review (4.6):</strong>
+<ul>
+<li>the opening starts nothing until Adopt (FR-122);</li>
+<li>the opening's flows are mapped to the subsystems, with the lines
+between them (FR-120a);</li>
+<li>pushed commands travel as a stream through the relay (FR-02);</li>
+<li>Mission A is imported silently at every load (FR-15);</li>
+<li>a full handshake follows each import (FR-44);</li>
+<li>the profile is a template (FR-40);</li>
+<li>the latest run is shown on return to a dataset (FR-35);</li>
+<li>charts stay, and D-53 is superseded (FR-80).</li>
+</ul></li>
+</ul>
 <h3 id="changes-from-version-44">Changes from Version 4.4</h3>
 <ul>
 <li><strong>CO₂ is measured (4.5)</strong> by both sensors, in ppm, and
@@ -103,11 +131,15 @@ client.</li>
 and a new failure demo (§9.7).</li>
 </ul>
 <p><strong>Companion mockups (non-normative):</strong> SRD v4 mockups 1
-to 3 and the interactive frame. They predate 4.1, 4.3 and 4.4. Where a
-mockup and this document disagree, this document wins.</p>
+to 3, the interactive frame, and the two OpenSensorHub savings frames.
+The savings frames predate 4.6. In them the eight subsystems sit inside
+a "built by us" box and the importer and Models are gold, and 4.6
+forbids both. Where a mockup and this document disagree, this document
+wins.</p>
 <p><strong>Companion documents to update:</strong>
 <code>docs/v4-interfaces.md</code> and the decision log describe 4.1 and
-4.2. Both need revising to 4.4 before building (§15).</p>
+4.2. Both need revising to 4.6 before building (§15). The implementation
+plan is <code>docs/plan-v4.6.md</code>.</p>
 <h3 id="changes-from-version-43">Changes from Version 4.3</h3>
 <ul>
 <li><strong>CSV files in a data folder (4.4).</strong> The legacy
@@ -235,10 +267,16 @@ stand-in (Python, Pyodide)</td>
 <ul>
 <li><strong>FR-02</strong> All traffic between the display client, the
 data server, the replay controller and the models crosses as
-<strong>HTTP</strong>, or as a <strong>WebSocket</strong> for pushed
+<strong>HTTP</strong>, or as a <strong>pushed stream</strong> for
 commands, and nowhere else, through a <strong>Service Worker
-relay</strong>. <strong>Every request and every WebSocket carries
-credentials (4.4)</strong> (§7.5).</li>
+relay</strong>. <strong>Every request and every push subscription
+carries credentials (4.4)</strong> (§7.5).</li>
+<li><strong>FR-02a (4.6)</strong> A Service Worker cannot carry a
+WebSocket. So in the demonstrator, a push subscription is <strong>one
+long streaming response</strong> through the relay, with one command per
+line. It is wrapped in a class with WebSocket's interface, and drawn as
+"push". In a developed system it is OpenSensorHub's WebSocket. Freeze
+holds the stream like any other response.</li>
 <li><strong>FR-03</strong> The relay is an <strong>invisible
 transport</strong>, not a component, and not drawn.</li>
 <li><strong>FR-04</strong> No client code or configuration carries an
@@ -509,7 +547,11 @@ streams.</p></li>
 <strong>data folder</strong> generated at build time:</p>
 <ul>
 <li><strong>Mission A</strong>, 24 hours, <strong>already
-imported</strong> at startup, so replay can begin at once;</li>
+imported</strong> at startup, so replay can begin at once. Since nothing
+persists between visits, it is imported <strong>silently on every load
+(4.6)</strong>: before the server takes requests, without being drawn,
+and the importer's panel says so. After Reset instance it stays gone
+until the page is reloaded;</li>
 <li><strong>Mission B</strong>, 24 hours, not yet imported;</li>
 <li><strong>Mission B (re-export)</strong>, which overlaps Mission B in
 time and differs in a few readings, not yet imported, to show that
@@ -710,9 +752,9 @@ altering the files.</li>
 permissions</strong>, required of the server (to be confirmed for
 OpenSensorHub, §15):
 <ul>
-<li>every request, discovery included, and every WebSocket needs
-<strong>valid credentials</strong>; without them the answer is
-<strong>401</strong> and nothing is served;</li>
+<li>every request, discovery included, and every push subscription
+(FR-02a) needs <strong>valid credentials</strong>; without them the
+answer is <strong>401</strong> and nothing is served;</li>
 <li>permissions are granted <strong>per system</strong> and
 <strong>inherited by its datastreams and control streams</strong>.
 Nothing in this system needs permission per field;</li>
@@ -747,7 +789,9 @@ detection, correlation and clustering with three algorithms).</li>
 dataset</strong> only (FR-84a), reading up to the replay time, and
 publish <strong>per dataset</strong>. On a change of dataset, each model
 works through the new one if it has not already; its outputs for other
-datasets are kept, so returning to a dataset is immediate.</li>
+datasets are kept, so returning to a dataset is immediate. On return,
+views show the dataset's <strong>latest run</strong> (4.6); earlier runs
+are reached through a saved data of interest.</li>
 <li><strong>FR-35a (4.4)</strong> <strong>Analysis takes a data of
 interest</strong> (§6.7) as its input: the display client's current
 selection is sent, as an unsaved data of interest, in the command.</li>
@@ -770,7 +814,9 @@ published as before.</li>
 is <strong>rejected</strong> (<code>REJECTED</code>, saying only that a
 requested source is not available) when the sender's role does not
 include emissions. The receiver checks the sender's role; it never
-relies on the client having hidden the choice.</li>
+relies on the client having hidden the choice. How the receiver learns
+the sender's role is decided by the authentication spike (§15, item
+4).</li>
 <li><strong>FR-113 (4.5)</strong> The core models' service accounts have
 access to CO₂. A <strong>new model</strong> written in an empty slot
 <strong>does not</strong>, unless the owner grants it.</li>
@@ -900,6 +946,11 @@ temperature and apparent wind speed, and the core models' datastreams
 the views depend on; and the importer's catalogue and the replay
 controller's state and control streams. <strong>CO₂ is never essential
 (4.5)</strong>, so a weather-only user does not start degraded.</li>
+<li><strong>FR-40a (4.6)</strong> Per-dataset essentials are written as
+<strong>templates</strong>, with output names such as
+<code>weather · {dataset}</code>. The client checks each dataset against
+them when it is loaded. The profile's schema allows the
+placeholder.</li>
 <li><strong>FR-41</strong> The profile is at a fixed path beside the
 server (<code>profile.json</code>).</li>
 </ul>
@@ -914,8 +965,10 @@ time.</li>
 <li><strong>FR-43 (4.4)</strong> The field list is built <strong>for the
 current dataset</strong>, and rebuilt when the current dataset changes,
 without a full handshake.</li>
-<li><strong>FR-44</strong> Discovery of systems happens only at
-handshake.</li>
+<li><strong>FR-44 (4.6)</strong> Discovery happens only at handshake.
+When an <strong>import completes</strong>, the client repeats the
+<strong>full handshake</strong>, so that it finds the new dataset's
+datastreams.</li>
 <li><strong>FR-45 (4.4)</strong> Degraded mode is <strong>per
 dataset</strong>: a dataset missing an essential source (Mission C)
 opens degraded, naming what is missing; other datasets are
@@ -1016,13 +1069,16 @@ once at installation as part of the delivered configuration:</p>
 models, and keep its own workspace.</p></li>
 <li><p><strong>FR-115</strong> The <strong>owner creates and maintains
 accounts</strong> (create, set or reset a password, assign a role,
-disable) <strong>through OpenSensorHub's own administration</strong>. He
-assigns roles; he does not edit them, so he cannot expose CO₂ by
-changing a permission. Granting or removing emissions is changing a
+disable) <strong>through OpenSensorHub's own administration</strong>.
+The owner assigns roles but does not edit them, and so cannot expose CO₂
+by changing a permission. Granting or removing emissions is changing a
 user's role.</p></li>
 <li><p><strong>FR-116</strong> A change of role takes effect <strong>at
 the user's next login</strong>; a user who is logged in when their role
-changes is logged out.</p></li>
+changes is logged out. Whether a change instead takes effect at once, on
+the next request, depends on how OpenSensorHub authenticates. The
+authentication spike decides, and the stand-in follows it
+(PR-06).</p></li>
 <li><p><strong>FR-117</strong> <strong>Our own account screen</strong>
 is built only if a stated <strong>trigger</strong> is met: the owner
 cannot complete the account tasks of FR-115 unaided in a short trial, or
@@ -1179,6 +1235,9 @@ panel.</li>
 <ul>
 <li><strong>FR-74 to FR-76</strong> As in 4.3. The importer and replay
 controller are not marked.</li>
+<li><strong>FR-74a (4.6)</strong> With the <code>hand-made</code> flag,
+FR-74's startup state begins <strong>at adoption</strong> (FR-125), not
+at load. No component can be revealed during the opening (FR-121).</li>
 </ul>
 <h3 id="96-time-in-the-demonstrator">9.6 Time in the demonstrator</h3>
 <ul>
@@ -1208,11 +1267,181 @@ crafted request (absent: 404 from the server, and a command naming CO₂
 rejected by the model) (4.5).</li>
 <li><strong>FR-79b, FR-79c</strong> As in 4.3.</li>
 </ul>
+<h3 id="98-adoption-opening-46">9.8 Adoption opening (4.6)</h3>
+<p>The opening is for <strong>non-engineers</strong>. It shows what the
+data server would be if we wrote it ourselves, then what adopting
+OpenSensorHub saves. It comes <strong>before</strong> the value-add
+reveal, so nothing is marked as ours in it.</p>
+<ul>
+<li><p><strong>FR-119</strong> <strong>Entry.</strong> If the page's URL
+query has a <code>hand-made</code> flag (<code>?hand-made</code>, with
+any value or none), the demonstrator opens in the <strong>adoption
+opening</strong>. Without the flag it opens exactly as FR-77 describes.
+The flag is read once, at load, and has no other effect. Reloading with
+the flag repeats the opening. The flag belongs to the demonstrator shell
+only; a developed system has no such flag.</p></li>
+<li><p><strong>FR-120</strong> <strong>The data server as
+subsystems.</strong> In the opening the third-party zone holds
+<strong>no data server</strong>. The back end holds <strong>eight
+subsystem components</strong> beside the CSV importer, replay controller
+and Models, and <strong>all are equals</strong>: the same card style,
+the same size, one grid. No frame, label or colour groups the eight, or
+sets them apart from the other components:</p>
+<table>
+<thead>
+<tr>
+<th>Subsystem</th>
+<th>What it does</th>
+<th>Keeps data in</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Web API</td>
+<td>Connected Systems endpoints, discovery, paging, formats</td>
+<td>—</td>
+</tr>
+<tr>
+<td>Registry</td>
+<td>Systems, datastreams, schemas, control streams</td>
+<td>a metadata database</td>
+</tr>
+<tr>
+<td>Observation store</td>
+<td>Time-series storage, indexes, backups, growth</td>
+<td>a time-series database</td>
+</tr>
+<tr>
+<td>Query engine</td>
+<td>Time filters, latest value, building responses</td>
+<td>indexes</td>
+</tr>
+<tr>
+<td>Commands</td>
+<td>Control streams, delivery to receivers, status</td>
+<td>a command log</td>
+</tr>
+<tr>
+<td>Accounts</td>
+<td>Users, passwords, roles, sessions</td>
+<td>a user database</td>
+</tr>
+<tr>
+<td>Permissions</td>
+<td>Who may see what; hiding restricted systems</td>
+<td>a policy store</td>
+</tr>
+<tr>
+<td>Admin</td>
+<td>Settings, start, stop, health</td>
+<td>configuration files</td>
+</tr>
+</tbody>
+</table>
+<p>The flows of §3.1 are drawn between the subsystems and the other
+components as plain lines, with no message letters (FR-120a). The
+back-end band has <strong>two rows</strong> in the opening (six cards
+and five), with every card at its normal size. The zones below it move
+down, and return at the merge.</p></li>
+<li><p><strong>FR-120a (4.6)</strong> <strong>Flows in the
+opening.</strong> Each external flow is drawn to the subsystem it
+belongs to, and the lines between the subsystems are drawn too:</p>
+<table>
+<thead>
+<tr>
+<th>From</th>
+<th>To</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Display client, Models, replay controller</td>
+<td>Web API (both ways)</td>
+</tr>
+<tr>
+<td>Commands</td>
+<td>CSV importer, replay controller, Models (push)</td>
+</tr>
+<tr>
+<td>CSV importer</td>
+<td>Observation store, Registry</td>
+</tr>
+<tr>
+<td>Web API</td>
+<td>Query engine, Registry, Commands, Permissions</td>
+</tr>
+<tr>
+<td>Query engine</td>
+<td>Observation store</td>
+</tr>
+<tr>
+<td>Accounts</td>
+<td>Permissions (both ways)</td>
+</tr>
+<tr>
+<td>Admin</td>
+<td>Web API</td>
+</tr>
+</tbody>
+</table></li>
+<li><p><strong>FR-121</strong> <strong>Nothing is gold.</strong> No card
+is gold. No ★, diamond or "our value-add" appears anywhere in the
+opening, the detail panel included. Clicking the display client or
+Models does not reveal it.</p></li>
+<li><p><strong>FR-122</strong> <strong>Nothing runs.</strong> The top
+bar's controls are <strong>hidden, not disabled</strong>: replay mirror,
+Freeze, restart client, restart server, failure demos, control panel and
+overview. No message is sent or drawn. The display client does not
+handshake. <strong>The back end does not start (4.6)</strong>: no worker
+runs and no model registers until hand-over (FR-125). The status panel
+shows only "Opening". The <strong>stand-in banner is hidden</strong>
+until hand-over, because it names OpenSensorHub before there is a data
+server on screen.</p></li>
+<li><p><strong>FR-123</strong> <strong>The opening panel.</strong> The
+detail panel opens on <strong>Data server</strong> with:</p>
+<ul>
+<li>a two-way switch, <strong>Build it ourselves | Adopt
+OpenSensorHub</strong>, with <em>Build it ourselves</em> selected;</li>
+<li>the table of FR-120;</li>
+<li>a row, <strong>"Written by us either way"</strong>: CSV importer,
+replay controller, Models, display client, in plain style.</li>
+</ul>
+<p>Clicking a subsystem card highlights its row in the table. Clicking
+any other card does nothing in the opening.</p></li>
+<li><p><strong>FR-124</strong> <strong>Adopt.</strong> Choosing
+<em>Adopt OpenSensorHub</em>:</p>
+<ol type="1">
+<li>moves the eight subsystem cards into the third-party zone, where
+they merge into the single <strong>Data server</strong> card
+(OpenSensorHub, OGC Connected Systems);</li>
+<li>spreads the CSV importer, replay controller and Models across the
+back end that the eight have left;</li>
+<li>changes the table to "OpenSensorHub covers all of these", with each
+subsystem ticked. No number is shown (§16).</li>
+</ol>
+<p>This takes about 1.5 seconds. With reduced motion it is
+immediate.</p></li>
+<li><p><strong>FR-125</strong> <strong>Hand-over.</strong> When the
+merge ends, the flowchart is <strong>exactly</strong> FR-77's startup
+layout, and FR-74 applies from that moment: every component looks the
+same, and the display client shows its login screen. The top bar's
+controls and the stand-in banner <strong>appear</strong>. The
+<strong>back end starts now (4.6)</strong>, with the usual loading
+progress (NFR-10), as on a load without the flag. The detail panel keeps
+the adopted savings until the viewer clicks a component or closes it.
+<strong>That panel is the only difference</strong> from a load without
+the flag.</p></li>
+<li><p><strong>FR-126</strong> <strong>One way.</strong> Adoption cannot
+be undone in a session. The switch is removed at hand-over. To show the
+opening again, reload with the flag.</p></li>
+</ul>
 <hr />
 <h2 id="10-implementation-direction">10. Implementation direction</h2>
 <ul>
-<li><strong>FR-80</strong> TypeScript and React; React Flow; ECharts
-(§15); react-grid-layout; CodeMirror 6.</li>
+<li><strong>FR-80 (4.6)</strong> TypeScript and React; React Flow;
+<strong>ECharts</strong>; react-grid-layout; CodeMirror 6. The views are
+charts. Decision D-53, which removed them for speed on slower laptops,
+is superseded: slower laptops are not a target for this project.</li>
 <li><strong>FR-81 (4.4)</strong> In a developed system:
 <strong>OpenSensorHub</strong>, with its own authentication, the CSV
 importer as its module writing in bulk, and the replay controller and
@@ -1226,8 +1455,12 @@ worker.</li>
 <hr />
 <h2 id="11-visual-style">11. Visual style</h2>
 <p>As Version 4.2 §11, with the changes of 4.3 (four zones; messages at
-a fixed on-screen pace), and in 4.4:</p>
+a fixed on-screen pace), and in 4.4 and 4.6:</p>
 <ul>
+<li><strong>VS-25 (4.6)</strong> In the adoption opening the eight
+subsystem cards are drawn with the same sketch renderer, line weight,
+fill and font as every other component card. The merge moves the cards;
+it does not redraw their outlines.</li>
 <li><strong>VS-24 (4.4)</strong> The <strong>login and lock
 screens</strong> are plain, inside the monitor frame, in the display
 client's own sans-serif. The demonstrator's pre-populated credentials
@@ -1255,7 +1488,7 @@ except the demonstrator's demo credentials, which are labelled as such
 and grant nothing outside the demonstrator.</li>
 </ul>
 <hr />
-<h2 id="14-acceptance-criteria-44">14. Acceptance criteria (4.4)</h2>
+<h2 id="14-acceptance-criteria-46">14. Acceptance criteria (4.6)</h2>
 <table>
 <thead>
 <tr>
@@ -1487,8 +1720,8 @@ file; re-importing the file restores it</td>
 </tr>
 <tr>
 <td><strong>AT-49</strong></td>
-<td>Every request and WebSocket without valid credentials is refused
-with 401, discovery and the catalogue included</td>
+<td>Every request and push subscription without valid credentials is
+refused with 401, discovery and the catalogue included</td>
 <td>C5</td>
 </tr>
 <tr>
@@ -1566,6 +1799,44 @@ essential source</td>
 grants it</td>
 <td>C3, C6</td>
 </tr>
+<tr>
+<td><strong>AT-62</strong></td>
+<td>Without the <code>hand-made</code> flag the demonstrator opens as
+FR-77 describes; with it, in the adoption opening; reloading with it
+repeats the opening</td>
+<td>Architecture view</td>
+</tr>
+<tr>
+<td><strong>AT-63</strong></td>
+<td>In the opening: no top-bar control and no stand-in banner is in the
+page; no back-end or model worker has started; no message is captured or
+drawn; the third-party zone has no data server; nothing gold, no ★ and
+no diamond anywhere, and clicking the display client or Models reveals
+nothing</td>
+<td>Architecture view</td>
+</tr>
+<tr>
+<td><strong>AT-64</strong></td>
+<td>The eight subsystem cards match the CSV importer, replay controller
+and Models cards in size, outline style, fill and font, and no element
+encloses or labels the eight as a group</td>
+<td>Architecture view</td>
+</tr>
+<tr>
+<td><strong>AT-65</strong></td>
+<td>After Adopt: one Data server card in the third-party zone; the table
+shows every subsystem ticked, with no number; the top-bar controls and
+banner appear and the back end starts; once it has started, everything
+but the detail panel matches a load without the flag, and the state
+passes AT-19 and AT-20</td>
+<td>Architecture view</td>
+</tr>
+<tr>
+<td><strong>AT-66</strong></td>
+<td>With reduced motion, Adopt changes the layout immediately, without
+animation</td>
+<td>Visual style</td>
+</tr>
 </tbody>
 </table>
 <hr />
@@ -1605,13 +1876,16 @@ format, units, missing-value codes, file sizes and whether files ever
 overlap or are re-exported.</p></li>
 <li><p><strong>Idle time before lock.</strong> 5 minutes is a
 placeholder; confirm with the barge owner.</p></li>
-<li><p><strong>Charts.</strong> D-53 removed them; this SRD assumes
-them. Settle which.</p></li>
 <li><p><strong>Decision log numbering.</strong> D-89 to D-96 are used
 twice.</p></li>
 <li><p><strong>Interfaces document.</strong>
 <code>docs/v4-interfaces.md</code> describes 4.1 and 4.2; revise to
-4.4.</p></li>
+4.6.</p></li>
+<li><p><strong>Handshakes after imports (4.6).</strong> A full handshake
+after every import (FR-44) is drawn one request at a time (FR-42a), and
+it grows with every dataset imported. If it gets in the way of a
+demonstration, a handshake scoped to the dataset is the
+alternative.</p></li>
 <li><p><strong>Retention.</strong> Results are appended per run and per
 dataset; a long-lived instance grows until Reset instance.</p></li>
 <li><p><strong>Resampling.</strong> Reserved in <code>aggregation</code>
@@ -1621,8 +1895,8 @@ of interest is already per analyst, so the step is smaller than it
 was.</p></li>
 <li><p><strong>Name.</strong></p></li>
 </ul>
-<h2 id="16-deliberate-exclusions-from-version-44">16. Deliberate
-exclusions from Version 4.4</h2>
+<h2 id="16-deliberate-exclusions-from-version-46">16. Deliberate
+exclusions from Version 4.6</h2>
 <ul>
 <li><strong>A live sensor or live ingest</strong>, and any writing to
 the data folder.</li>
@@ -1646,6 +1920,21 @@ FR-117's trigger is met.</li>
 is always per system (FR-93).</li>
 <li><strong>Roles defined or edited by the owner</strong>: roles are
 fixed at installation (FR-114).</li>
+<li><strong>Costs of adoption in the opening (4.6)</strong>, such as
+learning OpenSensorHub, its spikes, licence obligations or the risk of
+depending on it. The opening shows savings only; those costs belong in
+the ADR.</li>
+<li><strong>Counts, scores or totals in the opening (4.6)</strong>, such
+as subsystems saved or stores avoided. The merge itself makes the point;
+numbers would read as a sales pitch.</li>
+<li><strong>Marks of what is unproven in the opening (4.6).</strong>
+Every subsystem is ticked once adopted. What the authentication and
+bulk-import spikes have still to prove is recorded in §15 and ADR 0005,
+not on screen.</li>
+<li><strong>Returning to "Build it ourselves"</strong> after adoption,
+in a session (FR-126).</li>
+<li><strong>The adoption opening in a developed system (4.6)</strong>:
+it is demonstrator shell only.</li>
 </ul>
 <footer>Rendered from <code>srd-barge.md</code>.</footer>
 </main>
