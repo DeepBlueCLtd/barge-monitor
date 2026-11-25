@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Version 4 interfaces</title>
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<div class="banner">Preview of pull request #15 (1567168). Not the published document.</div>
+<main>
+<p class="demo-link"><a href="demo/"><strong>Open the working demonstrator →</strong></a> It runs whole in your browser. · <a href="index.html">Requirements</a> · <a href="interfaces.html">Version 4 interfaces</a> · Mockups: <a href="mockups/mockup-1-display-client.png">1</a>, <a href="mockups/mockup-2-models.png">2</a>, <a href="mockups/mockup-3-data-server.png">3</a></p>
+<nav id="TOC" aria-label="Contents">
+<ul>
+<li><a href="#version-41-interfaces-implementation-contract"
+id="toc-version-41-interfaces-implementation-contract">Version 4.1
+interfaces (implementation contract)</a>
+<ul>
+<li><a href="#1-component-identifiers"
+id="toc-1-component-identifiers">1. Component identifiers</a></li>
+<li><a href="#2-flows-and-letters-srd-31-5"
+id="toc-2-flows-and-letters-srd-31-5">2. Flows and letters (SRD §3.1,
+§5)</a></li>
+<li><a href="#3-captured-message" id="toc-3-captured-message">3.
+Captured message</a></li>
+<li><a href="#4-connected-systems-resources"
+id="toc-4-connected-systems-resources">4. Connected Systems
+resources</a></li>
+<li><a href="#5-declared-profile-v4" id="toc-5-declared-profile-v4">5.
+Declared profile (v4)</a></li>
+<li><a href="#6-the-display-clients-reading-plan-fr-29-fr-53-fr-54"
+id="toc-6-the-display-clients-reading-plan-fr-29-fr-53-fr-54">6. The
+display client's reading plan (FR-29, FR-53, FR-54)</a></li>
+<li><a href="#7-what-a-model-is-written-against"
+id="toc-7-what-a-model-is-written-against">7. What a model is written
+against</a></li>
+<li><a href="#8-workers-and-the-page" id="toc-8-workers-and-the-page">8.
+Workers and the page</a></li>
+<li><a href="#9-drawing-the-traffic-the-demonstrator-shell"
+id="toc-9-drawing-the-traffic-the-demonstrator-shell">9. Drawing the
+traffic (the demonstrator shell)</a></li>
+<li><a href="#10-the-shells-own-panels"
+id="toc-10-the-shells-own-panels">10. The shell's own panels</a></li>
+</ul></li>
+</ul>
+</nav>
+<h1 id="version-41-interfaces-implementation-contract">Version 4.1
+interfaces (implementation contract)</h1>
+<p>The fixed points that the Python back end, the JavaScript stand-in
+and the front end are built against. SRD Version 4.1
+(<code>srd-barge.md</code>) is the requirement; this file is the design
+that meets it. Where they disagree, the SRD wins and this file is
+wrong.</p>
+<h2 id="1-component-identifiers">1. Component identifiers</h2>
+<p>Every captured message names its sender and receiver with one of
+these ids (SRD §3):</p>
+<table>
+<thead>
+<tr>
+<th>id</th>
+<th>Component</th>
+<th>Zone</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>platform</code></td>
+<td>Collection platform</td>
+<td>World</td>
+</tr>
+<tr>
+<td><code>store</code></td>
+<td>Logger store</td>
+<td>Legacy</td>
+</tr>
+<tr>
+<td><code>adapter</code></td>
+<td>Store adapter</td>
+<td>New build · back end</td>
+</tr>
+<tr>
+<td><code>server</code></td>
+<td>Data server (OpenSensorHub; a stand-in here, ADR 0005)</td>
+<td>Third-party libraries</td>
+</tr>
+<tr>
+<td><code>models</code></td>
+<td>Models</td>
+<td>New build · back end ★</td>
+</tr>
+<tr>
+<td><code>scilibs</code></td>
+<td>Scientific libraries</td>
+<td>Third-party libraries</td>
+</tr>
+<tr>
+<td><code>client</code></td>
+<td>Display client</td>
+<td>New build · front end ★</td>
+</tr>
+</tbody>
+</table>
+<p>The relay is not a component: HTTP messages are captured as
+<code>client → server</code> and <code>server → client</code> (FR-03).
+FastAPI is an internal detail of the Python stand-in for the data server
+and is not a component: no message is captured to or from it.</p>
+<h2 id="2-flows-and-letters-srd-31-5">2. Flows and letters (SRD §3.1,
+§5)</h2>
+<table>
+<thead>
+<tr>
+<th>src → dst</th>
+<th>Letters</th>
+<th>What</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>platform → store</td>
+<td>L</td>
+<td>one fixed-width record per sensor per second</td>
+</tr>
+<tr>
+<td>server → adapter</td>
+<td>S</td>
+<td>store query: sensors, fields, period, source</td>
+</tr>
+<tr>
+<td>adapter → store</td>
+<td>S</td>
+<td>file read found through the index: file, offset, length</td>
+</tr>
+<tr>
+<td>store → adapter</td>
+<td>L</td>
+<td>the records read (first three shown)</td>
+</tr>
+<tr>
+<td>adapter → server</td>
+<td>I</td>
+<td>columns</td>
+</tr>
+<tr>
+<td>models → server</td>
+<td>Q, O, I</td>
+<td>HTTP request: create a system, datastream or control stream, read
+(Q); publish observations (O); ask the referee (I)</td>
+</tr>
+<tr>
+<td>server → models</td>
+<td>D, O, H, I</td>
+<td>HTTP response</td>
+</tr>
+<tr>
+<td>models → scilibs</td>
+<td>I</td>
+<td>a call (numpy, pandas, scipy, scikit-learn)</td>
+</tr>
+<tr>
+<td>scilibs → models</td>
+<td>I</td>
+<td>its result</td>
+</tr>
+<tr>
+<td>client → server</td>
+<td>Q, K</td>
+<td>HTTP request (K = POST to
+<code>/controlstreams/{id}/commands</code>)</td>
+</tr>
+<tr>
+<td>server → client</td>
+<td>D, P, O, H</td>
+<td>HTTP response (H = any status ≥ 400, and 503)</td>
+</tr>
+</tbody>
+</table>
+<p>A request says who makes it only for the capture: a model sends
+<code>x-tap-model: &lt;id&gt;</code>, and <code>x-tap-quiet: 1</code>
+while it works through history at startup (counted, not drawn). Nothing
+is decided by either header.</p>
+<h2 id="3-captured-message">3. Captured message</h2>
+<div class="sourceCode" id="cb1"><pre class="sourceCode ts"><code class="sourceCode typescript"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">interface</span> Captured {</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  id<span class="op">:</span> <span class="dt">number</span> <span class="op">|</span> <span class="dt">string</span><span class="op">;</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>  t<span class="op">:</span> <span class="dt">number</span><span class="op">;</span>          <span class="co">// simulated seconds since the simulation epoch</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  src<span class="op">:</span> ComponentId<span class="op">;</span> dst<span class="op">:</span> ComponentId<span class="op">;</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>  letter<span class="op">:</span> <span class="st">&#39;Q&#39;</span><span class="op">|</span><span class="st">&#39;D&#39;</span><span class="op">|</span><span class="st">&#39;O&#39;</span><span class="op">|</span><span class="st">&#39;K&#39;</span><span class="op">|</span><span class="st">&#39;P&#39;</span><span class="op">|</span><span class="st">&#39;H&#39;</span><span class="op">|</span><span class="st">&#39;S&#39;</span><span class="op">|</span><span class="st">&#39;L&#39;</span><span class="op">|</span><span class="st">&#39;I&#39;</span><span class="op">;</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>  summary<span class="op">:</span> <span class="dt">string</span><span class="op">;</span>    <span class="co">// one line</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>  content<span class="op">:</span> <span class="dt">string</span><span class="op">;</span>    <span class="co">// the message, at most 4000 characters, monospace</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>  failed<span class="op">?:</span> <span class="dt">boolean</span><span class="op">;</span>   <span class="co">// a request that got no answer (server down)</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>  chain<span class="op">?:</span> <span class="dt">string</span><span class="op">|</span><span class="dt">null</span><span class="op">;</span><span class="co">// messages caused by one HTTP request or one model call share a chain</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>  hop<span class="op">?:</span> <span class="dt">number</span><span class="op">;</span>       <span class="co">// order within the chain</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>  model<span class="op">?:</span> <span class="dt">string</span><span class="op">;</span>     <span class="co">// for models ↔ server/scilibs, and the hops their requests cause: which model (data-cleanse, summaries, …)</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<p>The display client sends <code>x-tap-chain: &lt;chain&gt;</code> on
+every request, so the S messages a selection causes can be found by
+chain (FR-70).</p>
+<h2 id="4-connected-systems-resources">4. Connected Systems
+resources</h2>
+<p>Systems (<code>/systems</code>, top level; subsystems under
+<code>/systems/{id}/subsystems</code>):</p>
+<table>
+<thead>
+<tr>
+<th>id</th>
+<th>uniqueId</th>
+<th>label</th>
+<th>systemType</th>
+<th>assetType</th>
+<th>parent</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>barge</code></td>
+<td><code>urn:x-barge:platform:barge</code></td>
+<td>Collection platform</td>
+<td>sosa:Platform</td>
+<td>Equipment</td>
+<td></td>
+</tr>
+<tr>
+<td><code>bow</code></td>
+<td><code>urn:x-barge:sensor:bow</code></td>
+<td>Bow sensor</td>
+<td>sosa:Sensor</td>
+<td>Equipment</td>
+<td>barge</td>
+</tr>
+<tr>
+<td><code>stern</code></td>
+<td><code>urn:x-barge:sensor:stern</code></td>
+<td>Stern sensor</td>
+<td>sosa:Sensor</td>
+<td>Equipment</td>
+<td>barge</td>
+</tr>
+<tr>
+<td><code>models</code></td>
+<td><code>urn:x-barge:process:models</code></td>
+<td>Models</td>
+<td>sosa:System</td>
+<td>Process</td>
+<td></td>
+</tr>
+<tr>
+<td><code>data-cleanse</code></td>
+<td><code>urn:x-barge:process:data-cleanse</code></td>
+<td>Data cleanse</td>
+<td>sosa:System</td>
+<td>Process</td>
+<td>models</td>
+</tr>
+<tr>
+<td><code>summaries</code></td>
+<td><code>urn:x-barge:process:summaries</code></td>
+<td>Summaries</td>
+<td>sosa:System</td>
+<td>Process</td>
+<td>models</td>
+</tr>
+<tr>
+<td><code>analysis</code></td>
+<td><code>urn:x-barge:process:analysis</code></td>
+<td>Analysis</td>
+<td>sosa:System</td>
+<td>Process</td>
+<td>models</td>
+</tr>
+</tbody>
+</table>
+<p><code>data-cleanse</code>, <code>summaries</code>,
+<code>analysis</code> (and any new model) are <strong>created by the
+models themselves</strong> (FR-28) as subsystems of <code>models</code>,
+with <code>POST /systems/models/subsystems</code>. The server creates
+only <code>barge</code>, <code>bow</code>, <code>stern</code> and
+<code>models</code>.</p>
+<p>Datastreams (identifier <code>{system}-{outputName}-{hash6}</code>;
+the hash is of the published field names, so a schema change gives a new
+id, FR-51):</p>
+<table>
+<thead>
+<tr>
+<th>system</th>
+<th>outputName</th>
+<th>fields (after <code>time</code>)</th>
+<th>resolution</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>bow, stern</td>
+<td><code>weather</code></td>
+<td>7 quantities, each followed by <code>&lt;name&gt;_qc</code>
+(Category, QARTOD); <code>precipitation_type</code> (Category,
+extra)</td>
+<td>raw, 1 s</td>
+</tr>
+<tr>
+<td>data-cleanse</td>
+<td><code>cleaned-bow</code>, <code>cleaned-stern</code></td>
+<td>7 quantities (cleaned; removed values are null),
+<code>precipitation_type</code></td>
+<td>1 s</td>
+</tr>
+<tr>
+<td>summaries</td>
+<td><code>summary-1min-bow</code>, <code>summary-1min-stern</code></td>
+<td>7 quantity means, <code>readings_removed</code> (Count, extra),
+<code>precipitation_type</code> (most frequent, extra)</td>
+<td>1 min</td>
+</tr>
+<tr>
+<td>summaries</td>
+<td><code>summary-1h-bow</code>, <code>summary-1h-stern</code></td>
+<td>as above</td>
+<td>1 h</td>
+</tr>
+<tr>
+<td>summaries</td>
+<td><code>derived-1min</code>, <code>derived-1h</code></td>
+<td><code>dew_point</code>, <code>bow_minus_stern</code> (air
+temperature, bow minus stern), <code>pressure_tendency_3h</code>
+(extra)</td>
+<td>1 min, 1 h</td>
+</tr>
+<tr>
+<td>analysis</td>
+<td><code>changes</code></td>
+<td><code>run_id</code>, <code>scale</code> (minutes/hours),
+<code>strength</code></td>
+<td>latest run only</td>
+</tr>
+<tr>
+<td>analysis</td>
+<td><code>clusters</code></td>
+<td><code>run_id</code>, <code>cluster</code> (Category c1…c8)</td>
+<td>latest run only</td>
+</tr>
+<tr>
+<td>analysis</td>
+<td><code>correlation</code></td>
+<td><code>run_id</code>, <code>fields</code>, <code>matrix</code></td>
+<td>latest run only</td>
+</tr>
+<tr>
+<td>analysis</td>
+<td><code>runs</code></td>
+<td><code>run_id</code>, <code>command_id</code>,
+<code>algorithm</code>, <code>fields</code>, <code>period</code>,
+<code>window_start</code>, <code>window_end</code>,
+<code>records</code>, <code>clusters</code>, <code>score_changes</code>,
+<code>score_clusters</code>, <code>scored_against</code>,
+<code>illustrative</code> (Boolean)</td>
+<td>one per run</td>
+</tr>
+</tbody>
+</table>
+<p>Field definitions are
+<code>https://deepbluecltd.github.io/barge-monitor/def/&lt;name&gt;</code>.
+A summary mean or a cleaned value has <strong>the same definition as the
+raw quantity</strong> it comes from, so a client groups fields into
+properties by definition.</p>
+<p>Quantities and units: <code>air_temperature</code> Cel,
+<code>apparent_wind_speed</code> m/s, <code>relative_humidity</code> %,
+<code>pressure</code> hPa, <code>apparent_wind_direction</code> deg
+(angular), <code>solar_irradiance</code> W/m2,
+<code>water_temperature</code> Cel.</p>
+<p>Control streams (one per model, created by the model):
+<code>data-cleanse</code> <code>settings</code>
+(<code>spike_threshold</code> Quantity 1–10); <code>summaries</code>
+<code>settings</code> (<code>tendency_hours</code> Quantity 1–6);
+<code>analysis</code> <code>clustering</code>:</p>
+<table>
+<thead>
+<tr>
+<th>field</th>
+<th>type</th>
+<th>bounds</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>algorithm</code></td>
+<td>Category</td>
+<td>A, B, C</td>
+</tr>
+<tr>
+<td><code>fields</code></td>
+<td>Text</td>
+<td>comma-separated property names; each must be a published
+property</td>
+</tr>
+<tr>
+<td><code>period</code></td>
+<td>Category</td>
+<td>PT1M, PT1H, PT6H, P1D, P7D, P28D</td>
+</tr>
+<tr>
+<td><code>clusters</code></td>
+<td>Count</td>
+<td>2–8 (default 4)</td>
+</tr>
+<tr>
+<td><code>sensitivity</code></td>
+<td>Quantity</td>
+<td>1–10 (default 5)</td>
+</tr>
+</tbody>
+</table>
+<p>A command outside the bounds is refused with HTTP 400 and
+<code>refused</code> naming the field (FR-27). A valid command returns
+201 with <code>currentStatus: PENDING</code>; the model moves it to
+ACCEPTED and COMPLETED (or FAILED) and publishes a new run.</p>
+<p>Commands are POSTed to <code>/controlstreams/{id}/commands</code>
+with body <code>{"parameters": {...}}</code>.
+<code>GET /commands/{id}</code> gives <code>currentStatus</code>.</p>
+<p>Observations:
+<code>GET /datastreams/{id}/observations?phenomenonTime=a/b&amp;limit=n&amp;offset=k</code>
+or <code>resultTime=latest</code>; <code>application/swe+json</code> (an
+array of records keyed by field name, <code>time</code> first,
+<code>Link: rel="next"</code> when paged, <code>x-total-count</code>).
+Over <code>MAX_LIMIT</code> (100 000) is refused naming
+<code>limit</code>.</p>
+<p>Creating and publishing (how a model registers, FR-28):</p>
+<table>
+<thead>
+<tr>
+<th>request</th>
+<th>body</th>
+<th>answer</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>POST /systems/models/subsystems</code></td>
+<td><code>{uniqueId, label, description}</code></td>
+<td>201 and <code>Location: /systems/{id}</code>; 409 with the same
+<code>Location</code> if that <code>uniqueId</code> exists</td>
+</tr>
+<tr>
+<td><code>POST /systems/{id}/datastreams</code></td>
+<td><code>{name, outputName, schema: {obsFormat: "application/swe+json", recordSchema}}</code></td>
+<td>201 and <code>Location: /datastreams/{dsId}</code>; 409 with its
+<code>Location</code> if that output exists with the same fields; a
+different schema makes a new datastream</td>
+</tr>
+<tr>
+<td><code>POST /systems/{id}/controlstreams</code></td>
+<td><code>{name, inputName, schema: {commandFormat: "application/json", parametersSchema}}</code></td>
+<td>201 or 409, as above</td>
+</tr>
+<tr>
+<td><code>POST /datastreams/{dsId}/observations</code></td>
+<td>one record or an array, <code>application/swe+json</code></td>
+<td>201 <code>{created}</code>; an unknown field or a missing
+<code>time</code> is refused by name</td>
+</tr>
+<tr>
+<td><code>PUT /datastreams/{dsId}/observations</code></td>
+<td>as POST</td>
+<td>200 <code>{created}</code>: these in place of all before.
+<strong>Plain HTTP, not Connected Systems</strong></td>
+</tr>
+<tr>
+<td><code>GET /controlstreams/{csId}/commands?statusCode=PENDING</code></td>
+<td></td>
+<td>the commands a model has yet to take up</td>
+</tr>
+<tr>
+<td><code>POST /commands/{cmdId}/status</code></td>
+<td><code>{statusCode, message?}</code></td>
+<td>201; <code>statusCode</code> is ACCEPTED, EXECUTING, COMPLETED,
+FAILED or REJECTED</td>
+</tr>
+<tr>
+<td><code>POST /demonstrator/referee/{changes|clusters}</code></td>
+<td>what to score</td>
+<td>scores against the manifest. <strong>Scaffolding</strong>, not part
+of the system</td>
+</tr>
+</tbody>
+</table>
+<p>Only the Models system takes subsystems, and only a system a model
+created takes datastreams and control streams. A sensor's datastream
+takes no observations. Everything else that would create, replace,
+update or delete is refused with 405 naming the method; the
+Create/Replace/Delete conformance classes are not claimed. A datastream
+with every output switched off is not served, but still takes its
+model's observations (AT-12).</p>
+<p>Every response carries <code>x-server-instance</code>; the landing
+page also sends it as <code>ETag</code>. Waiting mode: 503 with
+<code>Retry-After</code>. Server down: no answer (network failure).</p>
+<h2 id="5-declared-profile-v4">5. Declared profile (v4)</h2>
+<p><code>contracts/profile.json</code>, id
+<code>https://deepbluecltd.github.io/barge-monitor/profile/v4</code>.
+Each essential names <code>system</code> (uniqueId),
+<code>datastream</code> (outputName), <code>field</code>,
+<code>type</code>, <code>uom</code>, <code>resolution</code>
+(<code>raw</code>, <code>PT1M</code>, <code>PT1H</code> or
+<code>run</code>) and <code>views</code>. Essentials: bow and stern
+<code>weather</code> air temperature and apparent wind speed (raw);
+<code>summary-1min-bow</code> and <code>summary-1h-bow</code> air
+temperature and apparent wind speed; <code>derived-1min</code> and
+<code>derived-1h</code> dew point and bow-minus-stern;
+<code>changes.strength</code>; <code>clusters.cluster</code>;
+<code>runs.score_clusters</code>. Views: <code>graphs</code>,
+<code>changes</code>, <code>clusters</code>.</p>
+<p>The client takes <strong>the resolution of every datastream named in
+the profile from the profile</strong>. A datastream the profile does not
+name (a new model's) is read at its native resolution.</p>
+<h2 id="6-the-display-clients-reading-plan-fr-29-fr-53-fr-54">6. The
+display client's reading plan (FR-29, FR-53, FR-54)</h2>
+<p>Chips are properties (grouped by definition) of the bow sensor and of
+every other system's datastreams, excluding <code>time</code>, QC flags,
+Text and Analysis's run outputs (<code>changes</code>,
+<code>clusters</code>, <code>correlation</code>, <code>runs</code>: they
+feed views, not chips). A property named in the profile is solid; any
+other is dashed ("optional"). Sensor properties are plotted from the
+<strong>bow</strong> sensor.</p>
+<p>Periods offered: 1 min (default), 1 h, 6 h, day, week, 4 weeks. With
+24 hours of history pre-loaded (FR-15), week and 4 weeks show only what
+there is.</p>
+<table>
+<thead>
+<tr>
+<th>period</th>
+<th>sensor property reads</th>
+<th>derived property reads</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1 min (default), 1 h</td>
+<td>bow <code>weather</code> (raw: causes S)</td>
+<td><code>derived-1min</code></td>
+</tr>
+<tr>
+<td>6 h, day</td>
+<td><code>summary-1min-bow</code></td>
+<td><code>derived-1min</code></td>
+</tr>
+<tr>
+<td>week, 4 weeks</td>
+<td><code>summary-1h-bow</code></td>
+<td><code>derived-1h</code></td>
+</tr>
+</tbody>
+</table>
+<p>A property found only in a datastream not named in the profile is
+read from that datastream for the period, at its native resolution. Live
+data: once per simulated second, poll each datastream in use from the
+last time received.</p>
+<p>Changing the selected fields, the period or the algorithm sends one K
+to Analysis's <code>clustering</code> control stream; the cluster view
+and the change marks follow the latest run.</p>
+<h2 id="7-what-a-model-is-written-against">7. What a model is written
+against</h2>
+<p>A model reaches the data server only by HTTP, as the display client
+does (§4). In the browser each model runs in its own worker and makes
+its requests with <code>fetch</code>, carried by the relay. In CPython
+(tests, an ordinary ASGI server) and in the stand-in the models share a
+process with the server and make the same requests of the same
+application.</p>
+<p>A model is written against a small library,
+<code>backend/models/csmodel.py</code>, which makes those requests:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> Api:  <span class="co"># every method is async; each is one or more HTTP requests</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> create_system(<span class="va">self</span>, body) <span class="op">-&gt;</span> <span class="bu">str</span>             <span class="co"># POST /systems/models/subsystems; returns the system id</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> create_datastream(<span class="va">self</span>, system_id, body) <span class="op">-&gt;</span> <span class="bu">str</span>    <span class="co"># body: name, outputName, schema (SWE DataRecord); returns a key</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> create_controlstream(<span class="va">self</span>, system_id, body) <span class="op">-&gt;</span> <span class="bu">str</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> find(<span class="va">self</span>, system_uid, output_name) <span class="op">-&gt;</span> <span class="bu">str</span> <span class="op">|</span> <span class="va">None</span>  <span class="co"># another system&#39;s datastream, as a key</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> read(<span class="va">self</span>, key, t0, t1, fields<span class="op">=</span><span class="va">None</span>) <span class="op">-&gt;</span> <span class="bu">dict</span>       <span class="co"># GET observations: {&quot;t&quot;: ndarray, field: ndarray}</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> publish(<span class="va">self</span>, key, cols, replace<span class="op">=</span><span class="va">False</span>) <span class="op">-&gt;</span> <span class="bu">int</span>     <span class="co"># POST (or PUT) observations</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> commands(<span class="va">self</span>, key) <span class="op">-&gt;</span> <span class="bu">list</span>[<span class="bu">dict</span>]              <span class="co"># GET commands?statusCode=PENDING</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> command_status(<span class="va">self</span>, cmd_id, status, message<span class="op">=</span><span class="st">&quot;&quot;</span>) <span class="op">-&gt;</span> <span class="va">None</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> score(<span class="va">self</span>, kind, payload) <span class="op">-&gt;</span> <span class="bu">dict</span>             <span class="co"># the demonstrator&#39;s referee; models never see the manifest</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> now(<span class="va">self</span>) <span class="op">-&gt;</span> <span class="bu">float</span></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> tap(<span class="va">self</span>, dst, summary, content) <span class="op">-&gt;</span> <span class="va">None</span>             <span class="co"># models → scilibs and back (capture only)</span></span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> Model:</span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>    <span class="bu">id</span> <span class="op">=</span> <span class="st">&quot;new-model-1&quot;</span><span class="op">;</span> label <span class="op">=</span> <span class="st">&quot;New model 1&quot;</span><span class="op">;</span> interval <span class="op">=</span> <span class="fl">60.0</span>   <span class="co"># simulated seconds between steps</span></span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> setup(<span class="va">self</span>, api): ...</span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> step(<span class="va">self</span>, api, t0, t1): ...               <span class="co"># process (t0, t1]</span></span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> on_command(<span class="va">self</span>, api, cmd): ...            <span class="co"># optional</span></span></code></pre></div>
+<p>A <strong>key</strong> is <code>system:outputName</code>. It outlives
+server restarts; the public identifier behind it (which changes with the
+schema or the offering) is looked up again when the server answers 404
+or a new instance answers. A 503 or no answer means try again at the
+next step.</p>
+<p>A model looks for commands on its control stream on the simulation
+clock: Analysis every simulated second, the others at each step. While
+the clock stands still the shell lets a viewer's click through: it tells
+each model worker how many commands are pending
+(<code>pending_commands</code> in the back end's tick), and a model with
+one waiting looks at once.</p>
+<h2 id="8-workers-and-the-page">8. Workers and the page</h2>
+<table>
+<thead>
+<tr>
+<th>worker</th>
+<th>runs</th>
+<th>started by</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>backend.worker.ts</code></td>
+<td>Pyodide: world, store, adapter, the data server's stand-in</td>
+<td>page, if WebAssembly</td>
+</tr>
+<tr>
+<td><code>model.worker.ts</code> ×3 (+ one per empty slot used)</td>
+<td>Pyodide: one model each; its requests go through the relay</td>
+<td>page, Python mode</td>
+</tr>
+<tr>
+<td><code>standin.worker.ts</code></td>
+<td>TypeScript: world continuation, store adapter, server, core
+models</td>
+<td>page, without WebAssembly or <code>?backend=standin</code></td>
+</tr>
+<tr>
+<td><code>sw.js</code></td>
+<td>the relay (no logic)</td>
+<td>page</td>
+</tr>
+</tbody>
+</table>
+<p>Page ↔︎ back-end worker (both back ends): page sends
+<code>start</code>, <code>connect</code> (port for the relay),
+<code>model-connect {model}</code> (a port on which a model says which
+phase it is in, for the shell only), <code>control {action, arg}</code>;
+worker posts <code>progress {stage, detail, pct}</code>,
+<code>tick {messages, clock, server, pending_commands}</code> every 100
+ms, <code>state {…control state…}</code>,
+<code>relay-failed {chain, path, method, model}</code>.</p>
+<p>Page ↔︎ model worker: page sends
+<code>start {pyodideUrl, pyZipUrl, model, apiUrl, code?}</code> and
+<code>clock {state, pending}</code> on every tick; worker posts
+<code>tap {messages}</code> (models ↔︎ scientific libraries),
+<code>progress {…}</code>, <code>status {model, phase, detail}</code>,
+<code>stdout</code>, <code>stderr</code>.</p>
+<p>Control actions: <code>play</code>, <code>pause</code>,
+<code>rate</code> (0.25, 0.5, 1), <code>restart-server</code>,
+<code>down</code>, <code>up</code>, <code>field {name, on}</code>,
+<code>profile-lie</code>, <code>capture</code>, <code>state</code>.</p>
+<p>Control state (<code>state</code>):
+<code>{server: running|waiting|down, instance, progress, fields: [{name, label, kind, inputs, extra, essential, type, on_next_start, published_next_start, published_now}], pending, lie_about_profile, clock, store: {bytes, files, records}, models: [{id, label, phase, datastreams}], capture_counts, backend: python|standin}</code>.</p>
+<p>URL parameters: <code>?backend=python|standin</code>,
+<code>?seed=N</code>, <code>?sketch=off</code>. Without
+<code>backend</code>, the page starts the stand-in (FR-06b).
+<code>PYTHON_BY_DEFAULT</code> in <code>web/src/shell/runtime.ts</code>
+makes Python the default wherever WebAssembly runs.</p>
+<h2 id="9-drawing-the-traffic-the-demonstrator-shell">9. Drawing the
+traffic (the demonstrator shell)</h2>
+<ul>
+<li>Each datastream the display client uses is polled as often as it can
+change: raw records every simulated second (FR-63), 1-minute means every
+minute, hourly means every hour, Analysis's runs every minute (every
+second while a command's run is awaited).</li>
+<li>A selection change (fields, period, algorithm) is answered at once,
+playing or paused. The chains of requests it causes are marked; their
+icons wear a <strong>gold ring</strong> ("caused by your click" in the
+key) and set off at once, ahead of any queue on their lines.</li>
+<li>The handshake is paced by its drawing (FR-42a): the display client
+sends each handshake request only when the reply to the one before has
+been drawn arriving. Its chains' icons carry
+<code>data-handshake</code>, take 0.3 simulated seconds a hop
+(<code>HANDSHAKE_HOP_S</code>) and do not queue behind other traffic. 31
+requests of 2 hops take about 19 simulated seconds.</li>
+<li>Other icons queue per line and direction; a line that falls more
+than 6 simulated seconds behind is relieved rather than left to lag
+further.</li>
+</ul>
+<h2 id="10-the-shells-own-panels">10. The shell's own panels</h2>
+<ul>
+<li><strong>Overview</strong> (the detail panel's opening state,
+FR-69a): <code>web/src/detail/Overview.tsx</code> holds the three lists
+(adopted, written, not here).</li>
+<li><strong>Failure demos</strong> (FR-79a..c):
+<code>web/src/shell/demos.ts</code> holds each scenario as control
+actions and the words of its banner. Put everything back sets every
+field to its default (on unless it is an extra), clears the
+misconfigured-server switch and starts the server.</li>
+</ul>
+<footer>Rendered from <code>srd-barge.md</code>.</footer>
+</main>
+</body>
+</html>
