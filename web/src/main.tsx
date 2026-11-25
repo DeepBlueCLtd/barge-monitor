@@ -14,6 +14,7 @@ import { bus } from './shell/messages';
 
 // For the end-to-end tests: the captured messages, as the flowchart holds them (AT-18, AT-53). Demonstrator shell only.
 (window as unknown as { __messages: () => unknown[] }).__messages = () => bus.find(() => true);
+(window as unknown as { __messageTotal: () => number }).__messageTotal = () => bus.total;
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

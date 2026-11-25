@@ -25,6 +25,9 @@ const MAPPING: [string, string, string][] = [
 
 export function ImporterDetail() {
   const st = useStore(runtime.controlState);
+  const ir = st?.import_rate as unknown;
+  const rate = typeof ir === 'number' ? ir : ir && typeof ir === 'object' ? (ir as { rows_per_s?: number }).rows_per_s ?? null : null;
+  const last = ir && typeof ir === 'object' ? ir as { rows?: number; seconds?: number; file?: string; silent?: boolean } : null;
   return (
     <div className="component-detail" data-testid="detail-importer-panel">
       <h3>Catalogue</h3>
@@ -37,8 +40,8 @@ export function ImporterDetail() {
           ))}
         </tbody>
       </table>
-      <p className="live" data-testid="import-rate">{typeof st?.import_rate === 'number'
-        ? `Last import: ${Math.round(st.import_rate).toLocaleString()} rows a second, written in bulk inside the server.` : 'No import measured yet.'}</p>
+      <p className="live" data-testid="import-rate">{rate != null
+        ? `Last import${last?.file ? ` (${last.file}${last.silent ? ', silent' : ''})` : ''}: ${Math.round(rate).toLocaleString()} rows a second${last?.rows ? `, ${last.rows.toLocaleString()} rows in ${(last.seconds ?? 0).toFixed(1)} s` : ''}, written in bulk inside the server.` : 'No import measured yet.'}</p>
       <p className="hint" data-testid="silent-import">Mission A was imported silently at load, before the server took requests, and was not drawn (FR-15): nothing persists between visits. After Reset instance it is not imported again until the page is reloaded.</p>
       <h3>Column mapping</h3>
       <table className="letters-table" data-testid="column-mapping">

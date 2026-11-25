@@ -325,6 +325,8 @@ export class DisplayClientSession {
   private failed(e: unknown) {
     if (e instanceof Closed) return;
     if (e instanceof Unauthorized) {
+      // Only credentials that had worked can stop working; a login in progress handles its own refusal.
+      if (this.phase.value === 'login' || this.phase.value === 'locked' || this.phase.value === 'handshake') return;
       // The credentials no longer work: back to the login screen, saying only that (FR-101).
       this.restart();
       this.loginError.set('Please log in again.');
@@ -657,7 +659,7 @@ export class DisplayClientSession {
   private replayCommand(action: 'load' | 'play' | 'pause' | 'seek', over: Partial<{ dataset: string; rate: number; position: number }> = {}, label: string = action) {
     const cs = this.replayCs();
     const s = this.replay.value;
-    if (!cs || !this.http) return;
+    if (!cs || !this.http || this.phase.value !== 'ready') return;
     void this.user_(async (http) => {
       http.command(cs.id, {
         action, dataset: over.dataset ?? this.intent.dataset ?? s?.dataset ?? '', rate: over.rate ?? this.intent.rate ?? s?.rate ?? 1,

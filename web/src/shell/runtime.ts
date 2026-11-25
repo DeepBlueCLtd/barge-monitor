@@ -81,7 +81,8 @@ export interface ControlState {
   capture_counts?: Record<string, number>;
   backend?: BackendKind;
   frozen?: boolean;
-  import_rate?: number | null;
+  /** The last import's speed: rows a second, or the stand-in's record of it. */
+  import_rate?: number | { rows: number; seconds: number; rows_per_s: number; file: string; silent: boolean } | null;
 }
 
 export interface ModelWorkerStatus {

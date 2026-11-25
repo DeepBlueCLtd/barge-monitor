@@ -57,7 +57,11 @@ async function loggedIn(user = 'owner', s: DisplayClientSession = clientSession)
 async function playing() {
   await loggedIn(clientSession.user.value ?? 'owner');
   const r = clientSession.replay.value;
-  if (r && !r.playing && !r.at_end) clientSession.play();
+  if (r && !r.playing && !r.at_end) {
+    clientSession.play();
+    // Wait until the state says so: a command still on its way when the server stops is lost.
+    await until(() => !!clientSession.replay.value?.playing, 8000);
+  }
 }
 
 async function openFile(prefix: RegExp) {
@@ -73,6 +77,12 @@ export async function putEverythingBack() {
   if (runtime.controlState.value?.frozen) await runtime.freeze(false);
   await control('profile-lie', { on: false });
   for (const f of runtime.controlState.value?.fields ?? []) await field(f.name, !f.extra);
+  // Playing, so that the display client notices the restart and discovers the server again (FR-48).
+  const r = clientSession.replay.value;
+  if (clientSession.phase.value === 'ready' && r && !r.playing && !r.at_end) {
+    clientSession.play();
+    await until(() => !!clientSession.replay.value?.playing, 8000);
+  }
   await control(runtime.server.value === 'down' ? 'up' : 'restart-server');
   await sleep(300);
   await until(() => runtime.server.value === 'running');

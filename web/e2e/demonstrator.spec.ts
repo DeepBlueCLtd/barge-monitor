@@ -253,13 +253,15 @@ test('import, overlapping files, degraded Mission C, and returning without a han
   await page.getByTestId('control-panel-toggle').click();
   await page.getByTestId('capture').uncheck();
   await page.waitForTimeout(1000);
-  const n0 = (await messages(page)).length;
+  const total = () => page.evaluate(() => (window as unknown as { __messageTotal: () => number }).__messageTotal());
+  const n0 = await total();
   await page.getByTestId('dc-play').click();
   await page.waitForTimeout(3000);
   await page.getByTestId('dc-play').click();
-  expect((await messages(page)).length).toBe(n0);
+  expect(await total()).toBe(n0);
   await page.getByTestId('capture').check();
-  await expect.poll(async () => (await messages(page)).length, { timeout: 10_000 }).toBeGreaterThan(n0);
+  await page.getByTestId('dc-play').click();
+  await expect.poll(total, { timeout: 10_000 }).toBeGreaterThan(n0);
   // FR-109, FR-110: the folder and importer panels.
   await page.getByTestId('card-folder').click();
   await expect(page.getByTestId('folder-files')).toContainText('MISSION_C_20310421.csv');
@@ -474,6 +476,9 @@ test('failure demos: never-seen fields, the rate, a wrong password, the degraded
   await expect(extra).toHaveClass(/optional/);
   await expect(extra).toHaveAttribute('data-type', 'Quantity');
   await page.getByTestId('demo-reset').click();
+  await expect(page.getByTestId('client-state')).toHaveText('Configured', { timeout: SLOW });
+  await page.waitForTimeout(3000);
+  await expect(page.getByTestId('client-state')).toHaveText('Configured', { timeout: SLOW });
   await demo(page, 'rate');
   await expect(page.getByTestId('dc-notice').filter({ hasText: 'exceeds 10, the highest Analysis sustains' })).toBeVisible({ timeout: 15_000 });
   await demo(page, 'password');
