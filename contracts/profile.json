@@ -1,202 +1,261 @@
 {
- "id": "https://deepbluecltd.github.io/barge-monitor/profile/v4",
- "title": "Canal barge weather display: declared profile, Version 4",
- "description": "The essential sources the display client needs (SRD FR-40). A server claims this profile by listing its id in its conformance declaration; a client checks the claim against discovery (FR-41). Each essential names the resolution of its datastream, which is how a client chooses raw records or a summary for a period (FR-29).",
+ "id": "https://deepbluecltd.github.io/barge-monitor/profile/v4.6",
+ "title": "Canal barge weather display: declared profile, Version 4.6",
+ "description": "The essential sources the display client needs (SRD FR-40, FR-40a). Published beside the server at profile.json (FR-41). An essential with scope 'dataset' is a template: '{dataset}' in its datastream stands for a dataset id, and the client checks every dataset against it when the dataset is loaded; one missing makes that dataset degraded (FR-45). 'fixed' essentials are checked at the handshake. CO2 is never essential (FR-40).",
  "essentials": [
   {
    "id": "bow-air-temperature",
    "label": "Bow air temperature",
    "system": "urn:x-barge:sensor:bow",
-   "datastream": "weather",
+   "datastream": "weather__{dataset}",
    "field": "air_temperature",
    "type": "Quantity",
    "uom": "Cel",
    "resolution": "raw",
    "views": [
     "graphs"
-   ]
+   ],
+   "scope": "dataset"
   },
   {
    "id": "bow-wind-speed",
    "label": "Bow wind speed",
    "system": "urn:x-barge:sensor:bow",
-   "datastream": "weather",
+   "datastream": "weather__{dataset}",
    "field": "apparent_wind_speed",
    "type": "Quantity",
    "uom": "m/s",
    "resolution": "raw",
    "views": [
     "graphs"
-   ]
+   ],
+   "scope": "dataset"
   },
   {
    "id": "stern-air-temperature",
    "label": "Stern air temperature",
    "system": "urn:x-barge:sensor:stern",
-   "datastream": "weather",
+   "datastream": "weather__{dataset}",
    "field": "air_temperature",
    "type": "Quantity",
    "uom": "Cel",
    "resolution": "raw",
    "views": [
     "graphs"
-   ]
+   ],
+   "scope": "dataset"
   },
   {
    "id": "stern-wind-speed",
    "label": "Stern wind speed",
    "system": "urn:x-barge:sensor:stern",
-   "datastream": "weather",
+   "datastream": "weather__{dataset}",
    "field": "apparent_wind_speed",
    "type": "Quantity",
    "uom": "m/s",
    "resolution": "raw",
    "views": [
     "graphs"
-   ]
+   ],
+   "scope": "dataset"
   },
   {
    "id": "bow-air-temperature-1min",
-   "label": "Bow air temperature, 1-minute means",
+   "label": "Bow air temperature, 1-minute summary",
    "system": "urn:x-barge:process:summaries",
-   "datastream": "summary-1min-bow",
+   "datastream": "summary-1min-bow__{dataset}",
    "field": "air_temperature",
    "type": "Quantity",
    "uom": "Cel",
    "resolution": "PT1M",
    "views": [
     "graphs"
-   ]
+   ],
+   "scope": "dataset"
   },
   {
    "id": "bow-wind-speed-1min",
-   "label": "Bow wind speed, 1-minute means",
+   "label": "Bow wind speed, 1-minute summary",
    "system": "urn:x-barge:process:summaries",
-   "datastream": "summary-1min-bow",
+   "datastream": "summary-1min-bow__{dataset}",
    "field": "apparent_wind_speed",
    "type": "Quantity",
    "uom": "m/s",
    "resolution": "PT1M",
    "views": [
     "graphs"
-   ]
+   ],
+   "scope": "dataset"
+  },
+  {
+   "id": "bow-air-temperature-1h",
+   "label": "Bow air temperature, hourly summary",
+   "system": "urn:x-barge:process:summaries",
+   "datastream": "summary-1h-bow__{dataset}",
+   "field": "air_temperature",
+   "type": "Quantity",
+   "uom": "Cel",
+   "resolution": "PT1H",
+   "views": [
+    "graphs"
+   ],
+   "scope": "dataset"
+  },
+  {
+   "id": "bow-wind-speed-1h",
+   "label": "Bow wind speed, hourly summary",
+   "system": "urn:x-barge:process:summaries",
+   "datastream": "summary-1h-bow__{dataset}",
+   "field": "apparent_wind_speed",
+   "type": "Quantity",
+   "uom": "m/s",
+   "resolution": "PT1H",
+   "views": [
+    "graphs"
+   ],
+   "scope": "dataset"
   },
   {
    "id": "dew-point-1min",
    "label": "Dew point, 1-minute",
    "system": "urn:x-barge:process:summaries",
-   "datastream": "derived-1min",
+   "datastream": "derived-1min__{dataset}",
    "field": "dew_point",
    "type": "Quantity",
    "uom": "Cel",
    "resolution": "PT1M",
    "views": [
     "graphs"
-   ]
+   ],
+   "scope": "dataset"
   },
   {
    "id": "bow-minus-stern-1min",
-   "label": "Bow − stern, 1-minute",
+   "label": "Bow minus stern, 1-minute",
    "system": "urn:x-barge:process:summaries",
-   "datastream": "derived-1min",
+   "datastream": "derived-1min__{dataset}",
    "field": "bow_minus_stern",
    "type": "Quantity",
    "uom": "Cel",
    "resolution": "PT1M",
    "views": [
     "graphs"
-   ]
-  },
-  {
-   "id": "bow-air-temperature-1h",
-   "label": "Bow air temperature, hourly means",
-   "system": "urn:x-barge:process:summaries",
-   "datastream": "summary-1h-bow",
-   "field": "air_temperature",
-   "type": "Quantity",
-   "uom": "Cel",
-   "resolution": "PT1H",
-   "views": [
-    "graphs"
-   ]
-  },
-  {
-   "id": "bow-wind-speed-1h",
-   "label": "Bow wind speed, hourly means",
-   "system": "urn:x-barge:process:summaries",
-   "datastream": "summary-1h-bow",
-   "field": "apparent_wind_speed",
-   "type": "Quantity",
-   "uom": "m/s",
-   "resolution": "PT1H",
-   "views": [
-    "graphs"
-   ]
+   ],
+   "scope": "dataset"
   },
   {
    "id": "dew-point-1h",
    "label": "Dew point, hourly",
    "system": "urn:x-barge:process:summaries",
-   "datastream": "derived-1h",
+   "datastream": "derived-1h__{dataset}",
    "field": "dew_point",
    "type": "Quantity",
    "uom": "Cel",
    "resolution": "PT1H",
    "views": [
     "graphs"
-   ]
+   ],
+   "scope": "dataset"
   },
   {
    "id": "bow-minus-stern-1h",
-   "label": "Bow − stern, hourly",
+   "label": "Bow minus stern, hourly",
    "system": "urn:x-barge:process:summaries",
-   "datastream": "derived-1h",
+   "datastream": "derived-1h__{dataset}",
    "field": "bow_minus_stern",
    "type": "Quantity",
    "uom": "Cel",
    "resolution": "PT1H",
    "views": [
     "graphs"
-   ]
+   ],
+   "scope": "dataset"
   },
   {
    "id": "changes",
-   "label": "Detected changes",
+   "label": "Change detection",
    "system": "urn:x-barge:process:analysis",
-   "datastream": "changes",
+   "datastream": "changes__{dataset}",
    "field": "strength",
    "type": "Quantity",
    "uom": "1",
    "resolution": "run",
    "views": [
     "changes"
-   ]
+   ],
+   "scope": "dataset"
   },
   {
    "id": "clusters",
-   "label": "Cluster assignments",
+   "label": "Clusters",
    "system": "urn:x-barge:process:analysis",
-   "datastream": "clusters",
+   "datastream": "clusters__{dataset}",
    "field": "cluster",
    "type": "Category",
    "uom": null,
    "resolution": "run",
    "views": [
     "clusters"
-   ]
+   ],
+   "scope": "dataset"
   },
   {
-   "id": "cluster-score",
-   "label": "Clustering score",
+   "id": "runs",
+   "label": "Analysis runs",
    "system": "urn:x-barge:process:analysis",
-   "datastream": "runs",
-   "field": "score_clusters",
-   "type": "Quantity",
-   "uom": "1",
+   "datastream": "runs__{dataset}",
+   "field": "run_id",
+   "type": "Text",
+   "uom": null,
    "resolution": "run",
    "views": [
-    "clusters"
-   ]
+    "clusters",
+    "changes"
+   ],
+   "scope": "dataset"
+  },
+  {
+   "id": "catalogue",
+   "label": "Archive catalogue",
+   "system": "urn:x-barge:importer",
+   "datastream": "catalogue",
+   "field": "status",
+   "type": "Category",
+   "uom": null,
+   "resolution": "latest",
+   "views": [
+    "datasets"
+   ],
+   "scope": "fixed"
+  },
+  {
+   "id": "replay-state",
+   "label": "Replay state",
+   "system": "urn:x-barge:replay",
+   "datastream": "state",
+   "field": "playing",
+   "type": "Boolean",
+   "uom": null,
+   "resolution": "latest",
+   "views": [
+    "replay"
+   ],
+   "scope": "fixed"
+  },
+  {
+   "id": "replay-control",
+   "label": "Replay control",
+   "system": "urn:x-barge:replay",
+   "datastream": "replay",
+   "field": "action",
+   "type": "Category",
+   "uom": null,
+   "resolution": "command",
+   "views": [
+    "replay"
+   ],
+   "scope": "fixed",
+   "kind": "controlstream"
   }
  ]
 }

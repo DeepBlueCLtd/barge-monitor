@@ -280,6 +280,7 @@ every change. Fields:
 | `playing` | Boolean |
 | `at_end` | Boolean |
 | `run` | Text: the current replay run id |
+| `models_ready` | Boolean: every model under Models has created its datastreams for `dataset` |
 
 `time` is the replay time, so `resultTime=latest` gives the current state.
 `phenomenonTime` is the replay time too, which makes the state of a dataset readable by
@@ -290,6 +291,14 @@ time.
 
 **Replay runs.** A run id is `r-<dataset id>-<n>`. A new run starts on `load` of a
 dataset, and on every `seek` (FR-87). Models tag their results with it (§10).
+
+**Models ready.** After a `load`, the controller lists `/systems/{models}/subsystems` and
+`/datastreams` (Q, drawn) once per real second until every model system has at least one
+datastream whose output name ends `__{dataset}`. It then publishes the state with
+`models_ready: true`. A model that is failing is skipped after 10 real seconds, and named
+in the log. The display client starts the handshake that follows an import (FR-44) only
+once `models_ready` is true for the new dataset, so its profile check never races the
+models.
 
 **At the end** of the dataset the controller pauses, sets `at_end`, and publishes the
 state (FR-88).
@@ -428,7 +437,11 @@ class Model:
 
 ### 10.2 The runner
 
-The runner reads the replay `state` once per real second, and runs on what it finds:
+The runner reads the replay `state` once per real second (drawn, like every other
+request), and runs on what it finds:
+- **On a new dataset**, it first creates all of the model's datastreams for that dataset,
+  including the restricted ones it may publish. This is what the replay controller waits
+  for (`models_ready`, §8).
 - **Current dataset.** It follows `state.dataset`. On a new dataset or run, it continues
   from where it got to for that dataset if the run is the same, and otherwise starts the
   dataset's windows again from the run's position (FR-87).
