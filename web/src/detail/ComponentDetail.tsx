@@ -9,8 +9,9 @@ import { useStore } from '../shell/store';
 
 export function ComponentDetail({ id }: { id: ComponentId }) {
   const c = COMPONENTS[id];
-  const control = useStore(runtime.control);
-  const store = control?.store;
+  const control = useStore(runtime.control) as (Record<string, unknown> & { folder?: FolderFile[]; import_rate?: number | null }) | null;
+  // The 4.6 control state (docs/v4-interfaces.md §13.4); read defensively while the back ends move to it.
+  const folder = Array.isArray(control?.folder) ? control!.folder : null;
   return (
     <div className="component-detail" data-testid={`detail-${id}`}>
       <h3>What it does</h3>
@@ -20,12 +21,40 @@ export function ComponentDetail({ id }: { id: ComponentId }) {
       {runtime.kind === 'standin' && id !== 'client' && (
         <p className="standin-note">In this session it runs in the JavaScript stand-in, which serves the same interface; the stand-in is demonstrator scaffolding, not part of the system.</p>
       )}
-      {id === 'store' && store && (
-        <p className="live">Now holding {store.files.toLocaleString()} files, {(store.bytes / 1e6).toFixed(1)} MB, {store.records.toLocaleString()} records.</p>
+      {id === 'folder' && <FolderFiles files={folder} />}
+      {id === 'importer' && typeof control?.import_rate === 'number' && (
+        <p className="live" data-testid="import-rate">Last import: {Math.round(control.import_rate).toLocaleString()} rows a second.</p>
       )}
       <h3>Messages</h3>
       <Counters id={id} />
     </div>
+  );
+}
+
+interface FolderFile { file: string; size?: number; modified?: string; status?: string; pct?: number | null }
+
+/** FR-109: the data folder's files, with sizes, dates and statuses; the system never writes to it. */
+function FolderFiles({ files }: { files: FolderFile[] | null }) {
+  return (
+    <>
+      <h3>Files</h3>
+      {files?.length ? (
+        <table className="letters-table" data-testid="folder-files">
+          <thead><tr><th>File</th><th>Size</th><th>Modified</th><th>Status</th></tr></thead>
+          <tbody>
+            {files.map((f) => (
+              <tr key={f.file}>
+                <td className="mono">{f.file}</td>
+                <td className="num">{f.size != null ? `${(f.size / 1e6).toFixed(1)} MB` : '–'}</td>
+                <td>{f.modified ?? '–'}</td>
+                <td>{f.status ?? '–'}{f.status === 'importing' && f.pct != null ? ` ${Math.round(f.pct)}%` : ''}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : <p className="hint">The file list appears once the back end has listed the folder.</p>}
+      <p className="hint">The system never writes, renames or deletes anything in this folder.</p>
+    </>
   );
 }
 
