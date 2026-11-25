@@ -34,7 +34,7 @@ LETTERS = {
 MAX_CONTENT = 4000
 # The components of SRD §3 (docs/v4-interfaces.md §1). Nothing is captured with the
 # adoption opening's eight subsystem ids.
-COMPONENTS = ("folder", "importer", "replay", "server", "models", "scilibs", "client")
+COMPONENTS = ("folder", "importer", "replay", "gateway", "server", "models", "scilibs", "client")
 
 _AUTH = re.compile(r"(authorization[\"']?\s*[:=]\s*[\"']?)(?:(?:basic|bearer)\s+)?[^\s\"',}\]]+", re.I)
 _PASSWORD = re.compile(r"(\"password\"\s*:\s*)\"(?:[^\"\\]|\\.)*\"", re.I)

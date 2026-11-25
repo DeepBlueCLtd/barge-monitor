@@ -15,13 +15,13 @@ An ordinary ASGI application on FastAPI: it runs unchanged under uvicorn and in 
   ``200`` after about 5 s; status is posted to ``/controlstreams/{id}/status``;
 * ``/profile.json`` beside the API (FR-41).
 
-**Authentication and permissions** (§9.3): every request needs ``Authorization: Basic``; without
-valid credentials ``401`` (HTML, no ``WWW-Authenticate``). A system the account may not read is
-absent: left out of every listing and ``404`` under it.
+**Authentication** (§9.3, §9.5): every request needs ``Authorization: Basic``; without valid
+credentials ``401`` with ``WWW-Authenticate: basic``, as OpenSensorHub answers. The server applies
+no permission per system: every request reaches it through the access gateway (``gateway.py``),
+which does. The importer and the replay controller are modules inside it and use no HTTP.
 
-Two things here are not OpenSensorHub and say so: ``/demonstrator/referee`` (scaffolding: the only
-code that reads the manifest, FR-37) and ``/demonstrator/accounts/{user}`` (the admin stub's
-account lookup, interim for FR-112a, decision D-130).
+One thing here is not OpenSensorHub and says so: ``/demonstrator/referee`` (scaffolding: the only
+code that reads the manifest, FR-37).
 """
 from __future__ import annotations
 
@@ -114,7 +114,8 @@ class Gate:
     """The server's front: lifecycle (no answer while starting or down), Freeze, authentication, capture.
 
     A pure ASGI middleware around the FastAPI application, so that a push subscription streams
-    through it. Nothing is decided by the capture headers (§2).
+    through it. Every request it sees has come through the access gateway, so it is captured as
+    ``gateway → server`` and ``server → gateway``. Nothing is decided by the capture headers (§2).
     """
 
     def __init__(self, app: FastAPI, rt):
@@ -152,7 +153,8 @@ class Gate:
         acct = rt.accounts.authenticate(headers.get("authorization"))
         model = headers.get("x-tap-model") or None
         quiet = headers.get("x-tap-quiet") == "1"
-        who = "models" if model else (acct.component if acct and acct.component in ("client", "models") else "client")
+        who = "gateway"  # nothing reaches the server but through the gateway (§9.5)
+        origin = "models" if model else (acct.component if acct and acct.component in ("client", "models") else "client")
         hop = headers.get("x-tap-hop", "1")
         token = tap.begin_chain(headers.get("x-tap-chain"), int(hop) if hop.isdigit() else 1)
         ask = f"{method} {rel}{'?' + query if query else ''}"
@@ -181,17 +183,15 @@ class Gate:
             token = tap.begin_chain(chain_id, hops + 2)
             await send({"type": "http.response.start", "status": status, "headers": out_headers})
 
-        if acct is None or acct.seen_epoch < acct.epoch:
-            if acct is not None:
-                acct.seen_epoch = acct.epoch  # logged out by a role change: the next login gets the new role (D-128)
-            r = refusal_page(401, "valid credentials are needed")
+        if acct is None:
+            r = refusal_page(401, "valid credentials are needed", {"WWW-Authenticate": "basic"})
             await respond(401, list(r.raw_headers), r.body)
             await send({"type": "http.response.body", "body": r.body})
             tap.end_chain(token)
             return
 
         inner = dict(scope)
-        inner["state"] = {"account": acct, "model": model, "quiet": quiet, "who": who}
+        inner["state"] = {"account": acct, "model": model, "quiet": quiet, "who": who, "origin": origin}
         delivered = False
         disconnected = asyncio.Event()
 
@@ -237,8 +237,16 @@ class Gate:
             tap.end_chain(token)
 
 
-def create_app(rt) -> Gate:
-    """The application over the runtime. Under uvicorn or in Pyodide, the same object (NFR-03)."""
+def create_app(rt):
+    """What clients reach: the access gateway in front of the data server (§9.5). Under uvicorn or in
+    Pyodide, the same object (NFR-03)."""
+    from .gateway import Gateway
+
+    return Gateway(create_server(rt), rt)
+
+
+def create_server(rt) -> Gate:
+    """The data server's stand-in alone, as OpenSensorHub would be behind the gateway."""
     app = FastAPI(
         title="Canal barge weather demonstrator: data server stand-in (OpenSensorHub)",
         version="4.6.0",
@@ -289,12 +297,11 @@ def create_app(rt) -> Gate:
         return norm
 
     def visible(request) -> list[dict]:
-        a = who(request)
-        return [s for s in store().systems.values() if store().readable(s["id"], a)]
+        return list(store().systems.values())
 
     def get_system(request, sid) -> dict:
         s = store().systems.get(sid)
-        if s is None or not store().readable(sid, who(request)):
+        if s is None:
             raise Refusal(404, f"system {sid} not found")
         return s
 
@@ -308,13 +315,13 @@ def create_app(rt) -> Gate:
 
     def get_ds(request, dsid, hidden=False) -> dict:
         d = store().datastreams.get(dsid)
-        if d is None or not store().readable(d["system"], who(request)) or not (hidden or served(d)):
+        if d is None or not (hidden or served(d)):
             raise Refusal(404, f"datastream {dsid} not found")
         return d
 
     def get_cs(request, csid) -> dict:
         c = store().controlstreams.get(csid)
-        if c is None or c["replaced"] or not store().readable(c["system"], who(request)):
+        if c is None or c["replaced"]:
             raise Refusal(404, f"control stream {csid} not found")
         return c
 
@@ -418,8 +425,7 @@ def create_app(rt) -> Gate:
             items = [system_json(request, s, form) for s in visible(request)]
             return page(items, request, f"/collections/{collectionId}/items", limit, offset)
         if collectionId == "all_datastreams":
-            items = [ds_json(request, d) for d in store().datastreams.values()
-                     if served(d) and store().readable(d["system"], who(request))]
+            items = [ds_json(request, d) for d in store().datastreams.values() if served(d)]
             return page(items, request, f"/collections/{collectionId}/items", limit, offset)
         raise Refusal(404, f"collection {collectionId} not found")
 
@@ -470,12 +476,9 @@ def create_app(rt) -> Gate:
 
     async def create_system(request: Request, parent: str | None):
         a = who(request)
-        if parent is None or not store().may_add_subsystem(parent, a):
-            raise Refusal(403, "this account may not create a system here")
         b = system_from_body(await json_body(request))
         s, _ = store().add_system(b["uid"], b["label"], b["description"], b["feature"], b["asset"], parent=parent,
-                                  owner=a.user, restricted=b["uid"].endswith(":restricted"),
-                                  characteristics=b["characteristics"])
+                                  owner=a.user, characteristics=b["characteristics"])
         return Response(status_code=201, headers={"Location": base(request) + f"/systems/{s['id']}"})
 
     @app.post("/systems", status_code=201, summary="Create a system")
@@ -490,8 +493,7 @@ def create_app(rt) -> Gate:
     # --- Part 2: datastreams and observations ----------------------------------------------------
     @app.get("/datastreams", summary="Datastreams")
     async def datastreams(request: Request, limit: int = Query(C.DEFAULT_LIMIT), offset: int = Query(0)):
-        items = [ds_json(request, d) for d in store().datastreams.values()
-                 if served(d) and store().readable(d["system"], who(request))]
+        items = [ds_json(request, d) for d in store().datastreams.values() if served(d)]
         return page(items, request, "/datastreams", limit, offset)
 
     @app.get("/systems/{systemId}/datastreams", summary="A system's datastreams")
@@ -515,8 +517,6 @@ def create_app(rt) -> Gate:
     async def post_datastream(request: Request, systemId: str = Path(...)):
         get_system(request, systemId)
         a = who(request)
-        if not store().writable(systemId, a):
-            raise Refusal(403, "this account may not create a datastream here")
         body = await json_body(request)
         sch = body.get("schema") if isinstance(body, dict) else None
         rec = sch.get("recordSchema") if isinstance(sch, dict) else None
@@ -559,8 +559,6 @@ def create_app(rt) -> Gate:
     @app.post("/datastreams/{dsId}/observations", status_code=201, summary="Publish one observation")
     async def post_observation(request: Request, dsId: str = Path(...)):
         d = get_ds(request, dsId, hidden=True)  # a datastream not served still takes its model's observations (FR-52)
-        if not store().writable(d["system"], who(request)):
-            raise Refusal(403, "this account may not publish to this datastream")
         body = await json_body(request)
         if not isinstance(body, dict):
             raise Refusal(400, "one observation per request: the body must be one JSON object")
@@ -590,8 +588,7 @@ def create_app(rt) -> Gate:
     # --- Part 2: control streams and commands ------------------------------------------------------
     @app.get("/controlstreams", summary="Control streams")
     async def controlstreams(request: Request, limit: int = Query(C.DEFAULT_LIMIT), offset: int = Query(0)):
-        items = [cs_json(request, c) for c in store().controlstreams.values()
-                 if not c["replaced"] and store().readable(c["system"], who(request))]
+        items = [cs_json(request, c) for c in store().controlstreams.values() if not c["replaced"]]
         return page(items, request, "/controlstreams", limit, offset)
 
     @app.get("/systems/{systemId}/controlstreams", summary="A system's control streams")
@@ -613,8 +610,6 @@ def create_app(rt) -> Gate:
     async def post_controlstream(request: Request, systemId: str = Path(...)):
         get_system(request, systemId)
         a = who(request)
-        if not store().writable(systemId, a):
-            raise Refusal(403, "this account may not create a control stream here")
         body = await json_body(request)
         sch = body.get("schema") if isinstance(body, dict) else None
         rec = sch.get("parametersSchema") if isinstance(sch, dict) else None
@@ -682,9 +677,7 @@ def create_app(rt) -> Gate:
 
     @app.post("/controlstreams/{csId}/status", status_code=201, summary="Report a command's status (its receiver)")
     async def post_status(request: Request, csId: str = Path(...)):
-        c = get_cs(request, csId)
-        if not store().writable(c["system"], who(request)):
-            raise Refusal(403, "only the receiver reports a command's status")
+        get_cs(request, csId)
         body = await json_body(request)
         if not isinstance(body, dict):
             raise Refusal(400, "a status report is a JSON object")
@@ -739,15 +732,6 @@ def create_app(rt) -> Gate:
         except (KeyError, TypeError, ValueError) as e:
             raise Refusal(400, f"referee: {e}")
         raise Refusal(404, f"the referee scores changes and clusters, not {kind}")
-
-    @app.get("/demonstrator/accounts/{user}", summary="An account's role (the administration stub; interim, FR-112a)",
-             tags=["demonstrator"])
-    async def account(request: Request, user: str = Path(...)):
-        a = who(request)
-        target = rt.accounts.by_user.get(user)
-        if target is None or not (a.kind == "service" or a.role == "owner" or a.user == user):
-            raise Refusal(404, f"account {user} not found")
-        return {"user": target.user, "role": target.role, "co2": target.co2}
 
     # --- everything else ----------------------------------------------------------------------------
     @app.api_route("/{rest:path}", methods=["GET", "HEAD", "OPTIONS", "POST", "PUT", "PATCH", "DELETE"],

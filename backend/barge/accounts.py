@@ -36,8 +36,6 @@ class Account:
     role: str
     kind: str  # user | service
     component: str  # who it is in the architecture view: client, importer, replay, models
-    epoch: int = 0  # raised by a role change (FR-116, D-128)
-    seen_epoch: int = 0
 
     @property
     def co2(self) -> bool:
@@ -91,13 +89,25 @@ class Accounts:
             raise ValueError(f"unknown role {role!r}; roles are {', '.join(ROLES)}")
         if a.kind == "user" and r in (SERVICE, SERVICE_NO_CO2) or a.kind == "service" and r not in (SERVICE, SERVICE_NO_CO2):
             raise ValueError(f"{user} is a {a.kind} account; role {r} is not for it")
-        if r != a.role:
-            a.role = r
-            a.epoch += 1  # the next request with these credentials answers 401: the user is logged out (FR-116)
+        a.role = r  # read on every request by the gateway: it takes effect at once (FR-116, D-151)
         return a
+
+    def role_of(self, user: str) -> str | None:
+        a = self.by_user.get(user)
+        return a.role if a else None
 
     def state(self) -> list[dict]:
         return [{"user": a.user, "role": a.role, "kind": a.kind, "label": ROLES[a.role]} for a in self.by_user.values()]
+
+
+def role_of(user: str) -> str | None:
+    """The delivered user-to-role assignment, as a receiving model looks a ``sender`` up (FR-112a, D-152)."""
+    a = _accounts().get(user)
+    return a.role if a else None
+
+
+def may_read_co2(role: str | None) -> bool:
+    return role in CO2_ROLES
 
 
 def basic(user: str, password: str) -> str:

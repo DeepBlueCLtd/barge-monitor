@@ -8,8 +8,8 @@ Observations are kept as columns: numeric fields as float arrays (NaN for a miss
 everything else as object arrays; times as Unix seconds. Each observation also has a result
 time and an insertion sequence: ``resultTime=latest`` is the last one inserted.
 
-**Permissions** (FR-93, §9.3) are per system and inherited by subsystems, datastreams and
-control streams. A system the account may not read is *absent*.
+The server applies **no permission per system**, as OpenSensorHub behind the access gateway
+(§9.5): restriction is the gateway's (``gateway.py``).
 """
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ import itertools
 
 import numpy as np
 
-from . import accounts as A
+from . import accounts as A  # noqa: F401 - Subscription's account
 from .swe import NUMERIC
 
 B32 = "0123456789abcdefghijklmnopqrstuv"
@@ -227,36 +227,6 @@ class Store:
 
     def append_row(self, d: dict, t: float, rt: float, values: dict) -> None:
         d["series"].append_row(t, rt, values, next(self.seq))
-
-    # --- permissions (FR-93, FR-111, §9.3) ------------------------------------------------
-    def readable(self, sid: str, acct: A.Account) -> bool:
-        for s in self.ancestors(sid):
-            if s["restricted"] and not acct.co2:
-                return False
-            if s["workspace_of"] is not None and s["workspace_of"] != acct.user:
-                return False
-        return sid in self.systems
-
-    def writable(self, sid: str, acct: A.Account) -> bool:
-        """Create and append: a user only under its own workspace; a service only under its own systems
-        (and the importer under the sensors and CO₂ analysers)."""
-        chain = self.ancestors(sid)
-        if not chain or not self.readable(sid, acct):
-            return False
-        if acct.kind == "user":
-            return any(s["workspace_of"] == acct.user for s in chain)
-        if any(s["owner"] == acct.user for s in chain):
-            return True
-        if acct.user == "svc-importer" and chain[0]["uid"].startswith(URN + "sensor:"):
-            return True
-        return False
-
-    def may_add_subsystem(self, sid: str, acct: A.Account) -> bool:
-        """A model's service account registers its process system under Models (FR-28)."""
-        s = self.systems.get(sid)
-        if s and s["uid"] == URN + "process:models" and acct.user in A.MODEL_SERVICES:
-            return True
-        return self.writable(sid, acct)
 
 
 class Subscription:
