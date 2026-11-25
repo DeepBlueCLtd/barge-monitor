@@ -212,7 +212,7 @@ export class ClientSession {
 
   private async configure() {
     this.phase.set('handshake');
-    // Each handshake request waits for the reply before it to be drawn arriving (D-89).
+    // Each handshake request waits for the reply before it to be drawn arriving (D-107).
     this.http.paced = true;
     this.http.onPaced = (n, path) => this.handshakeStep.set({ n, path });
     let config: Configuration;

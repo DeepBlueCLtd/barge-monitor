@@ -15,7 +15,7 @@ export const STARTUP_BUDGET_MS = 30_000;
 // Each hop of a captured message takes this long on the flowchart, in simulated seconds.
 export const HOP_S = 0.8;
 // The handshake's messages travel faster, because the display client sends each handshake
-// request only when the reply to the one before has been drawn arriving (decision log D-89).
+// request only when the reply to the one before has been drawn arriving (decision log D-107).
 export const HANDSHAKE_HOP_S = 0.3;
 /** Speeds offered (FR-78): ½× is the default; there is no faster mode than 1×. */
 export const RATES = [0.25, 0.5, 1];

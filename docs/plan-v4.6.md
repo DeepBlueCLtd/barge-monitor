@@ -4,7 +4,7 @@
 4.6 was reviewed (§2).
 
 **Starting point:** `main` at `91489be`. It implements Version 4.1 with the Version 4.2
-redraw (D-91, D-92). It still has:
+redraw (D-109, D-110). It still has:
 - a live world, and a simulation clock with a speed control;
 - the fixed-width logger and the store adapter;
 - models that **poll** for commands;
@@ -89,8 +89,8 @@ can start at any time.
   Record the finding and amend ADR 0005. **Phase 8 waits for it.**
 - **S-IMPORT.** Can a Java module bulk-write about 500,000 observations, and how fast? It
   gates C1's claim, not the demonstrator: the stand-in writes inside itself either way.
-- **Recording decisions.** Renumber D-89 to D-96, then record the decisions of §2 from
-  D-97 onwards, including D-53 superseded.
+- **Recording decisions.** Done: the duplicated D-89 to D-96 are now D-107 to D-114, and
+  the decisions of §2 are D-115 onwards (D-121 supersedes D-53).
 
 ### Phase 1: documents and contracts
 

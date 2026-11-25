@@ -934,7 +934,7 @@ pace), and in 4.4 and 4.6:
 - **The client's real CSV files.** Column names, time format, units, missing-value codes,
   file sizes and whether files ever overlap or are re-exported.
 - **Idle time before lock.** 5 minutes is a placeholder; confirm with the barge owner.
-- **Decision log numbering.** D-89 to D-96 are used twice.
+- **Decision log numbering.** Resolved: the duplicates are now D-107 to D-114.
 - **Interfaces document.** `docs/v4-interfaces.md` describes 4.1 and 4.2; revise to 4.6.
 - **Handshakes after imports (4.6).** A full handshake after every import (FR-44) is
   drawn one request at a time (FR-42a), and it grows with every dataset imported. If it
