@@ -140,7 +140,7 @@ class Spike:
             f"/systems/{{bow}}/subsystems": self.ids_in(user, f"/systems/{i['bow']}/subsystems", ep),
             f"/systems/{{analysis}}/subsystems": self.ids_in(user, f"/systems/{i['analysis']}/subsystems", ep),
             "/datastreams": self.ids_in(user, "/datastreams", ep),
-            "/systems?searchFullTree=true": self.ids_in(user, "/systems", ep, searchFullTree="true"),
+            "/systems?searchMembers=true": self.ids_in(user, "/systems", ep, searchMembers="true"),
         }
         for k in ("bow-co2", "analysis-co2"):
             out[f"GET /systems/{{{k}}}"] = self.brief(self.c[user].get(f"{ep}/systems/{i[k]}"), 40)
@@ -152,7 +152,7 @@ class Spike:
         out["GET /systems/{bow} (open, control)"] = self.brief(self.c[user].get(f"{ep}/systems/{i['bow']}"), 40)
         # system and datastream identifiers are separate spaces (the same string can name both)
         listed = set()
-        for k in ("/systems", "/systems/{bow}/subsystems", "/systems/{analysis}/subsystems", "/systems?searchFullTree=true"):
+        for k in ("/systems", "/systems/{bow}/subsystems", "/systems/{analysis}/subsystems", "/systems?searchMembers=true"):
             if isinstance(out[k], list):
                 listed |= {f"system {x}" for x in {i["bow-co2"], i["analysis-co2"]} & set(out[k])}
         if isinstance(out["/datastreams"], list):
