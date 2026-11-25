@@ -4,8 +4,8 @@ in-process models both do. No routing or application logic lives here.
 ``call`` returns ``(status, headers, body)``, or ``None`` when the server answers nothing (it is
 starting or down: the relay then reports a network failure, §9.1).
 
-A **streamed** answer (a push subscription, §9.2) is recognised by its first body message having
-``more_body``. With ``on_stream`` given, ``call`` then calls ``on_stream("start", status, headers)``,
+A **streamed** answer (a push subscription, §9.2) is recognised by its content type
+(``application/x-ndjson``) or by its first body message having ``more_body``. With ``on_stream`` given, ``call`` then calls ``on_stream("start", status, headers)``,
 ``on_stream("chunk", bytes)`` per chunk and ``on_stream("end")``, and returns ``"stream"`` once it
 ends. Cancelling the task that awaits ``call`` disconnects the client.
 """
@@ -42,6 +42,10 @@ async def call(app, method, path, query="", body=None, root_path="", headers=Non
         if msg["type"] == "http.response.start":
             sent["status"] = msg["status"]
             sent["headers"] = [(k.decode("latin-1"), v.decode("latin-1")) for k, v in msg.get("headers", [])]
+            ctype = next((v for k, v in sent["headers"] if k.lower() == "content-type"), "")
+            if on_stream is not None and ctype.startswith("application/x-ndjson"):
+                sent["streaming"] = True  # a push subscription: its headers go at once, its lines as they come
+                on_stream("start", sent["status"], sent["headers"])
         elif msg["type"] == "http.response.body":
             chunk = msg.get("body", b"")
             more = msg.get("more_body", False)

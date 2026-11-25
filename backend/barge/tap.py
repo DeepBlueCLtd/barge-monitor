@@ -128,7 +128,10 @@ class Tap:
     @staticmethod
     def end_chain(token) -> int:
         ch = _chain.get()
-        _chain.reset(token)
+        try:
+            _chain.reset(token)
+        except ValueError:  # ended in another context (a streamed answer runs in a task of its own)
+            _chain.set(None)
         return ch.hop if ch else 0
 
 
