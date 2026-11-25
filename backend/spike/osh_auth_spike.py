@@ -78,8 +78,8 @@ class Spike:
     def loc(r):
         return r.headers.get("location", "").rstrip("/").rsplit("/", 1)[-1]
 
-    def ids_in(self, user, path, ep="/api"):
-        r = self.c[user].get(ep + path, params={"limit": 1000})
+    def ids_in(self, user, path, ep="/api", **params):
+        r = self.c[user].get(ep + path, params={"limit": 1000, **params})
         if r.status_code != 200:
             return self.brief(r, 60)
         return sorted(x["id"] for x in r.json().get("items", []))
@@ -140,7 +140,7 @@ class Spike:
             f"/systems/{{bow}}/subsystems": self.ids_in(user, f"/systems/{i['bow']}/subsystems", ep),
             f"/systems/{{analysis}}/subsystems": self.ids_in(user, f"/systems/{i['analysis']}/subsystems", ep),
             "/datastreams": self.ids_in(user, "/datastreams", ep),
-            "/systems?recursive=true": self.ids_in(user, "/systems?recursive=true", ep),
+            "/systems?searchFullTree=true": self.ids_in(user, "/systems", ep, searchFullTree="true"),
         }
         for k in ("bow-co2", "analysis-co2"):
             out[f"GET /systems/{{{k}}}"] = self.brief(self.c[user].get(f"{ep}/systems/{i[k]}"), 40)
@@ -149,12 +149,14 @@ class Spike:
             out[f"GET /datastreams/{{{k}}}/schema"] = self.brief(self.c[user].get(f"{ep}/datastreams/{i[k]}/schema"), 40)
             out[f"GET /datastreams/{{{k}}}/observations"] = self.brief(self.c[user].get(f"{ep}/datastreams/{i[k]}/observations"), 60)
         out["GET /systems/{bow-co2}/datastreams"] = self.brief(self.c[user].get(f"{ep}/systems/{i['bow-co2']}/datastreams"), 60)
-        out["GET /systems/{weather ds's bow}"] = self.brief(self.c[user].get(f"{ep}/systems/{i['bow']}"), 40)
-        restricted = {i["bow-co2"], i["analysis-co2"], i["ds-bow-co2"], i["ds-clusters-co2"]}
+        out["GET /systems/{bow} (open, control)"] = self.brief(self.c[user].get(f"{ep}/systems/{i['bow']}"), 40)
+        # system and datastream identifiers are separate spaces (the same string can name both)
         listed = set()
-        for k in ("/systems", "/systems/{bow}/subsystems", "/systems/{analysis}/subsystems", "/datastreams", "/systems?recursive=true"):
+        for k in ("/systems", "/systems/{bow}/subsystems", "/systems/{analysis}/subsystems", "/systems?searchFullTree=true"):
             if isinstance(out[k], list):
-                listed |= restricted & set(out[k])
+                listed |= {f"system {x}" for x in {i["bow-co2"], i["analysis-co2"]} & set(out[k])}
+        if isinstance(out["/datastreams"], list):
+            listed |= {f"datastream {x}" for x in {i["ds-bow-co2"], i["ds-clusters-co2"]} & set(out["/datastreams"])}
         by_id_404 = all(out[k].startswith("404") for k in out if k.startswith("GET ") and ("co2" in k or "clusters" in k))
         out["restricted ids still listed"] = sorted(listed)
         hidden = not listed and by_id_404
@@ -184,9 +186,12 @@ class Spike:
     def stream_restricted(self, user, ep, label):
         ds = self.ids["ds-bow-co2"]
         t = f"2031-04-08T12:{int(time.time()) % 60:02d}:30Z"
-        res = asyncio.run(self.ws_stream(user, f"/datastreams/{ds}/observations", ep, post=lambda: self.obs("owner", ds, {"co2": 420.0}, t)))
-        self.note(1, f"{label}: {user} subscribes by WebSocket to the bow CO2 datastream's observations",
-                  "refused or 404", res, res["handshake"] != 101 or not res["received"])
+        tries = []
+        for n in range(3):
+            t = f"2031-04-08T1{n}:{int(time.time()) % 60:02d}:30Z"
+            tries.append(asyncio.run(self.ws_stream(user, f"/datastreams/{ds}/observations", ep, post=lambda: self.obs("owner", ds, {"co2": 420.0 + n}, t), wait=4)))
+        self.note(1, f"{label}: {user} subscribes by WebSocket to the bow CO2 datastream's observations (3 tries, owner publishes one each time)",
+                  "refused or 404", tries, all(x["handshake"] != 101 or not x["received"] for x in tries))
 
     # ---- 6. workspaces -------------------------------------------------------------------
     def workspaces(self):
@@ -277,6 +282,8 @@ class Spike:
         r = self.c["friend2"].get("/api/systems")
         self.note(1, "friend2 (role names only /api-weather) asks /api", "403", self.brief(r, 40), r.status_code == 403)
         self.visibility("friend2", "/api-weather", "second endpoint whose view excludes urn:barge:restricted:*")
+        self.visibility("friend2", "/api-weather-ro", "the same view, read-only endpoint (enableTransactional false)")
+        self.stream_restricted("friend2", "/api-weather-ro", "read-only endpoint")
         self.stream_restricted("friend2", "/api-weather", "second endpoint")
         cs = self.ids["cs-analysis"]
         r = self.c["friend2"].get(f"/api-weather/controlstreams/{cs}")

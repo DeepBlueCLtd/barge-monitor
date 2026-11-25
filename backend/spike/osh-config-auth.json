@@ -104,13 +104,16 @@
         "objClass": "org.sensorhub.impl.security.BasicSecurityRealmConfig$RoleConfig",
         "id": "viewer_weather_endpoint",
         "name": "Viewer (weather only), second endpoint",
-        "description": "Only the /api-weather endpoint, whose view excludes urn:barge:restricted:*",
+        "description": "Only /api-weather and /api-weather-ro, whose views exclude urn:barge:restricted:*",
         "allow": [
           "csapi[7f3e0c1a-5b2d-4c6e-9a8f-1d2e3f4a5b6c]/get",
           "csapi[7f3e0c1a-5b2d-4c6e-9a8f-1d2e3f4a5b6c]/list",
           "csapi[7f3e0c1a-5b2d-4c6e-9a8f-1d2e3f4a5b6c]/stream",
           "csapi[7f3e0c1a-5b2d-4c6e-9a8f-1d2e3f4a5b6c]/create/commands",
-          "csapi[7f3e0c1a-5b2d-4c6e-9a8f-1d2e3f4a5b6c]/create/systems"
+          "csapi[7f3e0c1a-5b2d-4c6e-9a8f-1d2e3f4a5b6c]/create/systems",
+          "csapi[e8a1b2c3-d4e5-4f60-8a7b-9c0d1e2f3a4b]/get",
+          "csapi[e8a1b2c3-d4e5-4f60-8a7b-9c0d1e2f3a4b]/list",
+          "csapi[e8a1b2c3-d4e5-4f60-8a7b-9c0d1e2f3a4b]/stream"
         ],
         "deny": []
       },
@@ -234,6 +237,30 @@
     "id": "c4d5e6f7-1a2b-4c3d-8e9f-0a1b2c3d4e5f",
     "moduleClass": "org.sensorhub.impl.service.consys.ConSysApiService",
     "name": "Connected Systems API Service (internal, access control off)",
+    "autoStart": true
+  },
+  {
+    "objClass": "org.sensorhub.impl.service.consys.ConSysApiServiceConfig",
+    "databaseID": "0309491d-d5cb-4f2f-9b95-166179c66746",
+    "exposedResources": {
+      "objClass": "org.sensorhub.impl.datastore.view.ObsSystemDatabaseViewConfig",
+      "includeFilter": {
+        "objClass": "org.sensorhub.api.datastore.system.SystemFilter",
+        "uniqueIDs": [
+          "urn:barge:open:*"
+        ]
+      }
+    },
+    "security": {
+      "objClass": "org.sensorhub.api.security.SecurityConfig",
+      "enableAccessControl": true,
+      "requireAuth": true
+    },
+    "enableTransactional": false,
+    "endPoint": "/api-weather-ro",
+    "id": "e8a1b2c3-d4e5-4f60-8a7b-9c0d1e2f3a4b",
+    "moduleClass": "org.sensorhub.impl.service.consys.ConSysApiService",
+    "name": "Connected Systems API Service (weather only view, read-only)",
     "autoStart": true
   }
 ]
