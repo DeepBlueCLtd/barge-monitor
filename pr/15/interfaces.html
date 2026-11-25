@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="site.css">
 </head>
 <body>
-<div class="banner">Preview of pull request #15 (f998ec1). Not the published document.</div>
+<div class="banner">Preview of pull request #15 (b0d8302). Not the published document.</div>
 <main>
 <p class="demo-link"><a href="demo/"><strong>Open the working demonstrator →</strong></a> It runs whole in your browser. · <a href="demo/?hand-made"><strong>Start from “before”</strong></a>: the data server as subsystems we would build ourselves, then adopting OpenSensorHub (SRD §9.8). · <a href="index.html">Requirements</a> · <a href="interfaces.html">Version 4 interfaces</a> · Mockups: <a href="mockups/mockup-1-display-client.png">1</a>, <a href="mockups/mockup-2-models.png">2</a>, <a href="mockups/mockup-3-data-server.png">3</a></p>
 <nav id="TOC" aria-label="Contents">
@@ -417,8 +417,9 @@ read it.</p>
 under way, 0.35 in a lock, and 0.05 at a wharf
 (<code>World.boat(t)</code> gives the kind of each period). The stern
 sits nearer the motor, so its gain is 1.25. Noise has σ 6 ppm, and there
-are occasional spikes. QC is computed on import, like every other
-field.</p>
+are occasional spikes. QC is computed on import, like every other field,
+with a range of 250–5000 ppm and a 60 ppm spike test (D-144); both back
+ends use these values.</p>
 <h2 id="6-datasets-and-names">6. Datasets and names</h2>
 <ul>
 <li><strong>Dataset id</strong>: <code>&lt;slug&gt;-&lt;h8&gt;</code>.
