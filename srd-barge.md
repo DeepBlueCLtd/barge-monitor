@@ -1,16 +1,37 @@
 # Software Requirements Document
-## Canal barge weather demonstrator, Version 4.5 (draft)
+## Canal barge weather demonstrator, Version 4.6 (draft)
 
-**Status:** Draft. Builds on Version 4.4. Version 4.5 adds **measured CO₂**. The barge
-owner lets friends view the weather data but wants **CO₂ emissions, and everything derived
-from them, restricted** to users he chooses, and wants to **create and maintain the user
-accounts** himself.
+**Status:** Draft. Builds on Version 4.5. Version 4.6 adds an **opening act** for
+non-engineers. The demonstrator opens with the data server shown as the subsystems we would
+have to build. One click adopts OpenSensorHub, and only then does the demonstrator come
+alive (§9.8).
 **Author:** Doc
 **Working name:** to be chosen (§15). This document says *the demonstrator*.
-**Supersedes:** Version 4.4 and, through it, every earlier version and Annex A. Earlier
-change lists are in Versions 4.2, 4.3 and 4.4 (below). Requirements marked **(4.5)** are
-new or changed here; **(4.4)** and **(4.3)** mark those changed in those versions and
+**Supersedes:** Version 4.5 and, through it, every earlier version and Annex A. Earlier
+change lists are in Versions 4.2 to 4.5 (below). Requirements marked **(4.6)** are new or
+changed here; **(4.5)**, **(4.4)** and **(4.3)** mark those changed in those versions and
 unchanged since.
+
+### Changes from Version 4.5
+
+- **An adoption opening (4.6)**, entered with the `hand-made` flag in the URL's query
+  (FR-119). The data server starts out as **eight subsystems** in the back end, drawn as
+  equals of the CSV importer, replay controller and Models (FR-120).
+- **Nothing is gold, and nothing runs, before adoption (4.6).** The opening comes before
+  the value-add reveal. The top bar's controls are hidden and no message is sent (FR-121,
+  FR-122).
+- **Adopt OpenSensorHub (4.6)** merges the eight into one data server in the third-party
+  zone, shows what that saves, and hands over to the normal startup (FR-123 to FR-126).
+- **Savings only (4.6):** the opening shows no costs (§16).
+- **Settled in review (4.6):**
+  - the opening starts nothing until Adopt (FR-122);
+  - the opening's flows are mapped to the subsystems, with the lines between them (FR-120a);
+  - pushed commands travel as a stream through the relay (FR-02);
+  - Mission A is imported silently at every load (FR-15);
+  - a full handshake follows each import (FR-44);
+  - the profile is a template (FR-40);
+  - the latest run is shown on return to a dataset (FR-35);
+  - charts stay, and D-53 is superseded (FR-80).
 
 ### Changes from Version 4.4
 
@@ -30,12 +51,14 @@ unchanged since.
   restriction-specific code in the display client.
 - **Two demo accounts (4.5)**, the owner and a friend, and a new failure demo (§9.7).
 
-**Companion mockups (non-normative):** SRD v4 mockups 1 to 3 and the interactive frame.
-They predate 4.1, 4.3 and 4.4. Where a mockup and this document disagree, this document
-wins.
+**Companion mockups (non-normative):** SRD v4 mockups 1 to 3, the interactive frame, and
+the two OpenSensorHub savings frames. The savings frames predate 4.6. In them the eight
+subsystems sit inside a "built by us" box and the importer and Models are gold, and 4.6
+forbids both. Where a mockup and this document disagree, this document wins.
 
 **Companion documents to update:** `docs/v4-interfaces.md` and the decision log describe
-4.1 and 4.2. Both need revising to 4.4 before building (§15).
+4.1 and 4.2. Both need revising to 4.6 before building (§15). The implementation plan is
+`docs/plan-v4.6.md`.
 
 ### Changes from Version 4.3
 
@@ -127,9 +150,14 @@ The recordings arrive as CSV files and now include **CO₂** from both sensors (
 ### 2.1 The seam
 
 - **FR-02** All traffic between the display client, the data server, the replay
-  controller and the models crosses as **HTTP**, or as a **WebSocket** for pushed
-  commands, and nowhere else, through a **Service Worker relay**. **Every request and
-  every WebSocket carries credentials (4.4)** (§7.5).
+  controller and the models crosses as **HTTP**, or as a **pushed stream** for commands,
+  and nowhere else, through a **Service Worker relay**. **Every request and every push
+  subscription carries credentials (4.4)** (§7.5).
+- **FR-02a (4.6)** A Service Worker cannot carry a WebSocket. So in the demonstrator, a
+  push subscription is **one long streaming response** through the relay, with one
+  command per line. It is wrapped in a class with WebSocket's interface, and drawn as
+  "push". In a developed system it is OpenSensorHub's WebSocket. Freeze holds the stream
+  like any other response.
 - **FR-03** The relay is an **invisible transport**, not a component, and not drawn.
 - **FR-04** No client code or configuration carries an absolute URL.
 - **FR-05** Every shape crossing the seam is governed by a committed master under
@@ -233,7 +261,10 @@ importer. The **demonstrator shell** frames everything and is not a component.
 - **FR-12** A **manifest** per file records its ground truth, read only by the referee.
 - **FR-14** All randomness comes from named, seeded streams.
 - **FR-15 (4.4)** The demonstrator ships a **data folder** generated at build time:
-  - **Mission A**, 24 hours, **already imported** at startup, so replay can begin at once;
+  - **Mission A**, 24 hours, **already imported** at startup, so replay can begin at once.
+    Since nothing persists between visits, it is imported **silently on every load
+    (4.6)**: before the server takes requests, without being drawn, and the importer's
+    panel says so. After Reset instance it stays gone until the page is reloaded;
   - **Mission B**, 24 hours, not yet imported;
   - **Mission B (re-export)**, which overlaps Mission B in time and differs in a few
     readings, not yet imported, to show that overlapping files are kept apart;
@@ -350,7 +381,7 @@ the system **needs** of it. ✓ marks what the spike confirmed.
 - **FR-32** QC flags are computed on import, never by altering the files.
 - **FR-93 (4.5)** **Authentication and permissions**, required of the server (to be
   confirmed for OpenSensorHub, §15):
-  - every request, discovery included, and every WebSocket needs **valid credentials**;
+  - every request, discovery included, and every push subscription (FR-02a) needs **valid credentials**;
     without them the answer is **401** and nothing is served;
   - permissions are granted **per system** and **inherited by its datastreams and control
     streams**. Nothing in this system needs permission per field;
@@ -375,7 +406,8 @@ the system **needs** of it. ✓ marks what the spike confirmed.
 - **FR-35 (4.4)** Models work on the **current dataset** only (FR-84a), reading up to the
   replay time, and publish **per dataset**. On a change of dataset, each model works
   through the new one if it has not already; its outputs for other datasets are kept, so
-  returning to a dataset is immediate.
+  returning to a dataset is immediate. On return, views show the dataset's **latest run**
+  (4.6); earlier runs are reached through a saved data of interest.
 - **FR-35a (4.4)** **Analysis takes a data of interest** (§6.7) as its input: the display
   client's current selection is sent, as an unsaved data of interest, in the command.
 - **FR-36** Empty slots open an in-browser Python editor (Python back end only).
@@ -390,7 +422,8 @@ the system **needs** of it. ✓ marks what the spike confirmed.
 - **FR-112a (4.5)** A command asking a model to use CO₂ is **rejected** (`REJECTED`, saying
   only that a requested source is not available) when the sender's role does not include
   emissions. The receiver checks the sender's role; it never relies on the client having
-  hidden the choice.
+  hidden the choice. How the receiver learns the sender's role is decided by the
+  authentication spike (§15, item 4).
 - **FR-113 (4.5)** The core models' service accounts have access to CO₂. A **new model**
   written in an empty slot **does not**, unless the owner grants it.
 
@@ -461,6 +494,9 @@ the system **needs** of it. ✓ marks what the spike confirmed.
   the views depend on; and the importer's catalogue and the replay controller's state and
   control streams. **CO₂ is never essential (4.5)**, so a weather-only user does not start
   degraded.
+- **FR-40a (4.6)** Per-dataset essentials are written as **templates**, with output names
+  such as `weather · {dataset}`. The client checks each dataset against them when it is
+  loaded. The profile's schema allows the placeholder.
 - **FR-41** The profile is at a fixed path beside the server (`profile.json`).
 
 ### 7.2 Handshake and self-configuration
@@ -470,7 +506,9 @@ the system **needs** of it. ✓ marks what the spike confirmed.
 - **FR-42a** The handshake is drawn one request at a time.
 - **FR-43 (4.4)** The field list is built **for the current dataset**, and rebuilt when the
   current dataset changes, without a full handshake.
-- **FR-44** Discovery of systems happens only at handshake.
+- **FR-44 (4.6)** Discovery happens only at handshake. When an **import completes**,
+  the client repeats the **full handshake**, so that it finds the new dataset's
+  datastreams.
 - **FR-45 (4.4)** Degraded mode is **per dataset**: a dataset missing an essential source
   (Mission C) opens degraded, naming what is missing; other datasets are unaffected.
 
@@ -530,11 +568,13 @@ access. The device itself is secured.
   Every role may use the replay controller, the importer and the models, and keep its own
   workspace.
 - **FR-115** The **owner creates and maintains accounts** (create, set or reset a password,
-  assign a role, disable) **through OpenSensorHub's own administration**. He assigns roles;
-  he does not edit them, so he cannot expose CO₂ by changing a permission. Granting or
+  assign a role, disable) **through OpenSensorHub's own administration**. The owner
+  assigns roles but does not edit them, and so cannot expose CO₂ by changing a permission. Granting or
   removing emissions is changing a user's role.
 - **FR-116** A change of role takes effect **at the user's next login**; a user who is
-  logged in when their role changes is logged out.
+  logged in when their role changes is logged out. Whether a change instead takes effect at
+  once, on the next request, depends on how OpenSensorHub authenticates. The
+  authentication spike decides, and the stand-in follows it (PR-06).
 - **FR-117** **Our own account screen** is built only if a stated **trigger** is met: the
   owner cannot complete the account tasks of FR-115 unaided in a short trial, or
   OpenSensorHub's administration cannot be used on the delivered machine. Until then it is
@@ -654,6 +694,8 @@ of interest** list.
 ### 9.5 Value-add reveal
 
 - **FR-74 to FR-76** As in 4.3. The importer and replay controller are not marked.
+- **FR-74a (4.6)** With the `hand-made` flag, FR-74's startup state begins **at adoption**
+  (FR-125), not at load. No component can be revealed during the opening (FR-121).
 
 ### 9.6 Time in the demonstrator
 
@@ -676,11 +718,94 @@ of interest** list.
   (4.5).
 - **FR-79b, FR-79c** As in 4.3.
 
+### 9.8 Adoption opening (4.6)
+
+The opening is for **non-engineers**. It shows what the data server would be if we wrote
+it ourselves, then what adopting OpenSensorHub saves. It comes **before** the value-add
+reveal, so nothing is marked as ours in it.
+
+- **FR-119** **Entry.** If the page's URL query has a `hand-made` flag (`?hand-made`, with
+  any value or none), the demonstrator opens in the **adoption opening**. Without the flag
+  it opens exactly as FR-77 describes. The flag is read once, at load, and has no other
+  effect. Reloading with the flag repeats the opening. The flag belongs to the demonstrator
+  shell only; a developed system has no such flag.
+- **FR-120** **The data server as subsystems.** In the opening the third-party zone holds
+  **no data server**. The back end holds **eight subsystem components** beside the CSV
+  importer, replay controller and Models, and **all are equals**: the same card style,
+  the same size, one grid. No frame, label or colour groups the eight, or sets them apart
+  from the other components:
+
+  | Subsystem | What it does | Keeps data in |
+  |---|---|---|
+  | Web API | Connected Systems endpoints, discovery, paging, formats | — |
+  | Registry | Systems, datastreams, schemas, control streams | a metadata database |
+  | Observation store | Time-series storage, indexes, backups, growth | a time-series database |
+  | Query engine | Time filters, latest value, building responses | indexes |
+  | Commands | Control streams, delivery to receivers, status | a command log |
+  | Accounts | Users, passwords, roles, sessions | a user database |
+  | Permissions | Who may see what; hiding restricted systems | a policy store |
+  | Admin | Settings, start, stop, health | configuration files |
+
+  The flows of §3.1 are drawn between the subsystems and the other components as plain
+  lines, with no message letters (FR-120a). The back-end band has **two rows** in the
+  opening (six cards and five), with every card at its normal size. The zones below it
+  move down, and return at the merge.
+- **FR-120a (4.6)** **Flows in the opening.** Each external flow is drawn to the
+  subsystem it belongs to, and the lines between the subsystems are drawn too:
+
+  | From | To |
+  |---|---|
+  | Display client, Models, replay controller | Web API (both ways) |
+  | Commands | CSV importer, replay controller, Models (push) |
+  | CSV importer | Observation store, Registry |
+  | Web API | Query engine, Registry, Commands, Permissions |
+  | Query engine | Observation store |
+  | Accounts | Permissions (both ways) |
+  | Admin | Web API |
+- **FR-121** **Nothing is gold.** No card is gold. No ★, diamond or "our value-add" appears
+  anywhere in the opening, the detail panel included. Clicking the display client or
+  Models does not reveal it.
+- **FR-122** **Nothing runs.** The top bar's controls are **hidden, not disabled**: replay
+  mirror, Freeze, restart client, restart server, failure demos, control panel and
+  overview. No message is sent or drawn. The display client does not handshake. **The back
+  end does not start (4.6)**: no worker runs and no model registers until hand-over
+  (FR-125). The status panel shows only "Opening". The **stand-in banner is hidden** until
+  hand-over, because it names OpenSensorHub before there is a data server on screen.
+- **FR-123** **The opening panel.** The detail panel opens on **Data server** with:
+  - a two-way switch, **Build it ourselves | Adopt OpenSensorHub**, with *Build it
+    ourselves* selected;
+  - the table of FR-120;
+  - a row, **"Written by us either way"**: CSV importer, replay controller, Models,
+    display client, in plain style.
+
+  Clicking a subsystem card highlights its row in the table. Clicking any other card does
+  nothing in the opening.
+- **FR-124** **Adopt.** Choosing *Adopt OpenSensorHub*:
+  1. moves the eight subsystem cards into the third-party zone, where they merge into the
+     single **Data server** card (OpenSensorHub, OGC Connected Systems);
+  2. spreads the CSV importer, replay controller and Models across the back end that the
+     eight have left;
+  3. changes the table to "OpenSensorHub covers all of these", with each subsystem
+     ticked. No number is shown (§16).
+
+  This takes about 1.5 seconds. With reduced motion it is immediate.
+- **FR-125** **Hand-over.** When the merge ends, the flowchart is **exactly** FR-77's
+  startup layout, and FR-74 applies from that moment: every component looks the same, and
+  the display client shows its login screen. The top bar's controls and the stand-in banner
+  **appear**. The **back end starts now (4.6)**, with the usual loading progress (NFR-10),
+  as on a load without the flag. The detail panel keeps the adopted savings until the
+  viewer clicks a component or closes it. **That panel is the only difference** from a load
+  without the flag.
+- **FR-126** **One way.** Adoption cannot be undone in a session. The switch is removed at
+  hand-over. To show the opening again, reload with the flag.
+
 ---
 
 ## 10. Implementation direction
 
-- **FR-80** TypeScript and React; React Flow; ECharts (§15); react-grid-layout; CodeMirror 6.
+- **FR-80 (4.6)** TypeScript and React; React Flow; **ECharts**; react-grid-layout;
+  CodeMirror 6. The views are charts. Decision D-53, which removed them for speed on
+  slower laptops, is superseded: slower laptops are not a target for this project.
 - **FR-81 (4.4)** In a developed system: **OpenSensorHub**, with its own authentication, the
   CSV importer as its module writing in bulk, and the replay controller and models as
   separate processes with service accounts, each subscribed to its control stream. In the
@@ -693,8 +818,11 @@ of interest** list.
 ## 11. Visual style
 
 As Version 4.2 §11, with the changes of 4.3 (four zones; messages at a fixed on-screen
-pace), and in 4.4:
+pace), and in 4.4 and 4.6:
 
+- **VS-25 (4.6)** In the adoption opening the eight subsystem cards are drawn with the same
+  sketch renderer, line weight, fill and font as every other component card. The merge
+  moves the cards; it does not redraw their outlines.
 - **VS-24 (4.4)** The **login and lock screens** are plain, inside the monitor frame, in the
   display client's own sans-serif. The demonstrator's pre-populated credentials carry a
   visible "demo credentials" label.
@@ -718,7 +846,7 @@ pace), and in 4.4:
 
 ---
 
-## 14. Acceptance criteria (4.4)
+## 14. Acceptance criteria (4.6)
 
 | ID | Test | Supports |
 |---|---|---|
@@ -760,7 +888,7 @@ pace), and in 4.4:
 | **AT-46** | Two data of interest compared on elapsed time are drawn from each one's start, at the coarser resolution, labelled "elapsed" | C3 |
 | **AT-47** | A resolution with no datastream is refused, naming those available | C3 |
 | **AT-48** | After Reset instance, every data of interest is greyed naming its file; re-importing the file restores it | C1, C3 |
-| **AT-49** | Every request and WebSocket without valid credentials is refused with 401, discovery and the catalogue included | C5 |
+| **AT-49** | Every request and push subscription without valid credentials is refused with 401, discovery and the catalogue included | C5 |
 | **AT-50** | After inactivity, or on Lock, every view and list is blanked, the credentials are discarded, and no request is sent until login | C5 |
 | **AT-51** | Nothing sensitive is in browser storage at any time: no credentials, dataset names or data of interest | C5 |
 | **AT-52** | One analyst cannot read another's data of interest; a model's service account cannot create outside its own system | C5 |
@@ -773,6 +901,11 @@ pace), and in 4.4:
 | **AT-59** | Changing a user's role from emissions to weather only logs them out; at their next login CO₂ is absent and their CO₂ data of interest is greyed as no longer permitted | C6 |
 | **AT-60** | A weather-only user is not degraded on any dataset that has every essential source | C2, C6 |
 | **AT-61** | A new model from an empty slot cannot read CO₂ unless the owner grants it | C3, C6 |
+| **AT-62** | Without the `hand-made` flag the demonstrator opens as FR-77 describes; with it, in the adoption opening; reloading with it repeats the opening | Architecture view |
+| **AT-63** | In the opening: no top-bar control and no stand-in banner is in the page; no back-end or model worker has started; no message is captured or drawn; the third-party zone has no data server; nothing gold, no ★ and no diamond anywhere, and clicking the display client or Models reveals nothing | Architecture view |
+| **AT-64** | The eight subsystem cards match the CSV importer, replay controller and Models cards in size, outline style, fill and font, and no element encloses or labels the eight as a group | Architecture view |
+| **AT-65** | After Adopt: one Data server card in the third-party zone; the table shows every subsystem ticked, with no number; the top-bar controls and banner appear and the back end starts; once it has started, everything but the detail panel matches a load without the flag, and the state passes AT-19 and AT-20 | Architecture view |
+| **AT-66** | With reduced motion, Adopt changes the layout immediately, without animation | Visual style |
 
 ---
 
@@ -801,9 +934,12 @@ pace), and in 4.4:
 - **The client's real CSV files.** Column names, time format, units, missing-value codes,
   file sizes and whether files ever overlap or are re-exported.
 - **Idle time before lock.** 5 minutes is a placeholder; confirm with the barge owner.
-- **Charts.** D-53 removed them; this SRD assumes them. Settle which.
 - **Decision log numbering.** D-89 to D-96 are used twice.
-- **Interfaces document.** `docs/v4-interfaces.md` describes 4.1 and 4.2; revise to 4.4.
+- **Interfaces document.** `docs/v4-interfaces.md` describes 4.1 and 4.2; revise to 4.6.
+- **Handshakes after imports (4.6).** A full handshake after every import (FR-44) is
+  drawn one request at a time (FR-42a), and it grows with every dataset imported. If it
+  gets in the way of a demonstration, a handshake scoped to the dataset is the
+  alternative.
 - **Retention.** Results are appended per run and per dataset; a long-lived instance grows
   until Reset instance.
 - **Resampling.** Reserved in `aggregation` (FR-94a); not offered yet.
@@ -811,7 +947,7 @@ pace), and in 4.4:
   so the step is smaller than it was.
 - **Name.**
 
-## 16. Deliberate exclusions from Version 4.4
+## 16. Deliberate exclusions from Version 4.6
 
 - **A live sensor or live ingest**, and any writing to the data folder.
 - **Two datasets playing at once** (FR-84a); comparison is by data of interest on elapsed
@@ -826,3 +962,13 @@ pace), and in 4.4:
 - **Our own account administration screen**, until FR-117's trigger is met.
 - **Permissions per field** within a record: restriction is always per system (FR-93).
 - **Roles defined or edited by the owner**: roles are fixed at installation (FR-114).
+- **Costs of adoption in the opening (4.6)**, such as learning OpenSensorHub, its spikes,
+  licence obligations or the risk of depending on it. The opening shows savings only;
+  those costs belong in the ADR.
+- **Counts, scores or totals in the opening (4.6)**, such as subsystems saved or stores
+  avoided. The merge itself makes the point; numbers would read as a sales pitch.
+- **Marks of what is unproven in the opening (4.6).** Every subsystem is ticked once
+  adopted. What the authentication and bulk-import spikes have still to prove is recorded
+  in §15 and ADR 0005, not on screen.
+- **Returning to "Build it ourselves"** after adoption, in a session (FR-126).
+- **The adoption opening in a developed system (4.6)**: it is demonstrator shell only.
