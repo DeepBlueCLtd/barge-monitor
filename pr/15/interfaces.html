@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="site.css">
 </head>
 <body>
-<div class="banner">Preview of pull request #15 (9653303). Not the published document.</div>
+<div class="banner">Preview of pull request #15 (4d013b7). Not the published document.</div>
 <main>
 <p class="demo-link"><a href="demo/"><strong>Open the working demonstrator →</strong></a> It runs whole in your browser. · <a href="demo/?hand-made"><strong>Start from “before”</strong></a>: the data server as subsystems we would build ourselves, then adopting OpenSensorHub (SRD §9.8). · <a href="index.html">Requirements</a> · <a href="interfaces.html">Version 4 interfaces</a> · Mockups: <a href="mockups/mockup-1-display-client.png">1</a>, <a href="mockups/mockup-2-models.png">2</a>, <a href="mockups/mockup-3-data-server.png">3</a></p>
 <nav id="TOC" aria-label="Contents">
@@ -120,6 +120,12 @@ these ids (SRD §3):</p>
 <td>New build · front end</td>
 <td>★</td>
 </tr>
+<tr>
+<td><code>gateway</code></td>
+<td>Access gateway (§9.5)</td>
+<td>New build · back end</td>
+<td></td>
+</tr>
 </tbody>
 </table>
 <p>In the adoption opening only (§12), eight more ids stand in for
@@ -202,8 +208,24 @@ a row count</td>
 <td>I</td>
 <td>a call and its result</td>
 </tr>
+<tr>
+<td>client → gateway → server, models → gateway → server</td>
+<td>Q, K</td>
+<td>every request from the display client and the models passes the
+gateway (§9.5); each hop is captured</td>
+</tr>
+<tr>
+<td>server → gateway → client, server → gateway → models</td>
+<td>D, P, O, H, K</td>
+<td>responses and pushes come back through it</td>
+</tr>
 </tbody>
 </table>
+<p>The rows above that read <code>client → server</code>,
+<code>server → client</code>, <code>models → server</code> and
+<code>server → models</code> are drawn as two hops each, through
+<code>gateway</code>. The importer and the replay controller are modules
+inside the server, so they do not pass the gateway.</p>
 <p>The importer and the replay controller run inside the back-end
 worker. Their traffic is captured where §2 says, even though no HTTP is
 involved (FR-65: "inside the server").</p>
@@ -934,6 +956,53 @@ next login. Whether that matches OpenSensorHub is for S-AUTH (§14).</li>
 <li>The importer, the replay controller and the core models in CPython
 and in the stand-in authenticate as their service accounts.</li>
 </ul>
+<h3
+id="95-the-access-gateway-s-auth-finding-of-2026-11-25-decision-d-150">9.5
+The access gateway (S-AUTH finding of 2026-11-25; decision D-150)</h3>
+<p>A stock OpenSensorHub <strong>cannot hide</strong> a system: a denied
+system answers 403 and its datastreams, observations and streams stay
+readable, and denies are not inherited. With access control on, it also
+closes every command subscription at once. So the restriction of FR-93
+is done by an <strong>access gateway</strong>, written for this system,
+that sits in front of the data server. It is drawn as a component of its
+own (<code>gateway</code>), never hidden inside the stand-in.</p>
+<p><strong>The gateway:</strong></p>
+<ul>
+<li><p><strong>Credentials.</strong> It authenticates every request
+against the delivered accounts, and forwards the request with the same
+credentials. Without valid credentials it answers <code>401</code>
+itself, and it <strong>strips</strong> OpenSensorHub's
+<code>WWW-Authenticate: basic</code>, so that the browser never shows
+its own login dialog.</p></li>
+<li><p><strong>Filtering.</strong> It removes restricted resources from
+every listing, matching them by unique-id prefix:</p>
+<ul>
+<li><code>urn:x-barge:sensor:*:co2</code>;</li>
+<li><code>urn:x-barge:process:*:restricted</code>;</li>
+<li>other users' <code>urn:x-barge:workspace:*</code>.</li>
+</ul>
+<p>It also removes their datastreams and control streams, and answers
+<code>404</code> to every path under them.</p></li>
+<li><p><strong>Writes.</strong> It enforces "create and append only
+under your own systems".</p></li>
+<li><p><strong>Push subscriptions.</strong> It forwards them to the
+server's internal receiver endpoint, for service accounts only. That
+endpoint has access control off and is not reachable from
+outside.</p></li>
+<li><p><strong>Roles.</strong> It reads the delivered user-to-role
+assignment on <strong>every request</strong>, so a role change takes
+effect at once (FR-116; there is no session to end). The
+<code>epoch</code> of §9.3 is withdrawn.</p></li>
+</ul>
+<p><strong>The server (both stand-ins)</strong> behaves as OpenSensorHub
+would behind the gateway: it authenticates Basic credentials, and
+applies no permission per system. It keeps the
+<code>WWW-Authenticate: basic</code> header on its 401.</p>
+<p><strong>FR-112a.</strong> A pushed command carries
+<code>sender</code>, the user id, as OpenSensorHub's does. The receiving
+model looks up that user's role in the same delivered assignment
+(<code>accounts.py</code>, <code>accounts.ts</code>), and rejects a
+command naming CO₂ if the role lacks emissions.</p>
 <h3 id="94-redaction-fr-16a">9.4 Redaction (FR-16a)</h3>
 <p>Every captured <code>content</code> replaces the value of
 <code>Authorization</code> with <code>****</code>, and any JSON member
@@ -1242,27 +1311,31 @@ folder is fixed.</p>
 <tbody>
 <tr>
 <td>Restricted resources absent from listings, and 404</td>
-<td>Built as §9.3</td>
+<td><strong>Decided: the access gateway</strong> (§9.5); OpenSensorHub
+cannot do it</td>
 <td>S-AUTH, question 1</td>
 </tr>
 <tr>
 <td><code>sender</code> on a pushed command (FR-112a)</td>
-<td>Present (the user name), and the receiver checks its role</td>
+<td><strong>Decided: present as the user id</strong>; the receiver looks
+the role up</td>
 <td>S-AUTH, question 4</td>
 </tr>
 <tr>
 <td>Role change: at once, or at the next login (FR-116)</td>
-<td><code>epoch</code>: the next request answers 401</td>
+<td><strong>Decided: at once</strong>, on the next request</td>
 <td>S-AUTH, question 7</td>
 </tr>
 <tr>
 <td><code>401</code> with or without <code>WWW-Authenticate</code></td>
-<td>Without</td>
+<td><strong>Decided:</strong> the server sends it, and the gateway
+strips it</td>
 <td>S-AUTH, question 6</td>
 </tr>
 <tr>
 <td>Bulk import inside the server</td>
-<td>Done in-process</td>
+<td><strong>Decided: feasible</strong>, at about 300,000 rows/s (finding
+of 2026-11-25)</td>
 <td>S-IMPORT</td>
 </tr>
 </tbody>
