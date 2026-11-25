@@ -21,6 +21,7 @@ Every captured message names its sender and receiver with one of these ids (SRD 
 | `models` | Models | New build · back end | ★ |
 | `scilibs` | Scientific libraries | Third-party libraries | |
 | `client` | Display client | New build · front end | ★ |
+| `gateway` | Access gateway (§9.5) | New build · back end | |
 
 In the adoption opening only (§12), eight more ids stand in for `server`:
 
@@ -47,6 +48,12 @@ is scaffolding: its traffic is captured as `models ↔ server` with the letter `
 | server → models | D, O, H, K | an HTTP response; a pushed command (K) |
 | models → server | Q, O, I | a request (Q); publishing (O); the referee (I) |
 | models → scilibs, scilibs → models | I | a call and its result |
+| client → gateway → server, models → gateway → server | Q, K | every request from the display client and the models passes the gateway (§9.5); each hop is captured |
+| server → gateway → client, server → gateway → models | D, P, O, H, K | responses and pushes come back through it |
+
+The rows above that read `client → server`, `server → client`, `models → server` and
+`server → models` are drawn as two hops each, through `gateway`. The importer and the replay
+controller are modules inside the server, so they do not pass the gateway.
 
 The importer and the replay controller run inside the back-end worker. Their traffic is
 captured where §2 says, even though no HTTP is involved (FR-65: "inside the server").
@@ -398,6 +405,45 @@ the moment it is written to the stream.
 - The importer, the replay controller and the core models in CPython and in the stand-in
   authenticate as their service accounts.
 
+### 9.5 The access gateway (S-AUTH finding of 2026-11-25; decision D-150)
+
+A stock OpenSensorHub **cannot hide** a system: a denied system answers 403 and its
+datastreams, observations and streams stay readable, and denies are not inherited. With
+access control on, it also closes every command subscription at once. So the restriction
+of FR-93 is done by an **access gateway**, written for this system, that sits in front of
+the data server. It is drawn as a component of its own (`gateway`), never hidden inside
+the stand-in.
+
+**The gateway:**
+- **Credentials.** It authenticates every request against the delivered accounts, and
+  forwards the request with the same credentials. Without valid credentials it answers
+  `401` itself, and it **strips** OpenSensorHub's `WWW-Authenticate: basic`, so that the
+  browser never shows its own login dialog.
+- **Filtering.** It removes restricted resources from every listing, matching them by
+  unique-id prefix:
+  - `urn:x-barge:sensor:*:co2`;
+  - `urn:x-barge:process:*:restricted`;
+  - other users' `urn:x-barge:workspace:*`.
+
+  It also removes their datastreams and control streams, and answers `404` to every path
+  under them.
+- **Writes.** It enforces "create and append only under your own systems".
+- **Push subscriptions.** It forwards them to the server's internal receiver endpoint,
+  for service accounts only. That endpoint has access control off and is not reachable
+  from outside.
+- **Roles.** It reads the delivered user-to-role assignment on **every request**, so a
+  role change takes effect at once (FR-116; there is no session to end). The `epoch` of
+  §9.3 is withdrawn.
+
+**The server (both stand-ins)** behaves as OpenSensorHub would behind the gateway: it
+authenticates Basic credentials, and applies no permission per system. It keeps the
+`WWW-Authenticate: basic` header on its 401.
+
+**FR-112a.** A pushed command carries `sender`, the user id, as OpenSensorHub's does. The
+receiving model looks up that user's role in the same delivered assignment
+(`accounts.py`, `accounts.ts`), and rejects a command naming CO₂ if the role lacks
+emissions.
+
 ### 9.4 Redaction (FR-16a)
 
 Every captured `content` replaces the value of `Authorization` with `****`, and any JSON
@@ -591,11 +637,11 @@ folder is fixed.
 
 | Item | Interim in both stand-ins | Decided by |
 |---|---|---|
-| Restricted resources absent from listings, and 404 | Built as §9.3 | S-AUTH, question 1 |
-| `sender` on a pushed command (FR-112a) | Present (the user name), and the receiver checks its role | S-AUTH, question 4 |
-| Role change: at once, or at the next login (FR-116) | `epoch`: the next request answers 401 | S-AUTH, question 7 |
-| `401` with or without `WWW-Authenticate` | Without | S-AUTH, question 6 |
-| Bulk import inside the server | Done in-process | S-IMPORT |
+| Restricted resources absent from listings, and 404 | **Decided: the access gateway** (§9.5); OpenSensorHub cannot do it | S-AUTH, question 1 |
+| `sender` on a pushed command (FR-112a) | **Decided: present as the user id**; the receiver looks the role up | S-AUTH, question 4 |
+| Role change: at once, or at the next login (FR-116) | **Decided: at once**, on the next request | S-AUTH, question 7 |
+| `401` with or without `WWW-Authenticate` | **Decided:** the server sends it, and the gateway strips it | S-AUTH, question 6 |
+| Bulk import inside the server | **Decided: feasible**, at about 300,000 rows/s (finding of 2026-11-25) | S-IMPORT |
 
 When a spike reports, this table, FR-06c and both stand-ins are brought into line with
 OpenSensorHub. **OpenSensorHub is the reference** (PR-06).
