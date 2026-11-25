@@ -11,7 +11,7 @@ import { Node, NodeProps, ReactFlow, useReactFlow, ViewportPortal } from '@xyflo
 import '@xyflow/react/dist/style.css';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { OPENING_MERGE_MS } from '../config';
-import { simClock } from './clock';
+import { drawClock } from './drawclock';
 import { COMPONENT_IDS, COMPONENTS, ComponentId, isComponentId } from './components';
 import { Diamond } from './Diamond';
 import {
@@ -250,7 +250,7 @@ function position(m: Message, now: number): Pt | null {
   return pointAt(lane, m.failed ? Math.min(f, 0.55) : f);
 }
 
-/** Messages move on the simulation clock: paused, they freeze in place and stay clickable (FR-77). */
+/** Messages move in real time (FR-78): frozen, they hold in place and stay clickable (FR-92). */
 function Icons() {
   const live = useStore(bus.live);
   const picked = useStore(selectedMessage);
@@ -261,14 +261,14 @@ function Icons() {
       bus.tick();
       // A message picked while paused travels on at Play; once it arrives it is deselected.
       const sel = selectedMessage.value;
-      if (sel?.follow && simClock.playing && !position(sel.m, simClock.displayNow())) selectedMessage.set(null);
+      if (sel?.follow && !drawClock.frozen.value && !position(sel.m, drawClock.now())) selectedMessage.set(null);
       setFrame((f) => (f + 1) % 1e6);
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
   }, []);
-  const now = simClock.displayNow();
+  const now = drawClock.now();
   return (
     <>
       {live.map((m) => {
@@ -281,7 +281,7 @@ function Icons() {
             style={{ transform: `translate(${at[0] - 19}px, ${at[1] - 19}px)` }}
             onClick={(e) => {
               e.stopPropagation();
-              selectedMessage.set({ m, at, follow: !simClock.playing });
+              selectedMessage.set({ m, at, follow: drawClock.frozen.value });
             }}>
             <Glyph letter={m.letter} failed={m.failed} user={isUserMessage(m)} />
           </button>
