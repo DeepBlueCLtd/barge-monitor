@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""AT-16: browse the CPython build of the server with OSHConnect-Python.
+"""AT-05: browse the CPython build of the server with OSHConnect-Python, with credentials.
 
 OSHConnect-Python is an independent Connected Systems client. This script
 starts the server under uvicorn (mounted where OSHConnect expects a server,
@@ -22,8 +22,10 @@ import uvicorn  # noqa: E402
 from starlette.applications import Starlette  # noqa: E402
 from starlette.routing import Mount  # noqa: E402
 
-from barge.api import create_app  # noqa: E402
-from barge.runtime import Runtime  # noqa: E402
+from barge.serve import build  # noqa: E402
+
+ROOT = Path(__file__).resolve().parents[2]
+USER, PASSWORD = "owner", "demo-owner"  # demo credentials (PR-07)
 
 
 def serve() -> int:
@@ -31,13 +33,16 @@ def serve() -> int:
     s.bind(("127.0.0.1", 0))
     port = s.getsockname()[1]
     s.close()
-    rt = Runtime(seed=3, pregen_days=0.2, local_models=True)
-    while not (rt.server.ready and rt.local.live):
-        rt.tick()
-    app = Starlette(routes=[Mount("/sensorhub/api", app=create_app(rt))])
+    served = build(ROOT / "web" / "public" / "data" / "folder", local_models=False)
+
+    async def lifespan(app):
+        await served.startup()
+        yield
+        await served.shutdown()
+    app = Starlette(routes=[Mount("/sensorhub/api", app=served.app)], lifespan=lifespan)
     srv = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning"))
     threading.Thread(target=srv.run, daemon=True).start()
-    while not srv.started:
+    while not (srv.started and served.rt.running):
         time.sleep(0.05)
     return port
 
@@ -48,7 +53,10 @@ def main() -> int:
     from oshconnect.schema_datamodels import SWEDatastreamRecordSchema
 
     port = serve()
-    node = Node(protocol="http", address="127.0.0.1", port=port)
+    try:  # every request carries credentials (FR-93)
+        node = Node(protocol="http", address="127.0.0.1", port=port, username=USER, password=PASSWORD)
+    except TypeError:
+        node = Node(protocol="http", address="127.0.0.1", port=port)
     base = node.get_api_helper().get_base_url()
     api_root = "sensorhub/api"
     failures, client_defects = [], []

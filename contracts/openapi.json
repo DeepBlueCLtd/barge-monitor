@@ -50,9 +50,9 @@
   }
  },
  "info": {
-  "description": "A declared subset of OGC API \u2013 Connected Systems Parts 1 and 2 over a deliberately awkward logger store. Everything is fictional. The facade is shown working over an awkward store, to be confirmed against a real one (FR-19).",
-  "title": "Canal barge weather demonstrator: Connected Systems server",
-  "version": "4.1.0"
+  "description": "What this system needs of a Connected Systems server (OGC API \u2013 Connected Systems Parts 1 and 2), as a stand-in that behaves as a stock OpenSensorHub does (FR-06c). Every request needs Basic credentials. Everything is fictional.",
+  "title": "Canal barge weather demonstrator: data server stand-in (OpenSensorHub)",
+  "version": "4.6.0"
  },
  "openapi": "3.1.0",
  "paths": {
@@ -216,7 +216,7 @@
      },
      {
       "in": "query",
-      "name": "datetime",
+      "name": "f",
       "required": false,
       "schema": {
        "anyOf": [
@@ -227,7 +227,7 @@
          "type": "null"
         }
        ],
-       "title": "Datetime"
+       "title": "F"
       }
      }
     ],
@@ -326,41 +326,6 @@
      }
     },
     "summary": "A command's status reports"
-   },
-   "post": {
-    "operationId": "create_command_status_commands__cmdId__status_post",
-    "parameters": [
-     {
-      "in": "path",
-      "name": "cmdId",
-      "required": true,
-      "schema": {
-       "title": "Cmdid",
-       "type": "string"
-      }
-     }
-    ],
-    "responses": {
-     "201": {
-      "content": {
-       "application/json": {
-        "schema": {}
-       }
-      },
-      "description": "Successful Response"
-     },
-     "422": {
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/HTTPValidationError"
-        }
-       }
-      },
-      "description": "Validation Error"
-     }
-    },
-    "summary": "Report a command's status (the model that carries it out)"
    }
   },
   "/conformance": {
@@ -494,7 +459,7 @@
   },
   "/controlstreams/{csId}/commands": {
    "get": {
-    "operationId": "commands_controlstreams__csId__commands_get",
+    "operationId": "get_commands_controlstreams__csId__commands_get",
     "parameters": [
      {
       "in": "path",
@@ -503,6 +468,22 @@
       "schema": {
        "title": "Csid",
        "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "subscribe",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Subscribe"
       }
      },
      {
@@ -523,22 +504,6 @@
        "default": 0,
        "title": "Offset",
        "type": "integer"
-      }
-     },
-     {
-      "in": "query",
-      "name": "statusCode",
-      "required": false,
-      "schema": {
-       "anyOf": [
-        {
-         "type": "string"
-        },
-        {
-         "type": "null"
-        }
-       ],
-       "title": "Statuscode"
       }
      }
     ],
@@ -562,10 +527,10 @@
       "description": "Validation Error"
      }
     },
-    "summary": "Commands sent to a control stream"
+    "summary": "Commands sent; with subscribe=1, a push subscription (NDJSON)"
    },
    "post": {
-    "operationId": "create_command_controlstreams__csId__commands_post",
+    "operationId": "post_command_controlstreams__csId__commands_post",
     "parameters": [
      {
       "in": "path",
@@ -578,7 +543,7 @@
      }
     ],
     "responses": {
-     "201": {
+     "200": {
       "content": {
        "application/json": {
         "schema": {}
@@ -597,7 +562,7 @@
       "description": "Validation Error"
      }
     },
-    "summary": "Send a command"
+    "summary": "Send a command (pushed to subscribers)"
    }
   },
   "/controlstreams/{csId}/schema": {
@@ -637,6 +602,98 @@
     "summary": "A control stream's schema, with its bounds"
    }
   },
+  "/controlstreams/{csId}/status": {
+   "get": {
+    "operationId": "get_status_controlstreams__csId__status_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "csId",
+      "required": true,
+      "schema": {
+       "title": "Csid",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "default": 1000,
+       "title": "Limit",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "offset",
+      "required": false,
+      "schema": {
+       "default": 0,
+       "title": "Offset",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Status reports of a control stream's commands"
+   },
+   "post": {
+    "operationId": "post_status_controlstreams__csId__status_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "csId",
+      "required": true,
+      "schema": {
+       "title": "Csid",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "201": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Report a command's status (its receiver)"
+   }
+  },
   "/datastreams": {
    "get": {
     "operationId": "datastreams_datastreams_get",
@@ -659,22 +716,6 @@
        "default": 0,
        "title": "Offset",
        "type": "integer"
-      }
-     },
-     {
-      "in": "query",
-      "name": "datetime",
-      "required": false,
-      "schema": {
-       "anyOf": [
-        {
-         "type": "string"
-        },
-        {
-         "type": "null"
-        }
-       ],
-       "title": "Datetime"
       }
      }
     ],
@@ -840,10 +881,10 @@
       "description": "Validation Error"
      }
     },
-    "summary": "Observations (FR-25)"
+    "summary": "Observations"
    },
    "post": {
-    "operationId": "create_observations_datastreams__dsId__observations_post",
+    "operationId": "post_observation_datastreams__dsId__observations_post",
     "parameters": [
      {
       "in": "path",
@@ -875,42 +916,7 @@
       "description": "Validation Error"
      }
     },
-    "summary": "Publish observations"
-   },
-   "put": {
-    "operationId": "replace_observations_datastreams__dsId__observations_put",
-    "parameters": [
-     {
-      "in": "path",
-      "name": "dsId",
-      "required": true,
-      "schema": {
-       "title": "Dsid",
-       "type": "string"
-      }
-     }
-    ],
-    "responses": {
-     "200": {
-      "content": {
-       "application/json": {
-        "schema": {}
-       }
-      },
-      "description": "Successful Response"
-     },
-     "422": {
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/HTTPValidationError"
-        }
-       }
-      },
-      "description": "Validation Error"
-     }
-    },
-    "summary": "Replace a datastream's observations (plain HTTP, not Connected Systems)"
+    "summary": "Publish one observation"
    }
   },
   "/datastreams/{dsId}/schema": {
@@ -941,6 +947,22 @@
        ],
        "title": "Obsformat"
       }
+     },
+     {
+      "in": "query",
+      "name": "f",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "F"
+      }
      }
     ],
     "responses": {
@@ -963,12 +985,12 @@
       "description": "Validation Error"
      }
     },
-    "summary": "A datastream's schema (FR-24)"
+    "summary": "A datastream's schema"
    }
   },
   "/demonstrator/referee/{kind}": {
    "post": {
-    "description": "Scored here, outside the model: a model never sees the manifest or the position.",
+    "description": "Scored here, outside the model: a model never sees the manifest (FR-37). Times are Unix seconds.",
     "operationId": "referee_demonstrator_referee__kind__post",
     "parameters": [
      {
@@ -1007,9 +1029,9 @@
     ]
    }
   },
-  "/profile": {
+  "/profile.json": {
    "get": {
-    "operationId": "profile_profile_get",
+    "operationId": "profile_profile_json_get",
     "responses": {
      "200": {
       "content": {
@@ -1020,92 +1042,7 @@
       "description": "Successful Response"
      }
     },
-    "summary": "Declared profile (FR-38)"
-   }
-  },
-  "/properties": {
-   "get": {
-    "operationId": "properties_properties_get",
-    "parameters": [
-     {
-      "in": "query",
-      "name": "limit",
-      "required": false,
-      "schema": {
-       "default": 1000,
-       "title": "Limit",
-       "type": "integer"
-      }
-     },
-     {
-      "in": "query",
-      "name": "offset",
-      "required": false,
-      "schema": {
-       "default": 0,
-       "title": "Offset",
-       "type": "integer"
-      }
-     }
-    ],
-    "responses": {
-     "200": {
-      "content": {
-       "application/json": {
-        "schema": {}
-       }
-      },
-      "description": "Successful Response"
-     },
-     "422": {
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/HTTPValidationError"
-        }
-       }
-      },
-      "description": "Validation Error"
-     }
-    },
-    "summary": "Property definitions"
-   }
-  },
-  "/properties/{propId}": {
-   "get": {
-    "operationId": "property__properties__propId__get",
-    "parameters": [
-     {
-      "in": "path",
-      "name": "propId",
-      "required": true,
-      "schema": {
-       "title": "Propid",
-       "type": "string"
-      }
-     }
-    ],
-    "responses": {
-     "200": {
-      "content": {
-       "application/json": {
-        "schema": {}
-       }
-      },
-      "description": "Successful Response"
-     },
-     "422": {
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/HTTPValidationError"
-        }
-       }
-      },
-      "description": "Validation Error"
-     }
-    },
-    "summary": "A property definition"
+    "summary": "Declared profile, beside the API (FR-41)"
    }
   },
   "/systems": {
@@ -1134,7 +1071,7 @@
      },
      {
       "in": "query",
-      "name": "datetime",
+      "name": "f",
       "required": false,
       "schema": {
        "anyOf": [
@@ -1145,7 +1082,7 @@
          "type": "null"
         }
        ],
-       "title": "Datetime"
+       "title": "F"
       }
      }
     ],
@@ -1169,7 +1106,21 @@
       "description": "Validation Error"
      }
     },
-    "summary": "Systems"
+    "summary": "Systems (top level)"
+   },
+   "post": {
+    "operationId": "post_system_systems_post",
+    "responses": {
+     "201": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "Create a system"
    }
   },
   "/systems/{systemId}": {
@@ -1282,7 +1233,7 @@
     "summary": "A system's control streams"
    },
    "post": {
-    "operationId": "create_controlstream_systems__systemId__controlstreams_post",
+    "operationId": "post_controlstream_systems__systemId__controlstreams_post",
     "parameters": [
      {
       "in": "path",
@@ -1314,7 +1265,7 @@
       "description": "Validation Error"
      }
     },
-    "summary": "Create a control stream under a model's system"
+    "summary": "Create a control stream"
    }
   },
   "/systems/{systemId}/datastreams": {
@@ -1374,7 +1325,7 @@
     "summary": "A system's datastreams"
    },
    "post": {
-    "operationId": "create_datastream_systems__systemId__datastreams_post",
+    "operationId": "post_datastream_systems__systemId__datastreams_post",
     "parameters": [
      {
       "in": "path",
@@ -1406,7 +1357,7 @@
       "description": "Validation Error"
      }
     },
-    "summary": "Create a datastream under a model's system"
+    "summary": "Create a datastream"
    }
   },
   "/systems/{systemId}/subsystems": {
@@ -1441,6 +1392,22 @@
        "title": "Offset",
        "type": "integer"
       }
+     },
+     {
+      "in": "query",
+      "name": "f",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "F"
+      }
      }
     ],
     "responses": {
@@ -1466,7 +1433,7 @@
     "summary": "Subsystems"
    },
    "post": {
-    "operationId": "create_subsystem_systems__systemId__subsystems_post",
+    "operationId": "post_subsystem_systems__systemId__subsystems_post",
     "parameters": [
      {
       "in": "path",
@@ -1498,7 +1465,7 @@
       "description": "Validation Error"
      }
     },
-    "summary": "Create a subsystem: a model registers its process system"
+    "summary": "Create a subsystem (a model registers)"
    }
   }
  }
