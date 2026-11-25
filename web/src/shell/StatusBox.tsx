@@ -1,24 +1,16 @@
 // Below the flowchart (§9.1): the status box and the message key (VS-08, VS-10).
 import { clientSession } from '../client/session';
-import { simClock } from './clock';
+import { isoSecond } from './drawclock';
 import { Glyph } from './Glyph';
 import { LETTER_ORDER, LETTERS } from './messages';
 import { opening } from './opening';
 import { runtime } from './runtime';
 import { useStore } from './store';
 
-export const SPEED_LABELS: Record<number, string> = { 0.25: '¼×', 0.5: '½×', 1: '1×' };
-
 const CLIENT_PHASE: Record<string, string> = {
-  'waiting-play': 'Waiting for play', 'waiting-models': 'Waiting for models', handshake: 'Handshake', configured: 'Configured', degraded: 'Degraded',
-  rejected: 'Server rejected', waiting: 'Waiting (503)', unreachable: 'Server unreachable', error: 'Error',
+  login: 'Login screen', locked: 'Locked', handshake: 'Handshake', ready: 'Configured', unreachable: 'Server unreachable', rejected: 'Server rejected',
+  error: 'Error',
 };
-
-export function historyLabel(days: number | null): string {
-  if (days == null) return 'none';
-  if (days % 7 === 0) return days === 7 ? '1 week' : `${days / 7} weeks`;
-  return days === 1 ? '24 hours' : `${days} days`;
-}
 
 type Box = [number, number, number, number];
 
@@ -36,26 +28,24 @@ export function StatusBox({ rect }: { rect: Box }) {
   return <RunningStatus rect={rect} />;
 }
 
+/** §9.1: the logged-in analyst or locked, the current dataset, replay time, rate, back end, server, client and essentials. */
 function RunningStatus({ rect }: { rect: Box }) {
-  const clock = useStore(simClock.state);
+  const replay = useStore(runtime.replay);
   const server = useStore(runtime.server);
-  const control = useStore(runtime.control);
-  const session = useStore(clientSession);
-  const phase = useStore(session.phase);
-  const config = useStore(session.config);
-  const props = useStore(session.props);
-  const missing = config?.problems.length ?? 0;
-  const optional = props.filter((p) => !p.essential).length;
-  const instance = control?.instance ?? '';
+  const phase = useStore(clientSession.phase);
+  const user = useStore(clientSession.user);
+  useStore(clientSession.discovery);
+  const view = useStore(clientSession.view);
+  const essentials = clientSession.essentialsText();
   const rows: [string, React.ReactNode, string][] = [
-    ['Simulation', clock?.playing ? 'Playing' : 'Paused', 'sim-state'],
-    ['Speed', SPEED_LABELS[clock?.rate ?? 0.5] ?? `${clock?.rate}×`, 'speed-state'],
-    ['History', historyLabel(runtime.history.days), 'history-state'],
-    ['Server', server === 'running' ? `Ready${instance ? ` · ${instance.slice(0, 6)}` : ''}` : server === 'waiting' ? 'Waiting (503)' : 'Down', 'server-state'],
-    ['Client', CLIENT_PHASE[phase] ?? phase, 'client-state'],
-    ['Essentials', config ? (missing ? <span className="bad">{missing} missing</span> : <span className="good">All present</span>) : '–', 'essentials-state'],
-    ['Optional', config ? `${optional} source${optional === 1 ? '' : 's'}` : '–', 'optional-state'],
+    ['Analyst', phase === 'locked' ? 'Locked' : phase === 'login' ? 'Not logged in' : user ?? '–', 'analyst-state'],
+    ['Dataset', replay?.dataset ? <span title={replay.dataset}>{replay.dataset.replace(/-[0-9a-f]{8}$/, '')}</span> : 'None', 'dataset-state'],
+    ['Replay time', replay ? `${isoSecond(replay.time).slice(5, 19).replace('T', ' ')} · ${replay.at_end ? 'at the end' : replay.playing ? 'playing' : 'paused'}` : '–', 'replay-state'],
+    ['Rate', replay ? `${replay.rate}× (at most ${replay.max_rate}×, ${replay.max_rate_model})` : '–', 'rate-state'],
     ['Back end', runtime.kind === 'python' ? 'Python' : 'JavaScript stand-in', 'backend-state'],
+    ['Server', server === 'running' ? 'Running' : server === 'starting' ? 'Starting' : 'Down', 'server-state'],
+    ['Client', CLIENT_PHASE[phase] ?? phase, 'client-state'],
+    ['Essentials', phase === 'ready' || phase === 'rejected' ? (essentials === 'All present' ? <span className="good">All present</span> : <span className="bad" title={essentials}>{essentials.split(':')[0]}{view ? '' : ''}</span>) : '–', 'essentials-state'],
   ];
   return (
     <section className="status-box panel-box" style={{ left: rect[0], top: rect[1], width: rect[2], height: rect[3] }} aria-label="Status" data-testid="status-box">

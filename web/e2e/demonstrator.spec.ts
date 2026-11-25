@@ -1,260 +1,60 @@
 import { expect, Page, test } from '@playwright/test';
-import { contrast, contrastPairs } from '../src/shell/palette';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-// End-to-end tests of the v4 architecture view (SRD §9, §14) against the
-// assembled static site. They load the pre-calculated history the build provides.
+// End-to-end tests of SRD 4.6 against the assembled static site, in stand-in mode
+// (the default back end, FR-06b). Each test loads the page afresh, so each starts
+// from a new back end: Mission A imported silently, paused at its start (FR-77).
 const STARTUP_BUDGET_MS = 30_000; // NFR-10, as declared in src/config.ts
-const SLOW_MS = 180_000;
-const URL_PY = 'demo/?seed=1&backend=python'; // explicit: the stand-in is the default (FR-06b)
+const SLOW = 90_000;
+const BASE = 'demo/';
+const PASSWORDS = ['demo-owner', 'demo-friend', 'demo-analyst', 'svc-demo'];
 
-test.describe.configure({ mode: 'serial' });
 
-async function open(page: Page, url = URL_PY) {
-  await page.goto(url);
-  await expect(page.getByTestId('flowchart')).toBeVisible({ timeout: SLOW_MS });
+/** Requests the page sends to the server, through the relay (the display client's; the stand-in's models run in its worker). */
+function apiLog(page: Page) {
+  const log: { at: number; url: string; method: string }[] = [];
+  page.on('request', (r) => {
+    if (/\/demo\/api(\/|$)/.test(r.url())) log.push({ at: Date.now(), url: r.url(), method: r.method() });
+  });
+  return log;
 }
+const since = (log: { at: number }[], t: number) => log.filter((x) => x.at >= t);
+const landing = (u: string) => /\/demo\/api\/?$/.test(u);
 
-async function play(page: Page) {
-  if ((await page.getByTestId('play').innerText()).includes('Play')) await page.getByTestId('play').click();
-  await expect(page.getByTestId('sim-state')).toHaveText('Playing');
-}
-
-async function pause(page: Page) {
-  if ((await page.getByTestId('play').innerText()).includes('Pause')) await page.getByTestId('play').click();
-  await expect(page.getByTestId('sim-state')).toHaveText('Paused');
-}
-
-/** The display client is configured once the core models are live and it has made its handshake. */
-async function configured(page: Page) {
-  await expect(page.getByTestId('client-state')).toHaveText(/Configured|Degraded/, { timeout: SLOW_MS });
-}
-
-/** Every sketched outline's path data, keyed by shape (AT-21). */
-async function outlines(page: Page) {
-  return page.evaluate(() => Array.from(document.querySelectorAll('[data-sketch]')).map(
-    (e) => `${e.getAttribute('data-sketch')}:${Array.from(e.querySelectorAll('path')).map((p) => p.getAttribute('d')).join('|')}`).sort());
-}
-
-test('start-up: progress shown, then the flowchart; everything from the site itself (FR-15, NFR-10, AT-23)', async ({ page }) => {
-  const requests: string[] = [];
-  page.on('request', (r) => requests.push(r.url()));
-  const errors: string[] = [];
-  page.on('pageerror', (e) => errors.push(e.message));
-  const t0 = Date.now();
-  await page.goto(URL_PY);
-  await expect(page.getByTestId('progress')).toBeVisible();
+async function open(page: Page) {
+  await page.goto(BASE);
   await expect(page.getByTestId('flowchart')).toBeVisible({ timeout: STARTUP_BUDGET_MS });
-  console.log(`flowchart after ${Date.now() - t0} ms`);
-  await expect(page.getByTestId('backend-state')).toHaveText('Python');
-  await expect(page.getByTestId('history-state')).not.toHaveText('none');
-  for (const id of ['platform', 'store', 'adapter', 'server', 'models', 'scilibs', 'client']) await expect(page.getByTestId(`card-${id}`)).toBeVisible();
-  for (const l of 'QDOKPHSLI') await expect(page.getByTestId(`key-${l}`)).toBeVisible();
-  await expect(page.locator('[data-flow]')).toHaveCount(11); // every flow of §3.1, one arrow per direction (FR-65)
-  await expect(page.locator('.flow-label')).toHaveText(['HTTP', 'HTTP']); // the display client's and the models' requests
-  const origin = new URL(page.url()).origin;
-  expect(requests.filter((u) => !u.startsWith(origin) && !u.startsWith('data:') && !u.startsWith('blob:'))).toEqual([]);
-  // No horizontal scroll at 1920×1080.
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  expect(errors).toEqual([]);
-});
-
-test('nothing moves before Play or while paused; play moves clock and messages (AT-19, FR-77)', async ({ page }) => {
-  await open(page);
-  await expect(page.getByTestId('sim-state')).toHaveText('Paused');
-  const t1 = await page.getByTestId('role-platform').innerText();
-  await page.waitForTimeout(4000);
-  expect(await page.getByTestId('role-platform').innerText()).toBe(t1);
-  await expect(page.getByTestId('message-icon')).toHaveCount(0);
-  await expect(page.getByTestId('client-state')).toHaveText('Waiting for play');
-  await play(page);
-  await expect(page.getByTestId('message-icon').first()).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByTestId('role-platform')).not.toHaveText(t1);
-  await pause(page);
-  await page.waitForTimeout(800);
-  // Paused: icons freeze in place and the clock stands still.
-  const pos = () => page.getByTestId('message-icon').evaluateAll((els) => els.map((e) => (e as HTMLElement).style.transform).join(';'));
-  const t2 = await page.getByTestId('role-platform').innerText();
-  const p1 = await pos();
-  await page.waitForTimeout(3000);
-  expect(await pos()).toBe(p1);
-  expect(await page.getByTestId('role-platform').innerText()).toBe(t2);
-});
-
-test('the handshake is drawn in its true order: each request leaves after the reply before it arrives (FR-42a)', async ({ page }) => {
-  const sent: number[] = [];
-  page.on('request', (r) => r.url().includes('/demo/api') && sent.push(Date.now()));
-  await open(page, 'demo/?seed=1&backend=standin');
   await page.getByTestId('card-client').click();
-  await play(page);
-  await expect(page.getByTestId('handshake-step')).toContainText('Request 2', { timeout: 30_000 });
-  // One handshake message at most is on the flowchart at any moment.
-  let seen = 0;
-  for (let i = 0; i < 60; i++) {
-    const n = await page.locator('[data-testid="message-icon"][data-handshake]').count();
-    expect(n).toBeLessThanOrEqual(1);
-    seen += n;
-    await page.waitForTimeout(100);
+}
+
+async function login(page: Page, user = 'owner', password?: string) {
+  if (password === undefined) await page.getByTestId(`demo-login-${user}`).click();
+  else {
+    await page.getByTestId('login-user').fill(user);
+    await page.getByTestId('login-password').fill(password);
+    await page.getByTestId('login-submit').click();
   }
-  expect(seen).toBeGreaterThan(20);
-  // Two hops of 0.3 simulated seconds at half speed: no request within a second of the one before.
-  const gaps = sent.slice(1).map((t, i) => t - sent[i]);
-  expect(gaps.length).toBeGreaterThan(2);
-  expect(Math.min(...gaps)).toBeGreaterThan(1000);
-  await configured(page);
-});
+  await expect(page.getByTestId('chips')).toBeVisible({ timeout: SLOW });
+}
 
-test('value-add reveal: nothing gold at start; display client and Models reveal; nothing else can (AT-20, FR-74..FR-76)', async ({ page }) => {
-  await open(page);
-  await expect(page.locator('.card.gold')).toHaveCount(0);
-  await expect(page.getByTestId('detail-empty')).toBeVisible();
-  for (const id of ['platform', 'store', 'adapter', 'server', 'scilibs']) {
-    await page.getByTestId(`card-${id}`).click();
-    await expect(page.getByTestId(`card-${id}`)).toHaveAttribute('data-revealed', 'false');
-    await expect(page.getByTestId('detail-panel')).toHaveAttribute('data-showing', id);
-  }
-  await expect(page.locator('.card.gold')).toHaveCount(0);
-  await page.getByTestId('card-client').click();
-  // Clicked, but not yet showing its views: not revealed until it is configured.
-  await expect(page.getByTestId('card-client')).toHaveAttribute('data-revealed', 'false');
-  await expect(page.getByTestId('detail-title')).toHaveText('Display client');
-  // Configured while another panel is open: still not revealed, so Models can be shown first.
-  await page.getByTestId('card-models').click();
-  await expect(page.getByTestId('card-models')).toHaveAttribute('data-revealed', 'true');
-  await play(page);
-  await configured(page);
-  await expect(page.locator('.card.gold')).toHaveCount(1);
-  await expect(page.getByTestId('card-client')).toHaveAttribute('data-revealed', 'false');
-  // Configured and its panel on screen: revealed.
-  await page.getByTestId('card-client').click();
-  await expect(page.getByTestId('card-client')).toHaveAttribute('data-revealed', 'true');
-  await expect(page.getByTestId('detail-title')).toHaveText('★ Display client');
-  await expect(page.getByTestId('card-client')).toContainText('★ Display client');
-  await expect(page.getByTestId('role-client')).toContainText('our value-add');
-  await expect(page.getByTestId('card-client').getByTestId('diamond')).toBeVisible();
-  await page.getByTestId('card-models').click();
-  await expect(page.getByTestId('card-models')).toHaveAttribute('data-revealed', 'true');
-  await expect(page.getByTestId('detail-models').getByTestId('diamond')).toHaveCount(6); // Models and five model cards
-  // Stays revealed when another component is selected; the × returns the empty state (FR-69).
-  await page.getByTestId('card-server').click();
-  await expect(page.locator('.card.gold')).toHaveCount(2);
-  await page.getByTestId('detail-close').click();
-  await expect(page.getByTestId('detail-empty')).toBeVisible();
-  const before = await outlines(page);
-  await page.getByTestId('restart-client').click();
-  await expect(page.locator('.card.gold')).toHaveCount(0);
-  expect(await outlines(page)).toEqual(before); // AT-21: identical sketched outlines after a client restart
-});
+const bar = (page: Page) => page.getByTestId('replay-bar');
+const chipLabels = async (page: Page) => (await page.getByTestId('chip').allInnerTexts()).join(' | ');
+const monitorText = (page: Page) => page.getByTestId('monitor').innerText();
 
-test('display client: chips, period, clustering, views; the strip shows the selection\'s store query (FR-53..FR-61, FR-70, AT-17)', async ({ page }) => {
-  await open(page);
-  await page.getByTestId('card-client').click();
-  await expect(page.getByTestId('dc-waiting')).toBeVisible();
-  await play(page);
-  await configured(page);
-  const chips = page.getByTestId('chip');
-  await expect(chips.first()).toBeVisible();
-  await expect(page.locator('.chip.on')).toHaveCount(2); // default: the profile's raw essentials
-  await expect(page.locator('.chip.optional').first()).toBeVisible();
-  await expect(page.getByTestId('chart-line').locator('canvas')).toBeVisible({ timeout: 60_000 });
-  await expect(page.getByTestId('chart-errorbars').locator('canvas')).toBeVisible();
-  await expect(page.getByTestId('chart-heatmap').locator('canvas')).toBeVisible();
-  await expect(page.getByTestId('monitor').getByTestId('diamond')).toHaveCount(4); // three graphs and the cluster view (FR-76)
-  await expect(page.getByTestId('cluster-score')).toContainText('score against ground truth', { timeout: 90_000 });
-  // 1 h reads raw records: the strip shows the S that selection caused, found by its chain.
-  const strip = page.getByTestId('message-strip');
-  await expect(strip).toHaveAttribute('data-letter', 'S', { timeout: 30_000 });
-  await expect(page.getByTestId('strip-chain')).toContainText('S to the store adapter');
-  await expect(page.getByTestId('message-content')).toContainText('"op"');
-  // A week reads hourly summaries: no store query, said honestly.
-  await page.getByRole('button', { name: 'Week', exact: true }).click();
-  await expect(page.getByTestId('strip-no-s')).toBeVisible({ timeout: 30_000 });
-  // No field selected: the views say so (FR-56).
-  while (await page.locator('.chip.on').count()) await page.locator('.chip.on').first().click();
-  await expect(page.getByTestId('view-line')).toContainText('No field selected');
-  await expect(page.getByTestId('view-clusters')).toContainText('No field selected');
-});
+/** Open a file from the picker, and wait until the display client shows that dataset's field list. */
+async function openFile(page: Page, file: string) {
+  await page.getByTestId(`open-${file}`).click();
+  await viewing(page, file);
+}
 
-test('display client: a view is moved by its header and resized from its corner; its chart follows', async ({ page }) => {
-  await open(page, 'demo/?seed=1&backend=standin');
-  await page.getByTestId('card-client').click();
-  await play(page);
-  await configured(page);
-  const chart = page.getByTestId('chart-line');
-  await expect(chart.locator('canvas')).toBeVisible({ timeout: 60_000 });
-  const line = page.locator('[data-panel="line"]');
-  const heat = page.locator('[data-panel="heatmap"]');
-  const box = async (l: typeof line) => (await l.boundingBox())!;
-  // Resize: drag the line plot's corner down and to the left; the panel and its chart shrink in width and grow in height.
-  const before = await box(line);
-  const chartBefore = await box(chart);
-  const handle = await box(line.locator('.react-resizable-handle'));
-  await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(handle.x - before.width / 3, handle.y + 110, { steps: 8 });
-  await page.mouse.up();
-  await expect.poll(async () => (await box(line)).width).toBeLessThan(before.width - 40);
-  await expect.poll(async () => (await box(line)).height).toBeGreaterThan(before.height + 60);
-  await expect.poll(async () => (await box(chart)).height).toBeGreaterThan(chartBefore.height + 60);
-  // Move: drag the heat map by its header to the left edge; it ends up left of where it began.
-  const heatBefore = await box(heat);
-  const header = await box(heat.locator('header'));
-  await page.mouse.move(header.x + 40, header.y + 10);
-  await page.mouse.down();
-  await page.mouse.move(before.x + 40, header.y + 10, { steps: 12 });
-  await page.mouse.up();
-  await expect.poll(async () => (await box(heat)).x).toBeLessThan(heatBefore.x - 100);
-  await expect(page.getByTestId('chart-heatmap').locator('canvas')).toBeVisible();
-});
-
-test('clicking a message shows it in the message strip (FR-68)', async ({ page }) => {
-  await open(page);
-  await play(page);
-  await expect(page.getByTestId('message-icon').first()).toBeVisible({ timeout: 30_000 });
-  await pause(page);
-  const icon = page.getByTestId('message-icon').first();
-  const letter = await icon.getAttribute('data-letter');
-  await icon.dispatchEvent('click'); // icons queue and can overlap: click this one
-  const strip = page.getByTestId('message-strip');
-  await expect(strip).toBeVisible();
-  await expect(strip).toHaveAttribute('data-letter', letter!);
-  await expect(page.getByTestId('strip-meta')).toContainText(/from .+ to /);
-  await expect(page.getByTestId('message-content')).not.toBeEmpty();
-  await expect(page.getByTestId('selected-icon')).toBeVisible();
-  // Picked while paused: at Play it travels on, and is deselected when it arrives.
-  await play(page);
-  await expect(page.getByTestId('selected-icon')).toHaveCount(0, { timeout: 20_000 });
-});
-
-test('every text and icon colour meets 4.5:1 (AT-22)', async () => {
-  const failing = contrastPairs().filter((p) => contrast(p.fg, p.bg) < 4.5).map((p) => `${p.what}: ${contrast(p.fg, p.bg).toFixed(2)}`);
-  expect(failing).toEqual([]);
-});
-
-test('stand-in: labelled, tagged, the notice shown, the editor unavailable (AT-25, FR-06f, FR-06h)', async ({ page }) => {
-  await open(page, 'demo/?seed=1&backend=standin');
-  await expect(page.getByTestId('backend-state')).toHaveText('JavaScript stand-in');
-  await expect(page.getByTestId('standin-notice')).toContainText('Running the JavaScript stand-in');
-  await expect(page.getByTestId('standin-tag')).toHaveCount(6); // every component behind the seam
-  await expect(page.getByTestId('card-client').getByTestId('standin-tag')).toHaveCount(0);
-  await page.getByTestId('card-models').click();
-  await page.getByTestId('model-new-model-1').click();
-  await expect(page.getByTestId('editor-unavailable')).toBeVisible();
-  await play(page);
-  await configured(page);
-  await page.getByTestId('card-client').click();
-  await expect(page.getByTestId('cluster-score')).toContainText('(illustrative)', { timeout: 90_000 });
-});
-
-// ---- The failure demos and the claims behind them, in the stand-in: the display client is identical in
-// ---- both back ends (FR-06c), and the stand-in starts in seconds.
-const URL_JS = 'demo/?seed=1&backend=standin';
-
-async function ready(page: Page) {
-  await open(page, URL_JS);
-  await play(page);
-  await page.getByTestId('card-client').click();
-  await configured(page);
-  await expect(page.getByTestId('chart-line').locator('canvas')).toBeVisible({ timeout: 60_000 });
+async function viewing(page: Page, file: string) {
+  const row = page.locator(`[data-testid="dataset-row"][data-file="${file}"]`).last();
+  await expect(row).toHaveAttribute('data-dataset', /./, { timeout: SLOW });
+  const id = await row.getAttribute('data-dataset');
+  await expect(page.locator(`[data-testid="dc"][data-view="${id}"]`)).toBeVisible({ timeout: SLOW });
+  await expect(page.getByTestId('chips')).toBeVisible();
 }
 
 async function demo(page: Page, id: string) {
@@ -263,130 +63,432 @@ async function demo(page: Page, id: string) {
   await expect(page.getByTestId('demo-banner')).toBeVisible();
 }
 
-test('overview: what is adopted, what is written, what is not in the demonstrator', async ({ page }) => {
-  await open(page, URL_JS);
-  await expect(page.getByTestId('detail-empty')).toBeVisible();
-  await expect(page.getByTestId('adopted').locator('tbody tr')).toHaveCount(10);
-  await expect(page.getByTestId('adopted')).toContainText('OGC API – Connected Systems');
-  await expect(page.getByTestId('written').locator('li')).toHaveCount(3);
-  await expect(page.getByTestId('adopted')).toContainText('OpenSensorHub');
-  await expect(page.getByTestId('not-here').locator('li')).toHaveCount(13);
-  await expect(page.getByTestId('not-here')).toContainText('Authentication and access control');
-  await expect(page.locator('.card.gold')).toHaveCount(0); // the overview reveals nothing (FR-74)
-  await page.getByTestId('card-server').click();
-  await expect(page.getByTestId('overview')).toHaveCount(0);
-  await page.getByTestId('overview-button').click();
-  await expect(page.getByTestId('overview')).toBeVisible();
-  // Nothing on screen cites a requirement number.
-  for (const id of ['adapter', 'store', 'platform', 'scilibs', 'server', 'models']) {
-    await page.getByTestId(`card-${id}`).click();
-    expect(await page.getByTestId('detail-panel').innerText()).not.toMatch(/\b(FR|AT|NFR|VS)-\d|§/);
-  }
-  await page.getByTestId('control-panel-toggle').click();
-  expect(await page.getByTestId('control-panel').innerText()).not.toMatch(/\b(FR|AT|NFR|VS)-\d|§/);
+type Msg = { src: string; dst: string; letter: string; content: string; chain?: string | null; summary: string };
+const messages = (page: Page) => page.evaluate(() => (window as unknown as { __messages: () => Msg[] }).__messages());
+
+test('start-up within budget; before login nothing is shown and nothing is sent (NFR-10, FR-97, AT-19)', async ({ page }) => {
+  const log = apiLog(page);
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  const t0 = Date.now();
+  await page.goto(BASE);
+  await expect(page.getByTestId('flowchart')).toBeVisible({ timeout: STARTUP_BUDGET_MS });
+  console.log(`flowchart after ${Date.now() - t0} ms`);
+  await page.getByTestId('card-client').click();
+  await expect(page.getByTestId('dc-login')).toBeVisible();
+  // VS-24, FR-102: the two demo accounts, labelled.
+  await expect(page.getByTestId('demo-credentials')).toContainText('Demo credentials');
+  await expect(page.getByTestId('demo-login-owner')).toBeVisible();
+  await expect(page.getByTestId('demo-login-friend')).toBeVisible();
+  await page.waitForTimeout(3000);
+  expect(log).toEqual([]);
+  expect(await monitorText(page)).not.toMatch(/MISSION|mission-/);
+  await expect(page.getByTestId('analyst-state')).toHaveText('Not logged in');
+  for (const id of ['folder', 'importer', 'replay', 'gateway', 'server', 'models', 'scilibs', 'client']) await expect(page.getByTestId(`card-${id}`)).toBeVisible();
+  await expect(page.getByTestId('godseye-note')).toBeVisible(); // FR-68a
+  expect(errors).toEqual([]);
 });
 
-test('the Data server panel claims only what the server does; models register over HTTP (FR-28)', async ({ page }) => {
-  await ready(page);
-  await page.getByTestId('card-server').click();
-  const panel = page.getByTestId('detail-server');
-  await expect(panel).toContainText('ordinary resource creation');
-  await expect(panel).toContainText('Not used:');
-  // What the panel says is not used is refused by name; what it says a model does, works.
-  const probe = await page.evaluate(async () => {
-    const events = await fetch('api/systemEvents');
-    const made = await fetch('api/systems/models/subsystems', {
-      method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ uniqueId: 'urn:x-barge:process:e2e-probe', label: 'Probe' }),
-    });
-    return { events: events.status, refused: (await events.json()).refused, made: made.status, location: made.headers.get('location') };
-  });
-  expect(probe.events).toBe(404);
-  expect(probe.refused).toBe('systemEvents');
-  expect([201, 409]).toContain(probe.made);
-  expect(probe.location).toContain('/systems/e2e-probe');
-  // The models' own traffic is on the flowchart, between Models and the data server, as HTTP.
-  await expect(page.getByTestId('server-osh')).toContainText('OpenSensorHub');
-  await expect(page.getByTestId('card-server').getByTestId('standin-tag')).toBeVisible(); // a stand-in in both back ends
-  const counters = page.getByTestId('counters');
-  await expect(counters.locator('tr', { hasText: 'receives from' }).filter({ hasText: 'Models' })).toBeVisible();
-  await expect.poll(async () => Number((await counters.locator('tr', { hasText: 'receives from' }).filter({ hasText: 'Models' }).locator('td.num').innerText()).match(/Q ([\d,]+)/)?.[1].replace(/,/g, '') ?? 0),
-    { timeout: 60_000 }).toBeGreaterThan(0);
+test('AT-58: no code in the display client mentions CO₂ or roles', () => {
+  const root = fileURLToPath(new URL('../src/client', import.meta.url));
+  const hits: string[] = [];
+  const walk = (dir: string) => {
+    for (const f of readdirSync(dir)) {
+      const p = join(dir, f);
+      if (statSync(p).isDirectory()) walk(p);
+      else readFileSync(p, 'utf8').split('\n').forEach((line, i) => /co2|co₂|role|owner|friend|emission/i.test(line) && hits.push(`${p}:${i + 1}: ${line.trim()}`));
+    }
+  };
+  walk(root);
+  expect(hits).toEqual([]);
 });
 
-test('server down, then up: unreachable and stale, then waiting mode, a new instance and a fresh handshake (AT-10, AT-11)', async ({ page }) => {
-  await ready(page);
-  const instance = await page.getByTestId('server-state').innerText();
-  const simTime = () => page.getByTestId('role-platform').innerText();
-  await demo(page, 'down');
-  await expect(page.getByTestId('client-state')).toHaveText('Server unreachable', { timeout: 30_000 });
-  await expect(page.getByTestId('server-state')).toHaveText('Down');
-  await expect(page.getByTestId('dc-banner')).toContainText('Server unreachable');
-  await expect(page.getByTestId('dc-status')).toContainText('stale');
-  await expect(page.locator('.is-stale')).toHaveCount(1); // the last data stays, marked stale
-  const t = await simTime();
-  await expect.poll(simTime, { timeout: 30_000 }).not.toBe(t); // the platform and its store carry on (FR-18)
-  await page.getByTestId('demo-next').click();
-  await expect(page.getByTestId('server-state')).toHaveText(/Ready/, { timeout: 60_000 });
-  expect(await page.getByTestId('server-state').innerText()).not.toBe(instance);
-  await expect(page.getByTestId('client-state')).toHaveText('Configured', { timeout: SLOW_MS });
-  await expect(page.locator('.is-stale')).toHaveCount(0);
-});
-
-test('an essential source removed: degraded, one warning naming the sources, their views unavailable (AT-07)', async ({ page }) => {
-  await ready(page);
-  await demo(page, 'essential');
-  await expect(page.getByTestId('client-state')).toHaveText('Degraded', { timeout: SLOW_MS });
-  await expect(page.getByTestId('dc-degraded')).toHaveCount(1);
-  await expect(page.getByTestId('dc-degraded')).toContainText('Bow air temperature');
-  await expect(page.getByTestId('view-line')).toContainText('Unavailable');
-  await expect(page.getByTestId('chart-line')).toHaveCount(0); // never an empty chart (FR-45)
-  await expect(page.getByTestId('chip').filter({ hasText: 'air temperature' }).first()).toBeDisabled();
-  await page.getByTestId('demo-reset').click();
-  await expect(page.getByTestId('client-state')).toHaveText('Configured', { timeout: SLOW_MS });
-  await expect(page.getByTestId('dc-degraded')).toHaveCount(0);
-});
-
-test('fields the client has never seen appear after a handshake, drawn by schema type (AT-09)', async ({ page }) => {
-  await ready(page);
-  const before = await page.getByTestId('chip').allInnerTexts();
-  await demo(page, 'extra');
-  await expect.poll(async () => (await page.getByTestId('chip').allInnerTexts()).length, { timeout: SLOW_MS }).toBe(before.length + 3);
-  await expect(page.getByTestId('client-state')).toHaveText('Configured');
-  for (const name of ['Precipitation', 'Pressure tendency', 'Readings removed']) {
-    const chip = page.getByTestId('chip').filter({ hasText: name });
-    await expect(chip).toHaveClass(/optional/); // not in the profile: no warning, a dashed chip
-    await chip.click();
-  }
-  await expect(page.getByTestId('chart-line').locator('canvas')).toBeVisible({ timeout: 60_000 });
-  await expect(page.getByTestId('dc-degraded')).toHaveCount(0);
-});
-
-test('a server whose profile claim discovery contradicts is rejected (AT-08)', async ({ page }) => {
-  await ready(page);
-  await demo(page, 'lie');
-  await expect(page.getByTestId('client-state')).toHaveText('Server rejected', { timeout: SLOW_MS });
-  await expect(page.getByTestId('dc-rejected')).toContainText('This server cannot be used');
-  await page.getByTestId('demo-reset').click();
-  await expect(page.getByTestId('client-state')).toHaveText('Configured', { timeout: SLOW_MS });
-});
-
-test('a model written in an empty slot registers and appears in the display client (AT-13, Python)', async ({ page }) => {
+test('login, handshake, the owner sees CO₂; nothing sensitive in the browser; no credential captured (AT-51, AT-53, AT-58, AT-20)', async ({ page }) => {
+  const log = apiLog(page);
   await open(page);
-  await play(page);
-  await configured(page);
+  // FR-101: a refusal is generic.
+  await page.getByTestId('login-user').fill('owner');
+  await page.getByTestId('login-password').fill('wrong');
+  await page.getByTestId('login-submit').click();
+  await expect(page.getByTestId('login-error')).toHaveText('The name or password is wrong.');
+  await login(page);
+  // FR-42: discovery only, the profile at its fixed path (FR-41); no instance header is needed.
+  expect(log.some((x) => landing(x.url))).toBe(true);
+  expect(log.some((x) => /profile\.json$/.test(x.url))).toBe(true);
+  // The same build shows CO₂ to the owner (AT-58), because discovery finds it.
+  expect(await chipLabels(page)).toContain('CO₂');
+  await expect(page.getByTestId('analyst-state')).toHaveText('owner');
+  await expect(page.getByTestId('essentials-state')).toHaveText('All present');
+  // AT-20: the display client is revealed once it shows its views in its panel; Models on its first click.
+  await expect(page.getByTestId('card-client')).toHaveAttribute('data-revealed', 'true');
+  await expect(page.getByTestId('card-importer')).toHaveAttribute('data-revealed', 'false');
   await page.getByTestId('card-models').click();
-  await page.getByTestId('model-new-model-1').click();
-  await expect(page.getByTestId('model-editor')).toBeVisible();
-  await page.getByTestId('run-model').click();
-  await expect(page.getByTestId('phase-new-model-1')).toContainText('live', { timeout: SLOW_MS });
+  await expect(page.getByTestId('card-models')).toHaveAttribute('data-revealed', 'true');
   await page.getByTestId('card-client').click();
-  await page.getByTestId('restart-client').click(); // discovery happens only at handshake (FR-44)
+  // AT-51: no credentials, dataset names or data of interest in any browser storage.
+  const stored = await page.evaluate(async () => {
+    const all: string[] = [];
+    for (const s of [localStorage, sessionStorage]) for (let i = 0; i < s.length; i++) all.push(`${s.key(i)}=${s.getItem(s.key(i)!)}`);
+    const dbs = (await indexedDB.databases?.()) ?? [];
+    all.push(...dbs.map((d) => `idb:${d.name}`));
+    return all.join('\n');
+  });
+  for (const bad of [...PASSWORDS, 'MISSION', 'mission-', 'Basic ', 'authorization']) expect(stored).not.toContain(bad);
+  // AT-53: no captured message shows a credential.
+  const msgs = await messages(page);
+  expect(msgs.length).toBeGreaterThan(20);
+  const text = JSON.stringify(msgs);
+  for (const p of PASSWORDS) expect(text).not.toContain(p);
+  expect(text).not.toContain(Buffer.from('owner:demo-owner').toString('base64'));
+  expect(msgs.some((m) => /authorization: \*\*\*\*/.test(m.content))).toBe(true);
+});
+
+test('replay by commands: play, rates, seek and the log; never waited on; polls per second; nothing while paused (AT-33, AT-35, AT-37, AT-39, AT-19)', async ({ page }) => {
+  const log = apiLog(page);
+  await open(page);
+  await login(page);
+  await expect(bar(page)).toHaveAttribute('data-playing', 'false');
+  // AT-39: the POST is held about 5 s by the server; the bar follows the state within about a second.
+  const t0 = Date.now();
+  await page.getByTestId('dc-play').click();
+  await expect(bar(page)).toHaveAttribute('data-playing', 'true', { timeout: 3000 });
+  expect(Date.now() - t0).toBeLessThan(3500);
+  const post = log.find((x) => x.method === 'POST' && /commands$/.test(x.url) && x.at >= t0);
+  expect(post).toBeTruthy();
+  // AT-37: requests per real second the same at 0.1× and 10×.
+  await page.getByTestId('dc-rate-0.1').click();
+  await expect(bar(page)).toHaveAttribute('data-rate', '0.1');
+  await page.waitForTimeout(10_000); // past the command's own watch
+  let t = Date.now();
+  await page.waitForTimeout(6000);
+  const slow = since(log, t).length;
+  await page.getByTestId('dc-rate-10').click();
+  await expect(bar(page)).toHaveAttribute('data-rate', '10');
+  await page.waitForTimeout(10_000);
+  t = Date.now();
+  await page.waitForTimeout(6000);
+  const fast = since(log, t).length;
+  console.log(`requests in 6 s: ${slow} at 0.1×, ${fast} at 10×`);
+  expect(Math.abs(fast - slow)).toBeLessThanOrEqual(Math.max(3, slow * 0.25));
+  // AT-35: above the slowest model's bound: rejected, naming the bound and the model.
+  await page.getByTestId('dc-rate-100').click();
+  await expect(page.getByTestId('dc-notice').filter({ hasText: 'rate 100 exceeds 10, the highest Analysis sustains' })).toBeVisible({ timeout: 10_000 });
+  await expect(bar(page)).toHaveAttribute('data-rate', '10');
+  // Seek by the timeline: a new run; the state follows.
+  const slider = page.getByTestId('dc-timeline');
+  const b = (await slider.boundingBox())!;
+  await page.mouse.click(b.x + b.width * 0.5, b.y + b.height / 2);
+  await expect(bar(page)).toHaveAttribute('data-time', /T1[12]:/, { timeout: 4000 });
+  // FR-91: the replay controller's panel shows the commands pushed to it.
+  await page.getByTestId('card-replay').click();
+  await expect(page.getByTestId('replay-log')).toContainText('seek');
+  await expect(page.getByTestId('replay-log')).toContainText('play');
   await page.getByTestId('card-client').click();
-  await configured(page);
-  const chip = page.getByTestId('chip').filter({ hasText: 'Wind chill' });
-  await expect(chip).toBeVisible({ timeout: SLOW_MS });
-  await expect(chip).toHaveClass(/optional/);
-  await chip.click();
-  await expect(page.getByTestId('chart-line').locator('canvas')).toBeVisible({ timeout: 60_000 });
+  // The top bar's mirror acts through the display client.
+  await page.getByTestId('play').click();
+  await expect(bar(page)).toHaveAttribute('data-playing', 'false', { timeout: 3000 });
+  await expect(page.getByTestId('replay-state')).toContainText('paused');
+  // AT-19: while paused, the client polls nothing.
+  await page.waitForTimeout(10_000);
+  t = Date.now();
+  await page.waitForTimeout(4000);
+  expect(since(log, t)).toEqual([]);
+});
+
+test('Freeze holds the drawing and the replay (FR-92, AT-19)', async ({ page }) => {
+  await open(page);
+  await login(page);
+  await page.getByTestId('dc-play').click();
+  await expect(bar(page)).toHaveAttribute('data-playing', 'true', { timeout: 3000 });
+  await page.getByTestId('freeze').click();
+  await page.waitForTimeout(500);
+  const where = () => page.locator('[data-testid="message-icon"]').evaluateAll((els) => els.map((e) => (e as HTMLElement).style.transform).join(';'));
+  const a = await where();
+  const time = await page.getByTestId('replay-state').innerText();
+  await page.waitForTimeout(1500);
+  expect(await where()).toBe(a);
+  expect(await page.getByTestId('replay-state').innerText()).toBe(time);
+  await page.getByTestId('freeze').click();
+  await expect(page.getByTestId('replay-state')).not.toHaveText(time, { timeout: 5000 });
+});
+
+test('import, overlapping files, degraded Mission C, and returning without a handshake; every boundary captured (AT-41, AT-42, AT-44, AT-07, AT-18, FR-44)', async ({ page }) => {
+  const log = apiLog(page);
+  await open(page);
+  await login(page);
+  // AT-41: a file not imported: import (progress shown), then load; a full handshake follows (FR-44).
+  const t0 = Date.now();
+  await page.getByTestId('open-MISSION_B_20310414.csv').click();
+  await expect(page.getByTestId('import-progress')).toBeVisible({ timeout: 10_000 });
+  await viewing(page, 'MISSION_B_20310414.csv');
+  expect(since(log, t0).some((x) => landing(x.url))).toBe(true);
+  // The overlapping re-export: its own dataset, side by side (AT-42; the separation itself is tested in the back ends).
+  await openFile(page, 'MISSION_B_20310414_REEXPORT.csv');
+  const rows = page.getByTestId('dataset-row');
+  const b1 = await rows.filter({ hasText: 'MISSION_B_20310414.csv' }).getAttribute('data-dataset');
+  const b2 = await rows.filter({ hasText: 'REEXPORT' }).getAttribute('data-dataset');
+  expect(b1).toMatch(/^mission-b-20310414-/);
+  expect(b2).toMatch(/^mission-b-20310414-reexport-/);
+  // AT-07: Mission C opens degraded, naming its missing source.
+  await openFile(page, 'MISSION_C_20310421.csv');
+  await expect(page.getByTestId('dc-degraded')).toContainText('Stern wind speed');
+  await expect(page.getByTestId('essentials-state')).toContainText('missing');
+  // AT-44: back to Mission A: the field list rebuilt without a full handshake; not degraded.
+  const t1 = Date.now();
+  await openFile(page, 'MISSION_A_20310407.csv');
+  await expect(page.getByTestId('dc-degraded')).toHaveCount(0);
+  expect(since(log, t1).some((x) => landing(x.url))).toBe(false);
+  expect(Date.now() - t1).toBeLessThan(15_000);
+  // AT-18: every boundary of §3.1 produced captured messages (the models call the scientific libraries as the replay passes).
+  await page.getByTestId('dc-rate-10').click();
+  await page.getByTestId('dc-play').click();
+  await expect.poll(async () => (await messages(page)).some((m) => m.src === 'scilibs'), { timeout: 60_000 }).toBe(true);
+  await page.getByTestId('dc-play').click();
+  const msgs = await messages(page);
+  const pairs = new Set(msgs.map((m) => `${m.src}>${m.dst}`));
+  for (const p of ['client>gateway', 'gateway>client', 'gateway>server', 'server>gateway', 'models>gateway', 'gateway>models', 'server>replay', 'replay>server',
+    'importer>folder', 'folder>importer', 'importer>server', 'server>importer', 'models>scilibs', 'scilibs>models']) expect([...pairs]).toContain(p);
+  expect(msgs.some((m) => m.src === 'importer' && m.letter === 'I' && /rows written/.test(m.summary))).toBe(true);
+  // Capture off: nothing new is captured; on again, messages resume (FR-66).
+  await page.getByTestId('control-panel-toggle').click();
+  await page.getByTestId('capture').uncheck();
+  await page.waitForTimeout(1000);
+  const total = () => page.evaluate(() => (window as unknown as { __messageTotal: () => number }).__messageTotal());
+  const n0 = await total();
+  await page.getByTestId('dc-play').click();
+  await page.waitForTimeout(3000);
+  await page.getByTestId('dc-play').click();
+  expect(await total()).toBe(n0);
+  await page.getByTestId('capture').check();
+  await page.getByTestId('dc-play').click();
+  await expect.poll(total, { timeout: 10_000 }).toBeGreaterThan(n0);
+  // FR-109, FR-110: the folder and importer panels.
+  await page.getByTestId('card-folder').click();
+  await expect(page.getByTestId('folder-files')).toContainText('MISSION_C_20310421.csv');
+  await page.getByTestId('card-importer').click();
+  await expect(page.getByTestId('import-rate')).toContainText('rows a second');
+  await expect(page.getByTestId('column-mapping')).toBeVisible();
+  await page.getByTestId('card-server').click();
+  await expect(page.getByTestId('server-datasets')).toContainText(b2!);
+  await page.getByTestId('card-models').click();
+  await expect(page.getByTestId('models-per-dataset')).toBeVisible();
+});
+
+test('data of interest: save, open exactly after switching dataset, compare on elapsed time, refuse a missing resolution, remove (AT-45, AT-46, AT-47)', async ({ page }) => {
+  await open(page);
+  await login(page);
+  await page.getByTestId('dc-rate-10').click();
+  await page.getByTestId('dc-play').click();
+  await expect(bar(page)).toHaveAttribute('data-playing', 'true', { timeout: 5000 });
+  await page.waitForTimeout(25_000); // about four minutes of replay
+  await page.getByTestId('dc-play').click();
+  await expect(bar(page)).toHaveAttribute('data-playing', 'false', { timeout: 5000 });
+  await page.getByTestId('preset-1m').click();
+  // AT-47: a resolution no datastream holds is refused, naming those that do.
+  await page.getByTestId('doi-label').fill('Bad');
+  await page.getByTestId('doi-resolution').fill('PT10M');
+  await page.getByTestId('doi-save').click();
+  await expect(page.getByTestId('doi-error')).toContainText('No datastream holds PT10M');
+  await expect(page.getByTestId('doi-error')).toContainText('PT1S, PT1M, PT1H');
+  // Save a minute of raw readings.
+  await page.getByTestId('doi-label').fill('Last minute');
+  await page.getByTestId('doi-resolution').fill('PT1S');
+  await page.getByTestId('doi-save').click();
+  await expect(page.getByTestId('doi-item').filter({ hasText: 'Last minute' })).toBeVisible();
+  await page.getByTestId('doi-item').filter({ hasText: 'Last minute' }).getByTestId('doi-open').click();
+  const opened = page.getByTestId('doi-opened');
+  await expect(opened).toBeVisible();
+  const sum1 = await opened.getAttribute('data-checksum');
+  // And the run so far at 1-minute resolution.
+  await page.getByTestId('preset-6h').click();
+  await page.getByTestId('doi-label').fill('Minutes');
+  await page.getByTestId('doi-resolution').fill('PT1M');
+  await page.getByTestId('doi-save').click();
+  await expect(page.getByTestId('doi-item').filter({ hasText: 'Minutes' })).toBeVisible();
+  // AT-45: after switching dataset, the record regenerates exactly the same values.
+  await openFile(page, 'MISSION_C_20310421.csv');
+  await page.getByTestId('doi-item').filter({ hasText: 'Last minute' }).getByTestId('doi-open').click();
+  await expect(page.getByTestId('doi-opened')).toHaveAttribute('data-checksum', sum1!);
+  await expect(page.getByTestId('doi-opened')).toContainText('MISSION_A_20310407.csv');
+  // AT-46: compared on elapsed time, at the coarser resolution, labelled "elapsed".
+  await page.getByTestId('doi-item').filter({ hasText: 'Last minute' }).getByTestId('doi-pick').check();
+  await page.getByTestId('doi-item').filter({ hasText: 'Minutes' }).getByTestId('doi-pick').check();
+  await page.getByTestId('doi-compare-button').click();
+  const cmp = page.getByTestId('doi-compare');
+  await expect(cmp).toBeVisible();
+  await expect(cmp).toContainText('elapsed');
+  await expect(cmp).toContainText('at PT1M');
+  // FR-105: remove.
+  await page.getByTestId('doi-item').filter({ hasText: 'Minutes' }).getByTestId('doi-remove').click();
+  await expect(page.getByTestId('doi-item').filter({ hasText: 'Minutes' })).toHaveCount(0);
+});
+
+test('clustering carries the selection as an unsaved data of interest; the cluster view shows the latest run (FR-35a, FR-60)', async ({ page }) => {
+  const posts: string[] = [];
+  page.on('request', (r) => r.method() === 'POST' && /commands$/.test(r.url()) && posts.push(r.postData() ?? ''));
+  await open(page);
+  await login(page);
+  await page.getByTestId('dc-rate-10').click();
+  await page.getByTestId('dc-play').click();
+  // Data cleanse first: Analysis reads only its output (AT-15), so give it a few minutes of replay.
+  await page.waitForTimeout(30_000);
+  await page.getByTestId('cluster-B').click();
+  await expect.poll(() => posts.find((p) => p.includes('"algorithm":"B"')) ?? '').toContain('doi');
+  const sent = JSON.parse(posts.find((p) => p.includes('"algorithm":"B"'))!);
+  const doi = JSON.parse(sent.parameters.doi);
+  expect(doi.dataset).toMatch(/^mission-a-/);
+  expect(doi.sources.length).toBeGreaterThan(0);
+  expect(Object.keys(sent.parameters).sort()).toEqual(['algorithm', 'clusters', 'doi', 'sensitivity']);
+  await expect(page.getByTestId('chart-clusters')).toBeVisible({ timeout: 40_000 });
+  await expect(page.getByTestId('view-clusters')).toContainText('algorithm B', { timeout: 40_000 });
+});
+
+test('lock on the button and after inactivity: blanked, credentials gone, no request; unlocking restores the place (AT-50, FR-99)', async ({ page }) => {
+  const log = apiLog(page);
+  await open(page);
+  await login(page);
+  // A place to restore: a field chosen and a period.
+  const humid = page.getByTestId('chip').filter({ hasText: 'Bow · Humidity' });
+  await humid.click();
+  await expect(humid).toHaveAttribute('aria-pressed', 'true');
+  await page.getByTestId('preset-6h').click();
+  await page.getByTestId('dc-play').click();
+  await page.waitForTimeout(2000);
+  await page.getByTestId('dc-lock').click();
+  await expect(page.getByTestId('dc-locked')).toBeVisible();
+  await expect(page.getByTestId('analyst-state')).toHaveText('Locked');
+  expect(await monitorText(page)).not.toMatch(/MISSION|mission-|Humidity|Last minute/);
+  await page.waitForTimeout(1500);
+  const t = Date.now();
+  await page.waitForTimeout(4000);
+  expect(since(log, t)).toEqual([]);
+  // Unlocking needs the password again.
+  await page.getByTestId('login-password').fill('demo-owner');
+  await page.getByTestId('login-submit').click();
+  await expect(page.getByTestId('chips')).toBeVisible({ timeout: SLOW });
+  await expect(page.getByTestId('chip').filter({ hasText: 'Bow · Humidity' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('preset-6h')).toHaveAttribute('aria-pressed', 'true');
+  // After inactivity: the failure demo shortens 5 minutes to 5 seconds.
+  await demo(page, 'lock');
+  await expect(page.getByTestId('dc-locked')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId('demo-watch')).toContainText('blanked');
+});
+
+test('the friend: no trace of CO₂ in the client or its traffic, not degraded; a crafted request finds nothing (AT-55, AT-58, AT-60, FR-79a)', async ({ page }) => {
+  await open(page);
+  await login(page, 'friend');
+  expect(await chipLabels(page)).not.toMatch(/CO₂|co2/i);
+  expect(await monitorText(page)).not.toMatch(/CO₂|co2/i);
+  await expect(page.getByTestId('dc-degraded')).toHaveCount(0); // AT-60
+  await page.getByTestId('dc-play').click();
+  await page.waitForTimeout(4000);
+  // The client's own traffic, less the declared profile: a public document of the server's whose prose says CO₂ is never essential (FR-40).
+  const mine = (await messages(page)).filter((m) => /^dc\d+-/.test(m.chain ?? '') && (m.src === 'client' || m.dst === 'client') && !/profile\.json/.test(m.summary));
+  expect(mine.length).toBeGreaterThan(10);
+  expect(mine.filter((m) => /co2|co₂/i.test(m.content + m.summary)).map((m) => m.summary)).toEqual([]);
+  // The flowchart is a god's-eye view: the models' CO₂ traffic is still drawn (FR-68a).
+  expect((await messages(page)).some((m) => /co2/i.test(m.content + m.summary))).toBe(true);
+  await demo(page, 'crafted');
+  await expect(page.getByTestId('demo-found')).toContainText('404', { timeout: 30_000 });
+  await expect(page.getByTestId('demo-found')).toContainText('REJECTED: a requested source is not available');
+});
+
+test('a role change: CO₂ gone at the next login, the record naming it greyed as no longer permitted (AT-59)', async ({ page }) => {
+  await open(page);
+  await login(page, 'analyst', 'demo-analyst'); // Viewer with emissions
+  const co2 = page.getByTestId('chip').filter({ hasText: 'Bow · CO₂' });
+  await co2.click();
+  await page.getByTestId('doi-label').fill('Engine CO₂');
+  await page.getByTestId('doi-resolution').fill('PT1S');
+  await page.getByTestId('doi-save').click();
+  await expect(page.getByTestId('doi-item').filter({ hasText: 'Engine' })).toHaveAttribute('data-greyed', 'false');
+  // The owner changes the role in OpenSensorHub's administration (the stand-in, §13.5).
+  await page.getByTestId('control-panel-toggle').click();
+  await page.getByTestId('set-role-analyst').selectOption('viewer');
+  await page.getByTestId('control-panel-toggle').click();
+  await page.getByTestId('restart-client').click();
+  await page.getByTestId('card-client').click();
+  await login(page, 'analyst', 'demo-analyst');
+  expect(await chipLabels(page)).not.toContain('CO₂');
+  const rec = page.getByTestId('doi-item').filter({ hasText: 'Engine' });
+  await expect(rec).toHaveAttribute('data-greyed', 'true');
+  await expect(rec).toContainText('No longer permitted');
+});
+
+test('Reset instance asks, naming what is lost; afterwards nothing is imported (FR-50a)', async ({ page }) => {
+  await open(page);
+  await login(page);
+  await page.getByTestId('control-panel-toggle').click();
+  await page.getByTestId('reset-instance').click();
+  await expect(page.getByTestId('reset-confirm')).toContainText('1 imported dataset');
+  await expect(page.getByTestId('reset-confirm')).toContainText('data of interest');
+  await page.getByTestId('reset-confirm-yes').click();
+  await page.getByTestId('control-panel-toggle').click();
+  await expect(page.getByTestId('dataset-state')).toHaveText('None', { timeout: 15_000 });
+  await page.getByTestId('restart-client').click();
+  await page.getByTestId('card-client').click();
+  await page.getByTestId('demo-login-owner').click();
+  await expect(page.getByTestId('dc-no-dataset')).toBeVisible({ timeout: SLOW });
+  await expect(page.getByTestId('dataset-row').filter({ hasText: 'MISSION_A' })).toHaveAttribute('data-status', 'not-imported');
+});
+
+test('failure demos: the server down and up, restarts; an essential missing; a misconfigured server (AT-11, AT-31)', async ({ page }) => {
+  const log = apiLog(page);
+  await open(page);
+  await login(page);
+  await demo(page, 'down');
+  await expect(page.getByTestId('dc-unreachable')).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator('.dc.is-stale')).toBeVisible();
+  await expect(page.getByTestId('server-state')).toHaveText('Down');
+  const t = Date.now();
+  await page.getByTestId('demo-next').click();
+  await expect(page.getByTestId('dc-unreachable')).toHaveCount(0, { timeout: SLOW });
+  await expect(page.getByTestId('client-state')).toHaveText('Configured', { timeout: SLOW });
+  expect(since(log, t).some((x) => landing(x.url))).toBe(true); // a fresh handshake (FR-48)
+  await page.getByTestId('demo-reset').click();
+  await expect(page.getByTestId('server-state')).toHaveText('Running', { timeout: 10_000 });
+  // An essential missing: the dataset opens degraded, naming it.
+  await demo(page, 'essential');
+  await expect(page.getByTestId('dc-degraded')).toContainText('air temperature', { timeout: SLOW });
+  await page.getByTestId('demo-reset').click();
+  await expect(page.getByTestId('dc-degraded')).toHaveCount(0, { timeout: SLOW });
+  // A misconfigured server: the claim is not trusted.
+  await demo(page, 'lie');
+  await expect(page.getByTestId('dc-degraded')).toContainText('air temperature', { timeout: SLOW });
+  await page.getByTestId('demo-reset').click();
+  await expect(page.getByTestId('dc-degraded')).toHaveCount(0, { timeout: SLOW });
+  // The server restarts: the client finds it again by itself.
+  const t2 = Date.now();
+  await demo(page, 'restart');
+  await expect.poll(() => since(log, t2).some((x) => landing(x.url)), { timeout: SLOW }).toBe(true);
+  await expect(page.getByTestId('client-state')).toHaveText('Configured', { timeout: SLOW });
+});
+
+test('failure demos: never-seen fields, the rate, a wrong password, the degraded dataset, the friend (AT-09, AT-31, AT-35)', async ({ page }) => {
+  await open(page);
+  await login(page);
+  expect(await chipLabels(page)).not.toContain('Pressure tendency');
+  await demo(page, 'extra');
+  await expect(page.getByTestId('demo-next')).toBeVisible({ timeout: 20_000 });
+  await page.getByTestId('demo-next').click();
+  const extra = page.locator('[data-testid="chip"][data-key$="pressure_tendency_3h"]');
+  await expect(extra).toBeVisible({ timeout: SLOW });
+  await expect(extra).toHaveClass(/optional/);
+  await expect(extra).toHaveAttribute('data-type', 'Quantity');
+  await page.getByTestId('demo-reset').click();
+  await expect(page.getByTestId('client-state')).toHaveText('Configured', { timeout: SLOW });
+  await page.waitForTimeout(3000);
+  await expect(page.getByTestId('client-state')).toHaveText('Configured', { timeout: SLOW });
+  await demo(page, 'rate');
+  await expect(page.getByTestId('dc-notice').filter({ hasText: 'exceeds 10, the highest Analysis sustains' })).toBeVisible({ timeout: 15_000 });
+  await demo(page, 'password');
+  await expect(page.getByTestId('login-error')).toHaveText('The name or password is wrong.', { timeout: 15_000 });
+  expect(await monitorText(page)).not.toMatch(/MISSION|mission-/);
+  await demo(page, 'friend');
+  await expect(page.getByTestId('chips')).toBeVisible({ timeout: SLOW });
+  await expect(page.getByTestId('analyst-state')).toHaveText('friend');
+  expect(await chipLabels(page)).not.toContain('CO₂');
+  await demo(page, 'degraded');
+  await viewing(page, 'MISSION_C_20310421.csv');
+  await expect(page.getByTestId('dc-degraded')).toContainText('Stern wind speed');
 });

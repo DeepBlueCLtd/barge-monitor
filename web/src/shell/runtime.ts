@@ -1,16 +1,18 @@
-// The page's runtime (SRD §2, docs/v4-interfaces.md §8): registers the relay,
-// chooses and starts a back end (FR-06a, FR-06b), connects the relay to it,
-// and in the Python back end starts one worker per model (FR-33). A model's
-// requests go through the relay, like the display client's. The shell's controls (play, restart
-// server, control panel) reach the back-end worker directly: they belong to
-// the demonstrator, not the system.
-import { CORE_MODELS, HISTORY_PATH, PY_ZIP, PYODIDE_PATH, resolve, urlParam } from '../config';
-import { simClock } from './clock';
+// The page's runtime (SRD §2, docs/v4-interfaces.md §13): registers the relay,
+// chooses and starts a back end (FR-06a, FR-06b) over the data folder, connects the
+// relay to it, and in the Python back end starts one worker per model (FR-33). A
+// model's requests go through the relay, like the display client's. The shell's
+// controls (restart server, Freeze, the control panel) reach the back-end worker
+// directly: they belong to the demonstrator, not the system. Replay is not among
+// them: it is controlled only by commands, through the display client (C4, §13.3).
+import { CORE_MODELS, DATA_FOLDER, PY_ZIP, PYODIDE_PATH, resolve, urlParam } from '../config';
 import type { ComponentId } from './components';
+import { drawClock } from './drawclock';
 import { bus, Captured } from './messages';
 import { Store } from './store';
 
 export type BackendKind = 'python' | 'standin';
+export type ServerStatus = 'running' | 'starting' | 'down';
 
 export interface Progress {
   stage: string;
@@ -34,24 +36,53 @@ export interface FieldControl {
 export interface ModelState {
   id: string;
   label: string;
-  phase: string; // starting | catching up | live | failed
+  phase: string;
   detail?: string;
+  max_rate?: number;
   datastreams?: number | string[];
 }
 
-/** Control state (docs/v4-interfaces.md §8). */
+/** The replay state in the tick (§13.2): for the shell's status only. Times are Unix seconds. */
+export interface ReplayView {
+  time: number;
+  dataset: string;
+  start: number;
+  end: number;
+  position: number;
+  rate: number;
+  max_rate: number;
+  max_rate_model: string;
+  playing: boolean;
+  at_end: boolean;
+  run: string;
+  models_ready: boolean;
+}
+
+export interface FolderFile {
+  file: string;
+  size: number;
+  modified: string;
+  status: string;
+  dataset: string | null;
+  pct: number | null;
+}
+
+/** Control state (docs/v4-interfaces.md §13.4). */
 export interface ControlState {
-  server: 'running' | 'waiting' | 'down';
-  instance: string | null;
-  progress?: unknown;
+  server: ServerStatus;
   fields: FieldControl[];
   pending: boolean;
   lie_about_profile: boolean;
-  clock?: unknown;
-  store?: { bytes: number; files: number; records: number };
+  folder?: FolderFile[];
+  datasets?: { id: string; file: string; start: number; end: number; superseded: boolean }[];
+  replay?: ReplayView | null;
   models?: ModelState[];
+  accounts?: { user: string; role: string }[];
   capture_counts?: Record<string, number>;
   backend?: BackendKind;
+  frozen?: boolean;
+  /** The last import's speed: rows a second, or the stand-in's record of it. */
+  import_rate?: number | { rows: number; seconds: number; rows_per_s: number; file: string; silent: boolean } | null;
 }
 
 export interface ModelWorkerStatus {
@@ -63,58 +94,39 @@ export interface ModelWorkerStatus {
 // FR-06b: the stand-in is the default because it starts in seconds; `?backend=python` runs
 // Pyodide. Set this to true to make Python the default wherever WebAssembly runs.
 const PYTHON_BY_DEFAULT = false;
+/** The models' service accounts share one demo password (labelled demo credentials, PR-07). */
+const SERVICE_PASSWORD = 'svc-demo';
 
 function chooseBackend(): BackendKind {
   const asked = urlParam('backend');
   if (asked === 'python' || asked === 'standin') return asked;
   if (!PYTHON_BY_DEFAULT) return 'standin';
-  // FR-06b: the Python back end needs WebAssembly; without it, the stand-in.
   return typeof WebAssembly === 'undefined' ? 'standin' : 'python';
 }
 
 class Runtime {
   readonly kind: BackendKind = chooseBackend();
   progress = new Store<Progress>({ stage: 'page', detail: 'starting', pct: 0 });
-  control = new Store<ControlState | null>(null);
-  server = new Store<'running' | 'waiting' | 'down'>('waiting');
+  controlState = new Store<ControlState | null>(null);
+  server = new Store<ServerStatus>('starting');
+  /** The latest replay state from the tick (§13.2): the shell's status only; the display client reads it over HTTP. */
+  replay = new Store<ReplayView | null>(null);
   /** Per model worker: its phase and loading progress (Python back end only). */
   modelWorkers = new Store<Record<string, ModelWorkerStatus>>({});
   /** Output of model workers (stdout, stderr), for the empty-slot editor. */
   modelOutput = new Store<{ model: string; stream: 'stdout' | 'stderr'; text: string }[]>([]);
-  history = { days: null as number | null, source: '' };
-  seed = 0;
   startedAt = performance.now();
   readyMs: number | null = null;
 
   private backend: Worker | null = null;
   private models = new Map<string, Worker>();
-
   private started = false;
-
-  /** True once every core model reports itself live (the display client waits for this before its handshake). */
-  coreModelsLive(): boolean {
-    const models = this.control.value?.models;
-    if (!models) return this.control.value != null; // a back end that does not report its models
-    return CORE_MODELS.every((id) => models.find((m) => m.id === id)?.phase === 'live');
-  }
+  /** Control actions awaiting the worker's answer, in the order sent (§13.3). */
+  private waiting: { resolve: (s: ControlState) => void; reject: (e: Error) => void }[] = [];
 
   async start() {
     if (this.started) return; // React's development double-invoke must not start two back ends
     this.started = true;
-    const seedParam = urlParam('seed');
-    const requested = seedParam && /^\d+$/.test(seedParam) ? Number(seedParam) : null;
-    // Pre-calculated history (FR-15): the build says where it is and which seeds it holds.
-    let historyUrl: string | null = null;
-    let seed = requested ?? 0;
-    try {
-      const h = await (await fetch(resolve('py/history.json'), { cache: 'no-cache' })).json();
-      historyUrl = resolve(`${HISTORY_PATH}${h.code_hash}/days-${h.days}/`);
-      if (requested == null) seed = h.seeds[Math.floor(Math.random() * h.seeds.length)];
-      this.history = { days: h.days, source: 'pre-calculated' };
-    } catch {
-      this.history = { days: null, source: 'none found' };
-    }
-    this.seed = seed;
     if (!('serviceWorker' in navigator)) throw new Error('this browser has no Service Worker support, so the seam relay cannot run');
     this.progress.set({ stage: 'seam', detail: 'registering the seam relay (Service Worker)', pct: 1 });
     await navigator.serviceWorker.register(resolve('sw.js'), { scope: './' });
@@ -128,7 +140,8 @@ class Runtime {
       : new Worker(new URL('../workers/backend.worker.ts', import.meta.url), { type: 'module' });
     this.backend.onmessage = (e) => this.onBackend(e.data);
     this.backend.onerror = (e) => this.progress.set({ stage: 'error', detail: `the back-end worker failed: ${e.message ?? e}`, pct: 0 });
-    this.backend.postMessage({ type: 'start', pyodideUrl: resolve(PYODIDE_PATH), pyZipUrl: resolve(PY_ZIP), seed, historyUrl });
+    // §13.2: the worker reads the data folder the build ships (FR-15), at an absolute URL (D-148).
+    this.backend.postMessage({ type: 'start', folderUrl: resolve(DATA_FOLDER), pyodideUrl: resolve(PYODIDE_PATH), pyZipUrl: resolve(PY_ZIP) });
     this.connect();
   }
 
@@ -138,32 +151,36 @@ class Runtime {
         this.progress.set(d);
         if (d.stage === 'ready' && this.readyMs == null) {
           this.readyMs = performance.now() - this.startedAt;
-          // The model workers load once the back end can take their ports.
           if (this.kind === 'python') CORE_MODELS.forEach((m) => this.startModel(m));
         }
         break;
-      case 'tick':
-        simClock.update(d.clock);
-        if (d.server && d.server !== this.server.value) this.server.set(d.server);
+      case 'tick': {
+        const server = d.server === 'waiting' ? 'starting' : d.server;
+        if (server && server !== this.server.value) this.server.set(server);
+        const r: ReplayView | null = d.replay ?? null;
+        const old = this.replay.value;
+        if (!old || !r || old.playing !== r.playing || old.rate !== r.rate || old.dataset !== r.dataset || Math.floor(old.time) !== Math.floor(r.time)
+          || old.models_ready !== r.models_ready) this.replay.set(r);
         bus.add(d.messages ?? []);
-        // Every model reads time from the simulation clock (FR-13).
-        for (const w of this.models.values()) w.postMessage({ type: 'clock', state: d.clock, pending: d.pending_commands ?? {} });
         break;
+      }
       case 'state':
-        this.control.set(d.state);
-        if (d.state?.clock) simClock.update(d.state.clock);
-        if (d.state?.server) this.server.set(d.state.server);
+        this.controlState.set(d.state);
+        if (d.state?.server) this.server.set(d.state.server === 'waiting' ? 'starting' : d.state.server);
+        this.waiting.shift()?.resolve(d.state);
+        break;
+      case 'control-error':
+        this.waiting.shift()?.reject(new Error(String(d.error)));
+        console.warn('control action refused by the back end:', d.error);
         break;
       case 'relay-failed': {
-        // A request that got no answer (server down) is drawn stopped at the boundary (VS-14).
+        // A request that got no answer (server down or starting) is drawn stopped at the boundary (VS-14).
         const kOrQ = d.method === 'POST' && String(d.path).endsWith('/commands') ? 'K' : 'Q';
-        bus.add([{ t: simClock.now(), src: d.model ? 'models' : 'client', dst: 'server', letter: kOrQ, ...(d.model ? { model: d.model } : {}), summary: `${d.method} ${d.path}: no answer, the server is down`,
+        bus.add([{ t: Date.now() / 1000, src: (d.model ? 'models' : 'client') as ComponentId, dst: 'gateway', letter: kOrQ, ...(d.model ? { model: d.model } : {}),
+          summary: `${d.method} ${d.path}: no answer, the server is not running`,
           content: `${d.method} ${d.path}\n\nnetwork failure: the relay found no server to answer`, failed: true, chain: d.chain ?? null, hop: 0 }]);
         break;
       }
-      case 'control-error':
-        console.warn('control action refused by the back end:', d.error);
-        break;
     }
   }
 
@@ -176,9 +193,22 @@ class Runtime {
     sw.postMessage({ type: 'port' }, [ch.port2]);
   }
 
-  /** A control action (docs/v4-interfaces.md §8): play, pause, rate, restart-server, down, up, field, profile-lie, capture, state. */
-  send(action: string, arg?: unknown) {
-    this.backend?.postMessage({ type: 'control', action, arg });
+  /**
+   * A control action (§13.3): restart-server, down, up, field {name, on}, profile-lie, capture,
+   * freeze {on}, reset-instance, set-role {user, role}, state. Resolves with the control state
+   * the worker answers with.
+   */
+  control(action: string, arg?: unknown): Promise<ControlState> {
+    if (!this.backend) return Promise.reject(new Error('the back end has not started'));
+    const p = new Promise<ControlState>((resolve, reject) => this.waiting.push({ resolve, reject }));
+    this.backend.postMessage({ type: 'control', action, arg });
+    return p;
+  }
+
+  /** FR-92: Freeze holds the back end (requests, pushes and the replay clock) and the drawing. */
+  freeze(on: boolean): Promise<ControlState> {
+    drawClock.hold(on);
+    return this.control('freeze', { on });
   }
 
   /**
@@ -196,9 +226,9 @@ class Runtime {
     w.onerror = (e) => this.setModel(model, { phase: 'failed', detail: String(e.message ?? e) });
     const ch = new MessageChannel();
     this.backend.postMessage({ type: 'model-connect', model }, [ch.port1]);
-    w.postMessage({ type: 'start', pyodideUrl: resolve(PYODIDE_PATH), pyZipUrl: resolve(PY_ZIP), model, apiUrl: resolve('api'), ...(code ? { code } : {}) }, [ch.port2]);
-    const clock = simClock.state.value;
-    if (clock) w.postMessage({ type: 'clock', state: clock });
+    // Each model authenticates as its own service account (docs/v4-interfaces.md §9.3); these are demo credentials (PR-07).
+    w.postMessage({ type: 'start', pyodideUrl: resolve(PYODIDE_PATH), pyZipUrl: resolve(PY_ZIP), model, apiUrl: resolve('api'), ...(code ? { code } : {}),
+      user: `svc-${model}`, password: SERVICE_PASSWORD }, [ch.port2]);
     return true;
   }
 

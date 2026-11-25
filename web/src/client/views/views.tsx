@@ -1,22 +1,23 @@
-// The display client's views (§8.3, FR-57..FR-62). Each is a framed component
-// with a value-add diamond (FR-76). They follow the current field and period
-// selection (FR-61). A field the client has no specific knowledge of is drawn
-// by its SWE Common type alone (FR-62): a Quantity as a line, an angular
-// Quantity as points, a Category as a coloured band, a Count as steps. There is
-// no measurement-specific code here.
+// The display client's views (§8.3, FR-57 to FR-62), as ECharts charts (FR-80,
+// D-121): a line plot, a line plot with error bars (minimum, mean and maximum from
+// the summaries), a heat map and a cluster view. Each follows the current field and
+// period selection. A field the client knows nothing about is drawn by its SWE Common
+// type alone (FR-62): a Quantity as a line, a Count as steps, a Boolean as steps of 0
+// and 1, a Category as points on a band of its values. There is no
+// measurement-specific code here.
 import { ReactNode, useMemo } from 'react';
 import { Diamond } from '../../shell/Diamond';
-import { simClock } from '../../shell/clock';
-import { periodOf, Property } from '../plan';
-import type { ClientSession, Row } from '../session';
+import { useStore } from '../../shell/store';
+import type { Property, Source } from '../fields';
+import { periodOf } from '../plan';
+import { DisplayClientSession, Opened, Row } from '../session';
 import { AXIS, EChart, EChartsOption, ms, SERIES, timeLabel } from './chart';
 
 export const CLUSTER_COLOURS = ['#3653d4', '#e8890c', '#0f766e', '#9b3fd9', '#d43d51', '#3d8c40', '#8d5524', '#5c677d'];
-const BAND_COLOURS = ['#7c9cf5', '#f5b36b', '#6cc3b5', '#c39bf0', '#f08a9a', '#9bd37a', '#d1a77a', '#a3abb8'];
 
-export function ViewFrame({ title, sub, children, testid, className = '' }: { title: string; sub: ReactNode; children: ReactNode; testid: string; className?: string }) {
+export function ViewFrame({ title, sub, children, testid }: { title: string; sub: ReactNode; children: ReactNode; testid: string }) {
   return (
-    <section className={`dc-view ${className}`} data-testid={testid} aria-label={title}>
+    <section className="dc-view" data-testid={testid} aria-label={title}>
       <header>
         <h4>{title}</h4>
         <p>{sub}</p>
@@ -29,236 +30,234 @@ export function ViewFrame({ title, sub, children, testid, className = '' }: { ti
 
 /** FR-45, FR-56: a view never appears empty without saying why. */
 export function Empty({ children }: { children: ReactNode }) {
-  return <div className="dc-empty" role="note">{children}</div>;
-}
-
-interface Point {
-  t: number;
-  v: any;
-}
-
-function points(session: ClientSession, p: Property): Point[] {
-  const s = session.series(p);
-  if (!s) return [];
-  const out: Point[] = [];
-  for (const r of s.rows) out.push({ t: r._t, v: r[s.field.name] });
-  return out;
+  return <div className="dc-empty">{children}</div>;
 }
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
-
-function range(pts: Point[]): [number, number] {
-  let lo = Infinity, hi = -Infinity;
-  for (const p of pts) if (isNum(p.v)) {
-    if (p.v < lo) lo = p.v;
-    if (p.v > hi) hi = p.v;
-  }
-  return lo === Infinity ? [0, 1] : [lo, hi];
-}
-
-const unit = (p: Property) => (p.uom && p.uom !== '1' ? ` ${p.uom}` : '');
+const unit = (u: string | null) => (u && u !== '1' ? ` ${u}` : '');
 const fmt = (v: unknown) => (isNum(v) ? (Math.abs(v) >= 100 ? v.toFixed(0) : v.toFixed(2)) : String(v ?? '–'));
 
-/** Consecutive equal categories merged into runs, for coloured bands. */
-function runs(pts: Point[], t1: number): { a: number; b: number; v: string }[] {
-  const out: { a: number; b: number; v: string }[] = [];
-  for (let i = 0; i < pts.length; i++) {
-    const v = pts[i].v == null ? '' : String(pts[i].v);
-    const b = i + 1 < pts.length ? pts[i + 1].t : Math.max(t1, pts[i].t);
-    const last = out[out.length - 1];
-    if (last && last.v === v) last.b = b;
-    else out.push({ a: pts[i].t, b, v });
+interface Line {
+  prop: Property;
+  src: Source;
+  rows: Row[];
+}
+
+function useLines(session: DisplayClientSession): { lines: Line[]; window: [number, number] | null } {
+  useStore(session.data);
+  useStore(session.selection);
+  useStore(session.replay);
+  const lines = session.inUse().filter((u) => u.use === 'line').map((u) => ({ prop: u.prop, src: u.src, rows: session.rows(u.src) }));
+  return { lines, window: session.window() };
+}
+
+function timeAxis(w: [number, number]) {
+  const span = Math.max(1, w[1] - w[0]);
+  return {
+    type: 'time', min: ms(w[0]), max: ms(w[1]), axisLabel: { ...AXIS, hideOverlap: true, formatter: (v: number) => timeLabel(v, span) },
+    splitLine: { show: false },
+  };
+}
+
+/** A field's values as numbers to plot, by its type alone (FR-62). */
+function plotValues(l: Line): { data: [number, number | null][]; categories: string[] | null; step: boolean } {
+  const f = l.src.field;
+  if (f.type === 'Category') {
+    const cats = [...new Set(l.rows.map((r) => String(r[f.name] ?? '')).filter(Boolean))].sort();
+    return { data: l.rows.map((r) => [ms(r.t), r[f.name] == null ? null : cats.indexOf(String(r[f.name]))]), categories: cats, step: true };
   }
-  return out.filter((r) => r.v !== '');
+  if (f.type === 'Boolean') return { data: l.rows.map((r) => [ms(r.t), r[f.name] == null ? null : r[f.name] ? 1 : 0]), categories: ['false', 'true'], step: true };
+  return { data: l.rows.map((r) => [ms(r.t), isNum(r[f.name]) ? (r[f.name] as number) : null]), categories: null, step: f.type === 'Count' };
 }
 
-function windowOf(session: ClientSession): [number, number] {
-  const t1 = simClock.now();
-  return [t1 - periodOf(session.selection.value.period).seconds, t1];
-}
-
-/** FR-57: the selected fields overlaid on a normalised scale, real values on hover, changes marked on the time axis. */
-export function LinePlot({ session, props, changesNote }: { session: ClientSession; props: Property[]; changesNote: string | null }) {
-  const version = session.version.value;
-  const option = useMemo<EChartsOption>(() => {
-    const [t0, t1] = windowOf(session);
-    const span = t1 - t0;
-    const bands = props.filter((p) => p.kind === 'band');
-    const series: any[] = [];
-    props.forEach((p, i) => {
-      const pts = points(session, p);
-      const colour = SERIES[i % SERIES.length];
-      if (p.kind === 'band') {
-        const lane = bands.indexOf(p);
-        const cats = [...new Set(pts.map((x) => String(x.v ?? '')).filter(Boolean))].sort();
-        series.push({
-          type: 'custom', name: p.label, renderItem: (_: any, api: any) => {
-            const a = api.coord([api.value(0), -lane * 0.16 - 0.03]);
-            const b = api.coord([api.value(1), -(lane + 1) * 0.16 + 0.01]);
-            return { type: 'rect', shape: { x: a[0], y: a[1], width: Math.max(1, b[0] - a[0]), height: b[1] - a[1] }, style: { fill: BAND_COLOURS[api.value(2) % BAND_COLOURS.length] } };
-          },
-          encode: { x: [0, 1] }, data: runs(pts, t1).map((r) => [ms(r.a), ms(r.b), cats.indexOf(r.v), r.v]),
-          tooltip: { trigger: 'item', formatter: (q: any) => `${p.label}: ${q.value[3]}` },
-        });
-        return;
+/** FR-57: the selected fields over the period; one axis when they share a unit, otherwise each scaled to its own range. */
+export function LineView({ session }: { session: DisplayClientSession }) {
+  const { lines, window: w } = useLines(session);
+  const units = new Set(lines.map((l) => l.prop.uom ?? '?'));
+  const shared = units.size === 1 && lines.every((l) => l.src.field.type === 'Quantity' || l.src.field.type === 'Count');
+  const option = useMemo<EChartsOption | null>(() => {
+    if (!w || !lines.length) return null;
+    const series = lines.map((l, i) => {
+      const pv = plotValues(l);
+      let data = pv.data;
+      if (!shared) {
+        const vals = data.map((d) => d[1]).filter(isNum);
+        const lo = Math.min(...vals), hi = Math.max(...vals);
+        data = data.map(([t, v]) => [t, v == null ? null : hi > lo ? (v - lo) / (hi - lo) : 0.5]);
       }
-      const [lo, hi] = p.kind === 'angle' ? [0, 360] : range(pts);
-      const k = hi > lo ? 1 / (hi - lo) : 1;
-      const data = pts.map((x) => [ms(x.t), isNum(x.v) ? (x.v - lo) * k : null, x.v]);
-      if (p.kind === 'angle') series.push({ type: 'scatter', name: p.label, data, symbolSize: 3, itemStyle: { color: colour } });
-      else series.push({ type: 'line', name: p.label, data, showSymbol: false, step: p.kind === 'steps' ? 'end' : undefined, sampling: 'lttb',
-        lineStyle: { width: 1.6, color: colour }, itemStyle: { color: colour }, connectNulls: false });
+      return {
+        name: l.prop.label, type: pv.categories && l.src.field.type === 'Category' ? 'scatter' : 'line', data, step: pv.step ? 'end' : undefined,
+        showSymbol: false, symbolSize: 4, connectNulls: false, lineStyle: { width: 1.4 }, color: SERIES[i % SERIES.length],
+        raw: pv.data,
+      };
     });
-    // Detected changes from the latest run, marked on the time axis (FR-57).
-    const marks = changesNote ? [] : session.changes.filter((c) => c._t >= t0 && c._t <= t1).map((c) => ({ xAxis: ms(c._t) }));
-    series.push({ type: 'line', name: 'changes', data: [], markLine: { symbol: 'none', silent: true, label: { show: false },
-      lineStyle: { type: 'dashed', color: '#6b7280', width: 1 }, data: marks } });
     return {
-      grid: { left: 8, right: 10, top: 8, bottom: 22, containLabel: false },
-      xAxis: { type: 'time', min: ms(t0), max: ms(t1), axisLabel: { ...AXIS, formatter: (v: number) => timeLabel(v, span), hideOverlap: true }, splitLine: { show: false } },
-      yAxis: { type: 'value', min: -0.16 * bands.length - 0.02, max: 1.04, show: false },
-      tooltip: { trigger: 'axis', confine: true, textStyle: { fontSize: 14 }, formatter: (ps: any[]) => {
-        if (!ps.length) return '';
-        const head = timeLabel(ps[0].value?.[0] ?? ps[0].axisValue, 1);
-        return [head, ...ps.filter((q) => q.seriesName !== 'changes' && q.value?.[2] !== undefined).map((q) => {
-          const p = props.find((x) => x.label === q.seriesName);
-          return `${q.marker}${q.seriesName}: ${fmt(q.value[2])}${p ? unit(p) : ''}`;
-        })].join('<br/>');
-      } },
+      grid: { left: 52, right: 14, top: 26, bottom: 26 },
+      legend: { top: 0, textStyle: { ...AXIS, fontSize: 12 }, itemHeight: 8 },
+      tooltip: { trigger: 'axis', valueFormatter: (v: unknown) => fmt(v) },
+      xAxis: timeAxis(w),
+      yAxis: { type: 'value', scale: true, name: shared ? [...units][0] : '', nameTextStyle: AXIS, axisLabel: AXIS },
       series,
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [version, props, changesNote, session]);
-  return <EChart option={option} testid="chart-line" />;
-}
-
-/** FR-58: the first selected field as means with ± 1 standard deviation over intervals suited to the period. */
-export function ErrorBars({ session, p }: { session: ClientSession; p: Property }) {
-  const version = session.version.value;
-  const option = useMemo<EChartsOption>(() => {
-    const [t0, t1] = windowOf(session);
-    const binS = periodOf(session.selection.value.period).binS;
-    const pts = points(session, p);
-    const n = Math.ceil((t1 - t0) / binS);
-    const sums = Array.from({ length: n }, () => ({ s: 0, ss: 0, k: 0 }));
-    for (const x of pts) {
-      if (!isNum(x.v)) continue;
-      const i = Math.floor((x.t - t0) / binS);
-      if (i < 0 || i >= n) continue;
-      sums[i].s += x.v;
-      sums[i].ss += x.v * x.v;
-      sums[i].k++;
-    }
-    const bars = sums.map((b, i) => {
-      if (!b.k) return null;
-      const mean = b.s / b.k;
-      const sd = Math.sqrt(Math.max(0, b.ss / b.k - mean * mean));
-      return [ms(t0 + (i + 0.5) * binS), mean, mean - sd, mean + sd];
-    }).filter((x): x is number[] => !!x);
-    return {
-      grid: { left: 36, right: 10, top: 10, bottom: 22 },
-      xAxis: { type: 'time', min: ms(t0), max: ms(t1), axisLabel: { ...AXIS, formatter: (v: number) => timeLabel(v, t1 - t0), hideOverlap: true }, splitLine: { show: false } },
-      yAxis: { type: 'value', scale: true, axisLabel: AXIS, splitLine: { lineStyle: { color: '#eceae4' } } },
-      tooltip: { trigger: 'item', confine: true, formatter: (q: any) => `${timeLabel(q.value[0], 1)}: ${fmt(q.value[1])} ± ${fmt((q.value[3] - q.value[2]) / 2)}${unit(p)}` },
-      series: [
-        { type: 'custom', renderItem: (_: any, api: any) => {
-          const top = api.coord([api.value(0), api.value(3)]);
-          const bot = api.coord([api.value(0), api.value(2)]);
-          const w = 4;
-          return { type: 'group', children: [
-            { type: 'line', shape: { x1: top[0], y1: top[1], x2: bot[0], y2: bot[1] }, style: { stroke: '#1f2937', lineWidth: 1.2 } },
-            { type: 'line', shape: { x1: top[0] - w, y1: top[1], x2: top[0] + w, y2: top[1] }, style: { stroke: '#1f2937', lineWidth: 1.2 } },
-            { type: 'line', shape: { x1: bot[0] - w, y1: bot[1], x2: bot[0] + w, y2: bot[1] }, style: { stroke: '#1f2937', lineWidth: 1.2 } },
-          ] };
-        }, encode: { x: 0, y: [2, 3] }, data: bars, z: 1 },
-        { type: 'line', data: bars, symbolSize: 5, lineStyle: { color: SERIES[0], width: 1.6 }, itemStyle: { color: SERIES[0] }, z: 2 },
-      ],
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [version, p, session]);
-  return <EChart option={option} testid="chart-errorbars" />;
-}
-
-/** FR-59: the selected fields (rows) against time (columns), each row normalised. */
-export function HeatMap({ session, props }: { session: ClientSession; props: Property[] }) {
-  const version = session.version.value;
-  const option = useMemo<EChartsOption>(() => {
-    const [t0, t1] = windowOf(session);
-    const cols = 24;
-    const w = (t1 - t0) / cols;
-    const data: [number, number, number | null, string][] = [];
-    props.forEach((p, row) => {
-      const pts = points(session, p);
-      const cats = p.kind === 'band' ? [...new Set(pts.map((x) => String(x.v ?? '')).filter(Boolean))].sort() : [];
-      const acc = Array.from({ length: cols }, () => ({ s: 0, k: 0, counts: new Map<string, number>() }));
-      for (const x of pts) {
-        const i = Math.floor((x.t - t0) / w);
-        if (i < 0 || i >= cols || x.v == null) continue;
-        if (p.kind === 'band') acc[i].counts.set(String(x.v), (acc[i].counts.get(String(x.v)) ?? 0) + 1);
-        else if (isNum(x.v)) {
-          acc[i].s += x.v;
-          acc[i].k++;
-        }
-      }
-      const vals = acc.map((a) => {
-        if (p.kind === 'band') {
-          const top = [...a.counts.entries()].sort((m, n) => n[1] - m[1])[0];
-          return top ? cats.indexOf(top[0]) : null;
-        }
-        return a.k ? a.s / a.k : null;
-      });
-      const nums = vals.filter(isNum);
-      const lo = Math.min(...nums), hi = Math.max(...nums);
-      vals.forEach((v, i) => data.push([i, row, isNum(v) ? (hi > lo ? (v - lo) / (hi - lo) : 0.5) : null, isNum(v) ? (p.kind === 'band' ? cats[v] : `${fmt(v)}${unit(p)}`) : 'no data']));
-    });
-    return {
-      grid: { left: 4, right: 4, top: 4, bottom: 4, containLabel: false },
-      xAxis: { type: 'category', data: Array.from({ length: cols }, (_, i) => i), show: false },
-      yAxis: { type: 'category', data: props.map((p) => p.label), show: false, inverse: true },
-      visualMap: { show: false, min: 0, max: 1, dimension: 2, inRange: { color: ['#2b4c9b', '#9fb3df', '#f3f1ec', '#e8a68f', '#b5452d'] } },
-      tooltip: { trigger: 'item', confine: true, formatter: (q: any) => `${props[q.value[1]]?.label}: ${q.value[3]}` },
-      series: [{ type: 'heatmap', data, itemStyle: { borderColor: '#fff', borderWidth: 1 } }],
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [version, props, session]);
-  return <EChart option={option} testid="chart-heatmap" />;
-}
-
-/** FR-60: cluster assignments as a band along the time axis, a legend, the algorithm and fields used, and the score. */
-export function ClusterBand({ session, labelOf }: { session: ClientSession; labelOf: (name: string) => string }) {
-  const run = session.run.value;
-  const rows: Row[] = session.clusters;
-  const sel = session.selection.value;
-  if (!run || !rows.length) return <Empty>Waiting for Analysis's first clustering run on this selection…</Empty>;
-  const pts = rows.map((r) => ({ t: r._t, v: r.cluster }));
-  const t0 = run.window_start ? Date.parse(run.window_start) : ms(pts[0].t);
-  const t1 = run.window_end ? Date.parse(run.window_end) : ms(pts[pts.length - 1].t);
-  const segs = runs(pts, (t1 / 1000) - (ms(0) / 1000));
-  const names = [...new Set(pts.map((p) => String(p.v)))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-  const fields = String(run.fields ?? '').split(',').filter(Boolean).map(labelOf).join(', ');
-  const current = run.algorithm === sel.algorithm && run.period === sel.period;
-  const span = Math.max(1, t1 - t0);
+    } as EChartsOption;
+  }, [lines, w, shared]);
   return (
-    <div className="cluster-body">
-      <div className="cluster-head">
-        <span data-testid="cluster-caption">Clusters · on {fields || 'the selected fields'} · Algorithm {run.algorithm ?? '?'}</span>
-        <span className="score" data-testid="cluster-score">score against ground truth{' '}
-          <b>{typeof run.score_clusters === 'number' ? run.score_clusters.toFixed(2) : 'not scored'}</b>
-          {run.illustrative ? ' (illustrative)' : ''}</span>
-      </div>
-      <svg className="cluster-band" viewBox="0 0 1000 26" preserveAspectRatio="none" role="img" aria-label="Cluster assignments along time">
-        {segs.map((s, i) => {
-          const x = ((ms(s.a) - t0) / span) * 1000;
-          const w = ((ms(s.b) - ms(s.a)) / span) * 1000;
-          return <rect key={i} x={x} y={0} width={Math.max(0.5, w)} height={26} fill={CLUSTER_COLOURS[Math.max(0, names.indexOf(s.v)) % CLUSTER_COLOURS.length]} />;
-        })}
-      </svg>
-      <div className="cluster-legend">
-        {names.map((n, i) => (
-          <span key={n}><i style={{ background: CLUSTER_COLOURS[i % CLUSTER_COLOURS.length] }} />Cluster {n.replace(/^c/, '')}</span>
-        ))}
-        {!current && <span className="note">updating: a run for the current selection has been requested</span>}
-      </div>
-    </div>
+    <ViewFrame title="Line" sub={lines.length ? lines.map((l) => `${l.prop.label}${unit(l.prop.uom)}`).join(', ') + (shared ? '' : ' · each scaled to its own range') : 'No field selected'} testid="view-line">
+      {!option ? <Empty>No field is selected. Choose one above.</Empty>
+        : lines.every((l) => !l.rows.length) ? <Empty>No readings in this period yet.</Empty>
+          : <EChart option={option} testid="chart-line" extra={{ 'data-points': String(lines.reduce((n, l) => n + l.rows.length, 0)) }} />}
+    </ViewFrame>
   );
 }
+
+/** FR-58: minimum, mean and maximum per interval, from the summary datastreams (FR-29). */
+export function ErrorBarView({ session }: { session: DisplayClientSession }) {
+  useStore(session.data);
+  useStore(session.selection);
+  useStore(session.replay);
+  const w = session.window();
+  const u = session.inUse().find((x) => x.use === 'stats' && x.prop.type === 'Quantity');
+  const rows = u ? session.rows(u.src) : [];
+  const option = useMemo<EChartsOption | null>(() => {
+    if (!u || !w || !rows.length) return null;
+    const f = u.src.field.name;
+    const bars = rows.filter((r) => isNum(r[`${f}_min`]) && isNum(r[`${f}_max`])).map((r) => [ms(r.t), r[`${f}_min`], r[`${f}_max`]]);
+    return {
+      grid: { left: 52, right: 14, top: 12, bottom: 26 },
+      tooltip: { trigger: 'axis', valueFormatter: (v: unknown) => fmt(v) },
+      xAxis: timeAxis(w),
+      yAxis: { type: 'value', scale: true, name: u.prop.uom ?? '', nameTextStyle: AXIS, axisLabel: AXIS },
+      series: [
+        {
+          name: 'minimum to maximum', type: 'custom', data: bars, encode: { x: 0, y: [1, 2] },
+          renderItem: (_: unknown, api: any) => {
+            const lo = api.coord([api.value(0), api.value(1)]);
+            const hi = api.coord([api.value(0), api.value(2)]);
+            return { type: 'line', shape: { x1: lo[0], y1: lo[1], x2: hi[0], y2: hi[1] }, style: { stroke: '#94a3b8', lineWidth: 1.2 } };
+          },
+        },
+        { name: 'mean', type: 'line', showSymbol: false, data: rows.map((r) => [ms(r.t), isNum(r[f]) ? r[f] : null]), color: SERIES[0], lineStyle: { width: 1.6 } },
+      ],
+    } as EChartsOption;
+  }, [u, w, rows]);
+  return (
+    <ViewFrame title="Line with error bars" sub={u ? `${u.prop.label}: minimum, mean and maximum per ${u.res === 'PT1H' ? 'hour' : 'minute'}` : 'Minimum, mean and maximum'} testid="view-errorbars">
+      {!session.selection.value.fields.length ? <Empty>No field is selected.</Empty>
+        : !u ? <Empty>No summary of the selected fields: error bars come from the models' summaries.</Empty>
+          : !option ? <Empty>No summaries in this period yet: the models publish them as the replay passes.</Empty>
+            : <EChart option={option} testid="chart-errorbars" />}
+    </ViewFrame>
+  );
+}
+
+/** FR-59: each selected field as a row of time bins, coloured by its value within its own range. */
+export function HeatmapView({ session }: { session: DisplayClientSession }) {
+  const { lines, window: w } = useLines(session);
+  const numeric = lines.filter((l) => l.src.field.type !== 'Category' && l.src.field.type !== 'Text');
+  const option = useMemo<EChartsOption | null>(() => {
+    if (!w || !numeric.length || numeric.every((l) => !l.rows.length)) return null;
+    const BINS = 48;
+    const step = Math.max(1, (w[1] - w[0]) / BINS);
+    const data: [number, number, number | null][] = [];
+    numeric.forEach((l, row) => {
+      const sums = new Array(BINS).fill(0), ns = new Array(BINS).fill(0);
+      for (const r of l.rows) {
+        const v = plotValues({ ...l, rows: [r] }).data[0][1];
+        if (!isNum(v)) continue;
+        const b = Math.min(BINS - 1, Math.floor((r.t - w[0]) / step));
+        sums[b] += v;
+        ns[b]++;
+      }
+      const means = sums.map((s, i) => (ns[i] ? s / ns[i] : null));
+      const vals = means.filter(isNum);
+      const lo = Math.min(...vals), hi = Math.max(...vals);
+      means.forEach((m, i) => data.push([i, row, m == null ? null : hi > lo ? (m - lo) / (hi - lo) : 0.5]));
+    });
+    return {
+      grid: { left: 140, right: 14, top: 8, bottom: 26 },
+      tooltip: { formatter: (p: any) => `${numeric[p.value[1]].prop.label}<br/>${new Date(ms(w[0] + p.value[0] * step)).toISOString().slice(11, 19)}` },
+      xAxis: { type: 'category', data: Array.from({ length: BINS }, (_, i) => timeLabel(ms(w[0] + i * step), w[1] - w[0])), axisLabel: { ...AXIS, hideOverlap: true } },
+      yAxis: { type: 'category', data: numeric.map((l) => l.prop.label), axisLabel: { ...AXIS, fontSize: 12, width: 130, overflow: 'truncate' } },
+      visualMap: { min: 0, max: 1, show: false, inRange: { color: ['#dbeafe', '#3b82f6', '#1e3a8a'] } },
+      series: [{ type: 'heatmap', data }],
+    } as EChartsOption;
+  }, [numeric, w]);
+  return (
+    <ViewFrame title="Heat map" sub="Each field across the period, darker where higher in its own range" testid="view-heatmap">
+      {!lines.length ? <Empty>No field is selected.</Empty> : !option ? <Empty>No readings in this period yet.</Empty> : <EChart option={option} testid="chart-heatmap" />}
+    </ViewFrame>
+  );
+}
+
+/** FR-60: the latest Analysis run's clusters over time, with its detected changes (FR-35). */
+export function ClusterView({ session }: { session: DisplayClientSession }) {
+  const a = useStore(session.analysis);
+  const option = useMemo<EChartsOption | null>(() => {
+    if (!a || !a.clusters.length) return null;
+    const cats = [...new Set(a.clusters.map((r) => String(r.cluster)))].sort();
+    return {
+      grid: { left: 52, right: 14, top: 12, bottom: 26 },
+      tooltip: { trigger: 'item' },
+      xAxis: timeAxis([a.start, a.end]),
+      yAxis: { type: 'category', data: cats, axisLabel: AXIS },
+      series: [
+        ...cats.map((c, i) => ({
+          name: c, type: 'scatter', symbolSize: 5, color: CLUSTER_COLOURS[i % CLUSTER_COLOURS.length],
+          data: a.clusters.filter((r) => String(r.cluster) === c).map((r) => [ms(r.t), c]),
+        })),
+        {
+          name: 'changes', type: 'scatter', data: [], markLine: {
+            symbol: 'none', silent: true, lineStyle: { color: '#be123c', type: 'dashed' },
+            data: a.changes.map((r) => ({ xAxis: ms(r.t) })),
+          },
+        },
+      ],
+    } as EChartsOption;
+  }, [a]);
+  return (
+    <ViewFrame title="Clusters" sub={a ? `Run ${a.runId}${a.algorithm ? ` · algorithm ${a.algorithm}` : ''} · ${a.changes.length} change${a.changes.length === 1 ? '' : 's'} marked` : 'The latest Analysis run on this dataset'} testid="view-clusters">
+      {!option ? <Empty>No Analysis run on this dataset yet. Choose an algorithm above, or play: the models run as the replay passes.</Empty>
+        : <EChart option={option} testid="chart-clusters" extra={{ 'data-run': a!.runId }} />}
+    </ViewFrame>
+  );
+}
+
+/** FR-106, FR-107: an opened record, or two compared on elapsed time. */
+export function OpenedView({ opened, onClose }: { opened: Opened; onClose: () => void }) {
+  const compare = opened.kind === 'compare';
+  const option = useMemo<EChartsOption>(() => {
+    const series = opened.records.flatMap((rec, ri) => rec.series.map((s, si) => ({
+      name: compare ? `${rec.item.record.label} · ${s.label}` : s.label, type: 'line', showSymbol: false, lineStyle: { width: 1.4, type: ri ? 'dashed' : 'solid' },
+      color: SERIES[(ri * 3 + si) % SERIES.length],
+      data: s.rows.map((r) => [compare ? r.t : ms(r.t), isNum(r.v) ? r.v : null]),
+    })));
+    return {
+      grid: { left: 52, right: 14, top: 28, bottom: 34 },
+      legend: { top: 0, textStyle: { ...AXIS, fontSize: 12 } },
+      tooltip: { trigger: 'axis', valueFormatter: (v: unknown) => fmt(v) },
+      xAxis: compare
+        ? { type: 'value', name: 'elapsed', nameLocation: 'middle', nameGap: 20, nameTextStyle: AXIS, axisLabel: { ...AXIS, formatter: (v: number) => elapsed(v) } }
+        : { type: 'time', axisLabel: { ...AXIS, hideOverlap: true } },
+      yAxis: { type: 'value', scale: true, axisLabel: AXIS },
+      series,
+    } as EChartsOption;
+  }, [opened, compare]);
+  const r0 = opened.records[0].item.record;
+  return (
+    <section className="dc-opened" data-testid={compare ? 'doi-compare' : 'doi-opened'} data-checksum={opened.checksum}>
+      <header>
+        <h4>{compare ? 'Compared on elapsed time' : `Data of interest: ${r0.label}`}</h4>
+        <p>{opened.records.map((r) => `${r.item.record.label}: ${r.item.record.dataset.file}, ${r.item.record.start} to ${r.item.record.end} at ${r.item.record.resolution}`).join(' · ')}
+          {compare ? ` · each from its own start, at ${opened.res}, labelled elapsed: never simultaneous` : ''}</p>
+        <button className="dc-btn small" onClick={onClose} data-testid="doi-close">Close</button>
+      </header>
+      <EChart option={option} testid={compare ? 'chart-compare' : 'chart-opened'} />
+    </section>
+  );
+}
+
+function elapsed(s: number): string {
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = Math.floor(s % 60);
+  return h ? `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}` : `${m}:${String(sec).padStart(2, '0')}`;
+}
+
+export const periodLabel = (id: Parameters<typeof periodOf>[0]) => periodOf(id).label;

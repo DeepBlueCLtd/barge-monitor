@@ -4,10 +4,10 @@
 // With `?hand-made` it opens on the adoption opening (SRD §9.8): only the title
 // in the top bar, and nothing started until the viewer adopts (FR-122, FR-125).
 import { useEffect, useState } from 'react';
-import { restartClient } from '../client/session';
-import { STARTUP_BUDGET_MS } from '../config';
+import { clientSession } from '../client/session';
+import { RATES, STARTUP_BUDGET_MS } from '../config';
 import { DetailPanel } from '../detail/DetailPanel';
-import { simClock } from './clock';
+import { drawClock } from './drawclock';
 import { ControlPanel } from './ControlPanel';
 import { DemoBanner, DemoMenu } from './Demos';
 import { Flowchart } from './Flowchart';
@@ -15,7 +15,6 @@ import { opening } from './opening';
 import { runtime } from './runtime';
 import { selectComponent, unrevealAll } from './selection';
 import { sketchEnabled } from './sketch';
-import { SPEED_LABELS } from './StatusBox';
 import { useStore } from './store';
 
 const TITLE = 'Canal barge weather demonstrator';
@@ -58,8 +57,8 @@ function Loading({ pct, detail, failure }: { pct: number; detail: string; failur
           <progress max={100} value={pct} aria-label="Loading" />
           <p data-testid="progress">{detail}</p>
           <p className="hint">Everything runs in this tab. The {runtime.kind === 'python' ? 'Python back end (Pyodide)' : 'JavaScript stand-in'} is
-            loading the logger store's pre-calculated history, in the store's own format. The flowchart opens when it has finished
-            (budget {STARTUP_BUDGET_MS / 1000} s).</p>
+            starting the data server and importing Mission A from the data folder, silently, as it does at every load. The flowchart opens
+            when it has finished (budget {STARTUP_BUDGET_MS / 1000} s).</p>
         </>
       )}
     </main>
@@ -75,7 +74,7 @@ function Shell({ failure }: { failure: string | null }) {
       <header className="topbar">
         <div className="brand">
           <h1>{TITLE}</h1>
-          {running ? <p className="subtitle">Architecture view · click a component or a message to see it on the right</p>
+          {running ? <p className="subtitle">Architecture view · click a component or a message to see it on the right · <span data-testid="godseye-note">a god's-eye view: every message in this synthetic system is drawn, whoever is logged in; the display client shows only what its user may see</span></p>
             : <p className="subtitle placeholder" aria-hidden="true">&nbsp;</p>}
           {running && runtime.kind === 'standin' && <p className="standin-notice" data-testid="standin-notice">{STANDIN_NOTICE}</p>}
           {/* Before hand-over the lines below the title are empty, not absent: the top bar keeps its height,
@@ -112,30 +111,36 @@ function HandOverProgress({ failure }: { failure: string | null }) {
 }
 
 function TopControls() {
-  const clock = useStore(simClock.state);
-  const control = useStore(runtime.control);
+  const replay = useStore(clientSession.replay);
+  const phase = useStore(clientSession.phase);
+  const control = useStore(runtime.controlState);
+  const frozen = useStore(drawClock.frozen);
   const [drawer, setDrawer] = useState(false);
-  const playing = clock?.playing ?? false;
-  const rate = clock?.rate ?? 0.5;
+  const playing = replay?.playing ?? false;
+  const rate = replay?.rate ?? null;
+  // §9.1: a mirror of the display client's replay bar, acting through the display client (C4).
+  const ready = phase === 'ready' && !!replay?.dataset;
   return (
     <>
         <nav className="controls" aria-label="Controls">
-          {/* FR-77: one play/pause button starts and stops the simulation clock. */}
-          <button className={`btn play${playing ? '' : ' primary'}`} onClick={() => runtime.send(playing ? 'pause' : 'play')} data-testid="play">
+          <button className={`btn play${playing ? '' : ' primary'}`} disabled={!ready} onClick={() => (playing ? clientSession.pause() : clientSession.play())} data-testid="play"
+            title={ready ? 'Sent by the display client, as a command to the replay controller' : 'Log in to the display client first'}>
             {playing ? '❚❚ Pause' : '▶ Play'}
           </button>
-          <div className="segmented" role="group" aria-label="Speed" data-testid="speed">
-            {simClock.rates.map((r) => (
-              <button key={r} className={`btn${r === rate ? ' on' : ''}`} aria-pressed={r === rate} onClick={() => runtime.send('rate', r)}>{SPEED_LABELS[r] ?? `${r}×`}</button>
+          <div className="segmented" role="group" aria-label="Replay rate" data-testid="speed">
+            {RATES.map((r) => (
+              <button key={r} className={`btn${r === rate ? ' on' : ''}`} aria-pressed={r === rate} disabled={!ready} onClick={() => clientSession.setRate(r)} data-testid={`speed-${r}`}>{r}×</button>
             ))}
           </div>
-          {/* FR-46, FR-75: discard all client state, handshake again, un-reveal. */}
+          {/* FR-92: Freeze holds the whole demonstrator still for inspection. */}
+          <button className={`btn${frozen ? ' attention' : ''}`} aria-pressed={frozen} onClick={() => void runtime.freeze(!frozen)} data-testid="freeze">{frozen ? 'Unfreeze' : 'Freeze'}</button>
+          {/* FR-46, FR-75: discard all client state, credentials included; un-reveal. */}
           <button className="btn" data-testid="restart-client" onClick={() => {
-            restartClient();
+            clientSession.restart();
             unrevealAll();
             selectComponent(null);
           }}>Restart client</button>
-          <button className={`btn${control?.pending ? ' attention' : ''}`} data-testid="restart-server" onClick={() => runtime.send('restart-server')}
+          <button className={`btn${control?.pending ? ' attention' : ''}`} data-testid="restart-server" onClick={() => void runtime.control('restart-server')}
             title={control?.pending ? 'Field changes are pending until the next server start' : undefined}>Restart server</button>
           <DemoMenu />
           <button className="btn" onClick={() => setDrawer(!drawer)} aria-expanded={drawer} data-testid="control-panel-toggle">Control panel</button>
