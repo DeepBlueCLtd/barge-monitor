@@ -1,6 +1,9 @@
 // The detail panel (§9.4, FR-69..FR-73): the selected component, or an empty
-// state inviting a click. Crisp, not sketched (VS-18).
+// state inviting a click. Crisp, not sketched (VS-18). With `?hand-made` it opens on
+// the opening panel (FR-123) and keeps it after hand-over until the viewer clicks a
+// component or closes it (FR-125).
 import { COMPONENTS, ComponentId } from '../shell/components';
+import { opening } from '../shell/opening';
 import { ZONES } from '../shell/palette';
 import { useRevealed } from '../shell/reveal';
 import { selectComponent, selectedComponent, selectedMessage } from '../shell/selection';
@@ -9,12 +12,21 @@ import { ClientDetail } from './ClientDetail';
 import { ComponentDetail } from './ComponentDetail';
 import { MessageStrip } from './MessageStrip';
 import { ModelsDetail } from './ModelsDetail';
+import { OpeningPanel } from './OpeningPanel';
 import { Overview } from './Overview';
 import { ServerDetail } from './ServerDetail';
 
 export function DetailPanel() {
   const id = useStore(selectedComponent);
   const msg = useStore(selectedMessage);
+  const openingPanel = useStore(opening.panel);
+  if (openingPanel && !id) {
+    return (
+      <section className="detail" aria-label="Detail panel" data-testid="detail-panel" data-showing="opening">
+        <OpeningPanel />
+      </section>
+    );
+  }
   return (
     <section className="detail" aria-label="Detail panel" data-testid="detail-panel" data-showing={id ?? 'none'}>
       {id ? <Panel id={id} /> : (

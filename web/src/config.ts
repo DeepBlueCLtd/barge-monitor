@@ -20,6 +20,8 @@ export const HANDSHAKE_HOP_S = 0.3;
 /** Speeds offered (FR-78): ½× is the default; there is no faster mode than 1×. */
 export const RATES = [0.25, 0.5, 1];
 export const DEFAULT_RATE = 0.5;
+/** FR-124: how long the adoption opening's merge takes (about 1.5 s; immediate with reduced motion). */
+export const OPENING_MERGE_MS = 1500;
 
 export function resolve(rel: string): string {
   return new URL(rel, document.baseURI).toString();

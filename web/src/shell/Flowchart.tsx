@@ -2,30 +2,44 @@
 // component cards and zone bands from the committed layout file; the arrows,
 // the travelling messages, the status box and the message key are drawn in its
 // viewport. The view is fixed: no panning or zooming, only scaling to the column.
+//
+// With `?hand-made` it first shows the adoption opening (SRD §9.8) from a second
+// fixed layout: the data server as eight subsystem cards, drawn by the same card as
+// every component (VS-25), joined by plain lines (FR-120a). Adopt moves the eight
+// into the Data server card (FR-124) and hands over to the normal layout (FR-125).
 import { Node, NodeProps, ReactFlow, useReactFlow, ViewportPortal } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { OPENING_MERGE_MS } from '../config';
 import { simClock } from './clock';
-import { COMPONENT_IDS, COMPONENTS, ComponentId } from './components';
+import { COMPONENT_IDS, COMPONENTS, ComponentId, isComponentId } from './components';
 import { Diamond } from './Diamond';
-import { allLanes, arrowhead, cardRect, laneFor, LAYOUT_SIZE, Pt, pointAt } from './geometry';
+import {
+  allLanes, arrowhead, cardRect, laneFor, LAYOUT_SIZE, OPENING_CARD_IDS, OPENING_ZONE_RECTS, openingRect, Pt, pointAt, Rect, ZONE_RECTS, ZoneRect,
+} from './geometry';
+import { Glyph } from './Glyph';
 import layout from './layout.json';
-import { bus, isHandshakeMessage, isUserMessage, LETTERS, Message } from './messages';
+import { bus, isHandshakeMessage, isUserMessage, Message } from './messages';
+import { isSubsystem, opening, OPENING_FLOWS, subsystem, SUBSYSTEM_IDS } from './opening';
 import { GOLD, INK, ZoneId, ZONES } from './palette';
 import { runtime } from './runtime';
 import { useRevealed } from './reveal';
 import { selectComponent, selectedComponent, selectedMessage } from './selection';
 import { sketchLine, sketchRect } from './sketch';
-import { Glyph } from './Glyph';
 import { MessageKey, StatusBox } from './StatusBox';
 import { useStore } from './store';
 
 interface CardData {
-  id: ComponentId;
+  id: string;
+  name: string;
+  role: string;
+  w: number;
+  h: number;
   gold: boolean;
   selected: boolean;
   standin: boolean;
-  role: string;
+  /** During the adoption merge: the eight leave, the Data server arrives (FR-124). */
+  merge?: 'out' | 'in';
   [k: string]: unknown;
 }
 interface ZoneData {
@@ -47,16 +61,19 @@ export const Outline = memo(function Outline({ id, w, h, stroke, width = 1.7, da
   );
 });
 
-/** A component card (VS-12): its name and a one-line role, text only. Gold once revealed (FR-75). */
+/**
+ * A card (VS-12): its name and a one-line role, text only. Gold once revealed (FR-75).
+ * The subsystem cards of the adoption opening are drawn by this same card, so they are the
+ * equals of every component card (FR-120, VS-25).
+ */
 const Card = memo(function Card({ data }: NodeProps<Node<CardData>>) {
-  const c = COMPONENTS[data.id];
-  const [, , w, h] = cardRect(data.id);
+  const { w, h } = data;
   return (
-    <div className={`card${data.gold ? ' gold' : ''}${data.selected ? ' selected' : ''}`} style={{ width: w, height: h }}
-      data-testid={`card-${data.id}`} data-revealed={data.gold ? 'true' : 'false'} role="button" aria-pressed={data.selected} aria-label={c.name}>
-      {/* The outline is seeded by the component's name: identical whether gold or not (AT-21). */}
+    <div className={`card${data.gold ? ' gold' : ''}${data.selected ? ' selected' : ''}${data.merge ? ` merge-${data.merge}` : ''}`} style={{ width: w, height: h }}
+      data-testid={`card-${data.id}`} data-revealed={data.gold ? 'true' : 'false'} role="button" aria-pressed={data.selected} aria-label={data.name}>
+      {/* Seeded by the card's id: identical whether gold or not (AT-21); in the merge it moves and is not redrawn (VS-25). */}
       <Outline id={`card:${data.id}`} w={w} h={h} stroke={data.gold ? GOLD.outline : INK} width={data.gold ? 2 : 1.7} />
-      <div className="card-name">{data.gold ? '★ ' : ''}{c.name}</div>
+      <div className="card-name">{data.gold ? '★ ' : ''}{data.name}</div>
       <div className="card-role" data-testid={`role-${data.id}`}>{data.gold ? 'our value-add · ' : ''}{data.role}</div>
       {data.standin && <span className="standin-tag" data-testid="standin-tag">stand-in</span>}
       {data.gold && <Diamond className="card-diamond" size={26} />}
@@ -77,14 +94,6 @@ const Zone = memo(function Zone({ data }: NodeProps<Node<ZoneData>>) {
 
 const NODE_TYPES = { card: Card, zone: Zone };
 
-/** One-line live roles: the collection platform shows simulated time (mockups). */
-function useRoles(): Record<ComponentId, string> {
-  useStore(simClock.state);
-  const roles = Object.fromEntries(COMPONENT_IDS.map((id) => [id, COMPONENTS[id].role])) as Record<ComponentId, string>;
-  roles.platform = simClock.state.value ? `sim time ${simClock.hms()}` : 'sim time';
-  return roles;
-}
-
 function FixedView({ box }: { box: { w: number; h: number } }) {
   const rf = useReactFlow();
   useEffect(() => {
@@ -95,10 +104,59 @@ function FixedView({ box }: { box: { w: number; h: number } }) {
   return null;
 }
 
+type Mode = 'opening' | 'merging' | 'normal';
+
+const zoneNode = (z: ZoneRect): Node => ({
+  id: `zone-${z.id}`, type: 'zone', position: { x: z.rect[0], y: z.rect[1] }, width: z.rect[2], height: z.rect[3],
+  data: { zone: z.id as ZoneId, w: z.rect[2], h: z.rect[3], labelAt: z.labelAt }, selectable: false, draggable: false, connectable: false, focusable: false, zIndex: -1,
+});
+
+function infoOf(id: string): { name: string; role: string } {
+  return isSubsystem(id) ? subsystem(id) : COMPONENTS[id as ComponentId] ?? { name: id, role: '' };
+}
+
+const cardNode = (id: string, r: Rect, data: Pick<CardData, 'gold' | 'selected' | 'standin' | 'merge'>): Node => ({
+  id, type: 'card', position: { x: r[0], y: r[1] }, width: r[2], height: r[3], draggable: false, connectable: false, selectable: false,
+  data: { ...data, id, ...infoOf(id), w: r[2], h: r[3] },
+});
+
+/** The nodes of each mode: the opening layout; the merge (the normal layout, with the eight converging on the Data server); the normal layout. */
+function layoutNodes(mode: Mode, sel: string | null, rev: ReadonlySet<ComponentId>, standin: boolean, highlighted: string | null): Node[] {
+  if (mode === 'opening') {
+    // FR-121, FR-122: nothing gold, no stand-in tags, no data server.
+    return [
+      ...OPENING_ZONE_RECTS.map(zoneNode),
+      ...OPENING_CARD_IDS.map((id) => cardNode(id, openingRect(id)!, { gold: false, selected: highlighted === id, standin: false })),
+    ];
+  }
+  const normal = mode === 'normal';
+  const nodes = [
+    ...ZONE_RECTS.map(zoneNode),
+    ...COMPONENT_IDS.map((id) => cardNode(id, cardRect(id), {
+      gold: normal && rev.has(id),
+      selected: normal && sel === id,
+      // FR-06h: in stand-in mode every component behind the seam runs in the stand-in worker.
+      standin: normal && ((standin && id !== 'client') || id === 'server'),
+      merge: !normal && id === 'server' ? 'in' : undefined,
+    })),
+  ];
+  if (!normal) {
+    // FR-124: the eight move to the Data server card's place and merge into it.
+    const [sx, sy, sw, sh] = cardRect('server');
+    for (const id of SUBSYSTEM_IDS) {
+      const [, , w, h] = openingRect(id)!;
+      nodes.push(cardNode(id, [sx + (sw - w) / 2, sy + (sh - h) / 2, w, h], { gold: false, selected: false, standin: false, merge: 'out' }));
+    }
+  }
+  return nodes;
+}
+
 export function Flowchart() {
   const sel = useStore(selectedComponent);
   const rev = useRevealed();
-  const roles = useRoles();
+  const phase = useStore(opening.phase);
+  const highlighted = useStore(opening.highlighted);
+  const mode: Mode = phase === 'build' ? 'opening' : phase === 'merging' ? 'merging' : 'normal';
   const ref = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState({ w: LAYOUT_SIZE[0], h: LAYOUT_SIZE[1] });
   useEffect(() => {
@@ -110,44 +168,63 @@ export function Flowchart() {
   }, []);
   const standin = runtime.kind === 'standin';
 
-  const nodes: Node[] = useMemo(() => [
-    ...layout.zones.map((z) => ({
-      id: `zone-${z.id}`, type: 'zone', position: { x: z.rect[0], y: z.rect[1] }, width: z.rect[2], height: z.rect[3],
-      data: { zone: z.id as ZoneId, w: z.rect[2], h: z.rect[3], labelAt: z.labelAt }, selectable: false, draggable: false, connectable: false, focusable: false, zIndex: -1,
-    })),
-    ...COMPONENT_IDS.map((id) => {
-      const [x, y, w, h] = cardRect(id);
-      return {
-        id, type: 'card', position: { x, y }, width: w, height: h, draggable: false, connectable: false, selectable: false,
-        // FR-06h: in stand-in mode every component behind the seam runs in the stand-in worker.
-        data: { id, gold: rev.has(id), selected: sel === id, standin: (standin && id !== 'client') || id === 'server', role: roles[id] },
-      };
-    }),
-  ], [rev, sel, standin, roles]);
+  const nodes: Node[] = useMemo(() => layoutNodes(mode, sel, rev, standin, highlighted), [mode, rev, sel, standin, highlighted]);
+
+  const onCardClick = (id: string) => {
+    if (opening.active) {
+      // FR-123: a subsystem card highlights its row; any other card does nothing, and nothing is revealed (FR-121).
+      if (opening.phase.value === 'build' && isSubsystem(id)) opening.highlighted.set(id);
+      return;
+    }
+    if (isComponentId(id)) selectComponent(id);
+  };
 
   return (
-    <div className="flowchart" data-testid="flowchart" ref={ref}>
+    <div className={`flowchart mode-${mode}`} data-testid="flowchart" data-mode={mode} ref={ref} style={{ ['--merge-ms' as string]: `${OPENING_MERGE_MS}ms` }}>
       <ReactFlow nodes={nodes} edges={[]} nodeTypes={NODE_TYPES} defaultViewport={{ x: 0, y: 0, zoom: 1 }} minZoom={0.4} maxZoom={1.6}
         panOnDrag={false} zoomOnScroll={false} zoomOnPinch={false} zoomOnDoubleClick={false} panOnScroll={false} preventScrolling={false}
         nodesConnectable={false} nodesDraggable={false} elementsSelectable={false} nodesFocusable={false} edgesFocusable={false}
-        onNodeClick={(_, n) => n.type === 'card' && selectComponent(n.id as ComponentId)} proOptions={{ hideAttribution: true }}>
+        onNodeClick={(_, n) => n.type === 'card' && onCardClick(n.id)} proOptions={{ hideAttribution: true }}>
         <FixedView box={box} />
         <ViewportPortal>
-          <Arrows />
-          <Icons />
+          {mode === 'normal' ? <Arrows /> : <OpeningLines fading={mode === 'merging'} />}
+          {mode === 'merging' && <Arrows arriving />}
+          {mode === 'normal' && <Icons />}
           <StatusBox rect={layout.status as [number, number, number, number]} />
-          <MessageKey rect={layout.key as [number, number, number, number]} />
+          {/* No letters in the opening (FR-120a): the key comes with the messages. */}
+          {mode === 'normal' && <MessageKey rect={layout.key as [number, number, number, number]} />}
         </ViewportPortal>
       </ReactFlow>
     </div>
   );
 }
 
+/** FR-120a: the opening's flows as plain lines, without letters; a head at each end of a two-way flow. */
+const OpeningLines = memo(function OpeningLines({ fading }: { fading: boolean }) {
+  return (
+    <svg className={`arrows opening-lines${fading ? ' fading' : ''}`} width={LAYOUT_SIZE[0]} height={LAYOUT_SIZE[1]} aria-hidden="true" data-testid="opening-lines">
+      {OPENING_FLOWS.map((f) => {
+        const id = `${f.a}>${f.b}`;
+        const pts = f.path as Pt[];
+        const sk = sketchLine(`line:${id}`, pts, INK, 1.4);
+        return (
+          <g key={id} data-sketch={sk ? `line:${id}` : undefined} data-line={id}>
+            {sk ? sk.map((p, i) => <path key={i} d={p.d} stroke={p.stroke} strokeWidth={p.strokeWidth} fill="none" />)
+              : <polyline points={pts.map((p) => p.join(',')).join(' ')} stroke={INK} strokeWidth={1.4} fill="none" />}
+            <path d={arrowhead(pts, 8)} fill={INK} />
+            {f.both && <path d={arrowhead(pts, 8, true)} fill={INK} />}
+          </g>
+        );
+      })}
+    </svg>
+  );
+});
+
 /** Ink arrows with filled heads, one per direction (FR-65, VS-13), sketched and seeded (VS-15, VS-16). */
-const Arrows = memo(function Arrows() {
+const Arrows = memo(function Arrows({ arriving = false }: { arriving?: boolean }) {
   const lanes = useMemo(() => allLanes(), []);
   return (
-    <svg className="arrows" width={LAYOUT_SIZE[0]} height={LAYOUT_SIZE[1]} aria-hidden="true">
+    <svg className={`arrows${arriving ? ' arriving' : ''}`} width={LAYOUT_SIZE[0]} height={LAYOUT_SIZE[1]} aria-hidden="true">
       {lanes.map((a) => {
         const sk = sketchLine(`flow:${a.id}`, a.points, INK, 1.6);
         return (
@@ -164,6 +241,7 @@ const Arrows = memo(function Arrows() {
 });
 
 function position(m: Message, now: number): Pt | null {
+  // A message naming an id this flowchart does not draw has no lane, and is not drawn.
   const lane = laneFor(m.src, m.dst);
   if (!lane) return null;
   const f = (now - m.start) / m.dur;
@@ -220,6 +298,7 @@ function SelectedIcon({ now }: { now: number }) {
   if (!picked) return null;
   const { m } = picked;
   const at = picked.follow ? position(m, now) ?? picked.at : picked.at;
+  if (!at) return null;
   return (
     <div className="icon selected" data-letter={m.letter} data-testid="selected-icon" style={{ transform: `translate(${at[0] - 19}px, ${at[1] - 19}px)` }}>
       <Glyph letter={m.letter} failed={m.failed} selected user={isUserMessage(m)} />

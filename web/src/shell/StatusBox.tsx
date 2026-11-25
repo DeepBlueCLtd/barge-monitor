@@ -3,6 +3,7 @@ import { clientSession } from '../client/session';
 import { simClock } from './clock';
 import { Glyph } from './Glyph';
 import { LETTER_ORDER, LETTERS } from './messages';
+import { opening } from './opening';
 import { runtime } from './runtime';
 import { useStore } from './store';
 
@@ -22,6 +23,20 @@ export function historyLabel(days: number | null): string {
 type Box = [number, number, number, number];
 
 export function StatusBox({ rect }: { rect: Box }) {
+  const phase = useStore(opening.phase);
+  // FR-122: in the adoption opening the status shows only "Opening".
+  if (phase === 'build' || phase === 'merging') {
+    return (
+      <section className="status-box panel-box" style={{ left: rect[0], top: rect[1], width: rect[2], height: rect[3] }} aria-label="Status" data-testid="status-box">
+        <h2 className="box-title">Status</h2>
+        <p className="status-opening" data-testid="status-opening">Opening</p>
+      </section>
+    );
+  }
+  return <RunningStatus rect={rect} />;
+}
+
+function RunningStatus({ rect }: { rect: Box }) {
   const clock = useStore(simClock.state);
   const server = useStore(runtime.server);
   const control = useStore(runtime.control);
@@ -43,7 +58,7 @@ export function StatusBox({ rect }: { rect: Box }) {
     ['Back end', runtime.kind === 'python' ? 'Python' : 'JavaScript stand-in', 'backend-state'],
   ];
   return (
-    <section className="status-box panel-box" style={{ left: rect[0], top: rect[1], width: rect[2], height: rect[3] }} aria-label="Status">
+    <section className="status-box panel-box" style={{ left: rect[0], top: rect[1], width: rect[2], height: rect[3] }} aria-label="Status" data-testid="status-box">
       <h2 className="box-title">Status</h2>
       <dl>
         {rows.map(([k, v, id]) => (

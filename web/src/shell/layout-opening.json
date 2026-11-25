@@ -1,0 +1,490 @@
+{
+ "comment": "The adoption opening (SRD 9.8, docs/v4-interfaces.md 12): the back-end band in two rows of six, every card the same size on one grid (FR-120, VS-25): the importer, replay controller, Models and access gateway, written by us either way, beside the eight subsystems; the third-party zone holds the scientific libraries only; the zones below move down by one card row. Lines are the flows of FR-120a, plain, without letters; \"both\" draws a head at each end. Segments never cross a card.",
+ "size": [
+  840,
+  968
+ ],
+ "zones": [
+  {
+   "id": "front",
+   "rect": [
+    0,
+    0,
+    840,
+    126
+   ],
+   "labelAt": "left"
+  },
+  {
+   "id": "third",
+   "rect": [
+    0,
+    172,
+    840,
+    130
+   ],
+   "labelAt": "left"
+  },
+  {
+   "id": "back",
+   "rect": [
+    0,
+    348,
+    840,
+    320
+   ],
+   "labelAt": "bottom-left"
+  },
+  {
+   "id": "legacy",
+   "rect": [
+    322,
+    844,
+    278,
+    118
+   ],
+   "labelAt": "right"
+  }
+ ],
+ "cards": {
+  "client": [
+   352,
+   34,
+   440,
+   78
+  ],
+  "scilibs": [
+   28,
+   206,
+   220,
+   78
+  ],
+  "folder": [
+   352,
+   874,
+   240,
+   74
+  ],
+  "importer": [
+   26,
+   384,
+   108,
+   96
+  ],
+  "replay": [
+   162,
+   384,
+   108,
+   96
+  ],
+  "models": [
+   298,
+   384,
+   108,
+   96
+  ],
+  "gateway": [
+   434,
+   384,
+   108,
+   96
+  ],
+  "sub-webapi": [
+   570,
+   384,
+   108,
+   96
+  ],
+  "sub-registry": [
+   706,
+   384,
+   108,
+   96
+  ],
+  "sub-obsstore": [
+   26,
+   528,
+   108,
+   96
+  ],
+  "sub-query": [
+   162,
+   528,
+   108,
+   96
+  ],
+  "sub-commands": [
+   298,
+   528,
+   108,
+   96
+  ],
+  "sub-accounts": [
+   434,
+   528,
+   108,
+   96
+  ],
+  "sub-permissions": [
+   570,
+   528,
+   108,
+   96
+  ],
+  "sub-admin": [
+   706,
+   528,
+   108,
+   96
+  ]
+ },
+ "lines": [
+  {
+   "a": "client",
+   "b": "gateway",
+   "both": true,
+   "path": [
+    [
+     500,
+     112
+    ],
+    [
+     500,
+     384
+    ]
+   ]
+  },
+  {
+   "a": "models",
+   "b": "gateway",
+   "both": true,
+   "path": [
+    [
+     406,
+     432
+    ],
+    [
+     434,
+     432
+    ]
+   ]
+  },
+  {
+   "a": "gateway",
+   "b": "sub-webapi",
+   "both": true,
+   "path": [
+    [
+     542,
+     432
+    ],
+    [
+     570,
+     432
+    ]
+   ]
+  },
+  {
+   "a": "replay",
+   "b": "sub-webapi",
+   "both": true,
+   "path": [
+    [
+     234,
+     384
+    ],
+    [
+     234,
+     350
+    ],
+    [
+     610,
+     350
+    ],
+    [
+     610,
+     384
+    ]
+   ]
+  },
+  {
+   "a": "sub-commands",
+   "b": "models",
+   "path": [
+    [
+     360,
+     528
+    ],
+    [
+     360,
+     480
+    ]
+   ]
+  },
+  {
+   "a": "sub-commands",
+   "b": "replay",
+   "path": [
+    [
+     320,
+     528
+    ],
+    [
+     320,
+     504
+    ],
+    [
+     230,
+     504
+    ],
+    [
+     230,
+     480
+    ]
+   ]
+  },
+  {
+   "a": "sub-commands",
+   "b": "importer",
+   "path": [
+    [
+     306,
+     528
+    ],
+    [
+     306,
+     514
+    ],
+    [
+     100,
+     514
+    ],
+    [
+     100,
+     480
+    ]
+   ]
+  },
+  {
+   "a": "importer",
+   "b": "sub-obsstore",
+   "path": [
+    [
+     60,
+     480
+    ],
+    [
+     60,
+     528
+    ]
+   ]
+  },
+  {
+   "a": "importer",
+   "b": "sub-registry",
+   "path": [
+    [
+     56,
+     384
+    ],
+    [
+     56,
+     316
+    ],
+    [
+     760,
+     316
+    ],
+    [
+     760,
+     384
+    ]
+   ]
+  },
+  {
+   "a": "sub-webapi",
+   "b": "sub-query",
+   "path": [
+    [
+     590,
+     480
+    ],
+    [
+     590,
+     488
+    ],
+    [
+     216,
+     488
+    ],
+    [
+     216,
+     528
+    ]
+   ]
+  },
+  {
+   "a": "sub-webapi",
+   "b": "sub-registry",
+   "path": [
+    [
+     678,
+     432
+    ],
+    [
+     706,
+     432
+    ]
+   ]
+  },
+  {
+   "a": "sub-webapi",
+   "b": "sub-commands",
+   "path": [
+    [
+     602,
+     480
+    ],
+    [
+     602,
+     496
+    ],
+    [
+     382,
+     496
+    ],
+    [
+     382,
+     528
+    ]
+   ]
+  },
+  {
+   "a": "sub-webapi",
+   "b": "sub-permissions",
+   "path": [
+    [
+     624,
+     480
+    ],
+    [
+     624,
+     528
+    ]
+   ]
+  },
+  {
+   "a": "sub-query",
+   "b": "sub-obsstore",
+   "path": [
+    [
+     162,
+     576
+    ],
+    [
+     134,
+     576
+    ]
+   ]
+  },
+  {
+   "a": "sub-accounts",
+   "b": "sub-permissions",
+   "both": true,
+   "path": [
+    [
+     542,
+     576
+    ],
+    [
+     570,
+     576
+    ]
+   ]
+  },
+  {
+   "a": "sub-admin",
+   "b": "sub-webapi",
+   "path": [
+    [
+     730,
+     528
+    ],
+    [
+     730,
+     508
+    ],
+    [
+     660,
+     508
+    ],
+    [
+     660,
+     480
+    ]
+   ]
+  },
+  {
+   "a": "models",
+   "b": "scilibs",
+   "both": true,
+   "path": [
+    [
+     318,
+     384
+    ],
+    [
+     318,
+     366
+    ],
+    [
+     200,
+     366
+    ],
+    [
+     200,
+     284
+    ]
+   ]
+  },
+  {
+   "a": "importer",
+   "b": "folder",
+   "both": true,
+   "path": [
+    [
+     26,
+     432
+    ],
+    [
+     12,
+     432
+    ],
+    [
+     12,
+     636
+    ],
+    [
+     400,
+     636
+    ],
+    [
+     400,
+     874
+    ]
+   ]
+  }
+ ],
+ "status": [
+  0,
+  670,
+  306,
+  298
+ ],
+ "key": [
+  616,
+  670,
+  224,
+  298
+ ]
+}
