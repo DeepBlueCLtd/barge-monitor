@@ -1,0 +1,539 @@
+{
+ "server": "http://localhost:8181/sensorhub",
+ "ids": {
+  "platform": "040g",
+  "bow": "0410",
+  "bow-co2": "041g",
+  "ds-weather": "040g",
+  "ds-bow-co2": "0410",
+  "analysis": "0420",
+  "analysis-co2": "042g",
+  "ds-clusters-co2": "041g",
+  "cs-analysis": "040g",
+  "ws-friend": "0430",
+  "ds-ws-friend": "0420",
+  "ws-emi": "043g",
+  "ds-ws-emi": "042g",
+  "sub-friend-under-platform": "0440",
+  "ws-friend2": "044g",
+  "ds-ws-friend2": "0430"
+ },
+ "phase 1: no deny entries": [
+  {
+   "question": 6,
+   "check": "GET /api without credentials",
+   "expected": "401, nothing served",
+   "observed": {
+    "status": 401,
+    "www-authenticate": "basic realm=\"OpenSensorHub: Authentication Required\"",
+    "content-type": "text/html;charset=iso-8859-1",
+    "set-cookie": null,
+    "body": "401 text/html;charset=iso-8859-1: Error 401 Unauthorized (Unauthorized)"
+   },
+   "as_needed": true
+  },
+  {
+   "question": 6,
+   "check": "GET /api/systems without credentials",
+   "expected": "401, nothing served",
+   "observed": {
+    "status": 401,
+    "www-authenticate": "basic realm=\"OpenSensorHub: Authentication Required\"",
+    "content-type": "text/html;charset=iso-8859-1",
+    "set-cookie": null,
+    "body": "401 text/html;charset=iso-8859-1: Error 401 Unauthorized (Unauthorized)"
+   },
+   "as_needed": true
+  },
+  {
+   "question": 6,
+   "check": "GET /api/systems/040g without credentials",
+   "expected": "401, nothing served",
+   "observed": {
+    "status": 401,
+    "www-authenticate": "basic realm=\"OpenSensorHub: Authentication Required\"",
+    "content-type": "text/html;charset=iso-8859-1",
+    "set-cookie": null,
+    "body": "401 text/html;charset=iso-8859-1: Error 401 Unauthorized (Unauthorized)"
+   },
+   "as_needed": true
+  },
+  {
+   "question": 6,
+   "check": "GET /api-weather/systems without credentials",
+   "expected": "401, nothing served",
+   "observed": {
+    "status": 401,
+    "www-authenticate": "basic realm=\"OpenSensorHub: Authentication Required\"",
+    "content-type": "text/html;charset=iso-8859-1",
+    "set-cookie": null,
+    "body": "401 text/html;charset=iso-8859-1: Error 401 Unauthorized (Unauthorized)"
+   },
+   "as_needed": true
+  },
+  {
+   "question": 6,
+   "check": "GET /admin/ without credentials",
+   "expected": "401, nothing served",
+   "observed": {
+    "status": 401,
+    "www-authenticate": "basic realm=\"OpenSensorHub: Authentication Required\"",
+    "content-type": "text/html;charset=iso-8859-1",
+    "set-cookie": null,
+    "body": "401 text/html;charset=iso-8859-1: Error 401 Unauthorized (Unauthorized)"
+   },
+   "as_needed": true
+  },
+  {
+   "question": 6,
+   "check": "wrong password",
+   "expected": "401",
+   "observed": 401,
+   "as_needed": true
+  },
+  {
+   "question": 6,
+   "check": "OPTIONS (CORS preflight) without credentials",
+   "expected": "n/a",
+   "observed": "200 allow-origin=http://example.org",
+   "as_needed": true
+  },
+  {
+   "question": 7,
+   "check": "is there a session? Set-Cookie on an authenticated request",
+   "expected": "n/a",
+   "observed": null,
+   "as_needed": true
+  },
+  {
+   "question": 7,
+   "check": "the next request on the same connection without Authorization",
+   "expected": "n/a (a session would answer 200)",
+   "observed": "401; cookies held: {}",
+   "as_needed": true
+  },
+  {
+   "question": 0,
+   "check": "owner creates the platform, analysers, model, datastreams and a control stream",
+   "expected": "all 201",
+   "observed": {
+    "ids": {
+     "platform": "040g",
+     "bow": "0410",
+     "bow-co2": "041g",
+     "ds-weather": "040g",
+     "ds-bow-co2": "0410",
+     "analysis": "0420",
+     "analysis-co2": "042g",
+     "ds-clusters-co2": "041g",
+     "cs-analysis": "040g"
+    },
+    "control stream": "201 application/json: "
+   },
+   "as_needed": true
+  },
+  {
+   "question": 0,
+   "check": "owner publishes one observation to each datastream",
+   "expected": "201",
+   "observed": [
+    201,
+    201,
+    201
+   ],
+   "as_needed": true
+  },
+  {
+   "question": 1,
+   "check": "no deny entries yet (baseline): is CO2 hidden from friend?",
+   "expected": "absent from every listing, 404 by id",
+   "observed": {
+    "/systems": [
+     "040g",
+     "0420"
+    ],
+    "/systems/{bow}/subsystems": [
+     "041g"
+    ],
+    "/systems/{analysis}/subsystems": [
+     "042g"
+    ],
+    "/datastreams": [
+     "040g",
+     "0410",
+     "041g"
+    ],
+    "/systems?recursive=true": [
+     "040g",
+     "0420"
+    ],
+    "GET /systems/{bow-co2}": "200 auto: { \"type\": \"Feature\", \"id\": \"041g\", \"geom",
+    "GET /systems/{analysis-co2}": "200 auto: { \"type\": \"Feature\", \"id\": \"042g\", \"geom",
+    "GET /datastreams/{ds-bow-co2}": "200 auto: { \"id\": \"0410\", \"name\": \"co2\", \"system@i",
+    "GET /datastreams/{ds-bow-co2}/schema": "200 auto: { \"obsFormat\": \"application/om+json\", \"r",
+    "GET /datastreams/{ds-bow-co2}/observations": "200 application/json: { \"items\": [ { \"id\": \"041c1b7mj43g000000\", \"datastream@id\": ",
+    "GET /datastreams/{ds-clusters-co2}": "200 auto: { \"id\": \"041g\", \"name\": \"clusters co2\", ",
+    "GET /datastreams/{ds-clusters-co2}/schema": "200 auto: { \"obsFormat\": \"application/om+json\", \"r",
+    "GET /datastreams/{ds-clusters-co2}/observations": "200 application/json: { \"items\": [ { \"id\": \"041s1b7mj43g000000\", \"datastream@id\": ",
+    "GET /systems/{bow-co2}/datastreams": "200 application/json: { \"items\": [ { \"id\": \"0410\", \"name\": \"co2\", \"system@id\": \"04",
+    "GET /systems/{weather ds's bow}": "200 auto: { \"type\": \"Feature\", \"id\": \"0410\", \"geom",
+    "restricted ids still listed": [
+     "0410",
+     "041g",
+     "042g"
+    ]
+   },
+   "as_needed": false
+  },
+  {
+   "question": 1,
+   "check": "friend2 (role names only /api-weather) asks /api",
+   "expected": "403",
+   "observed": "403 text/html;charset=iso-8859-1: Error 403 Permission denied (Permission ",
+   "as_needed": true
+  },
+  {
+   "question": 1,
+   "check": "second endpoint whose view excludes urn:barge:restricted:*: is CO2 hidden from friend2?",
+   "expected": "absent from every listing, 404 by id",
+   "observed": {
+    "/systems": [
+     "040g",
+     "0420"
+    ],
+    "/systems/{bow}/subsystems": [],
+    "/systems/{analysis}/subsystems": [],
+    "/datastreams": [
+     "040g",
+     "0410",
+     "041g"
+    ],
+    "/systems?recursive=true": [
+     "040g",
+     "0420"
+    ],
+    "GET /systems/{bow-co2}": "404 text/html;charset=iso-8859-1: Error 404 Resource not found (Resource n",
+    "GET /systems/{analysis-co2}": "404 text/html;charset=iso-8859-1: Error 404 Resource not found (Resource n",
+    "GET /datastreams/{ds-bow-co2}": "200 auto: { \"id\": \"0410\", \"name\": \"co2\", \"system@i",
+    "GET /datastreams/{ds-bow-co2}/schema": "200 auto: { \"obsFormat\": \"application/om+json\", \"r",
+    "GET /datastreams/{ds-bow-co2}/observations": "200 application/json: { \"items\": [ { \"id\": \"041c1b7mj43g000000\", \"datastream@id\": ",
+    "GET /datastreams/{ds-clusters-co2}": "200 auto: { \"id\": \"041g\", \"name\": \"clusters co2\", ",
+    "GET /datastreams/{ds-clusters-co2}/schema": "200 auto: { \"obsFormat\": \"application/om+json\", \"r",
+    "GET /datastreams/{ds-clusters-co2}/observations": "200 application/json: { \"items\": [ { \"id\": \"041s1b7mj43g000000\", \"datastream@id\": ",
+    "GET /systems/{bow-co2}/datastreams": "200 application/json: { \"items\": [ { \"id\": \"0410\", \"name\": \"co2\", \"system@id\": \"04",
+    "GET /systems/{weather ds's bow}": "200 auto: { \"type\": \"Feature\", \"id\": \"0410\", \"geom",
+    "restricted ids still listed": [
+     "0410",
+     "041g"
+    ]
+   },
+   "as_needed": false
+  },
+  {
+   "question": 1,
+   "check": "second endpoint: friend2 subscribes by WebSocket to the bow CO2 datastream's observations",
+   "expected": "refused or 404",
+   "observed": {
+    "handshake": 101,
+    "received": []
+   },
+   "as_needed": true
+  },
+  {
+   "question": 1,
+   "check": "friend2 sees the open control stream through /api-weather",
+   "expected": "200",
+   "observed": "200 auto: { \"id\": \"040g\", \"name\": \"analysis settin",
+   "as_needed": true
+  },
+  {
+   "question": 6,
+   "check": "friend creates a datastream under the platform (not theirs)",
+   "expected": "403",
+   "observed": "403 text/html;charset=iso-8859-1: Error 403 Permission denied (Permission denied)",
+   "as_needed": true
+  },
+  {
+   "question": 6,
+   "check": "friend creates their workspace system",
+   "expected": "201",
+   "observed": "201 application/sml+json: ",
+   "as_needed": true
+  },
+  {
+   "question": 7,
+   "check": "friend, on the very next request, creates a datastream under their new workspace (owner permission granted at run time)",
+   "expected": "201",
+   "observed": "201 application/json: ",
+   "as_needed": true
+  },
+  {
+   "question": 6,
+   "check": "friend appends to their own workspace",
+   "expected": "201",
+   "observed": "201 application/swe+json: ",
+   "as_needed": true
+  },
+  {
+   "question": 6,
+   "check": "emi creates their workspace system",
+   "expected": "201",
+   "observed": "201 application/sml+json: ",
+   "as_needed": true
+  },
+  {
+   "question": 7,
+   "check": "emi, on the very next request, creates a datastream under their new workspace (owner permission granted at run time)",
+   "expected": "201",
+   "observed": "201 application/json: ",
+   "as_needed": true
+  },
+  {
+   "question": 6,
+   "check": "emi appends to their own workspace",
+   "expected": "201",
+   "observed": "201 application/swe+json: ",
+   "as_needed": true
+  },
+  {
+   "question": 6,
+   "check": "friend reads emi's workspace system",
+   "expected": "404 (no account may read another's workspace)",
+   "observed": "200 auto: { \"type\": \"Feature\", \"id\": \"043g\", \"geometry\": null, \"proper",
+   "as_needed": false
+  },
+  {
+   "question": 6,
+   "check": "friend reads emi's workspace observations",
+   "expected": "404",
+   "observed": "200 application/json: { \"items\": [ { \"id\": \"042s1b7mj43g000000\", \"datastream@id\": \"042g\", \"phenomenonT",
+   "as_needed": false
+  },
+  {
+   "question": 6,
+   "check": "friend appends to emi's workspace",
+   "expected": "403 or 404",
+   "observed": "403 text/html;charset=iso-8859-1: Error 403 Permission denied (Permission denied)",
+   "as_needed": true
+  },
+  {
+   "question": 6,
+   "check": "friend creates a datastream in emi's workspace",
+   "expected": "403 or 404",
+   "observed": "403 text/html;charset=iso-8859-1: Error 403 Permission denied (Permission denied)",
+   "as_needed": true
+  },
+  {
+   "question": 6,
+   "check": "friend creates a subsystem under the platform (role allows create/systems)",
+   "expected": "403",
+   "observed": "201 application/sml+json: ",
+   "as_needed": false
+  },
+  {
+   "question": 6,
+   "check": "friend2 creates a workspace through /api-weather",
+   "expected": "201",
+   "observed": "201 application/sml+json: ",
+   "as_needed": true
+  },
+  {
+   "question": 6,
+   "check": "...and a datastream in it",
+   "expected": "201",
+   "observed": "201 application/json: ",
+   "as_needed": true
+  },
+  {
+   "question": 4,
+   "check": "WebSocket subscription without credentials",
+   "expected": "401",
+   "observed": 401,
+   "as_needed": true
+  },
+  {
+   "question": 4,
+   "check": "WebSocket subscription with a wrong password",
+   "expected": "401",
+   "observed": 401,
+   "as_needed": true
+  },
+  {
+   "question": 4,
+   "check": "credentials in the WebSocket URL (ws://user:pass@host/...)",
+   "expected": "n/a",
+   "observed": "101 (the Python client turned the user info into an Authorization header)",
+   "as_needed": true
+  },
+  {
+   "question": 4,
+   "check": "credentials as query parameters",
+   "expected": "n/a",
+   "observed": "401 text/html;charset=iso-8859-1: Error 401 Unauthorized (Unauthorized)",
+   "as_needed": false
+  },
+  {
+   "question": 4,
+   "check": "service account (has create/status) subscribes to its control stream on /api, as a receiver",
+   "expected": "101, both commands pushed",
+   "observed": {
+    "handshake": 101,
+    "received": [],
+    "closed by server": "1011 Permission denied: csapi[9d23a6a7-7455-41d1-9f1d-494be4e2463c]/create/status: No user specified",
+    "senders' POSTs": {
+     "emi": "202 text/html;charset=iso-8859-1: Error 202 Command accepted but request timed out before comm in 29.5 s",
+     "friend": "202 text/html;charset=iso-8859-1: Error 202 Command accepted but request timed out before comm in 29.5 s"
+    }
+   },
+   "as_needed": false
+  },
+  {
+   "question": 4,
+   "check": "a viewer (no create/status) subscribes to the same control stream on /api",
+   "expected": "n/a",
+   "observed": {
+    "handshake": 101,
+    "received": [],
+    "closed by server": "1011 Permission denied: csapi[9d23a6a7-7455-41d1-9f1d-494be4e2463c]/create/status: No user specified"
+   },
+   "as_needed": true
+  },
+  {
+   "question": 4,
+   "check": "receiver on /api-internal (access control off, authentication on); emi and friend post on /api",
+   "expected": "both pushed",
+   "observed": {
+    "handshake": 101,
+    "received": [
+     {
+      "id": "040tpcktr030img868",
+      "controlstream@id": "040g",
+      "issueTime": "2026-11-25T21:55:40.156895282Z",
+      "sender": "emi",
+      "parameters": {
+       "algorithm": "A",
+       "fields": "co2"
+      }
+     },
+     {
+      "id": "040u3cktr030le7rps",
+      "controlstream@id": "040g",
+      "issueTime": "2026-11-25T21:55:45.179895247Z",
+      "sender": "friend",
+      "parameters": {
+       "algorithm": "B",
+       "fields": "co2"
+      }
+     }
+    ],
+    "senders' POSTs": {
+     "emi": "200 application/json: { \"command@id\": \"040tpcktr030img868\", \"reportTime\": \"2026-11 in 5.0 s",
+     "friend": "200 application/json: { \"command@id\": \"040u3cktr030le7rps\", \"reportTime\": \"2026-11 in 5.0 s"
+    }
+   },
+   "as_needed": true
+  },
+  {
+   "question": 4,
+   "check": "the pushed command names who sent it",
+   "expected": "the sender's user id (or role)",
+   "observed": [
+    "emi",
+    "friend"
+   ],
+   "as_needed": true
+  },
+  {
+   "question": 4,
+   "check": "the stored command resource names who sent it",
+   "expected": "sender",
+   "observed": [
+    {
+     "sender": "emi",
+     "parameters": {
+      "algorithm": "A",
+      "fields": "co2"
+     },
+     "currentStatus": "PENDING"
+    },
+    {
+     "sender": "friend",
+     "parameters": {
+      "algorithm": "B",
+      "fields": "co2"
+     },
+     "currentStatus": "PENDING"
+    }
+   ],
+   "as_needed": true
+  },
+  {
+   "question": 1,
+   "check": "but any authenticated user can read restricted systems through /api-internal",
+   "expected": "404",
+   "observed": "200 auto: { \"type\": \"Feature\", \"id\": \"041g\", \"geom",
+   "as_needed": false
+  },
+  {
+   "question": 4,
+   "check": "is there an API for a receiver to look up a user's roles?",
+   "expected": "n/a",
+   "observed": "none found: no users/roles resource in the Connected Systems API; 400 text/html;charset=iso-8859-1: Error 400 Invalid resource name: &apos;u",
+   "as_needed": true
+  },
+  {
+   "question": 6,
+   "check": "permissions OpenSensorHub added at run time (state file)",
+   "expected": "n/a",
+   "observed": {
+    "emi": {
+     "allow": [
+      "csapi[9d23a6a7-7455-41d1-9f1d-494be4e2463c]/*/systems/043g",
+      "csapi[9d23a6a7-7455-41d1-9f1d-494be4e2463c]/*/systems[parent=043g]",
+      "csapi[9d23a6a7-7455-41d1-9f1d-494be4e2463c]/*/fois[parent=043g]",
+      "csapi[9d23a6a7-7455-41d1-9f1d-494be4e2463c]/*/datastreams[parent=043g]",
+      "csapi[9d23a6a7-7455-41d1-9f1d-494be4e2463c]/*/controls[parent=043g]",
+      "csapi[9d23a6a7-7455-41d1-9f1d-494be4e2463c]/*/obs[parent=042g]"
+     ],
+     "deny": []
+    },
+    "friend": {
+     "allow": [
+      "csapi[9d23a6a7-7455-41d1-9f1d-494be4e2463c]/*/systems/0430",
+      "csapi[9d23a6a7-7455-41d1-9f1d-494be4e2463c]/*/systems[parent=0430]",
+      "csapi[9d23a6a7-7455-41d1-9f1d-494be4e2463c]/*/fois[parent=0430]",
+      "csapi[9d23a6a7-7455-41d1-9f1d-494be4e2463c]/*/datastreams[parent=0430]",
+      "csapi[9d23a6a7-7455-41d1-9f1d-494be4e2463c]/*/controls[parent=0430]",
+      "csapi[9d23a6a7-7455-41d1-9f1d-494be4e2463c]/*/obs[parent=0420]",
+      "csapi[9d23a6a7-7455-41d1-9f1d-494be4e2463c]/*/systems/0440",
+      "csapi[9d23a6a7-7455-41d1-9f1d-494be4e2463c]/*/systems[parent=0440]",
+      "csapi[9d23a6a7-7455-41d1-9f1d-494be4e2463c]/*/fois[parent=0440]",
+      "csapi[9d23a6a7-7455-41d1-9f1d-494be4e2463c]/*/datastreams[parent=0440]",
+      "csapi[9d23a6a7-7455-41d1-9f1d-494be4e2463c]/*/controls[parent=0440]"
+     ],
+     "deny": []
+    },
+    "friend2": {
+     "allow": [
+      "csapi[7f3e0c1a-5b2d-4c6e-9a8f-1d2e3f4a5b6c]/*/systems/044g",
+      "csapi[7f3e0c1a-5b2d-4c6e-9a8f-1d2e3f4a5b6c]/*/systems[parent=044g]",
+      "csapi[7f3e0c1a-5b2d-4c6e-9a8f-1d2e3f4a5b6c]/*/fois[parent=044g]",
+      "csapi[7f3e0c1a-5b2d-4c6e-9a8f-1d2e3f4a5b6c]/*/datastreams[parent=044g]",
+      "csapi[7f3e0c1a-5b2d-4c6e-9a8f-1d2e3f4a5b6c]/*/controls[parent=044g]",
+      "csapi[7f3e0c1a-5b2d-4c6e-9a8f-1d2e3f4a5b6c]/*/obs[parent=0430]"
+     ],
+     "deny": []
+    },
+    "owner": {
+     "allow": [],
+     "deny": []
+    },
+    "svc-analysis": {
+     "allow": [],
+     "deny": []
+    }
+   },
+   "as_needed": true
+  }
+ ]
+}
