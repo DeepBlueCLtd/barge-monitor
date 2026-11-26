@@ -3,7 +3,8 @@ import { useEffect, useRef, useState } from 'react';
 import { activeDemo, DEMOS, endDemo, startDemo, takeStep } from './demos';
 import { useStore } from './store';
 
-export function DemoMenu() {
+/** `reason`, when set, is why the menu cannot open yet (FR-125a). */
+export function DemoMenu({ reason = null }: { reason?: string | null }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -14,7 +15,8 @@ export function DemoMenu() {
   }, [open]);
   return (
     <div className="demo-menu" ref={ref}>
-      <button className="btn" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)} data-testid="demo-menu">Failure demos ▾</button>
+      <button className="btn" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)} data-testid="demo-menu"
+        {...(reason ? { disabled: true, title: reason, 'aria-describedby': 'control-reason' } : {})}>Failure demos ▾</button>
       {open && (
         <ul className="demo-list" role="menu">
           {DEMOS.map((d) => (

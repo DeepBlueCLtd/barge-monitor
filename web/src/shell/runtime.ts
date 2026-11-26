@@ -8,6 +8,7 @@ import { CORE_MODELS, HISTORY_PATH, PY_ZIP, PYODIDE_PATH, resolve, urlParam } fr
 import { simClock } from './clock';
 import type { ComponentId } from './components';
 import { bus, Captured } from './messages';
+import { STAGE_STEP, Startup } from './startup';
 import { Store } from './store';
 
 export type BackendKind = 'python' | 'standin';
@@ -75,6 +76,8 @@ function chooseBackend(): BackendKind {
 class Runtime {
   readonly kind: BackendKind = chooseBackend();
   progress = new Store<Progress>({ stage: 'page', detail: 'starting', pct: 0 });
+  /** The named startup steps and any stall (docs/v4-interfaces.md §13.7). */
+  readonly startup = new Startup(this.kind === 'python');
   control = new Store<ControlState | null>(null);
   server = new Store<'running' | 'waiting' | 'down'>('waiting');
   /** Per model worker: its phase and loading progress (Python back end only). */
@@ -101,6 +104,17 @@ class Runtime {
   async start() {
     if (this.started) return; // React's development double-invoke must not start two back ends
     this.started = true;
+    // The relay first: every request of the system goes through it (FR-02).
+    this.progress.set({ stage: 'seam', detail: 'registering the seam relay (Service Worker)', pct: 1 });
+    this.startup.enter('relay', 'registering the seam relay (Service Worker)');
+    try {
+      await this.startRelay();
+    } catch (e: any) {
+      const why = `the seam relay (Service Worker) could not be registered: ${String(e?.message ?? e)}`;
+      this.startup.fail('relay', why);
+      throw new Error(why);
+    }
+    this.startup.enter('back end');
     const seedParam = urlParam('seed');
     const requested = seedParam && /^\d+$/.test(seedParam) ? Number(seedParam) : null;
     // Pre-calculated history (FR-15): the build says where it is and which seeds it holds.
@@ -115,31 +129,72 @@ class Runtime {
       this.history = { days: null, source: 'none found' };
     }
     this.seed = seed;
-    if (!('serviceWorker' in navigator)) throw new Error('this browser has no Service Worker support, so the seam relay cannot run');
-    this.progress.set({ stage: 'seam', detail: 'registering the seam relay (Service Worker)', pct: 1 });
-    await navigator.serviceWorker.register(resolve('sw.js'), { scope: './' });
-    await navigator.serviceWorker.ready;
-    if (!navigator.serviceWorker.controller) {
-      await new Promise<void>((r) => navigator.serviceWorker.addEventListener('controllerchange', () => r(), { once: true }));
-    }
-    navigator.serviceWorker.addEventListener('message', (e) => e.data?.type === 'need-port' && this.connect());
+    this.progress.set({ stage: 'backend', detail: this.startup.steps.value[1].what, pct: 2 });
     this.backend = this.kind === 'standin'
       ? new Worker(new URL('../workers/standin.worker.ts', import.meta.url), { type: 'module' })
       : new Worker(new URL('../workers/backend.worker.ts', import.meta.url), { type: 'module' });
     this.backend.onmessage = (e) => this.onBackend(e.data);
-    this.backend.onerror = (e) => this.progress.set({ stage: 'error', detail: `the back-end worker failed: ${e.message ?? e}`, pct: 0 });
+    this.backend.onerror = (e) => {
+      const why = `the back-end worker failed: ${e.message ?? e}`;
+      this.progress.set({ stage: 'error', detail: why, pct: 0 });
+      this.startup.fail(this.startup.current()?.id ?? 'back end', why);
+    };
     this.backend.postMessage({ type: 'start', pyodideUrl: resolve(PYODIDE_PATH), pyZipUrl: resolve(PY_ZIP), seed, historyUrl });
     this.connect();
+  }
+
+  /**
+   * Start the seam relay (§13.7): resolve once a Service Worker controls this page.
+   * A relay already in control is used at once (an update is still looked for, and a
+   * newer relay that takes over is given its own port). A page loaded without a
+   * controller, such as after a hard reload, asks the active relay to claim it: it would
+   * otherwise never see a `controllerchange`, because that relay never activates again.
+   */
+  private async startRelay(): Promise<void> {
+    if (!('serviceWorker' in navigator)) throw new Error('this browser offers no Service Workers here (some turn them off in private windows)');
+    const sws = navigator.serviceWorker;
+    sws.addEventListener('message', (e) => e.data?.type === 'need-port' && this.connect());
+    // A newer relay that takes over needs its own port to the back end.
+    sws.addEventListener('controllerchange', () => this.connect());
+    const url = resolve('sw.js');
+    if (sws.controller) {
+      sws.register(url, { scope: './' }).catch((e) => console.warn('seam relay: update check failed', e));
+      return;
+    }
+    const reg = await sws.register(url, { scope: './' });
+    await new Promise<void>((done) => {
+      let asked = -Infinity;
+      const check = () => {
+        if (sws.controller) {
+          clearInterval(poll);
+          sws.removeEventListener('controllerchange', check);
+          done();
+          return;
+        }
+        const now = performance.now();
+        if (reg.active && now - asked > 1000) {
+          asked = now;
+          reg.active.postMessage({ type: 'claim' });
+        }
+      };
+      sws.addEventListener('controllerchange', check);
+      const poll = setInterval(check, 200);
+      check();
+    });
   }
 
   private onBackend(d: any) {
     switch (d?.type) {
       case 'progress':
         this.progress.set(d);
+        if (d.stage === 'error') this.startup.fail(this.startup.current()?.id ?? 'back end', String(d.detail));
+        else if (STAGE_STEP[d.stage]) this.startup.enter(STAGE_STEP[d.stage], d.detail);
         if (d.stage === 'ready' && this.readyMs == null) {
+          this.startup.finish('server');
           this.readyMs = performance.now() - this.startedAt;
           // The model workers load once the back end can take their ports.
           if (this.kind === 'python') CORE_MODELS.forEach((m) => this.startModel(m));
+          this.checkModels();
         }
         break;
       case 'tick':
@@ -151,6 +206,7 @@ class Runtime {
         break;
       case 'state':
         this.control.set(d.state);
+        this.checkModels();
         if (d.state?.clock) simClock.update(d.state.clock);
         if (d.state?.server) this.server.set(d.state.server);
         break;
@@ -165,6 +221,13 @@ class Runtime {
         console.warn('control action refused by the back end:', d.error);
         break;
     }
+  }
+
+  /** The last step, models, is done once every core model is live (after the server is). */
+  private checkModels() {
+    if (this.readyMs == null || this.startup.steps.value[4].state === 'done') return;
+    if (this.coreModelsLive()) this.startup.finish('models');
+    else this.startup.enter('models', 'starting each core model');
   }
 
   /** Give the relay a port to the back-end worker (FR-02). */
