@@ -229,7 +229,13 @@ export class DisplayClientSession {
       };
       for (const ev of ['pointerdown', 'keydown', 'wheel', 'pointermove']) window.addEventListener(ev, touch, { passive: true, capture: true });
     }
-    this.clock.onEnd = () => this.notify('The replay reached the end of the dataset and paused.');
+    this.clock.onEnd = () => {
+      this.notify('The replay reached the end of the dataset and paused.');
+      void this.act(async (http) => {
+        await this.readData(http, false);
+        await this.readAnalysis(http, false);
+      });
+    };
   }
 
   // --- notices -------------------------------------------------------------------------------------------------
@@ -804,6 +810,9 @@ export class DisplayClientSession {
       if (!this.live(http) || !this.view.value) return;
       if (playing || watching) {
         await this.readRuns(http);
+        // A model that has not yet declared its outputs for the dataset (no runs log at the handshake): discover again (FR-44).
+        const logs = new Set(this.runs.value.map((l) => l.ds.systemUid));
+        if ((this.view.value?.awaited ?? []).some((e) => !logs.has(e.system)) && Date.now() - this.lastHandshake > 4000) this.wantHandshake = true;
         if (!this.preparing().length && !this.importing.value && !this.statusWatch.length && !this.awaitingCommand) this.watchUntil = 0;
       }
       if (playing) {
@@ -853,8 +862,14 @@ export class DisplayClientSession {
     this.clock.play();
   }
 
+  /** Pause; the views are brought up to the replay time where it paused (one read, then nothing while paused). */
   pause() {
+    if (!this.clock.state.value?.playing) return;
     this.clock.pause();
+    void this.act(async (http) => {
+      await this.readData(http, false);
+      await this.readAnalysis(http, false);
+    });
   }
 
   setRate(rate: number) {
@@ -1205,4 +1220,7 @@ export class DisplayClientSession {
 }
 
 export const clientSession = new DisplayClientSession();
+// Read-only views of what the client shows, and a second display client on the same server, for the end-to-end
+// tests only (AT-45, AT-70; D-306). A second client is the same code, not on screen; nothing of it is stored.
 (globalThis as { bargeClientShown?: () => unknown }).bargeClientShown = () => clientSession.shown();
+(globalThis as { bargeNewClient?: () => DisplayClientSession }).bargeNewClient = () => new DisplayClientSession();

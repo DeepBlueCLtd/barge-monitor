@@ -155,7 +155,8 @@ export function checkDataset(d: Discovery, dataset: string, complete: Set<string
     const ds = findDatastream(d, e.system, name);
     const f = ds ? d.schemas.get(ds.id)?.find((x) => x.name === e.field) : undefined;
     const system = [...d.systems.values()].find((s) => s.uid === e.system);
-    const fromModel = system?.assetType === 'Process';
+    // A model's output, or one whose system has not registered yet: the models may still be starting (FR-35b).
+    const fromModel = !system || system.assetType === 'Process';
     if (!ds || d.refused.has(ds.id)) {
       if (fromModel && !complete.has(e.system)) awaited.push(e);
       else problems.push({ essential: e, detail: `${name.replace('__', ' · ')} is not offered` });
