@@ -125,9 +125,10 @@ export class ClientHttp {
     if (this.closed) throw new Closed('the display client was locked or restarted');
     if (paced) await this.drawn(chain);
     if (r.status === 401) throw new Unauthorized('the name or password was not accepted');
+    // JSON whatever the Content-Type says (D-196): OpenSensorHub labels some of its JSON "auto".
     const ctypeIn = r.headers.get('content-type') ?? '';
     let parsed: any = text;
-    if (text && ctypeIn.includes('json')) {
+    if (text && (ctypeIn.includes('json') || /^\s*[[{]/.test(text))) {
       try {
         parsed = JSON.parse(text);
       } catch {

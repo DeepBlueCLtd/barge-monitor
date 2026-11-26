@@ -58,8 +58,7 @@ class Client:
     async def request(self, method, path, params=None, body=None, headers=None):
         async with httpx.AsyncClient(base_url=self.base, timeout=60) as c:
             r = await c.request(method, path, params=params, json=body, headers=headers)
-            ctype = r.headers.get("content-type", "")
-            data = r.json() if ("json" in ctype and r.content) else r.text
+            data = suite.read_body(r.content)  # JSON whatever the Content-Type says (D-196)
             return r.status_code, dict(r.headers), data
 
     async def open_stream(self, path, params=None, headers=None):

@@ -113,30 +113,12 @@ export class Api {
   }
 
   // --- discovery ------------------------------------------------------------------------------------
-  /** A system's id by its unique id, through discovery: top-level systems, then their subsystems. */
+  /** A system's id by its unique id, through discovery: every system, subsystems included (D-193). */
   async findSystem(uid: string): Promise<string | null> {
     const known = this.systems.get(uid);
     if (known) return known;
-    let level: string[] = [];
-    const top = await this.getJson('/systems?limit=1000');
-    for (const s of top.items) {
-      this.systems.set(s.properties?.uid ?? s.uniqueId, s.id);
-      level.push(s.id);
-    }
-    for (let depth = 0; depth < 3 && !this.systems.has(uid) && level.length; depth++) {
-      // Only the branch that can hold it: a uid's prefix names its parent.
-      const next: string[] = [];
-      for (const id of level) {
-        const sUid = [...this.systems].find(([, v]) => v === id)?.[0] ?? '';
-        if (!(uid.startsWith(sUid + ':') || sUid === 'urn:x-barge:process:models' || sUid === 'urn:x-barge:platform:barge')) continue;
-        const sub = await this.getJson(`/systems/${id}/subsystems?limit=1000`);
-        for (const s of sub.items) {
-          this.systems.set(s.properties?.uid ?? s.uniqueId, s.id);
-          next.push(s.id);
-        }
-      }
-      level = next;
-    }
+    const all = await this.getJson('/systems?searchMembers=true&f=application/sml%2Bjson&limit=100000');
+    for (const s of all.items) this.systems.set(s.uniqueId ?? s.properties?.uid, s.id);
     return this.systems.get(uid) ?? null;
   }
 
@@ -448,7 +430,7 @@ export function rng(seed: number): () => number {
 
 export const UNITS: Record<string, string> = {
   air_temperature: 'Cel', apparent_wind_speed: 'm/s', relative_humidity: '%', pressure: 'hPa',
-  apparent_wind_direction: 'deg', solar_irradiance: 'W/m2', water_temperature: 'Cel', co2: 'ppm',
+  apparent_wind_direction: 'deg', solar_irradiance: 'W/m2', water_temperature: 'Cel', co2: '[ppm]', // UCUM (D-195)
 };
 export const LABELS: Record<string, string> = {
   air_temperature: 'Air temperature', apparent_wind_speed: 'Wind speed', relative_humidity: 'Humidity', pressure: 'Pressure',

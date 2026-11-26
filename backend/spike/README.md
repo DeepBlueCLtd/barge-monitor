@@ -72,8 +72,9 @@ No longer a spike: `backend/independent/at32_osh.py` starts the same build with 
 written from the delivered accounts, puts the access gateway in front of it, installs the
 platform, runs the importer and replay controller as clients and the core models through the
 gateway, then runs `backend/contract_suite/suite.py` unchanged and prints pass or fail per check
-(`docs/findings/FINDING-2026-11-26-opensensorhub-contract-suite.md`):
+(`docs/findings/FINDING-2026-11-26-opensensorhub-contract-suite.md`). Since D-193 to D-196 were
+adopted, nothing rewrites requests on the way, and there is no `--proposed` run:
 
     pip install -r backend/requirements-dev.txt websockets
     python scripts/build_data_folder.py
-    python backend/independent/at32_osh.py --osh <osh-core>/build/install/osh-core --proposed
+    python backend/independent/at32_osh.py --osh <osh-core>/build/install/osh-core [--json backend/independent/at32-osh-results.json]

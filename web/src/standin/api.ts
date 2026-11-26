@@ -14,6 +14,7 @@ import { ControlstreamRec, DatastreamRec, Pick, storedAsNumber, SystemRec } from
 import { PushStream } from './stream';
 import { DataRecord, JSON_TYPE, NDJSON, schemaResponse, SWE_JSON } from './swe';
 import type { Chain, ComponentId, Letter, Tap } from './tap';
+import { badCodes } from './ucum';
 import { iso, parseIso, realNow } from './time';
 
 export interface HttpRequest {
@@ -230,7 +231,8 @@ export class Api {
         return this.collections(c, b, d);
       case 'systems':
         if (seg.length === 1) {
-          if (get) return this.systemsList(c, [...this.srv.store.systems.values()].filter((s) => !s.parent));
+          // Every system, subsystems included, with searchMembers=true (D-193); else the top level.
+          if (get) return this.systemsList(c, [...this.srv.store.systems.values()].filter((s) => searchMembers(c.q) || !s.parent));
           if (m === 'POST') return this.createSystem(c, null);
           throw no('GET, POST');
         }
@@ -391,19 +393,22 @@ export class Api {
 
   private collections(c: Ctx, cid?: string, items?: string): Reply {
     const all: Record<string, string> = { all_systems: 'All systems', all_datastreams: 'All datastreams' };
-    const one = (id: string) => ({ id, title: all[id], itemType: 'feature', links: [this.link(c, `/collections/${id}/items`, 'items')] });
+    // OpenSensorHub links all_systems' items to /systems and serves no /collections/all_systems/items (D-193).
+    const one = (id: string) => ({ id, title: all[id], itemType: 'feature',
+      links: [this.link(c, id === 'all_systems' ? '/systems' : `/collections/${id}/items`, 'items')] });
     if (!cid) return json({ collections: Object.keys(all).map(one), links: [this.link(c, '/collections', 'self')] });
     if (!(cid in all)) throw new HttpError(404, `no collection ${cid}`);
     if (!items) return json(one(cid));
     if (items !== 'items') throw new HttpError(404, `no resource ${items}`);
-    return cid === 'all_systems' ? this.systemsList(c, [...this.srv.store.systems.values()]) : this.dsList(c, this.srv.servedDatastreams());
+    if (cid === 'all_systems') throw new HttpError(400, "Invalid resource name: 'items'"); // every system: GET /systems?searchMembers=true
+    return this.dsList(c, this.srv.servedDatastreams());
   }
 
   // --- systems ----------------------------------------------------------------------------------------
-  private systemJson(c: Ctx, s: SystemRec, fmt: string): Record<string, unknown> {
+  private systemJson(c: Ctx, s: SystemRec, fmt: string, listed = true): Record<string, unknown> {
     const links = [this.link(c, `/systems/${s.id}/subsystems`, 'subsystems'), this.link(c, `/systems/${s.id}/datastreams`, 'datastreams'),
       this.link(c, `/systems/${s.id}/controlstreams`, 'controlstreams')];
-    if (s.parent) links.push(this.link(c, `/systems/${s.parent}`, 'parent'));
+    if (s.parent && !listed) links.push(this.link(c, `/systems/${s.parent}`, 'parent')); // never in a listing, as OpenSensorHub (D-193)
     if (fmt === SML_JSON) {
       const out: Record<string, unknown> = {
         type: s.smlType, id: s.id, definition: s.featureType, uniqueId: s.uid, label: s.label, description: s.description,
@@ -427,12 +432,18 @@ export class Api {
 
   private systemOne(c: Ctx, s: SystemRec): Reply {
     const fmt = this.format(c, [JSON_TYPE, GEO_JSON, SML_JSON], GEO_JSON);
-    return json(this.systemJson(c, s, fmt));
+    return json(this.systemJson(c, s, fmt, false));
   }
 
   private createSystem(c: Ctx, parent: SystemRec | null): Reply {
     const b = this.jsonBody(c);
     if (!b || typeof b !== 'object' || Array.isArray(b)) throw new HttpError(400, 'a system must be a JSON object');
+    // D-194: SensorML is sent as application/sml+json; anything else is read as GeoJSON, as OpenSensorHub does.
+    const ctype = (c.headers.get('content-type') ?? JSON_TYPE).split(';')[0].trim().toLowerCase();
+    if (ctype === SML_JSON && b.type === 'Feature') throw new HttpError(400, 'a SensorML description cannot be a GeoJSON Feature');
+    if (ctype !== SML_JSON && b.type !== 'Feature') {
+      throw new HttpError(400, "The type of a GeoJSON feature must be 'Feature' (send SensorML as application/sml+json)");
+    }
     let body: SystemBody;
     if (b.type === 'Feature') {
       const p = b.properties ?? {};
@@ -482,6 +493,7 @@ export class Api {
     const b = this.jsonBody(c);
     const rec = b?.schema?.recordSchema ?? b?.schema?.resultSchema;
     checkRecord(rec);
+    checkUnits(rec);
     if (typeof b.outputName !== 'string' || !b.outputName) throw new HttpError(400, 'a datastream needs an outputName');
     if (!/^[A-Za-z_][\w.-]*$/.test(b.outputName)) throw new HttpError(400, `invalid outputName: ${b.outputName}`);
     const fields = rec.fields[0]?.type === 'Time' ? rec.fields : [{ type: 'Time', name: 'time', label: 'Time' }, ...rec.fields];
@@ -610,6 +622,7 @@ export class Api {
     const b = this.jsonBody(c);
     const rec = b?.schema?.parametersSchema ?? b?.schema?.recordSchema;
     checkRecord(rec);
+    checkUnits(rec);
     const name = b.inputName ?? b.name;
     if (typeof name !== 'string' || !name) throw new HttpError(400, 'a control stream needs an inputName');
     const r = this.srv.createControlstream(c.account, s.id, { name: b.name, inputName: name, description: b.description, schema: rec });
@@ -684,6 +697,17 @@ function interval(text: string): [number, number] {
 }
 
 const SWE_TYPES = new Set(['Quantity', 'Count', 'Category', 'Boolean', 'Text', 'Time']);
+
+/** D-195: OpenSensorHub checks every unit code against UCUM, strictly ("ppm" is refused; UCUM's is "[ppm]"). */
+function checkUnits(rec: unknown): void {
+  const bad = badCodes(rec);
+  if (bad.length) throw new HttpError(400, `Invalid UCUM code '${bad[0]}'`);
+}
+
+function searchMembers(q: { get(k: string): string | null | undefined }): boolean {
+  const v = (q.get('searchMembers') ?? '').toLowerCase();
+  return v === 'true' || v === '1';
+}
 
 function checkRecord(rec: any): asserts rec is DataRecord {
   if (!rec || typeof rec !== 'object' || rec.type !== 'DataRecord' || !Array.isArray(rec.fields) || !rec.fields.length) {

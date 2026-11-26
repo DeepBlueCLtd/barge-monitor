@@ -55,7 +55,7 @@ def test_the_server_itself_challenges_and_applies_no_permissions(played):
     r = played.run(asgi.call(server, "GET", "/systems", "", None, "", [], "http://t"))
     assert r[0] == 401 and dict((k.lower(), v) for k, v in r[1])["www-authenticate"].lower().startswith("basic")
     friend = [("authorization", A.basic("friend", "demo-friend"))]
-    r = played.run(asgi.call(server, "GET", "/collections/all_systems/items", "f=application/sml%2Bjson", None, "",
+    r = played.run(asgi.call(server, "GET", "/systems", "searchMembers=true&f=application/sml%2Bjson", None, "",
                              friend, "http://t"))
     assert r[0] == 200 and b":co2" in r[2]  # OpenSensorHub cannot hide: the gateway does (§9.5)
 
@@ -63,13 +63,13 @@ def test_the_server_itself_challenges_and_applies_no_permissions(played):
 def discovery_text(r, user):
     """Every discovery response a client can reach, concatenated."""
     out = []
-    for path in ("/systems", "/datastreams", "/controlstreams", "/collections/all_systems/items",
-                 "/collections/all_datastreams/items"):
-        resp = r.get(path, {"limit": "100000"}, user=user)
+    for path, extra in (("/systems", {}), ("/datastreams", {}), ("/controlstreams", {}),
+                        ("/systems", {"searchMembers": "true"}), ("/collections/all_datastreams/items", {})):
+        resp = r.get(path, {"limit": "100000", **extra}, user=user)
         assert resp.status == 200
         out.append(resp.body.decode())
         for item in resp.json["items"]:
-            if path == "/systems":
+            if path == "/systems" and not extra:
                 for sub in ("subsystems", "datastreams", "controlstreams"):
                     out.append(r.get(f"/systems/{item['id']}/{sub}", user=user).body.decode())
             if path == "/datastreams":

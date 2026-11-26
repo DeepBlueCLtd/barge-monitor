@@ -40,7 +40,8 @@ export const WEATHER: Field[] = [
   field('solar_irradiance', 'Solar irradiance', 'Quantity', 'W/m2'),
   field('water_temperature', 'Water temp', 'Quantity', 'Cel'),
 ];
-export const CO2 = field('co2', 'CO₂', 'Quantity', 'ppm', { restricted: true, description: 'Carbon dioxide at the sensor package (FR-09a). Restricted.' });
+export const CO2 = field('co2', 'CO₂', 'Quantity', '[ppm]', // UCUM's code for parts per million (D-195)
+  { restricted: true, description: 'Carbon dioxide at the sensor package (FR-09a). Restricted.' });
 export const RAW: Field[] = [...WEATHER, CO2];
 export const QUANTITIES = WEATHER.map((f) => f.name);
 

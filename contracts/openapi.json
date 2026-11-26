@@ -1084,6 +1084,16 @@
        ],
        "title": "F"
       }
+     },
+     {
+      "in": "query",
+      "name": "searchMembers",
+      "required": false,
+      "schema": {
+       "default": false,
+       "title": "Searchmembers",
+       "type": "boolean"
+      }
      }
     ],
     "responses": {
@@ -1106,10 +1116,25 @@
       "description": "Validation Error"
      }
     },
-    "summary": "Systems (top level)"
+    "summary": "Systems: the top level, or every system with searchMembers=true (D-193)"
    },
    "post": {
     "operationId": "post_system_systems_post",
+    "requestBody": {
+     "content": {
+      "application/geo+json": {
+       "schema": {
+        "type": "object"
+       }
+      },
+      "application/sml+json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     },
+     "required": true
+    },
     "responses": {
      "201": {
       "content": {
@@ -1120,7 +1145,7 @@
       "description": "Successful Response"
      }
     },
-    "summary": "Create a system"
+    "summary": "Create a system (SensorML as application/sml+json, D-194)"
    }
   },
   "/systems/{systemId}": {
@@ -1445,6 +1470,21 @@
       }
      }
     ],
+    "requestBody": {
+     "content": {
+      "application/geo+json": {
+       "schema": {
+        "type": "object"
+       }
+      },
+      "application/sml+json": {
+       "schema": {
+        "type": "object"
+       }
+      }
+     },
+     "required": true
+    },
     "responses": {
      "201": {
       "content": {
@@ -1465,7 +1505,7 @@
       "description": "Validation Error"
      }
     },
-    "summary": "Create a subsystem (a model registers)"
+    "summary": "Create a subsystem (a model registers; SensorML as application/sml+json, D-194)"
    }
   }
  }

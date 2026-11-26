@@ -172,7 +172,7 @@ import, like every other field, with a range of 250–5000 ppm and a 60 ppm spik
 | System (uniqueId) | outputName pattern | What |
 |---|---|---|
 | `urn:x-barge:sensor:bow`, `…:stern` | `weather__{ds}` | The 7 quantities (6 in Mission C's stern), each with its `<name>_qc` |
-| `urn:x-barge:sensor:bow:co2`, `…:stern:co2` | `co2__{ds}` | `co2` (ppm) and `co2_qc` (**restricted**) |
+| `urn:x-barge:sensor:bow:co2`, `…:stern:co2` | `co2__{ds}` | `co2` (`[ppm]`) and `co2_qc` (**restricted**) |
 | `urn:x-barge:process:data-cleanse` | `cleaned-bow__{ds}`, `cleaned-stern__{ds}` | |
 | `urn:x-barge:process:data-cleanse:restricted` | `cleaned-co2-bow__{ds}`, `cleaned-co2-stern__{ds}` | **Restricted** |
 | `urn:x-barge:process:summaries` | `summary-1min-{bow,stern}__{ds}`, `summary-1h-{bow,stern}__{ds}`, `derived-1min__{ds}`, `derived-1h__{ds}` | Minimum, mean and maximum per quantity (FR-29): `<f>_min`, `<f>`, `<f>_max` |
@@ -190,7 +190,8 @@ Field definitions are `https://deepbluecltd.github.io/barge-monitor/def/<name>`.
 summary or cleaned value has the definition of its raw quantity (unchanged from 4.1).
 Quantity units: `air_temperature` Cel, `apparent_wind_speed` m/s (converted from knots on
 import), `relative_humidity` %, `pressure` hPa, `apparent_wind_direction` deg,
-`solar_irradiance` W/m2, `water_temperature` Cel, `co2` ppm.
+`solar_irradiance` W/m2, `water_temperature` Cel, `co2` `[ppm]`. Every `uom.code` is a
+UCUM code: parts per million is `[ppm]` in UCUM, and `ppm` is refused (D-195).
 
 **Systems** (top level, with subsystems under them):
 
@@ -319,6 +320,23 @@ its start (FR-77). This load is quiet.
 ### 9.1 Behaving as a stock OpenSensorHub
 
 - Identifiers are opaque (§6).
+- **Discovery of every system** is `GET /systems?searchMembers=true` (D-193): every
+  system, subsystems included, in either encoding (`f=application/sml+json` gives
+  `uniqueId`; GeoJSON gives `properties.uid`). `GET /systems` alone lists the top level;
+  `/systems/{id}/subsystems` lists a system's children. **A listing carries no `parent`
+  link**; only a single system (`GET /systems/{id}`) links its parent. No client relies on
+  parent links: the system tree, where one is needed, is learnt from `/subsystems` (the
+  gateway's discovery, D-192). `GET /collections/all_systems/items` answers `400`, as
+  OpenSensorHub does; `/collections` lists `all_systems` with its `items` link to `/systems`.
+- **SensorML is sent as `application/sml+json`** (D-194), to `POST /systems` and
+  `POST /systems/{id}/subsystems`. A body sent as `application/json` (or without a
+  `Content-Type`) is read as GeoJSON: anything but a `Feature` is refused with `400`, as
+  OpenSensorHub refuses it.
+- **Units are UCUM codes** (D-195). A datastream or control stream whose schema carries a
+  `uom.code` that is not UCUM is refused with `400` (OpenSensorHub: "Invalid UCUM code").
+- **Clients read a body as JSON whatever its `Content-Type` says** (D-196). OpenSensorHub
+  labels the landing page, `/conformance` and `/datastreams/{id}/schema` asked without `f`
+  as `Content-Type: auto`; the bodies are JSON. The stand-ins label them `application/json`.
 - `POST` creating something that already exists (same uniqueId, or same outputName
   under the same system) answers `201` with the **existing** `Location`. A different
   schema under an existing outputName makes a new datastream, with a new id (FR-51).
@@ -399,7 +417,7 @@ the moment it is written to the stream.
   - **create and append**: a user only under `workspace:{self}`; a service account only
     under its own systems.
 - A system the account may not read is **absent** (FR-93): it is left out of every
-  listing (`/systems`, `/systems/{id}/subsystems`, `/datastreams`,
+  listing (`/systems`, `/systems?searchMembers=true`, `/systems/{id}/subsystems`, `/datastreams`,
   `/systems/{id}/datastreams`, `/controlstreams`, `/collections/*/items`), and answers
   **404** to every path under it.
 - **Role changes** (FR-116): the stand-in keeps a per-account `epoch`. Raising it (the
@@ -459,8 +477,9 @@ member named `password` with `"****"`. The tap does this once, centrally, in
 
 ```python
 class Api:  # every method is async; each is one or more HTTP requests with the model's credentials
-    async def find_system(self, uid) -> str | None            # by uniqueId, through discovery
-    async def create_system(self, body, parent_uid=None) -> str  # POST /systems or /systems/{parent}/subsystems; 201 = success
+    async def find_system(self, uid) -> str | None            # by uniqueId: GET /systems?searchMembers=true (D-193)
+    async def create_system(self, body, parent_uid=None) -> str  # POST /systems or /systems/{parent}/subsystems as
+                                                                 # application/sml+json (D-194); 201 = success
     async def create_datastream(self, system_id, body) -> str  # returns a key "system_uid|outputName"
     async def create_controlstream(self, system_id, body) -> str
     async def find(self, system_uid, output_name) -> str | None

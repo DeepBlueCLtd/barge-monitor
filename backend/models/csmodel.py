@@ -34,7 +34,7 @@ SAMPLING_TIME = "http://www.opengis.net/def/property/OGC/0/SamplingTime"
 QUANTITIES = ["air_temperature", "apparent_wind_speed", "relative_humidity", "pressure",
               "apparent_wind_direction", "solar_irradiance", "water_temperature"]
 UNITS = {"air_temperature": "Cel", "apparent_wind_speed": "m/s", "relative_humidity": "%", "pressure": "hPa",
-         "apparent_wind_direction": "deg", "solar_irradiance": "W/m2", "water_temperature": "Cel", "co2": "ppm"}
+         "apparent_wind_direction": "deg", "solar_irradiance": "W/m2", "water_temperature": "Cel", "co2": "[ppm]"}  # UCUM (D-195)
 LABELS = {"air_temperature": "Air temperature", "apparent_wind_speed": "Wind speed", "relative_humidity": "Humidity",
           "pressure": "Pressure", "apparent_wind_direction": "Wind direction", "solar_irradiance": "Solar irradiance",
           "water_temperature": "Water temp", "co2": "CO₂"}
@@ -217,7 +217,8 @@ class Api:
     # --- discovery ----------------------------------------------------------------------------
     async def find_system(self, uid: str) -> str | None:
         if uid not in self._systems:
-            doc = await self._get("/collections/all_systems/items?f=application%2Fsml%2Bjson&limit=100000")
+            # Every system, subsystems included (D-193); the listing carries no parent link.
+            doc = await self._get("/systems?searchMembers=true&f=application%2Fsml%2Bjson&limit=100000")
             for s in doc["items"]:
                 self._systems[s.get("uniqueId") or s.get("properties", {}).get("uid")] = s["id"]
         return self._systems.get(uid)
@@ -255,7 +256,7 @@ class Api:
             if pid is None:
                 raise NotFound(f"system {parent_uid} is not there")
             path = f"/systems/{pid}/subsystems"
-        _, rh, _ = await self.request("POST", path, body)
+        _, rh, _ = await self.request("POST", path, body, ctype="application/sml+json")  # SensorML (D-194)
         sid = self._located(rh)
         self._systems[body["uniqueId"]] = sid
         return sid

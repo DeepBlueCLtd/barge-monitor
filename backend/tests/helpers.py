@@ -159,7 +159,7 @@ class Rig:
 
     # --- finding things as a client does: by uniqueId and outputName ------------------------------
     def systems(self, user="owner"):
-        r = self.get("/collections/all_systems/items", {"f": "application%2Fsml%2Bjson", "limit": "100000"}, user=user)
+        r = self.get("/systems", {"searchMembers": "true", "f": "application%2Fsml%2Bjson", "limit": "100000"}, user=user)
         return {s["uniqueId"]: s for s in r.json["items"]}
 
     def ds(self, uid, output, user="owner"):
