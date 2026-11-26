@@ -601,13 +601,18 @@ The master is `contracts/schemas/data-of-interest.json`:
 ## 12. The adoption opening (SRD §9.8)
 
 - **The flag.** `?hand-made` is read once, by `web/src/shell/opening.ts`.
-- **Layout.** `layout-opening.json` holds two rows of five for the back-end band:
-  - row 1: `importer`, `models`, `sub-webapi`, `sub-registry`, `sub-obsstore`;
-  - row 2: `sub-query`, `sub-commands`, `sub-accounts`, `sub-permissions`, `sub-admin`.
+- **Layout.** `layout-opening.json` holds two rows of five for the back-end band, every
+  card the size of `importer` and `models` in `layout.json` (D-330):
+  - row 1: `models`, `importer`, `sub-obsstore`, `sub-registry`, `sub-webapi`;
+  - row 2: `sub-commands`, `sub-accounts`, `sub-query`, `sub-permissions`, `sub-admin`.
 
-  The third-party zone holds `scilibs` only. The other zones are shifted down by one card
-  row.
-- **Lines** (FR-120a) are drawn from `OPENING_FLOWS` in `opening.ts`, without letters.
+  The order within each row is the layout's (D-331): `models` and `importer` lead row 1, in
+  the order they have in `layout.json`, so the merge moves neither across the other. The
+  third-party zone holds `scilibs` only. The zones below the back end are shifted down by
+  one card row, and the back end's label sits at its bottom left.
+- **Lines** (FR-120a) are drawn from `OPENING_LINES` (the layout's `lines`) in `opening.ts`,
+  without letters or labels; a two-way flow has a head at each end. Besides FR-120a's
+  table, `models ↔ scilibs` and `importer ↔ folder` are drawn, as in §3.1.
 - **Wording.** The lead reads: written ourselves, the data server is a range of subsystem
   components to develop, among them these. No count appears (FR-120, FR-124).
 - **Before Adopt:**
@@ -616,9 +621,14 @@ The master is `contracts/schemas/data-of-interest.json`:
   - the top bar renders only the title;
   - the status reads "Opening";
   - the banner is not rendered.
-- **Adopt** animates the subsystem cards to the `server` card's position over 1.5 s, with
-  `prefers-reduced-motion` honoured. It then swaps to the normal layout, calls
-  `runtime.start()`, and shows the controls. Nothing plays (FR-125a, §13.7).
+- **Adopt** animates the subsystem cards to the `server` card's position over 1.5 s
+  (`OPENING_MERGE_MS`), with `prefers-reduced-motion` honoured: the merge is skipped. It
+  then swaps to the normal layout, calls `runtime.start()`, and shows the controls. The
+  page then shows the same named loading steps as a load without the flag (§13.7, D-332),
+  and the flowchart again once the server answers. Nothing plays (FR-125a, §13.7).
+- **After hand-over** the detail panel keeps the opening panel, with every subsystem ticked
+  and no switch, until a component is clicked, the panel is closed or Overview is pressed
+  (FR-125).
 
 ## 13. Workers, the page and controls
 
