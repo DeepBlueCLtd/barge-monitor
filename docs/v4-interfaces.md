@@ -504,6 +504,9 @@ request), and runs on what it finds:
   `score_clusters` (D-183).
 - **Ready.** A model publishes `ready` (its `phase`, for the shell) only after its
   subscription is open (AT-38).
+- **After a server restart** a model registers again and declares its datastreams again
+  (the fields offered may have changed). A model's datastream is listed only once its model
+  has declared it since this start, and `models_ready` counts only those (D-186).
 - **Declared rates:**
 
   | Model | `max_rate` |
