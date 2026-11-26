@@ -230,11 +230,17 @@ try {
     await waitFor('the pushed command', () => lines.length > 0, 4);
     const pushAt = (lines[0].at - t1) / 1000;
     check(pushAt < 1 && lines[0].cmd.parameters.k === 7 && lines[0].cmd.sender === 'owner', `the command is pushed at once (${pushAt.toFixed(2)} s) with its sender`, JSON.stringify(lines[0].cmd));
+    const st = await req('POST', `/controlstreams/${csId}/status`, { user: NEW, body: { 'command@id': lines[0].cmd.id, statusCode: 'COMPLETED', message: 'ok' } });
+    check(st.status === 201, 'status reported at /controlstreams/{id}/status', String(st.status));
     const r = await sent;
     const dt1 = (Date.now() - t1) / 1000;
     check(r.status === 200 && r.json?.currentStatus === 'PENDING' && dt1 >= 4.5, `with a subscriber the POST answers 200 PENDING after ${dt1.toFixed(1)} s`, `${r.status} ${r.text.slice(0, 80)}`);
-    const st = await req('POST', `/controlstreams/${csId}/status`, { user: NEW, body: { 'command@id': lines[0].cmd.id, statusCode: 'COMPLETED', message: 'ok' } });
-    check(st.status === 201, 'status reported at /controlstreams/{id}/status', String(st.status));
+    // D-199: the sender's PENDING is stored as the POST answers, after the receiver's COMPLETED, as OpenSensorHub
+    // stores it; the outcome is the latest report other than PENDING.
+    const reps = ((await get(`/controlstreams/${csId}/status`)).json?.items ?? []).filter((x) => x['command@id'] === lines[0].cmd.id);
+    const outcome = reps.filter((x) => x.statusCode !== 'PENDING').sort((a, b) => a.reportTime.localeCompare(b.reportTime)).pop();
+    check(reps[reps.length - 1]?.statusCode === 'PENDING' && outcome?.statusCode === 'COMPLETED',
+      'PENDING is stored after COMPLETED; the outcome is the latest report other than PENDING (D-199)', reps.map((x) => x.statusCode).join(','));
     // a restart ends the subscription
     await control('restart-server');
     await waitFor('the stream to end', async () => (await Promise.race([pump.then(() => true), sleep(0.2).then(() => false)])), 5);
