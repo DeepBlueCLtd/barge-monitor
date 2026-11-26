@@ -600,6 +600,8 @@ export class DisplayClientSession {
     const before = this.completeRuns();
     this.runs.set(out.sort((a, b) => a.label.localeCompare(b.label)));
     const after = this.completeRuns();
+    // A run in progress is followed to its end, playing or paused (D-304).
+    if (this.preparing().length) this.watch(600);
     // A run newly complete: rows of an earlier run are no longer the ones shown (FR-35).
     if ([...after].some((x) => !before.has(x))) {
       this.cache.clear();

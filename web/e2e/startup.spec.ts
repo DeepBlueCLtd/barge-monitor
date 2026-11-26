@@ -60,9 +60,12 @@ async function started(page: Page) {
   await expect(page.getByTestId('flowchart')).toBeVisible({ timeout: STARTED_MS });
   await expect(page.getByTestId('step-models')).toHaveCount(0); // the steps give way to the flowchart
   await expect(page.getByTestId('stall')).toHaveCount(0);
-  // The controls are enabled, and nothing has started playing (FR-125a).
-  expect(await everyDisabledControlSaysWhy(page)).toBe(0);
-  await expect(page.getByTestId('play')).toBeEnabled();
+  // Nothing has started playing; a control that cannot act yet says why (FR-125a). 4.7 (D-307): replay is the
+  // display client's own, so Play and the rates wait for a login, and say so (interfaces §13.7).
+  await everyDisabledControlSaysWhy(page);
+  await expect(page.getByTestId('restart-server')).toBeEnabled();
+  await expect(page.getByTestId('play')).toBeDisabled();
+  await expect(page.getByTestId('play')).toHaveAttribute('title', 'Log in to the display client first');
   await expect(page.getByTestId('play')).toHaveText(/Play/);
   await expect(page.getByTestId('sim-state')).toHaveText('Paused');
   // The relay answers for the system: a request under api/ reaches the back end (with the
