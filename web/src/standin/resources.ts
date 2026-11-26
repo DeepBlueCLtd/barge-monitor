@@ -3,9 +3,10 @@
 // Identifiers are opaque (four base-32 characters, like OpenSensorHub's `040g`): nobody may rely on
 // them; clients find everything by uniqueId and outputName (docs/v4-interfaces.md §6, §9.1).
 //
-// A datastream is `stored` (its observations are kept here) or `sensor` (read from the logger store
-// through the store adapter, until the CSV importer of plan Phase 5). Each resource carries its
-// `owner`, for the permission checks of §9.3, which are the server's own.
+// A datastream is `stored` (its observations are kept here) or `sensor` (read from the 4.1 logger
+// store through the store adapter, for the 4.1 display client and models, until plan Phases 6 and 7).
+// The CSV importer writes its datasets in bulk into stored datastreams (`appendCols`, FR-20a). Each
+// resource carries its `owner`, for the permission checks of §9.3, which are the server's own.
 import type { PushStream } from './stream';
 import type { Account } from './accounts';
 import type { Component, DataRecord } from './swe';
@@ -57,6 +58,30 @@ export class Series {
     for (const [n, ty] of this.types) {
       const v = values[n];
       this.cols.get(n)!.splice(i, 0, NUMERIC.has(ty) || ty === 'Time' ? (v === undefined || v === null ? NaN : v) : v ?? null);
+    }
+  }
+
+  /** Many observations at once, as columns, in time order after what is there: the importer's bulk write (FR-20a). */
+  appendCols(t: ArrayLike<number>, cols: Record<string, ArrayLike<unknown>>, seq0: number): void {
+    const n = t.length;
+    if (!n) return;
+    if (this.t.length && t[0] < this.t[this.t.length - 1]) { // not after what is there: row by row, in place
+      for (let i = 0; i < n; i++) {
+        const row: Record<string, unknown> = {};
+        for (const k of this.types.keys()) row[k] = cols[k]?.[i];
+        this.appendRow(t[i], row, seq0 + i);
+      }
+      return;
+    }
+    for (let i = 0; i < n; i++) {
+      this.t.push(t[i]);
+      this.seq.push(seq0 + i);
+    }
+    for (const [name, ty] of this.types) {
+      const out = this.cols.get(name)!;
+      const v = cols[name];
+      const numeric = NUMERIC.has(ty) || ty === 'Time';
+      for (let i = 0; i < n; i++) out.push(v ? v[i] : numeric ? NaN : null);
     }
   }
 
@@ -165,7 +190,9 @@ const sameSchema = (a: DataRecord, b: DataRecord) =>
 
 /** Created resources. Everything is kept across restarts. */
 export class Store {
-  readonly ids = new Ids();
+  /** Reset instance makes a new store that keeps counting identifiers, so that none is reused (FR-50a). */
+  constructor(readonly ids: Ids = new Ids()) {}
+
   readonly systems = new Map<string, SystemRec>();
   readonly datastreams = new Map<string, DatastreamRec>();
   readonly controlstreams = new Map<string, ControlstreamRec>();
@@ -240,6 +267,12 @@ export class Store {
 
   appendRow(d: DatastreamRec, t: number, values: Record<string, unknown>): void {
     d.series!.appendRow(t, values, ++this.seq);
+  }
+
+  /** Rows in bulk, inside the server (FR-20a): the CSV importer's write. */
+  appendCols(d: DatastreamRec, t: ArrayLike<number>, cols: Record<string, ArrayLike<unknown>>): void {
+    d.series!.appendCols(t, cols, this.seq + 1);
+    this.seq += t.length;
   }
 }
 

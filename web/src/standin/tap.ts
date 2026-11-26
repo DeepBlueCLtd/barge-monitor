@@ -5,7 +5,7 @@
 // are numbered by hop (docs/v4-interfaces.md §3).
 import { pyJson } from './py';
 
-export type ComponentId = 'platform' | 'store' | 'adapter' | 'server' | 'models' | 'scilibs' | 'client';
+export type ComponentId = 'platform' | 'store' | 'adapter' | 'folder' | 'importer' | 'server' | 'models' | 'scilibs' | 'client';
 export type Letter = 'Q' | 'D' | 'O' | 'K' | 'P' | 'H' | 'S' | 'L' | 'I';
 
 export interface Captured {

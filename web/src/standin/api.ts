@@ -47,7 +47,7 @@ const FORMATS: Record<string, string> = {
 const FIELD_TYPES = new Set(['Quantity', 'Count', 'Category', 'Boolean', 'Text', 'Time']);
 const SHOWN = 4 * 4000;
 const PRECISION = 2;
-const COMPONENTS = new Set(['platform', 'store', 'adapter', 'server', 'models', 'scilibs', 'client']);
+const COMPONENTS = new Set(['platform', 'store', 'adapter', 'folder', 'importer', 'server', 'models', 'scilibs', 'client']);
 // Restricted systems, matched by unique id (§9.3): reading them, or anything under them, answers 403.
 const CO2 = /^urn:x-barge:sensor:[^:]+:co2(:|$)/;
 const RESTRICTED = /^urn:x-barge:process:[^:]+:restricted(:|$)/;

@@ -4,6 +4,7 @@
 // no counterpart in a developed system. Entry points shared by the stand-in
 // worker (web/src/workers/standin.worker.ts) and the Node harness that runs
 // the contract suite against it (web/scripts/standin-server.mjs, AT-24).
+import type { Folder } from './folder';
 import { History, HistoryManifest, Progress, Runtime } from './runtime';
 
 export type { HttpRequest, HttpResponse } from './api';
@@ -11,6 +12,8 @@ export type { Captured } from './tap';
 export { DEMO_PASSWORDS } from './accounts';
 export { Runtime } from './runtime';
 export type { History, HistoryManifest, Progress } from './runtime';
+export type { Folder, FolderEntry } from './folder';
+export { fetchFolder } from './folder';
 
 /**
  * Load the pre-calculated history (FR-15, FR-06d): the same files the Python
@@ -35,11 +38,14 @@ export async function loadHistory(manifest: HistoryManifest, readFile: (name: st
   return { manifest, files };
 }
 
-/** Start the stand-in over a loaded history: build the index, catch the models up, ready to serve. */
+/**
+ * Start the stand-in over a loaded history and a data folder: build the index, start the CSV importer
+ * (which imports Mission A silently, FR-15), catch the models up, ready to serve.
+ */
 export async function createStandin(seed: number, history: History, hostSeconds: () => number, progress?: (p: Progress) => void,
-  holdS?: number): Promise<Runtime> {
+  holdS?: number, folder?: Folder): Promise<Runtime> {
   progress?.({ stage: 'store', detail: 'loading the history into the logger store', pct: 90 });
-  const rt = new Runtime(seed, history, hostSeconds);
+  const rt = new Runtime(seed, history, hostSeconds, undefined, folder);
   if (holdS !== undefined) rt.holdS = holdS;
   await rt.catchUp(progress);
   return rt;

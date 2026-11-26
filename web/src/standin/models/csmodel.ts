@@ -109,6 +109,13 @@ export class ModelApi {
     return this.rt.now();
   }
 
+  /** Drop every identifier found or made (csmodel.Api.forget): looked up, or made, again on next use. */
+  forget(): void {
+    this.systems.clear();
+    this.ids.clear();
+    this.types.clear();
+  }
+
   iso(t: number): string {
     return isoUnix(this.epoch + t);
   }
@@ -504,6 +511,7 @@ export class Runner {
     if (closed) { // the server went away: register again once it answers, and resubscribe (AT-38)
       this.subscribed = false;
       this.ready = false;
+      this.api.forget(); // after Reset instance (FR-50a) every identifier it held has gone
     } else this.subscribed = true;
   };
 

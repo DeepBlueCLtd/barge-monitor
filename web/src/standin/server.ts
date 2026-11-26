@@ -1,7 +1,9 @@
 // The data server (C-04; server.py): one start of the stand-in for OpenSensorHub. An
 // instance is created at each server start: it freezes the field offering (FR-51) and
-// drops the store adapter's index so the adapter rebuilds it; while it does, the server
-// answers nothing (4.7, §9.1: no 503 and no instance identifier). The store of created
+// drops the store adapter's index so the adapter rebuilds it; then its modules start (the
+// CSV importer registers, lists the folder and, at the first start of a page load, imports
+// Mission A silently, FR-15). Until then the server answers nothing (4.7, §9.1: no 503 and
+// no instance identifier). The store of created
 // resources (resources.ts) outlives it, as OpenSensorHub's database does.
 //
 // The profile served is the one the 4.1 display client is built against; the 4.7
@@ -67,6 +69,11 @@ function capitalize(s: string) {
 export class Server {
   readonly offering: Offering;
   readonly adapter: StoreAdapter;
+  /** The adapter's index is rebuilt. */
+  indexed = false;
+  /** Its modules (the CSV importer) are starting. */
+  starting = false;
+  /** Answering requests: once indexed and its modules have started. */
   ready = false;
   readonly store: Store;
   readonly lieAboutProfile: boolean;
@@ -113,10 +120,14 @@ export class Server {
   }
 
   // --- start-up: the index is rebuilt; meanwhile the server answers nothing (§9.1) -----------------------
+  /** One step of rebuilding the index; true once it is rebuilt. The runtime then starts the modules. */
   indexStep(): boolean {
-    const done = this.adapter.indexStep();
-    if (done) this.ready = true;
-    return done;
+    if (!this.indexed) this.indexed = this.adapter.indexStep();
+    return this.indexed;
+  }
+
+  phase(): 'index' | 'import' | 'ready' {
+    return this.ready ? 'ready' : this.indexed ? 'import' : 'index';
   }
 
   progress(): { indexed: number; stored: number } {
