@@ -48,7 +48,14 @@ for (const backend of ['standin', 'python'] as const) {
       await expect(page.getByTestId('flowchart')).toBeVisible({ timeout: SLOW_MS });
       await expect(page.getByTestId('backend-state')).toHaveText(backend === 'python' ? 'Python' : 'JavaScript stand-in');
       // In Python mode the models start in their own workers after the server: wait until they have registered (FR-28).
-      await expect.poll(async () => (await systems(page)).has('urn:x-barge:process:analysis'), { timeout: SLOW_MS, intervals: [1000] }).toBe(true);
+      // While a server starts it refuses connections (§9.1), so a failed fetch is a reason to poll again, not a failure.
+      await expect.poll(async () => {
+        try {
+          return (await systems(page)).has('urn:x-barge:process:analysis');
+        } catch {
+          return false;
+        }
+      }, { timeout: SLOW_MS, intervals: [1000] }).toBe(true);
     });
 
     test.afterAll(async () => {
