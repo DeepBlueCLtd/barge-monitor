@@ -506,7 +506,8 @@ request), and runs on what it finds:
   subscription is open (AT-38).
 - **After a server restart** a model registers again and declares its datastreams again
   (the fields offered may have changed). A model's datastream is listed only once its model
-  has declared it since this start, and `models_ready` counts only those (D-186).
+  has declared it since this start, and `models_ready` counts only those. Until then (at most
+  about 11 s) the Python back end answers only the models (D-186).
 - **Declared rates:**
 
   | Model | `max_rate` |
