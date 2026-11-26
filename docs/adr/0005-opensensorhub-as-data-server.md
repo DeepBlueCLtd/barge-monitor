@@ -68,6 +68,17 @@ Commands, restart recognition and replacing a result do not, and need design cha
     after the importer module. It **weakens "used as shipped"** for the access-control
     part, though not for sensing, storage, discovery or commands.
 
+**AT-32, 2026-11-26** (`docs/findings/FINDING-2026-11-26-opensensorhub-contract-suite.md`;
+`backend/independent/at32_osh.py`). **Not passed: 1 of 12.** The contract suite, unchanged, ran
+against OpenSensorHub 2.0.4 behind the access gateway, with the importer, the replay controller
+and the core models as its clients.
+  - One path fails 11 checks: OpenSensorHub serves no `/collections/all_systems/items`.
+  - With four client-side changes (D-193 to D-196: discovery by `/systems?searchMembers=true`,
+    SensorML as `application/sml+json`, `[ppm]` for CO₂, reading JSON whatever the content
+    type), **all 12 pass**. They are proposed, not made.
+  - In front of a real server the gateway also bridges receivers' subscriptions to WebSocket,
+    serves the profile and discovers the system tree itself (D-190 to D-192).
+
 **Consequences.**
 
 * Less is written for this system: the display client, the models and the store adapter.

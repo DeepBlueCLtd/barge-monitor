@@ -379,8 +379,9 @@ the system **needs** of it. ✓ marks what the spike confirmed.
 - **FR-31** Declared queries (the last hour at replay time; one field over a whole dataset
   from a summary) meet a declared time budget.
 - **FR-32** QC flags are computed on import, never by altering the files.
-- **FR-93 (4.5)** **Authentication and permissions**, required of the server (to be
-  confirmed for OpenSensorHub, §15):
+- **FR-93 (4.6)** **Authentication and permissions**, required of the server. OpenSensorHub
+  refuses (403) rather than hides, so hiding is done by a thin **access gateway** in front
+  of it (§15, D-150), drawn as a component of its own:
   - every request, discovery included, and every push subscription (FR-02a) needs **valid credentials**;
     without them the answer is **401** and nothing is served;
   - permissions are granted **per system** and **inherited by its datastreams and control
@@ -571,10 +572,11 @@ access. The device itself is secured.
   assign a role, disable) **through OpenSensorHub's own administration**. The owner
   assigns roles but does not edit them, and so cannot expose CO₂ by changing a permission. Granting or
   removing emissions is changing a user's role.
-- **FR-116** A change of role takes effect **at the user's next login**; a user who is
-  logged in when their role changes is logged out. Whether a change instead takes effect at
-  once, on the next request, depends on how OpenSensorHub authenticates. The
-  authentication spike decides, and the stand-in follows it (PR-06).
+- **FR-116 (4.6)** A change of role takes effect **at once, on the user's next request**
+  (basic authentication has no session; the authentication spike confirmed OpenSensorHub
+  applies a change on the next request, D-151). A logged-in user is not logged out: what
+  they can no longer see disappears at their next poll, and their data of interest from it
+  is shown greyed (FR-96a).
 - **FR-117** **Our own account screen** is built only if a stated **trigger** is met: the
   owner cannot complete the account tasks of FR-115 unaided in a short trial, or
   OpenSensorHub's administration cannot be used on the delivered machine. Until then it is
@@ -911,6 +913,14 @@ pace), and in 4.4 and 4.6:
 
 ## 15. Open questions
 
+- **Reset instance and greyed data of interest (raised in implementation, D-169).**
+  FR-50a says Reset instance leaves "no data of interest", but FR-96, FR-108 and AT-48
+  expect data of interest to survive a Reset instance, greyed, and to be restored by
+  re-importing. Both cannot hold. Options: (a) workspaces survive Reset instance (it
+  deletes datasets and results only); (b) Reset instance deletes everything and AT-48 is
+  restated as greying after a role change (AT-59 already covers that). The implementation
+  currently follows FR-50a (b).
+
 - **The CSV importer as an OpenSensorHub module (answered 2026-11-25: feasible, at about
   300,000 rows/s, through internal classes that need a retest on each upgrade; see the
   finding of that date).** The question was: Can a module write a file of
@@ -926,8 +936,7 @@ pace), and in 4.4 and 4.6:
      control on.
   5. The administration screen is generic.
   6. 401 with `WWW-Authenticate: basic`; workspaces are only half enforced.
-  7. Changes take effect on the next request, so FR-116's "at next login" is to be
-     reworded.
+  7. Changes take effect on the next request; FR-116 is reworded accordingly.
 
   The original question: Confirm, in this
   order of risk:

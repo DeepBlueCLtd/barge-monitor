@@ -65,3 +65,15 @@ command receiver can connect). Passwords are in the file in plain text: spike on
        python backend/spike/osh_auth_spike.py http://localhost:8181/sensorhub backend/spike/auth-results.json --after-deny --ancestors
 
 Everything a request needs is in the `Authorization` header (Basic); there is no session.
+
+## The contract suite against OpenSensorHub (AT-32)
+
+No longer a spike: `backend/independent/at32_osh.py` starts the same build with a configuration
+written from the delivered accounts, puts the access gateway in front of it, installs the
+platform, runs the importer and replay controller as clients and the core models through the
+gateway, then runs `backend/contract_suite/suite.py` unchanged and prints pass or fail per check
+(`docs/findings/FINDING-2026-11-26-opensensorhub-contract-suite.md`):
+
+    pip install -r backend/requirements-dev.txt websockets
+    python scripts/build_data_folder.py
+    python backend/independent/at32_osh.py --osh <osh-core>/build/install/osh-core --proposed
