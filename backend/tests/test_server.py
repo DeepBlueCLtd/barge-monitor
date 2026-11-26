@@ -2,11 +2,13 @@
 restarts and resubscription, capture. AT-12, AT-38, AT-49, AT-52, AT-53, AT-55 to AT-57, AT-59, AT-61."""
 import base64
 import json
+import time
 
 import pytest
 
 from barge import accounts as A
 from barge import asgi
+from barge import config as C
 from barge.api import create_server
 from tests.helpers import Rig
 
@@ -257,4 +259,11 @@ def test_at38_receivers_resubscribe_after_every_restart_and_starting_answers_not
     r.control("up")
     r.step(1.0)
     r.step(1.0)
+    # After a restart the server answers the models first, until they are ready (D-186, at most
+    # MODEL_READY_TIMEOUT_S + 1 of real time), so another client may wait a little longer.
+    for _ in range(int(C.MODEL_READY_TIMEOUT_S) + 3):
+        if r.get("/") is not None:
+            break
+        time.sleep(0.5)
+        r.step(1.0)
     assert r.get("/").status == 200 and runner.subscribed.is_set()
