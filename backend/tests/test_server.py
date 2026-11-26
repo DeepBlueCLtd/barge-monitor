@@ -12,7 +12,7 @@ from tests.helpers import Rig
 
 @pytest.fixture(scope="module")
 def r():
-    return Rig(seed=21, days=0.2)
+    return Rig()
 
 
 def cs_of(r, system):
@@ -20,7 +20,7 @@ def cs_of(r, system):
 
 
 def test_at49_credentials_are_needed_and_the_challenge_is_basic(r):
-    for path in ("/", "/systems", "/profile.json", f"/datastreams/{r.ds('bow', 'weather')['id']}/observations"):
+    for path in ("/", "/systems", "/profile.json", f"/systems/{r.sid('bow')}/datastreams"):
         st, body, resp = r.get(path, user=False)
         assert st == 401 and resp.headers["www-authenticate"] == "basic", path  # the relay drops it (D-226)
         assert resp.headers["content-type"].startswith("text/html") and "<title>401 Unauthorized</title>" in body
@@ -110,7 +110,7 @@ def test_a_bound_is_rejected_by_the_receiver_naming_it(r):
 
 
 def test_at38_receivers_resubscribe_after_a_restart_and_starting_answers_nothing():
-    r = Rig(seed=22, days=0.1)
+    r = Rig()
     assert all(x.subscribed.is_set() for x in r.rt.local.runners)
     r.rt.restart_server()
     with pytest.raises(ServerUnavailable):
@@ -132,7 +132,7 @@ def test_at53_no_captured_message_shows_a_credential(r):
     r.get("/systems")
     r.request("POST", f"/systems/{r.systems()['urn:x-barge:workspace:owner']}/datastreams",
               json={"password": "demo-owner", "outputName": "x"})
-    r.advance(10)
+    r.step(10)
     text = json.dumps(r.rt.tap.drain())
     for pw in A.DEMO_PASSWORDS:
         assert pw not in text, pw

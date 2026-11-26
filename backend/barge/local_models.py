@@ -100,9 +100,10 @@ class LocalModels:
         user = f"svc-{model.id}"
         api = csmodel.Api(model.id, self._transport, user, password_of(user), stream=self._stream, real=self.rt.real)
         api.retry_s = 0.0  # in-process, the server answers as soon as it is up: resubscribe at the next tick
-        api.tap = lambda dst, summary, content=None, m=model.id, a=api: self.rt.tap.emit(
+        # A call into the scientific libraries is drawn, processing included (D-321).
+        api.tap = lambda dst, summary, content=None, m=model.id: self.rt.tap.emit(
             *(("models", "scilibs") if dst == "scilibs" else ("scilibs", "models")), "I", f"{m}: {summary}", content,
-            model=m, quiet=a.quiet)
+            model=m)
         r = csmodel.Runner(model, api)
         r.scan_s = 0.0  # in-process: read the catalogue at every step
         self.runners.append(r)

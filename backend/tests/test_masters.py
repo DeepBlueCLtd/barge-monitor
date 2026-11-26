@@ -81,14 +81,13 @@ def test_essentials_agree_with_the_swe_masters():
     assert checked >= 6
 
 
-def test_the_servers_weather_record_is_the_master():
-    """The 4.1 logger's records (still read by the 4.1 app, D-271) have the master's fields; the importer declares
-    the master itself (``importer.weather_schema``)."""
-    from barge.clock import ManualClock
-    from barge.runtime import Runtime
+def test_the_importers_weather_record_is_the_master():
+    """A file with every column gets the master's weather record (``importer.weather_schema``). The 4.1 logger's
+    records, checked here before, are retired (D-320)."""
+    from barge.fields import QUANTITIES
+    from barge.importer import weather_schema
 
-    rt = Runtime(seed=1, clock=ManualClock(0), pregen_days=0)
-    served = rt.server.sensor_schema["bow"]
+    served = weather_schema(list(QUANTITIES), "bow")
     master = load(C / "swe" / "weather-record.json")
     assert [(f["name"], f["type"], (f.get("uom") or {}).get("code")) for f in served["fields"]] == \
         [(f["name"], f["type"], (f.get("uom") or {}).get("code")) for f in master["fields"]]

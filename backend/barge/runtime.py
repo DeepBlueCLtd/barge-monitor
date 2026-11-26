@@ -1,9 +1,10 @@
-"""The running back end: the world and store, the data server's lifecycle, the models' host.
+"""The running back end: the data server's lifecycle, its store and its modules, the models' host.
 
-The world, the clock, the sensors and the logger store run continuously; the
-data server is started, restarted, taken down and brought up around them
-(FR-18, FR-47, FR-49). The control panel's field toggles are kept here as
-*pending* until the next server start (FR-51).
+The data server is started, restarted, taken down and brought up (FR-47, FR-49); its store of
+resources outlives every start but Reset instance. The control panel's field toggles are kept here
+as *pending* until the next server start (FR-50, FR-51). There is no simulation clock, world or
+logger: the data arrive as CSV files in the data folder (4.4), replay is each display client's own
+(4.7), and the 4.1 remnants are retired (plan Phase 8, D-320).
 
 Models run elsewhere: each in its own worker in the browser (FR-33), using the
 data server's HTTP interface like any other client (FR-28). In CPython (tests,
@@ -26,43 +27,29 @@ import atexit
 
 from . import config as C
 from .accounts import Accounts
-from .clock import SimClock, real_seconds
+from .clock import real_seconds
 from .fields import CATALOGUE, Offering
 from .folder import DirFolder
 from .importer import EmptyFolder, Importer
-from .logger import Logger
-from .sensors import Sensors
 from .server import Server, iso_real
 from .store import URN, Hub, Store
 from .tap import Tap
-from .truth import World
-from .world import generate
 
 
 class Runtime:
-    def __init__(self, seed: int = 1, clock=None, pregen_days: float = C.PREGEN_DAYS, capture: bool = True,
-                 progress=None, history: dict | None = None, local_models: bool = False,
-                 store_format=None, adapter_class=None, real=real_seconds, hold_s: float = C.COMMAND_HOLD_S,
-                 folder=None, parser=None, own_loop: bool = True):
-        self.seed = seed
-        self.real = real  # real time, Unix seconds: commands and status reports are stamped with it (§9.1)
+    def __init__(self, capture: bool = True, local_models: bool = False, real=real_seconds,
+                 hold_s: float = C.COMMAND_HOLD_S, folder=None, parser=None, own_loop: bool = True):
+        self.real = real  # real time, Unix seconds: commands, status reports and captures are stamped with it (§9.1)
         self.hold_s = hold_s  # how long a command's POST is held before it is answered (§9.1)
-        self.manifest = generate(seed)
-        self.world = World(self.manifest)
-        self.clock = clock if clock is not None else SimClock(start=pregen_days * 86400.0)
-        self.tap = Tap(now=self.now)
+        self.tap = Tap(now=self.real)
         self.tap.enabled = capture
-        self.logger = Logger()
-        # The store's format and the adapter that reads it are a port (SRD §2.2): AT-03 swaps both, and nothing else.
-        self.adapter_class = adapter_class
-        self.sensors = Sensors(self.world, self.logger, self.tap, **({"fmt": store_format} if store_format else {}))
         self.store = Store()  # created resources and their observations: they outlive restarts (D-11)
         self.accounts = Accounts()  # the server's accounts and user-to-role assignment (§9.3)
         self.hub = Hub()  # push subscriptions (§9.2)
         self.phases: dict[str, dict] = {}  # model -> {label, phase, detail}: what each model says of itself, for the shell
         self.local = None
         self.offering = Offering()  # what the next server start will publish
-        self.lie_about_profile = False  # a misconfigured server, for AT-07
+        self.lie_about_profile = False  # a misconfigured server (FR-79a, D-210)
         # The data folder (a path, or a Folder); none: an empty folder. The importer is its only reader (FR-20).
         if folder is not None and not hasattr(folder, "list"):
             folder = DirFolder(folder)
@@ -76,11 +63,6 @@ class Runtime:
         self.server: Server | None = None
         self.server_starts = 0
         self.down = False
-        self.history_source = "generated"
-        if history is not None and self.load_history(history, pregen_days):
-            self.history_source = "pre-built"
-        else:
-            self.pregenerate(pregen_days, progress)
         self.start_server()
         if local_models:
             from .local_models import LocalModels
@@ -88,51 +70,16 @@ class Runtime:
             self.local = LocalModels(self, loop=self.loop)
 
     def now(self) -> float:
-        return self.clock.now()
-
-    # --- FR-16: four weeks of history, through the same sensor-to-logger path --
-    def pregenerate(self, days: float, progress=None) -> None:
-        self.tap.recording = False
-        end = days * 86400.0
-        while self.sensors.next_t < end:
-            self.sensors.sample_until(min(end, self.sensors.next_t + 86400))
-            if progress:
-                progress(self.sensors.next_t / end)
-        self.tap.recording = True
-
-    def load_history(self, history: dict, days: float) -> bool:
-        """Load pre-built logger files instead of generating them (SRD §13).
-
-        `history` is {"manifest": {...}, "files": {name: bytes}}. Refused, and
-        False returned, unless it was made from this seed by this exact code.
-        """
-        from .history import code_hash
-
-        m = history["manifest"]
-        if m.get("seed") != self.seed or m.get("code_hash") != code_hash() or m.get("days") != days:
-            return False
-        for name in sorted(history["files"]):
-            data = history["files"][name]
-            self.logger._files[name] = data if isinstance(data, bytearray) else bytearray(data)
-        self.sensors.next_t = int(m["end_t"])
-        for k, v in m.get("capture_counts", {}).items():
-            self.tap.counts[k] = self.tap.counts.get(k, 0) + v
-        return True
+        """Real time, Unix seconds (there is no simulated time any more)."""
+        return self.real()
 
     # --- the running system ---------------------------------------------------------
     def tick(self) -> None:
-        """Bring the store up to the clock; let a starting server rebuild its index and start its modules; step
-        local models."""
-        if self.clock.playing:
-            self.sensors.sample_until(self.clock.now() + 1)
+        """Let a starting server start its modules (the CSV importer); run the back end's loop; step local models."""
         srv = self.server
-        if srv and not self.down:
-            if not srv.ready:
-                if srv.index_step() and not srv.starting:
-                    srv.starting = True
-                    self.spawn(self._start_modules(srv))
-            else:
-                srv.adapter.index_step()  # the adapter's index follows the growing store (FR-21)
+        if srv and not self.down and not srv.ready and not srv.starting:
+            srv.starting = True
+            self.spawn(self._start_modules(srv))
         self.run_loop()
         if self.local:
             self.local.tick()
@@ -154,7 +101,7 @@ class Runtime:
                 break
 
     async def _start_modules(self, srv) -> None:
-        """After the index: the importer registers and lists the folder, imports Mission A silently at the first
+        """At each start: the importer registers and lists the folder, imports Mission A silently at the first
         start of a page load (FR-15), and the server then answers. The importer subscribes once it does."""
         try:
             await self.importer.start()
@@ -182,7 +129,7 @@ class Runtime:
         loop.close()
 
     def startup_phase(self) -> str:
-        """For the page's loading steps (§13.7): ``index``, ``import``, ``ready`` (or ``down``)."""
+        """For the page's loading steps (§13.7): ``import`` while starting, then ``ready`` (or ``down``)."""
         if self.server is None or self.down:
             return "down"
         return self.server.phase()
@@ -198,15 +145,6 @@ class Runtime:
         self.importer.reset()
         self.instance_resets += 1
         self.start_server()
-
-    def play(self):
-        self.clock.play()
-
-    def pause(self):
-        self.clock.pause()
-
-    def set_rate(self, rate):
-        self.clock.set_rate(rate)
 
     # --- server lifecycle (FR-43..FR-46e) ----------------------------------------
     def start_server(self) -> None:
@@ -225,7 +163,7 @@ class Runtime:
 
     @property
     def running(self) -> bool:
-        """Answering requests. While starting (the index rebuilt) and while down the server answers nothing."""
+        """Answering requests. While starting (its modules starting) and while down the server answers nothing."""
         return not self.down and self.server is not None and self.server.ready
 
     # --- commands: pushed to subscribers (§9.1, §9.2) ----------------------------------
@@ -261,10 +199,6 @@ class Runtime:
         cur.update(phase=phase, detail=detail)
         if label:
             cur["label"] = label
-
-    def pending_commands(self) -> dict:
-        """Nothing waits for the clock any more: commands are pushed at once (4.7, §9.2). Kept for the 4.1 page."""
-        return {}
 
     def set_field(self, name: str, on: bool) -> None:
         if name not in CATALOGUE:
@@ -302,12 +236,8 @@ class Runtime:
         return {
             "server": "down" if self.down else ("waiting" if not self.server.ready else "running"),
             # The shell's own count of server starts (god's-eye): the server serves no instance identifier (§9.1).
-            "instance": f"{self.seed}-{self.server.number}" if self.server else None,
-            "progress": self.server.progress() if self.server else None,
+            "instance": str(self.server.number) if self.server else None,
             "fields": rows, "pending": pending, "lie_about_profile": self.lie_about_profile,
-            "clock": self.clock.state(),
-            "store": {"bytes": self.logger.total_bytes(), "files": len(self.logger.list_files()),
-                      "records": self.sensors.next_t * 2},
             "capture_counts": self.tap.counts,
             "models": models,
             "accounts": self.accounts.state(),
