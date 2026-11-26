@@ -156,6 +156,8 @@ def test_at40_the_catalogue_lists_every_file_and_a_new_one_after_rescan(folder_r
         row = cat[(f["file"], f["sha256"])]
         assert (row["size"], row["modified"]) == (f["size"], f["modified"])
         assert row["status"] == ("imported" if f["file"] == A_FILE else "not-imported")
+        if row["status"] == "not-imported":  # a Count has no missing value in OpenSensorHub: 0 until imported (D-197)
+            assert row["records"] == 0, row
     a = cat[(A_FILE, index[0]["sha256"])]
     assert a["dataset"] == dataset_id(A_FILE, index[0]["sha256"]) and a["records"] == 86400
     (path / "MISSION_D_20310428.csv.gz").write_bytes((path / "MISSION_C_20310421.csv.gz").read_bytes())
