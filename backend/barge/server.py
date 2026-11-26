@@ -1,8 +1,10 @@
 """The data server (C-04): one start of the stand-in for OpenSensorHub.
 
 An instance is created at each server start. It freezes the field offering
-(FR-51) and drops the store adapter's index so the adapter rebuilds it; while it
-does, the server answers nothing (4.7, §9.1: no 503 and no instance identifier).
+(FR-51) and drops the store adapter's index so the adapter rebuilds it; then its
+modules start: the CSV importer registers, lists the data folder and, at the first
+start of a page load, imports Mission A silently (FR-15). Until then the server
+answers nothing (4.7, §9.1: no 503 and no instance identifier).
 The store of created resources (``store.py``: systems, datastreams, control
 streams, commands and observations) outlives it, as OpenSensorHub's database does.
 
@@ -98,7 +100,9 @@ class Server:
         self.tap = tap
         self.number = number  # internal only: the server serves no instance identifier (4.7, §9.1)
         self.adapter = (getattr(runtime, "adapter_class", None) or StoreAdapter)(runtime.logger, tap)
-        self.ready = False
+        self.indexed = False  # the adapter's index is rebuilt
+        self.starting = False  # its modules are starting (the CSV importer)
+        self.ready = False  # answering requests
         self.store: Store = runtime.store
         self.lie_about_profile = runtime.lie_about_profile
         self.profile = json.loads((contracts_dir() / INTERIM_PROFILE).read_text())
@@ -143,12 +147,16 @@ class Server:
             ids[f"workspace:{u}"] = w["id"]
         return ids
 
-    # --- start-up: waiting mode while the index is rebuilt (FR-47) ----------------
+    # --- start-up: no answer while the index is rebuilt and the modules start (FR-47) --------
     def index_step(self) -> bool:
-        done = self.adapter.index_step()
-        if done:
-            self.ready = True
-        return done
+        """One step of rebuilding the adapter's index; True once it is rebuilt. The runtime then starts the
+        server's modules, and the server answers once they have started."""
+        if not self.indexed:
+            self.indexed = self.adapter.index_step()
+        return self.indexed
+
+    def phase(self) -> str:
+        return "ready" if self.ready else ("import" if self.indexed else "index")
 
     def progress(self) -> dict:
         return {"indexed": self.adapter.indexed_records(), "stored": self.adapter.store_records()}

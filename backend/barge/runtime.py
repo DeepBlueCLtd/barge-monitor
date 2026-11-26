@@ -9,13 +9,27 @@ Models run elsewhere: each in its own worker in the browser (FR-33), using the
 data server's HTTP interface like any other client (FR-28). In CPython (tests,
 an ordinary ASGI server) ``local_models=True`` runs the core models in-process
 instead, making the same HTTP requests of the same application.
+
+The CSV importer (``importer.py``) is a module of the data server: it starts with
+each server start, and the server answers only once it has registered and listed
+the data folder, and, at the first start only, imported Mission A silently (FR-15).
+Its work is asynchronous: in Pyodide on the page's event loop, in CPython on an
+event loop of the runtime's own, run a little at each ``tick`` (as the in-process
+models' is, D-259).
+
+Reset instance (FR-50a) deletes the whole store and starts the server again, empty.
 """
 from __future__ import annotations
+
+import asyncio
+import atexit
 
 from . import config as C
 from .accounts import Accounts
 from .clock import SimClock, real_seconds
 from .fields import CATALOGUE, Offering
+from .folder import DirFolder
+from .importer import EmptyFolder, Importer
 from .logger import Logger
 from .sensors import Sensors
 from .server import Server, iso_real
@@ -29,7 +43,7 @@ class Runtime:
     def __init__(self, seed: int = 1, clock=None, pregen_days: float = C.PREGEN_DAYS, capture: bool = True,
                  progress=None, history: dict | None = None, local_models: bool = False,
                  store_format=None, adapter_class=None, real=real_seconds, hold_s: float = C.COMMAND_HOLD_S,
-                 model_backlog: float | None = None):
+                 model_backlog: float | None = None, folder=None, parser=None, own_loop: bool = True):
         self.seed = seed
         self.real = real  # real time, Unix seconds: commands and status reports are stamped with it (§9.1)
         self.hold_s = hold_s  # how long a command's POST is held before it is answered (§9.1)
@@ -49,6 +63,16 @@ class Runtime:
         self.local = None
         self.offering = Offering()  # what the next server start will publish
         self.lie_about_profile = False  # a misconfigured server, for AT-07
+        # The data folder (a path, or a Folder); none: an empty folder. The importer is its only reader (FR-20).
+        if folder is not None and not hasattr(folder, "list"):
+            folder = DirFolder(folder)
+        self.importer = Importer(self, folder if folder is not None else EmptyFolder(), parser)
+        self.silent_import = True  # Mission A, once per page load: not again after Reset instance (FR-15, FR-50a)
+        # CPython: an event loop of the runtime's own, run at each tick. Pyodide: the page's (own_loop=False).
+        self.loop = asyncio.new_event_loop() if own_loop else None
+        if self.loop is not None:
+            atexit.register(self.close)
+        self.instance_resets = 0
         self.server: Server | None = None
         self.server_starts = 0
         self.down = False
@@ -61,7 +85,7 @@ class Runtime:
         if local_models:
             from .local_models import LocalModels
 
-            self.local = LocalModels(self, backlog=model_backlog)
+            self.local = LocalModels(self, backlog=model_backlog, loop=self.loop)
 
     def now(self) -> float:
         return self.clock.now()
@@ -97,16 +121,83 @@ class Runtime:
 
     # --- the running system ---------------------------------------------------------
     def tick(self) -> None:
-        """Bring the store up to the clock; let a starting server rebuild its index; step local models."""
+        """Bring the store up to the clock; let a starting server rebuild its index and start its modules; step
+        local models."""
         if self.clock.playing:
             self.sensors.sample_until(self.clock.now() + 1)
-        if self.server and not self.down:
-            if not self.server.ready:
-                self.server.index_step()
+        srv = self.server
+        if srv and not self.down:
+            if not srv.ready:
+                if srv.index_step() and not srv.starting:
+                    srv.starting = True
+                    self.spawn(self._start_modules(srv))
             else:
-                self.server.adapter.index_step()  # the adapter's index follows the growing store (FR-21)
+                srv.adapter.index_step()  # the adapter's index follows the growing store (FR-21)
+        self.run_loop()
         if self.local:
             self.local.tick()
+
+    # --- the server's modules: the CSV importer (§7) ----------------------------------------
+    def spawn(self, coro):
+        """Run a coroutine on the back end's event loop (the runtime's own in CPython, the page's in Pyodide)."""
+        if self.loop is not None:
+            return self.loop.create_task(coro)
+        return asyncio.ensure_future(coro)
+
+    def run_loop(self, rounds: int = 400) -> None:
+        """CPython: let the runtime's own loop run what it has in hand (in Pyodide the page's loop runs by itself)."""
+        if self.loop is None or self.loop.is_closed() or self.loop.is_running():
+            return
+        for _ in range(rounds):
+            self.loop.run_until_complete(asyncio.sleep(0))
+            if not self.loop._ready:  # noqa: SLF001 - nothing more to do now
+                break
+
+    async def _start_modules(self, srv) -> None:
+        """After the index: the importer registers and lists the folder, imports Mission A silently at the first
+        start of a page load (FR-15), and the server then answers. The importer subscribes once it does."""
+        try:
+            await self.importer.start()
+            if self.silent_import:
+                self.silent_import = False
+                await self.importer.silent_import()
+        except Exception as e:  # noqa: BLE001 - a broken folder never stops the server
+            self.tap.emit("importer", "server", "I", f"importer: {type(e).__name__}: {e}", str(e), quiet=True)
+        if srv is not self.server or self.down:
+            return
+        srv.ready = True
+        if self.importer.cs is not None:
+            await self.importer.listen(srv)
+
+    def close(self) -> None:
+        """End the back end's own loop (at exit): its subscriptions end, no task is left pending."""
+        loop = self.loop
+        if loop is None or loop.is_closed():
+            return
+        tasks = asyncio.all_tasks(loop)
+        for t in tasks:
+            t.cancel()
+        if tasks:
+            loop.run_until_complete(asyncio.gather(*tasks, return_exceptions=True))
+        loop.close()
+
+    def startup_phase(self) -> str:
+        """For the page's loading steps (§13.7): ``index``, ``import``, ``ready`` (or ``down``)."""
+        if self.server is None or self.down:
+            return "down"
+        return self.server.phase()
+
+    def reset_instance(self) -> None:
+        """FR-50a: stop the server, delete its whole store, and start it again empty: no dataset imported, no
+        results, no data of interest. Nothing is deleted record by record, and the data folder is untouched.
+        Mission A is not imported again until the page is reloaded (FR-15). Identifiers keep counting, so that
+        an identifier a client still holds is not found rather than found as something else."""
+        self.hub.close_all()
+        self.server = None
+        self.store = Store(ids=self.store.ids)
+        self.importer.reset()
+        self.instance_resets += 1
+        self.start_server()
 
     def play(self):
         self.clock.play()
@@ -142,7 +233,7 @@ class Runtime:
         """Write a command to every subscription to its control stream, at once; captured as it is written."""
         subs = self.hub.subscribers(cs["id"])
         for sub in subs:
-            who = "models" if sub.account.component == "models" else "client"
+            who = sub.account.component if sub.account.component in ("models", "importer") else "client"
             p = ", ".join(f"{k}={v}" for k, v in cmd["parameters"].items())
             self.tap.emit("server", who, "K", f"{sub.model + ': ' if sub.model else ''}push: {p}"[:120], cmd,
                           model=sub.model, push=True)
@@ -221,4 +312,9 @@ class Runtime:
             "models": models,
             "accounts": self.accounts.state(),
             "backend": "python",
+            "folder": self.importer.folder_state(),
+            "datasets": self.importer.datasets_state(),
+            "import_rate": self.importer.rate,
+            "importer": {"subscribed": self.importer.subscribed, "silent_done": not self.silent_import},
+            "resets": self.instance_resets,
         }

@@ -34,12 +34,12 @@ SETTLE = 400  # loop iterations a tick may take to finish the models' work in ha
 
 
 class LocalModels:
-    def __init__(self, runtime, classes=CORE, backlog: float | None = None):
+    def __init__(self, runtime, classes=CORE, backlog: float | None = None, loop=None):
         from .api import create_app
 
         self.rt = runtime
         self.app = create_app(runtime)
-        self.loop = asyncio.new_event_loop()
+        self.loop = loop or asyncio.new_event_loop()  # the runtime's own, which the importer shares
         atexit.register(self.close)
         self.backlog = backlog
         self.runners = []

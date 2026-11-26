@@ -203,6 +203,13 @@ class Api:
     def now(self) -> float:
         return float(self._now()) if self._now else 0.0
 
+    def forget(self) -> None:
+        """Drop every identifier found or made: they are looked up (or made) again on next use. After a restart
+        they are the same; after Reset instance (FR-50a) they are gone, and new ones are made."""
+        self._systems.clear()
+        self._ids.clear()
+        self._types.clear()
+
     def iso(self, t: float) -> str:
         return iso(self.epoch + float(t))
 
@@ -577,6 +584,7 @@ class Runner:
         if closed:  # the server went away: register again once it answers, and resubscribe (AT-38)
             self.subscribed.clear()
             self.ready = False
+            self.api.forget()  # after Reset instance (FR-50a) every identifier it held has gone
             return
         self.subscribed.set()
 
