@@ -499,6 +499,9 @@ request), and runs on what it finds:
   rate (FR-35, AT-34).
 - **Results.** Every output observation carries `run` (and Analysis's `run_id`). Nothing
   is replaced (FR-28a). A reader takes the **latest run** for the dataset (FR-35).
+  Analysis's `runs` names the data range it used as `start` and `end` (Time), beside
+  `run_id`, `algorithm`, `resolution`, `records`, `clusters`, `score_changes` and
+  `score_clusters` (D-183).
 - **Ready.** A model publishes `ready` (its `phase`, for the shell) only after its
   subscription is open (AT-38).
 - **Declared rates:**

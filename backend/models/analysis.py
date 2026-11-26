@@ -116,7 +116,7 @@ class Analysis(Model):
             "runs": [time_field("time", "Time the run ended"), text("run_id", "Analysis run"), run_field(),
                      text("command_id", "Command"), text("sender", "Sent by"), text("algorithm", "Algorithm"),
                      text("fields", "Fields"), text("sources", "Sources (JSON)"), text("resolution", "Resolution"),
-                     time_field("window_start", "Data range: start"), time_field("window_end", "Data range: end"),
+                     time_field("start", "Data range: start"), time_field("end", "Data range: end"),
                      count("records", "Records used"), count("clusters", "Clusters"),
                      quantity("score_changes", "Score: changes found against the manifest", "1"),
                      quantity("score_clusters", "Score: clusters against the manifest (adjusted Rand index)", "1"),
@@ -277,7 +277,7 @@ class Analysis(Model):
         await api.publish(out[(where, "runs")], {
             "t": end, "run_id": run_id, "run": run, "command_id": command_id, "sender": sender,
             "algorithm": s["algorithm"], "fields": ",".join(names), "sources": json.dumps(s["sources"]),
-            "resolution": res, "window_start": float(t[0]), "window_end": float(t[-1]), "records": int(len(t)),
+            "resolution": res, "start": float(t[0]), "end": float(t[-1]), "records": int(len(t)),
             "clusters": k, "score_changes": np.nan if score_changes is None else round(score_changes, 3),
             "score_clusters": np.nan if score_clusters is None else round(score_clusters, 3),
             "scored_against": against, "illustrative": False})

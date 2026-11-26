@@ -85,7 +85,7 @@ def test_at16_analysis_runs_on_a_data_of_interest_with_scores(played):
     assert run["score_clusters"] == pytest.approx(expect, abs=1e-3)
     det = {"t": world_seconds(np.array([parse_iso(c["time"]) for c in changes], dtype=float)),
            "scale": np.array([0 if c["scale"] == "minutes" else 1 for c in changes], dtype=int)}
-    sc = scoring.score_changes(w, det, float(world_seconds(parse_iso(run["window_start"]))), float(world_seconds(parse_iso(run["window_end"]))))
+    sc = scoring.score_changes(w, det, float(world_seconds(parse_iso(run["start"]))), float(world_seconds(parse_iso(run["end"]))))
     if sc["boundary_recall"] is None:
         assert np.isnan(run["score_changes"]) or run["score_changes"] == "NaN"
     else:

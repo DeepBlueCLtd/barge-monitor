@@ -218,6 +218,19 @@ of "Performance on slower machines" are now D-107 to D-114.
 | D-172 | The declared profile's own text and AT-55 | — | **Reworded**: the profile's description now says only weather sources are essential, and names no CO₂. The client's traffic test (AT-55) can include the profile | Revised after merge |
 | D-173 | Commands and logins in flight | — | A command is sent only while the client is configured; a 401 is acted on (back to the login screen, "Please log in again") only for credentials that had already worked, never during a login's own handshake | A refused login must say only that the name or password is wrong (FR-101) |
 
+## The Python back end in a real browser (2026-11-26)
+
+From running the demonstrator with `?backend=python` in headless Chromium and the e2e suite
+against both back ends (`E2E_BACKEND=python`, `web/e2e/backend.ts`).
+
+| # | Question | Options considered | Decision | Why |
+|---|---|---|---|---|
+| D-180 | When the page is ready in Python mode (NFR-05) | the back end's server running; also every core model | **Server running, then every core model `live`** (registered, subscribed, datastreams made for Mission A), or its worker could not load; at most 45 s after the server runs (`MODELS_WAIT_MS`). The model workers start with the back end's, not after it. A step that fails (e.g. a request before the server answers) is retried and does not settle start-up | NFR-05 puts the models in the start-up budget; a client logging in before a model's datastreams exist would hold a discovery without them. The stand-in's models are in place before it is ready, so both modes look the same to the viewer and the tests |
+| D-181 | Telling command status reports apart | by `command@id` and code; by an `id` | **Every listed status report has its own `id`** (Python now gives one, as the stand-in did; §9.1 says so) | The display client dedups reports by `id`; with none, the first report hid every later one, so no rejection was ever shown in Python mode |
+| D-182 | How a clustering command's `doi` names its dataset | the dataset id; `{file, size, modified, sha256}` as §11 | **As §11: by file and sha256**, from the catalogue, in the client's clustering command and the shell's crafted request; the stand-in still accepts an id | Python's Analysis followed §11 and rejected the id; the stand-in's leniency hid the client's deviation. The e2e test now checks the object |
+| D-183 | The field names of Analysis's `runs` data range | `window_start`/`window_end` (Python); `start`/`end` (stand-in, client) | **`start` and `end`** (§10 names them) | The client and the stand-in already agreed; one change in the Python model |
+| D-184 | e2e expectations that differ by back end | separate suites; one suite with a switch | **One suite**; `E2E_BACKEND=python` adds `?backend=python`. Differences: the stand-in banner (only the stand-in shows it); the captured `Authorization` header is matched case-insensitively (Python writes `Authorization: ****`, the stand-in `authorization: ****`); model workers' requests (`x-tap-model`) are left out of the client's request log | Each is a difference of presentation, not behaviour |
+
 ## AT-32 against a stock OpenSensorHub (2026-11-26)
 
 From running the contract suite against OpenSensorHub 2.0.4 behind the access gateway
