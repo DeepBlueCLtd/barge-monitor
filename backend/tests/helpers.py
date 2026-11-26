@@ -11,22 +11,55 @@ HOLD_S = 0.01  # the server's hold on a command's answer, shortened for the test
 
 
 class Rig:
-    """The application over a runtime with a hand-set clock, called in-process."""
+    """The application over a runtime with a hand-set clock, called in-process. ``folder``: a data folder for
+    the CSV importer (none: an empty one); ``models=False`` runs no in-process models."""
 
-    def __init__(self, seed=5, days=2.0, capture=True, user="owner", **store):
+    def __init__(self, seed=5, days=2.0, capture=True, user="owner", models=True, **store):
         self.clock = ManualClock(days * 86400.0)
         self.user = user
-        self.rt = Runtime(seed=seed, clock=self.clock, pregen_days=days, capture=capture, local_models=True,
+        self.rt = Runtime(seed=seed, clock=self.clock, pregen_days=days, capture=capture, local_models=models,
                           hold_s=HOLD_S, **store)
         self.app = create_app(self.rt)
         self.ready()
 
     def ready(self):
+        """The server answers, the importer holds its subscription and every in-process model is live."""
+        rt = self.rt
         for _ in range(10000):
-            if self.rt.server and self.rt.server.ready and self.rt.local.live:
+            if rt.server and rt.server.ready and rt.importer.subscribed and (rt.local is None or rt.local.live):
                 return
+            rt.tick()
+        raise AssertionError("the server, the importer and the models never became ready")
+
+    def step(self, n=1):
+        """Let the back end's loop run (pushed commands, imports) without moving the clock."""
+        for _ in range(n):
             self.rt.tick()
-        raise AssertionError("the server and models never became ready")
+
+    def command(self, uid, input_name, params, user=None):
+        """Send a command (its answer is held only HOLD_S here); returns the response."""
+        sid = self.systems()[uid]
+        _, body, _ = self.get(f"/systems/{sid}/controlstreams")
+        cs = next(c for c in body["items"] if c["inputName"] == input_name)
+        return self.request("POST", f"/controlstreams/{cs['id']}/commands", json={"parameters": params}, user=user)
+
+    def reports(self, cmd_id):
+        return self.get(f"/commands/{cmd_id}/status")[1]["items"]
+
+    def wait(self, cmd_id, steps=200):
+        """Tick until the command's outcome is final; its status reports other than PENDING, oldest first."""
+        st = []
+        for _ in range(steps):
+            st = [x for x in self.reports(cmd_id) if x["statusCode"] != "PENDING"]
+            if st and st[-1]["statusCode"] in ("COMPLETED", "FAILED", "REJECTED"):
+                return st
+            self.step()
+        raise AssertionError(f"command {cmd_id} never finished: {st}")
+
+    def dataset(self, file_prefix):
+        """The id of the current (not superseded) dataset imported from a file whose name starts so."""
+        return next(d["id"] for d in reversed(list(self.rt.importer.datasets.values()))
+                    if d["file"].startswith(file_prefix) and not d["superseded"])
 
     def advance(self, seconds):
         self.clock.play()
