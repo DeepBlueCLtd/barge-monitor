@@ -233,6 +233,22 @@ against both back ends (`E2E_BACKEND=python`, `web/e2e/backend.ts`).
 | D-185 | How "Put everything back" makes the display client discover the server again (FR-48) | restart (about 1 s refusing connections); down until the client has seen it, then up | **Down until the client reports the server unreachable (at most 8 s), then up** | In Python mode a poll can take over a second, so the client sometimes missed a one-second restart and kept the demo's degraded view (2 of 3 runs of the failure-demo test failed); now 3 of 3 pass. Shell only; the server's own restart is unchanged |
 | D-186 | A restart in Python mode, when model workers declare their datastreams after the server runs | keep listing the previous start's model datastreams; list them only once re-declared | **A model's datastream is listed and served only once its model has declared it since this server start** (`declared_at_boot`); the replay controller's `models_ready` counts only those; a model that gets no answer registers again; **after a restart the server answers only the models until `models_ready` (at most about 11 s)**, so a client's handshake sees the models' datastreams complete, as with the stand-in; the display client also repeats a handshake made while `models_ready` was false once it is true | The stand-in's models re-make their datastreams synchronously at start. In Python each model is a worker that re-declares a second or two later, Summaries after Data cleanse, so Summaries could re-make its summaries from the old cleaned schema, and a client's handshake could list the datastreams before Summaries had declared them: after "An essential missing" or "A misconfigured server" and back, the dataset stayed degraded ("Bow air temperature, 1-minute summary"; or every summary). Each of the first two measures alone left the failure-demo e2e failing in 1 of 4 runs. |
 
+Measured in headless Chromium on this container (2026-11-26), Mission A alone imported:
+
+- **Start-up (NFR-10, 30 s; `STARTUP_BUDGET_MS`)**, ms from navigation. Python: server running
+  about 7 100, Mission A loaded about 6 900, models ready about 10 100 (flowchart shown at about
+  10 100). Stand-in: about 380, 480 and 1 200.
+- **AT-04 (FR-31, `QUERY_BUDGET_MS`)** through the relay and the gateway, as the owner. The last
+  hour from both sensors: Python about 140 ms (two queries of 3 600 rows, 64–86 ms each),
+  stand-in about 80 ms; budget 1 500. One field over the whole dataset from a summary: 17 ms
+  under CPython after a full replay (`test_at04_declared_queries_meet_their_budget`); in the
+  browser the summaries are empty before a replay, so only an upper bound was taken there: every
+  field of a whole day of raw readings (86 400 rows) in about 1.4 s (Python) and 0.7 s (stand-in).
+- **AT-37**: 30 requests in 6 s at 0.1× and at 10× in both modes (100× is refused by Analysis's
+  bound of 10×, AT-35).
+- **AT-16**: each run's `score_clusters` and `score_changes` equal the referee's (`scoring.py`
+  against the manifest) recomputed from the run's own outputs (`test_at16_…`, CPython).
+
 ## AT-32 against a stock OpenSensorHub (2026-11-26)
 
 From running the contract suite against OpenSensorHub 2.0.4 behind the access gateway
