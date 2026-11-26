@@ -48,17 +48,10 @@ const get = (p, user = 'owner') => req('GET', p, { user });
 const control = async (action, arg) => (await fetch(B + '/demonstrator/control', { method: 'POST', body: JSON.stringify({ action, arg }) })).json();
 
 const uidOf = (s) => s.properties?.uid ?? s.uniqueId;
+/** Every system, subsystems included, in one listing (D-193). */
 async function systemsTree(user) {
-  const out = [];
-  const walk = async (path) => {
-    const r = await get(`${path}?limit=1000`, user);
-    for (const s of r.json?.items ?? []) {
-      out.push({ id: s.id, uid: uidOf(s) });
-      await walk(`/systems/${s.id}/subsystems`);
-    }
-  };
-  await walk('/systems');
-  return out;
+  const r = await get('/systems?searchMembers=true&limit=1000', user);
+  return (r.json?.items ?? []).map((s) => ({ id: s.id, uid: uidOf(s), links: s.links ?? [] }));
 }
 async function sysId(uid, user = 'owner') {
   return (await systemsTree(user)).find((s) => s.uid === uid)?.id ?? null;
@@ -109,6 +102,16 @@ try {
   const bowId = tree.find((s) => s.uid === 'urn:x-barge:sensor:bow')?.id;
   check(!!bowId, 'the bow sensor found by uniqueId through discovery');
   check(tree.every((s) => /^[0-9a-v]{4}$/.test(s.id)), 'identifiers are opaque (4 base-32 characters)', tree.map((s) => s.id).join(','));
+  {
+    const top = (await get('/systems?limit=1000')).json?.items ?? [];
+    check(top.length > 0 && top.length < tree.length && !top.some((s) => uidOf(s) === 'urn:x-barge:sensor:bow'),
+      '/systems lists the top level; searchMembers=true every system (D-193)', `${top.length} of ${tree.length}`);
+    check(tree.every((s) => !s.links.some((l) => l.rel === 'parent')), 'a listing carries no parent link, as OpenSensorHub (D-193)');
+    const one = (await get(`/systems/${bowId}`)).json;
+    check((one?.links ?? []).some((l) => l.rel === 'parent'), 'a single system links its parent');
+    const old = await get('/collections/all_systems/items');
+    check(old.status === 400, '/collections/all_systems/items answers 400, as OpenSensorHub (D-193)', String(old.status));
+  }
   const weatherA = await dsOf('urn:x-barge:sensor:bow', `weather__${DS_A}`);
   check(!!weatherA && /^[0-9a-v]{4}$/.test(weatherA), 'weather__{dataset} found by outputName');
   {
@@ -142,6 +145,16 @@ try {
   check(c1.status === 201 && c2.status === 201 && c1.headers.get('location') === c2.headers.get('location'),
     'creating what exists answers 201 with the existing Location (AT-29)', `${c1.status} ${c2.status} ${c1.headers.get('location')} ${c2.headers.get('location')}`);
   const newSys = c1.headers.get('location').split('/').pop();
+  {
+    const asJson = await req('POST', `/systems/${modelsId}/subsystems`, { user: NEW, body: { ...sysBody, uniqueId: sysBody.uniqueId + ':j' } });
+    check(asJson.status === 400, 'SensorML sent as application/json is refused with 400, as OpenSensorHub (D-194)', String(asJson.status));
+    const ppm = { type: 'DataRecord', label: 'Out', fields: [{ type: 'Time', name: 'time', label: 'Time' }, { type: 'Quantity', name: 'c', label: 'C', uom: { code: 'ppm' } }] };
+    const bad = await req('POST', `/systems/${newSys}/datastreams`, { user: NEW, body: { name: 'Ppm', outputName: 'ppm', schema: { obsFormat: 'application/swe+json', recordSchema: ppm } } });
+    check(bad.status === 400, 'a unit code that is not UCUM ("ppm") is refused with 400 (D-195)', String(bad.status));
+    ppm.fields[1].uom.code = '[ppm]';
+    const good = await req('POST', `/systems/${newSys}/datastreams`, { user: NEW, body: { name: 'Ppm', outputName: 'ppm', schema: { obsFormat: 'application/swe+json', recordSchema: ppm } } });
+    check(good.status === 201, '"[ppm]", UCUM\'s code, is accepted (D-195)', String(good.status));
+  }
   const rec = { type: 'DataRecord', label: 'Out', fields: [{ type: 'Time', name: 'time', label: 'Time' }, { type: 'Quantity', name: 'x', label: 'X', uom: { code: '1' } }] };
   const d1 = await req('POST', `/systems/${newSys}/datastreams`, { user: NEW, body: { name: 'Out', outputName: 'out', schema: { obsFormat: 'application/swe+json', recordSchema: rec } } });
   const d2 = await req('POST', `/systems/${newSys}/datastreams`, { user: NEW, body: { name: 'Out', outputName: 'out', schema: { obsFormat: 'application/swe+json', recordSchema: rec } } });

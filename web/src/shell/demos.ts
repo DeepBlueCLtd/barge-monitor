@@ -101,7 +101,7 @@ async function craftedRequest(): Promise<string> {
   const quiet = { authorization: auth('owner'), 'x-tap-quiet': '1' };
   const j = async (path: string, headers: Record<string, string>) => (await fetch(API_BASE + path, { headers, cache: 'no-store' })).json();
   // The demonstrator, not the client, knows where CO₂ is: it asks as the owner, quietly (a god's-eye view, FR-68a).
-  const systems = (await j('collections/all_systems/items?limit=1000', quiet)).items as { id: string; properties: { uid: string } }[];
+  const systems = (await j('systems?searchMembers=true&limit=1000', quiet)).items as { id: string; properties: { uid: string } }[];
   const co2 = systems.find((s) => /:co2$/.test(s.properties.uid));
   const ds = co2 ? (await j(`systems/${co2.id}/datastreams?limit=1000`, quiet)).items?.[0] : null;
   const chain = `crafted-${Date.now()}`;

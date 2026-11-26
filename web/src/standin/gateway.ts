@@ -176,7 +176,7 @@ export class Gateway {
     if (res.status !== 200) return res;
     const j = JSON.parse(new TextDecoder().decode(res.body));
     const items = (j.items as any[]).filter((it) => {
-      const sys = it['system@id'] ?? (seg[0] === 'systems' || seg[1] === 'all_systems' ? it.id : null);
+      const sys = it['system@id'] ?? (seg[0] === 'systems' ? it.id : null);
       return sys === null || this.canRead(a, sys);
     });
     const links: unknown[] = [];

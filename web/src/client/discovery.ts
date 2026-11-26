@@ -43,7 +43,6 @@ export interface SystemInfo {
   uid: string;
   label: string;
   assetType: string;
-  parent: string | null;
 }
 
 export interface DatastreamInfo {
@@ -128,11 +127,11 @@ export async function handshake(http: ClientHttp): Promise<Discovery> {
     const claimed = !!profile && conformsTo.includes(profile.id);
 
     const systems = new Map<string, SystemInfo>();
-    for (const s of await http.all<any>('collections/all_systems/items')) {
-      const parentHref: string | undefined = (s.links ?? []).find((l: any) => l.rel === 'parent')?.href;
+    // Every system, subsystems included (D-193). A listing carries no parent link, and nothing here needs one.
+    for (const s of await http.all<any>('systems', { searchMembers: 'true' })) {
       systems.set(s.id, {
         id: s.id, uid: s.properties?.uid ?? s.uniqueId ?? '', label: s.properties?.name ?? s.label ?? s.id,
-        assetType: s.properties?.assetType ?? s.assetType ?? '', parent: parentHref ? parentHref.split('/').pop()! : null,
+        assetType: s.properties?.assetType ?? s.assetType ?? '',
       });
     }
     const uidOf = (sid: string) => systems.get(sid)?.uid ?? '';
