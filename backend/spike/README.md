@@ -78,3 +78,7 @@ adopted, nothing rewrites requests on the way, and there is no `--proposed` run:
     pip install -r backend/requirements-dev.txt websockets
     python scripts/build_data_folder.py
     python backend/independent/at32_osh.py --osh <osh-core>/build/install/osh-core [--json backend/independent/at32-osh-results.json]
+
+What `DELETE` and `PUT` do on that server (D-200), through the gateway and directly, with the same set-up:
+
+    python backend/independent/at32_delete_probe.py --osh <osh-core>/build/install/osh-core [--json backend/independent/at32-delete-results.json]
