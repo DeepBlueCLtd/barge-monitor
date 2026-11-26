@@ -531,7 +531,9 @@ for (const backend of ['standin', 'python'] as const) {
           '    async def process(self, api, ds, t0, t1, run):', '        raise RuntimeError("a bug in a new model")', '', '', 'MODEL = Broken', ''].join('\n'));
         await page.getByTestId('run-model').click();
         await expect(page.getByTestId('phase-new-model-1')).toContainText('failed', { timeout: SLOW });
-        for (const m of ['data-cleanse', 'summaries', 'analysis']) await expect(page.getByTestId(`phase-${m}`)).toContainText('live');
+        // The others carry on: still processing the datasets the demos imported, then live; none failed (FR-33).
+        for (const m of ['data-cleanse', 'summaries', 'analysis']) await expect(page.getByTestId(`phase-${m}`)).toContainText('live', { timeout: SLOW });
+        await expect(page.getByTestId('phase-new-model-1')).toContainText('failed');
         await expect(status(page, 'server')).toContainText('Ready');
         const drawn = (await captured(page))['client>server:Q'] ?? 0;
         await page.getByTestId('card-client').click();
