@@ -76,9 +76,10 @@ the two OpenSensorHub savings frames. The savings frames predate 4.6. In them th
 subsystems sit inside a "built by us" box and the importer and Models are gold, and 4.6
 forbids both. Where a mockup and this document disagree, this document wins.
 
-**Companion documents to update (4.7):** `docs/v4-interfaces.md`, `docs/plan-v4.6.md`,
-ADR 0006 (replay controller) and ADR 0008 (access gateway) describe 4.6. They need revising
-to 4.7 before building (§15).
+**Companion documents (4.7):** the contract is `docs/v4-interfaces.md`, the plan
+`docs/plan-v4.7.md`, and the decisions `docs/decisions-log.md` (D-220 to D-232). ADR 0009
+(replay in the display client) and ADR 0010 (access control by OpenSensorHub) supersede
+ADRs 0006 and 0008.
 
 ### Changes from Version 4.3
 
@@ -1032,8 +1033,10 @@ pace), and in 4.4 and 4.6:
   file sizes and whether files ever overlap or are re-exported.
 - **Idle time before lock.** 5 minutes is a placeholder; confirm with the barge owner.
 - **Decision log numbering.** Resolved: the duplicates are now D-107 to D-114.
-- **Interfaces document (4.7).** `docs/v4-interfaces.md`, the plan and ADRs 0006 and 0008
-  describe 4.6 (the replay controller and the access gateway); revise them to 4.7.
+- **What OpenSensorHub must be configured to do (4.7).** Interfaces §14 lists what the
+  stand-ins assume of a configured OpenSensorHub without a gateway: an allow-list for
+  restricted reads, refusing delete, private workspaces, an internal endpoint for receivers,
+  and no browser login dialog. Each is to be confirmed with the OpenSensorHub team.
 - **Handshakes after imports (4.6).** A full handshake after every import (FR-44) is
   drawn one request at a time (FR-42a), and it grows with every dataset imported. If it
   gets in the way of a demonstration, a handshake scoped to the dataset is the

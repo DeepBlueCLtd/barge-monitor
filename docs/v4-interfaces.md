@@ -1,9 +1,21 @@
-# Version 4.6 interfaces (implementation contract)
+# Version 4.7 interfaces (implementation contract)
 
 These are the fixed points that the Python back end, the JavaScript stand-in, the models
-and the front end are built against. SRD Version 4.6 (`srd-barge.md`) is the requirement;
+and the front end are built against. SRD Version 4.7 (`srd-barge.md`) is the requirement;
 this file is the design that meets it. Where the two disagree, the SRD wins and this file
-is wrong. `docs/plan-v4.6.md` gives the order of work.
+is wrong. `docs/plan-v4.7.md` gives the order of work.
+
+**Changes from 4.6 (the owner's review, 2026-11-26; decisions D-220 to D-232):**
+- **No replay controller.** Replay is the display client's own (§8). Models process each
+  dataset on import (§10.2). The `replay` component, `urn:x-barge:replay`, its control
+  stream, `state`, `log`, `models_ready`, `max_rate` and `svc-replay` are withdrawn.
+- **No access gateway.** Clients talk to the data server directly (§9.3). Restricted
+  resources are listed and refused with `403`, as stock OpenSensorHub does. The `gateway`
+  component and §9.5 are withdrawn.
+- **No Freeze.** The `freeze` control action, the relay's hold (`x-relay-hold-ok`,
+  `{held}`) and `frozen` are withdrawn.
+- **Startup names its steps**, and a stall says where (§13.7).
+- The opening's back-end band is two rows of five (§12).
 
 Names in `code` are normative. Both back ends implement every section that says "the
 server", except where a section says otherwise.
@@ -16,19 +28,18 @@ Every captured message names its sender and receiver with one of these ids (SRD 
 |---|---|---|---|
 | `folder` | Data folder | Legacy | |
 | `importer` | CSV importer | New build · back end | |
-| `replay` | Replay controller | New build · back end | |
 | `server` | Data server (OpenSensorHub; a stand-in here) | Third-party libraries | |
 | `models` | Models | New build · back end | ★ |
 | `scilibs` | Scientific libraries | Third-party libraries | |
 | `client` | Display client | New build · front end | ★ |
-| `gateway` | Access gateway (§9.5) | New build · back end | |
 
-In the adoption opening only (§12), eight more ids stand in for `server`:
+In the adoption opening only (§12), these ids stand in for `server`. They are the
+subsystems drawn, not a count of what the data server holds (SRD FR-120):
 
 `sub-webapi`, `sub-registry`, `sub-obsstore`, `sub-query`, `sub-commands`,
 `sub-accounts`, `sub-permissions`, `sub-admin`.
 
-No message is ever captured with these eight ids.
+No message is ever captured with these ids.
 
 The relay is not a component, and nothing is captured to or from it (FR-03). The referee
 is scaffolding: its traffic is captured as `models ↔ server` with the letter `I`.
@@ -43,19 +54,12 @@ is scaffolding: its traffic is captured as `models ↔ server` with the letter `
 | server → importer | K | a pushed `import` command |
 | client → server | Q, K | an HTTP request (K is a `POST` to `/controlstreams/{id}/commands`) |
 | server → client | D, P, O, H | an HTTP response (H is any status ≥ 400, including 401) |
-| server → replay | K | a pushed `replay` command |
-| replay → server | Q, O | registration (Q); state, log and command status (O) |
 | server → models | D, O, H, K | an HTTP response; a pushed command (K) |
 | models → server | Q, O, I | a request (Q); publishing (O); the referee (I) |
 | models → scilibs, scilibs → models | I | a call and its result |
-| client → gateway → server, models → gateway → server | Q, K | every request from the display client and the models passes the gateway (§9.5); each hop is captured |
-| server → gateway → client, server → gateway → models | D, P, O, H, K | responses and pushes come back through it |
 
-The rows above that read `client → server`, `server → client`, `models → server` and
-`server → models` are drawn as two hops each, through `gateway`. The importer and the replay
-controller are modules inside the server, so they do not pass the gateway.
-
-The importer and the replay controller run inside the back-end worker. Their traffic is
+The display client and the models talk to the server directly (4.7: no gateway). The
+importer is a module inside the server and runs inside the back-end worker. Their traffic is
 captured where §2 says, even though no HTTP is involved (FR-65: "inside the server").
 
 **Who sends a request** is told to the capture by request headers:
@@ -72,12 +76,12 @@ None of these headers decides anything in the server.
 interface Captured {
   id: number | string;
   t: number;            // REAL seconds (Date.now()/1000) when captured; drawing is in real time (FR-78)
-  replay_t?: number;    // the replay time then, as Unix seconds, when a dataset is loaded (for the strip only)
+  replay_t?: number;    // the display client's replay time then, as Unix seconds, when a dataset is open (for the strip only)
   src: ComponentId; dst: ComponentId;
   letter: 'Q'|'D'|'O'|'K'|'P'|'H'|'S'|'L'|'I';
   summary: string;      // one line
   content: string;      // the message, at most 4,000 characters, with credentials redacted (§9.4)
-  failed?: boolean;     // a request that got no answer (server down, starting or frozen past its timeout)
+  failed?: boolean;     // a request that got no answer (server down or starting)
   push?: boolean;       // a command delivered on a push subscription (drawn "push")
   chain?: string|null;
   hop?: number;
@@ -88,24 +92,17 @@ interface Captured {
 ## 4. Time
 
 - **Replay time** is absolute UTC, as written in the CSV files. Each dataset has its own
-  span (§6). The replay controller holds the replay time and the current dataset (§8).
-- **Real time** paces the replay clock (`rate` replay seconds per real second) and the
-  drawing. The shell has no speed control (FR-78).
-- The `SimClock` of 4.1 is withdrawn, together with `CLOCK_RATES`, `RATES`,
-  `DEFAULT_RATE`, `HOP_S` in simulated seconds, and `simClock` in the page. One hop takes
-  `HOP_MS = 900` real milliseconds; a handshake hop takes `HANDSHAKE_HOP_MS = 350`.
-- **Rates** offered: `0.1, 0.5, 1, 10, 100` (FR-86). Each is capped by the lowest
-  `max_rate` declared by an active model (§10.3).
-- **Freeze** (FR-92) is set by the page on the back-end worker, with the control
-  `freeze {on}`. While frozen:
-  - the replay clock does not advance;
-  - every request and every push is queued in the back-end worker, unanswered, and
-    released in order on unfreeze;
-  - the drawing holds its icons where they are.
-
-  Freeze is not captured. A queued request keeps its relay timeout suspended: the relay
-  asks with `x-relay-hold-ok: 1`, and the back-end worker sends `{held: true}` while it
-  holds one, which resets the relay's timer.
+  span (§6). Each **display client** holds its own replay time and current dataset (§8).
+  Nothing on the server holds a replay time.
+- **Real time** paces each client's replay clock (`rate` replay seconds per real second)
+  and the drawing. The shell has no speed control (FR-78).
+- The `SimClock` of 4.1 is withdrawn, together with `CLOCK_RATES`, `DEFAULT_RATE`, `HOP_S`
+  in simulated seconds, and `simClock` in the page. One hop takes `HOP_MS = 900` real
+  milliseconds; a handshake hop takes `HANDSHAKE_HOP_MS = 350`.
+- **Rates** offered: `0.1, 0.5, 1, 10, 100` (FR-86). Nothing bounds them: models do not
+  follow replay (§10.2).
+- **Freeze** is withdrawn (4.7, FR-92). Pausing the client stops its polling (FR-63a); the
+  drawing of messages already sent finishes in real time.
 
 ## 5. The data folder and its CSV dialect (FR-15, FR-17)
 
@@ -177,10 +174,10 @@ import, like every other field, with a range of 250–5000 ppm and a 60 ppm spik
 | `urn:x-barge:process:data-cleanse:restricted` | `cleaned-co2-bow__{ds}`, `cleaned-co2-stern__{ds}` | **Restricted** |
 | `urn:x-barge:process:summaries` | `summary-1min-{bow,stern}__{ds}`, `summary-1h-{bow,stern}__{ds}`, `derived-1min__{ds}`, `derived-1h__{ds}` | Minimum, mean and maximum per quantity (FR-29): `<f>_min`, `<f>`, `<f>_max` |
 | `urn:x-barge:process:summaries:restricted` | `summary-1min-co2-{bow,stern}__{ds}`, `summary-1h-co2-{bow,stern}__{ds}` | **Restricted** |
-| `urn:x-barge:process:analysis` | `runs__{ds}`, `changes__{ds}`, `clusters__{ds}`, `correlation__{ds}` | Appended, keyed by `run_id` (FR-28a) |
+| `urn:x-barge:process:{model}` (every model) | `runs__{ds}` | Each run's progress and result on the dataset (§10.2, FR-35b) |
+| `urn:x-barge:process:analysis` | `changes__{ds}`, `clusters__{ds}`, `correlation__{ds}` | Appended, keyed by `run_id` (FR-28a) |
 | `urn:x-barge:process:analysis:restricted` | the same four | Runs whose selection includes CO₂ (FR-112). **Restricted** |
 | `urn:x-barge:importer` | `catalogue` | §7 |
-| `urn:x-barge:replay` | `state`, `log` | §8 |
 | `urn:x-barge:workspace:{user}` | `data-of-interest` | §11 |
 
 `correlation` carries `matrix` as **Text** (JSON), because OpenSensorHub refused an array
@@ -201,7 +198,6 @@ UCUM code: parts per million is `[ppm]` in UCUM, and `ppm` is refused (D-195).
 | `urn:x-barge:sensor:bow`, `…:stern` | Bow sensor, Stern sensor | sosa:Sensor / Equipment | barge | server config |
 | `urn:x-barge:sensor:bow:co2`, `…:stern:co2` | Bow CO₂ analyser, Stern CO₂ analyser | sosa:Sensor / Equipment | the sensor | server config; **restricted** |
 | `urn:x-barge:importer` | CSV importer | sosa:System / Equipment | | the importer |
-| `urn:x-barge:replay` | Replay controller | sosa:System / Simulation | | the replay controller |
 | `urn:x-barge:process:models` | Models | sosa:System / Process | | server config |
 | `urn:x-barge:process:{model}` | the model's label | sosa:System / Process | models | the model |
 | `urn:x-barge:process:{model}:restricted` | `{label}, restricted outputs` | sosa:System / Process | that model | the model; **restricted** |
@@ -258,72 +254,41 @@ import does not run until the page is reloaded.
 **Speed.** The importer panel shows `rows/s` for the last import. In the stand-in it must
 beat 50,000 rows/s, so that 24 h imports in under 4 s.
 
-## 8. Replay controller (FR-84 to FR-89, FR-91)
+## 8. Replay in the display client (FR-84 to FR-90, §8.6)
 
-Its system is `urn:x-barge:replay` (Simulation). It is created at server start, under
-its own service account, and subscribes to its control stream before it declares itself
-ready.
+There is no replay on the server (4.7, D-220). Each display client keeps:
 
-**`replay` control stream.** Parameters, every one present on every command:
+```ts
+interface ReplayClock {
+  dataset: string | null;   // the client's current dataset id
+  start: number; end: number; // its span, Unix seconds, from the catalogue
+  time: number;             // the replay time, Unix seconds, within [start, end]
+  rate: 0.1 | 0.5 | 1 | 10 | 100;
+  playing: boolean;
+  atEnd: boolean;
+}
+```
 
-| Parameter | Type | Bounds |
-|---|---|---|
-| `action` | Category | `load`, `play`, `pause`, `seek` |
-| `dataset` | Text | a dataset id; must be imported, for `load` |
-| `rate` | Quantity | one of `0.1, 0.5, 1, 10, 100`; at most `max_rate` |
-| `position` | Time | ISO, within the current dataset's span (`seek`) |
-
-The client always sends all four, filling the unchanged ones from the latest `state`.
-
-The receiver validates every command:
-- a rate above the bound is `REJECTED` with the message `rate 100 exceeds 10, the
-  highest Analysis sustains` (FR-86, AT-35);
-- `load` of a dataset that is not imported is `REJECTED`, naming it.
-
-**`state` datastream.** One observation once per real second while playing, and one on
-every change. Fields:
-
-| Field | Type |
-|---|---|
-| `time` | Time: the replay time |
-| `dataset` | Text |
-| `start`, `end` | Time |
-| `position` | Time: equal to `time` |
-| `rate` | Quantity |
-| `max_rate` | Quantity |
-| `max_rate_model` | Text |
-| `playing` | Boolean |
-| `at_end` | Boolean |
-| `run` | Text: the current replay run id |
-| `models_ready` | Boolean: every model under Models has created its datastreams for `dataset` |
-
-`time` is the replay time, so `resultTime=latest` gives the current state.
-`phenomenonTime` is the replay time too, which makes the state of a dataset readable by
-time.
-
-**`log` datastream.** Every command applied: `time` (the **real time** it took effect),
-`command_id`, `action`, `dataset`, `rate`, `position` (the **replay time** it took effect),
-`run`, `sender`, `note` (D-198). `time` is real time, not the replay time, because
-OpenSensorHub keeps one observation per phenomenon time per datastream and replaces the
-first: keyed by replay time, a `load` and a `pause` at one position would leave one entry.
-Readers order the log by `time` and show `position` as where the replay was.
-
-**Replay runs.** A run id is `r-<dataset id>-<n>`. A new run starts on `load` of a
-dataset, and on every `seek` (FR-87). Models tag their results with it (§10).
-
-**Models ready.** After a `load`, the controller lists `/systems/{models}/subsystems` and
-`/datastreams` (Q, drawn) once per real second until every model system has at least one
-datastream whose output name ends `__{dataset}`. It then publishes the state with
-`models_ready: true`. A model that is failing is skipped after 10 real seconds, and named
-in the log. The display client starts the handshake that follows an import (FR-44) only
-once `models_ready` is true for the new dataset, so its profile check never races the
-models.
-
-**At the end** of the dataset the controller pauses, sets `at_end`, and publishes the
-state (FR-88).
-
-**At startup**, before the first login, the controller loads Mission A and is paused at
-its start (FR-77). This load is quiet.
+- **Open** (from the Dataset selector, FR-103) sets `dataset`, `start` and `end`, puts
+  `time` at `start`, and pauses. It sends no command. If the file is not imported, the
+  client first sends `import` (§7) and opens it when the catalogue says `imported`.
+- **Play, pause, rate and seek** change the clock only. While playing, `time` advances by
+  `rate` replay seconds per real second. At `end` the clock pauses and sets `atEnd`
+  (FR-88). Play at the end starts again from `start`.
+- **Reading.** While playing, the client polls each datastream in use once per real second
+  for `phenomenonTime` up to `time` (FR-63). While paused it polls nothing (FR-63a). It
+  never asks beyond `time` (FR-63b), even though the server holds the whole dataset and
+  every model's results for it.
+- **Results.** For model outputs, the client shows the dataset's **latest complete run**
+  (§10.2). While a model's latest run on the dataset is `processing`, the views that depend
+  on it say "results being prepared", with the run's `pct` (FR-35b). It finds this
+  generically, from the `runs__{ds}` datastreams it can read; it does not know the models.
+- **Default.** After login, the client opens Mission A, paused at its start (FR-77).
+  Restart client returns to that (FR-85).
+- **Two clients** replaying the same dataset at different rates see the same results up to
+  their own times. The server's outputs do not change (AT-70).
+- **The shell** mirrors the clock in the top bar and the status box. It reads and drives it
+  in the page, through the display client; nothing about it crosses the seam.
 
 ## 9. The server: behaviour both stand-ins must have (FR-06c, PR-05, PR-06)
 
@@ -335,8 +300,7 @@ its start (FR-77). This load is quiet.
   `uniqueId`; GeoJSON gives `properties.uid`). `GET /systems` alone lists the top level;
   `/systems/{id}/subsystems` lists a system's children. **A listing carries no `parent`
   link**; only a single system (`GET /systems/{id}`) links its parent. No client relies on
-  parent links: the system tree, where one is needed, is learnt from `/subsystems` (the
-  gateway's discovery, D-192). `GET /collections/all_systems/items` answers `400`, as
+  parent links: the system tree, where one is needed, is learnt from `/subsystems` (D-192). `GET /collections/all_systems/items` answers `400`, as
   OpenSensorHub does; `/collections` lists `all_systems` with its `items` link to `/systems`.
 - **SensorML is sent as `application/sml+json`** (D-194), to `POST /systems` and
   `POST /systems/{id}/subsystems`. A body sent as `application/json` (or without a
@@ -354,11 +318,12 @@ its start (FR-77). This load is quiet.
 - A missing value is the string `"NaN"`. JSON `null` in a Quantity is refused with `400`.
 - `PUT` and `DELETE` on observations, systems and datastreams are **refused with a `4xx`**
   (D-200): the stand-ins answer `405`; OpenSensorHub answers `400` to `PUT` with an empty
-  body. Clients rely only on a 4xx. A stock OpenSensorHub **deletes** a system or a
-  datastream on `DELETE` (`204`) for an account its permissions allow, and for any account
-  on its internal endpoint (tried on 2026-11-26), so the access gateway refuses `PUT`,
-  `PATCH` and `DELETE` with `405` for every account (§9.5): nothing is replaced or deleted
-  except by Reset instance (SRD §17).
+  body. Clients rely only on a 4xx. **Open (D-224):** a stock OpenSensorHub **deletes** a
+  system or a datastream on `DELETE` (`204`) for an account its permissions allow, and for
+  any account on its internal endpoint (tried on 2026-11-26). FR-28a needs the delivered
+  OpenSensorHub configured to refuse it; that is to be settled with the OpenSensorHub team
+  (§14). The stand-ins refuse `PUT`, `PATCH` and `DELETE` with `405` for every account, as
+  the configured server is expected to.
 - The format is chosen with `f=application/swe+json`. The `Accept` header is
   **ignored**: the default is `application/json` observation resources. Paging is by
   `limit` and `offset`, with no `next` link in SWE JSON. A `limit` over the maximum is
@@ -380,7 +345,8 @@ its start (FR-77). This load is quiet.
   alone would read `PENDING`. Both stand-ins store it too. The display client, both
   `csmodel`s (`outcome`, `commandOutcome`), the shell and the suite read it this way.
 - **Sending a command:** `POST /controlstreams/{csId}/commands` with
-  `{"parameters": {...}}`.
+  `{"parameters": {...}}`. Commands go to the importer (`import`) and to the models; there
+  is no `replay` control stream (4.7).
   - **With no subscriber**, the command is dropped and not listed afterwards. The answer
     is `202` after the hold: **5 s in the stand-ins**, about **29.5 s in OpenSensorHub**
     2.0.4 (AT-32 run of 2026-11-26). The stand-ins keep 5 s; no client waits on either.
@@ -397,12 +363,20 @@ its start (FR-77). This load is quiet.
 `Authorization` header. The answer is `200` with `content-type: application/x-ndjson`
 and a body that **never ends**: one command JSON per line, as
 `{"id", "parameters", "issueTime", "sender"?}`.
-- `sender` is present only if S-AUTH shows that OpenSensorHub provides it (§14).
+- `sender` is the sending user's id, as OpenSensorHub puts it on a pushed command
+  (D-152).
 - The subscription ends when the server stops, restarts or goes down. The receiver then
   resubscribes once the server answers again (FR-48, AT-38).
 
 **`PushChannel`** (`web/src/push.ts`, and `csmodel.py`'s `subscribe`) wraps this in an
 interface shaped like WebSocket: `onopen`, `onmessage({data})`, `onclose`, `close()`.
+
+- **Where receivers subscribe (D-223).** With access control on, OpenSensorHub closes every
+  command subscription on its public endpoint at once (S-AUTH). Receivers (the importer and
+  the models) are server-side processes in a developed system, so they subscribe on the
+  server's **internal endpoint**, which has access control off and is not reachable from
+  outside: `/api-internal` beside `/api`. The stand-ins serve the same path, for service
+  accounts only.
 
 **Port protocol.** The back-end worker answers a subscription with
 `{status, headers, stream: true}`, then `{chunk: <bytes>}` per command, and `{end: true}`
@@ -412,13 +386,19 @@ CPython the same endpoint is a FastAPI `StreamingResponse`.
 **Capture.** The push is captured as `server → <receiver>` with `K` and `push: true`, at
 the moment it is written to the stream.
 
-### 9.3 Authentication (FR-93, FR-97 to FR-102)
+### 9.3 Authentication and permissions (FR-93, FR-97 to FR-102, FR-111 to FR-118)
+
+Clients reach the data server **directly** (4.7, D-221). The stand-ins do what a stock
+OpenSensorHub with its security module on does, configured as below. Where that
+configuration is not yet proven, §14 says so.
 
 - Every request and every push subscription carries
   `Authorization: Basic base64(user:password)`. Without valid credentials the answer is
-  **`401`** (an HTML page) with **no `WWW-Authenticate` header**, so the browser never
-  shows a native login dialog. That header is to be confirmed against OpenSensorHub
-  (§14).
+  **`401`** (an HTML page) with `WWW-Authenticate: basic`, as OpenSensorHub sends it.
+  The browser's native login dialog must never appear (FR-97): the display client always
+  sends credentials, and the relay drops the `WWW-Authenticate` header on the way back. In
+  a developed system the same is done by configuring OpenSensorHub or its web server (§14,
+  D-226).
 - `/profile.json` also needs credentials.
 - Accounts, as the server's configuration (`backend/barge/accounts.py` and
   `web/src/standin/accounts.ts`; identical, and labelled demo credentials, PR-07):
@@ -428,69 +408,42 @@ the moment it is written to the stream.
 | `owner` | `demo-owner` | Owner |
 | `friend` | `demo-friend` | Viewer (weather only) |
 | `analyst` | `demo-analyst` | Viewer with emissions (for tests) |
-| `svc-importer`, `svc-replay`, `svc-data-cleanse`, `svc-summaries`, `svc-analysis` | `svc-demo` | service: create and append only under their own systems (and the importer under the sensors' datastreams); read everything, CO₂ included |
+| `svc-importer`, `svc-data-cleanse`, `svc-summaries`, `svc-analysis` | `svc-demo` | service: create and append only under their own systems (and the importer under the sensors' datastreams); read everything, CO₂ included |
 | `svc-new-model-1`, `svc-new-model-2` | `svc-demo` | service: as above, but **no CO₂** unless the owner grants it (FR-113) |
 
-- **Permissions**, checked per system and inherited by its subsystems, datastreams and
-  control streams:
+- **Permissions**, per system. In OpenSensorHub a grant is inherited but a deny is not
+  (S-AUTH), so restricting is done with an **allow-list**: each role is granted read on
+  every *open* resource by id, and the list is extended as each import and each model
+  creates datastreams (D-222). The stand-ins check by resource the same way:
   - **read**: every role reads every unrestricted system, plus its own workspace.
     Owner, Viewer with emissions, and the core service accounts also read restricted
     systems;
-  - **command**: every user may send commands to the importer, the replay controller and
-    every model's unrestricted control stream;
+  - **command**: every user may send commands to the importer and every model's
+    unrestricted control stream;
   - **create and append**: a user only under `workspace:{self}`; a service account only
-    under its own systems.
-- A system the account may not read is **absent** (FR-93): it is left out of every
-  listing (`/systems`, `/systems?searchMembers=true`, `/systems/{id}/subsystems`, `/datastreams`,
-  `/systems/{id}/datastreams`, `/controlstreams`, `/collections/*/items`), and answers
-  **404** to every path under it.
-- **Role changes** (FR-116): the stand-in keeps a per-account `epoch`. Raising it (the
-  admin stub, §13.5) makes every request with the old credentials answer `401` until the
-  next login. Whether that matches OpenSensorHub is for S-AUTH (§14).
-- The importer, the replay controller and the core models in CPython and in the stand-in
-  authenticate as their service accounts.
-
-### 9.5 The access gateway (S-AUTH finding of 2026-11-25; decision D-150)
-
-A stock OpenSensorHub **cannot hide** a system: a denied system answers 403 and its
-datastreams, observations and streams stay readable, and denies are not inherited. With
-access control on, it also closes every command subscription at once. So the restriction
-of FR-93 is done by an **access gateway**, written for this system, that sits in front of
-the data server. It is drawn as a component of its own (`gateway`), never hidden inside
-the stand-in.
-
-**The gateway:**
-- **Credentials.** It authenticates every request against the delivered accounts, and
-  forwards the request with the same credentials. Without valid credentials it answers
-  `401` itself, and it **strips** OpenSensorHub's `WWW-Authenticate: basic`, so that the
-  browser never shows its own login dialog.
-- **Filtering.** It removes restricted resources from every listing, matching them by
-  unique-id prefix:
+    under its own systems. Stock OpenSensorHub meets this for top-level creation, but lets
+    an account create **subsystems under any system**, and lets any account read another
+    user's workspace (S-AUTH). Both are open (§14); the stand-ins refuse them, as the
+    configured server is expected to.
+- **A system the account may not read is listed, and refused (4.7, FR-93).** It appears in
+  `/systems`, `/systems?searchMembers=true`, `/systems/{id}/subsystems`, `/datastreams`,
+  `/systems/{id}/datastreams` and `/controlstreams`, as OpenSensorHub lists it. Reading it,
+  or anything under it (its datastreams' schemas, its observations, its control streams'
+  commands), answers **`403`**. The restricted systems are matched by unique id:
   - `urn:x-barge:sensor:*:co2`;
   - `urn:x-barge:process:*:restricted`;
   - other users' `urn:x-barge:workspace:*`.
-
-  It also removes their datastreams and control streams, and answers `404` to every path
-  under them.
-- **Writes.** It enforces "create and append only under your own systems". It refuses
-  `PUT`, `PATCH` and `DELETE` with `405` for **every account**, whatever the path: a stock
-  OpenSensorHub deletes on `DELETE`, and nothing is replaced or deleted except by Reset
-  instance (SRD §17; D-200).
-- **Push subscriptions.** It forwards them to the server's internal receiver endpoint,
-  for service accounts only. That endpoint has access control off and is not reachable
-  from outside.
-- **Roles.** It reads the delivered user-to-role assignment on **every request**, so a
-  role change takes effect at once (FR-116; there is no session to end). The `epoch` of
-  §9.3 is withdrawn.
-
-**The server (both stand-ins)** behaves as OpenSensorHub would behind the gateway: it
-authenticates Basic credentials, and applies no permission per system. It keeps the
-`WWW-Authenticate: basic` header on its 401.
-
-**FR-112a.** A pushed command carries `sender`, the user id, as OpenSensorHub's does. The
-receiving model looks up that user's role in the same delivered assignment
-(`accounts.py`, `accounts.ts`), and rejects a command naming CO₂ if the role lacks
-emissions.
+- **The display client offers only what it can read (FR-118).** At the handshake, a
+  datastream whose schema answers `403` is left out of the field list, like a datastream it
+  cannot use. It is not reported as missing, and it never makes a dataset degraded. The
+  client has no list of restricted ids.
+- **Role changes** take effect **on the next request** (FR-116, D-151): the server reads
+  the user-to-role assignment on every request. The admin stub (§13.5) changes it.
+- **FR-112a.** A pushed command carries `sender`, the user id. The receiving model looks
+  that user's role up in the delivered assignment (`accounts.py`, `accounts.ts`), and
+  rejects a command naming CO₂ if the role lacks emissions (D-152).
+- The importer and the core models in CPython and in the stand-in authenticate as their
+  service accounts.
 
 ### 9.4 Redaction (FR-16a)
 
@@ -516,63 +469,61 @@ class Api:  # every method is async; each is one or more HTTP requests with the 
     async def publish_many(self, key, cols: dict) -> int      # loops publish(); counts
     async def subscribe(self, cs_key, on_command) -> None     # push stream (§9.2); resubscribes after unreachability
     async def command_status(self, cs_key, cmd_id, status, message="") -> None
-    async def replay_state(self) -> dict                      # latest of urn:x-barge:replay|state
+    async def catalogue(self) -> list[dict]                   # the importer's catalogue, folded per file (§7)
     async def score(self, kind, payload) -> dict              # the referee (scaffolding)
 ```
 
 ```python
 class Model:
     id, label, description
-    max_rate: float             # the highest replay rate it sustains (FR-37a)
-    window: float = 60.0        # replay seconds per processing window, aligned to the dataset's start
+    window: float = 60.0        # seconds of data per processing window, aligned to the dataset's start
     async def setup(self, api)                    # register; subscribe; THEN declare ready
-    async def process(self, api, ds, t0, t1, run) # one window (t0, t1] of dataset ds, under replay run `run`
+    async def declare(self, api, ds)              # create every datastream for dataset ds, runs__{ds} included
+    async def process(self, api, ds, t0, t1, run) # one window [t0, t1) of dataset ds, in run `run`
     async def on_command(self, api, cmd) -> str   # validate; raise Rejected("…bound…") to report REJECTED
 ```
 
-### 10.2 The runner
+### 10.2 The runner (4.7: process on import)
 
-The runner reads the replay `state` once per real second (drawn, like every other
-request), and runs on what it finds:
-- **On a new dataset**, it first creates all of the model's datastreams for that dataset,
-  including the restricted ones it may publish. This is what the replay controller waits
-  for (`models_ready`, §8).
-- **Current dataset.** It follows `state.dataset`. On a new dataset or run, it continues
-  from where it got to for that dataset if the run is the same, and otherwise starts the
-  dataset's windows again from the run's position (FR-87).
-- **Up to the replay time.** It processes whole windows only, up to `state.time`: every
-  window `(t0, t1]` with `t1 ≤ replay time`. This is what makes outputs identical at any
-  rate (FR-35, AT-34).
-- **Results.** Every output observation carries `run` (and Analysis's `run_id`). Nothing
-  is replaced (FR-28a). A reader takes the **latest run** for the dataset (FR-35).
-  Analysis's `runs` names the data range it used as `start` and `end` (Time), beside
-  `run_id`, `algorithm`, `resolution`, `records`, `clusters`, `score_changes` and
+Models follow **no replay clock and no current dataset** (FR-35, D-220). The runner:
+
+- **Finds datasets** by reading the importer's `catalogue` once per real second (drawn,
+  like every other request). Every dataset whose file status is `imported`, `changed` or
+  `superseded` is one to process.
+- **On a dataset not yet processed**, it first **declares** every datastream the model may
+  publish for it, restricted ones included, and `runs__{ds}`. It then processes the
+  **whole dataset**, in whole windows `[t0, t1)` aligned to the dataset's start
+  (D-129), oldest first, and the last, partial window at the dataset's end. Datasets are
+  taken in the order they were imported.
+- **Runs.** A run id is `<model>-<dataset id>-<n>`. Run 1 is the first processing of a
+  dataset. A settings command (§10.3) starts a new run of that model over every imported
+  dataset, newest first. Analysis's `clustering` command starts one run on the dataset its
+  `doi` names.
+- **Progress (FR-35b).** Each run appends to `runs__{ds}`: `time` (real time), `run_id`,
+  `status` (`processing` or `complete`), `done_until` (Time: the end of the last window
+  done), `pct` (Count 0–100), and the settings it used. It appends a `processing` entry at
+  the start and every 10 %, and a `complete` entry at the end. Analysis's runs also carry
+  `start`, `end`, `algorithm`, `resolution`, `records`, `clusters`, `score_changes` and
   `score_clusters` (D-183).
+- **Results.** Every output observation carries its `run_id`. Nothing is replaced (FR-28a).
+  A reader takes the **latest complete run** for the dataset (FR-35).
+- **Determinism (AT-34).** A run's outputs depend only on the dataset and the run's
+  settings, never on when it ran, how long it took or what any client was doing.
 - **Ready.** A model publishes `ready` (its `phase`, for the shell) only after its
   subscription is open (AT-38).
-- **After a server restart** a model registers again and declares its datastreams again
-  (the fields offered may have changed). A model's datastream is listed only once its model
-  has declared it since this start, and `models_ready` counts only those. Until then (at most
-  about 11 s) the Python back end answers only the models (D-186).
-- **Declared rates:**
-
-  | Model | `max_rate` |
-  |---|---|
-  | Data cleanse | 100 |
-  | Summaries | 100 |
-  | Analysis | 10 |
-
-  The replay controller reads them from each model system's `max_rate` property
-  (SensorML `characteristics`, read at registration).
+- **After a server restart** a model registers again and resubscribes. Datastreams and
+  results persist across a restart, as in OpenSensorHub. A run cut short by the restart is
+  restarted as a new run. The 4.6 restart hold (D-186) is withdrawn (D-228).
 - **Order.** Data cleanse reads `weather__{ds}` (and `co2__{ds}`). Every other model reads
-  only Data cleanse's outputs (AT-15).
+  only Data cleanse's outputs (AT-15), and waits until Data cleanse's run on the dataset is
+  `complete`.
 
 ### 10.3 Commands to models
 
 | Model | Control stream | Parameters (all present) |
 |---|---|---|
-| Data cleanse | `settings` | `spike_threshold` (Quantity 1–10) |
-| Summaries | `settings` | `tendency_hours` (Quantity 1–6) |
+| Data cleanse | `settings` | `spike_threshold` (Quantity 1–10); a new run over every dataset |
+| Summaries | `settings` | `tendency_hours` (Quantity 1–6); a new run over every dataset |
 | Analysis | `clustering` | the table below |
 
 Analysis's `clustering` parameters:
@@ -589,7 +540,7 @@ The receiver validates every bound, and answers `REJECTED` naming it (FR-27).
 **CO₂ in a command (FR-112, FR-112a).** If `doi.sources` names a CO₂ field:
 - the run is published under `analysis:restricted`;
 - if the sender is not allowed CO₂, the command is `REJECTED` with "a requested source is
-  not available". How the receiver knows the sender is decided by S-AUTH (§14).
+  not available". The receiver looks up the role of the command's `sender` (§9.3).
 
 ## 11. Data of interest (FR-94 to FR-96a, FR-104 to FR-108)
 
@@ -600,7 +551,7 @@ The master is `contracts/schemas/data-of-interest.json`:
   "dataset": {"file": "…", "size": 0, "modified": "…", "sha256": "…"},
   "start": "…Z", "end": "…Z", "resolution": "PT1S|PT1M|PT1H", "aggregation": "as-stored",
   "sources": [{"system": "urn:…", "output": "weather", "fields": ["air_temperature"]}],
-  "run": "r-…", "created": {"at": "…Z", "by": "owner"} }
+  "run": "analysis-…-1", "created": {"at": "…Z", "by": "owner"} }
 ```
 
 - `sources[].output` is the output name **without** `__{ds}`. The dataset id is found
@@ -609,6 +560,8 @@ The master is `contracts/schemas/data-of-interest.json`:
 - **Saving** appends an observation to `urn:x-barge:workspace:{user}|data-of-interest`
   with fields `time` (save time), `doi_id` (Text), `action` (`save` or `remove`) and
   `record` (Text, the JSON). The list is folded from these.
+- **On screen** these are **Favourites** (SRD §8.5). The record's name stays "data of
+  interest".
 - **Resolution** maps to datastreams: `PT1S` reads `cleaned-*` (or `weather`); `PT1M`
   reads `summary-1min-*`; `PT1H` reads `summary-1h-*`. Any other resolution is refused,
   naming these three (FR-94a).
@@ -616,22 +569,24 @@ The master is `contracts/schemas/data-of-interest.json`:
 ## 12. The adoption opening (SRD §9.8)
 
 - **The flag.** `?hand-made` is read once, by `web/src/shell/opening.ts`.
-- **Layout.** `layout-opening.json` holds two rows for the back-end band:
-  - row 1: `importer`, `replay`, `models`, `sub-webapi`, `sub-registry`, `sub-obsstore`;
+- **Layout.** `layout-opening.json` holds two rows of five for the back-end band:
+  - row 1: `importer`, `models`, `sub-webapi`, `sub-registry`, `sub-obsstore`;
   - row 2: `sub-query`, `sub-commands`, `sub-accounts`, `sub-permissions`, `sub-admin`.
 
   The third-party zone holds `scilibs` only. The other zones are shifted down by one card
   row.
 - **Lines** (FR-120a) are drawn from `OPENING_FLOWS` in `opening.ts`, without letters.
+- **Wording.** The lead reads: written ourselves, the data server is a range of subsystem
+  components to develop, among them these. No count appears (FR-120, FR-124).
 - **Before Adopt:**
   - `runtime.start()` is **not called**: no worker starts and the relay is not
     registered (FR-122);
   - the top bar renders only the title;
   - the status reads "Opening";
   - the banner is not rendered.
-- **Adopt** animates the eight cards to the `server` card's position over 1.5 s, with
+- **Adopt** animates the subsystem cards to the `server` card's position over 1.5 s, with
   `prefers-reduced-motion` honoured. It then swaps to the normal layout, calls
-  `runtime.start()`, and shows the controls.
+  `runtime.start()`, and shows the controls. Nothing plays (FR-125a, §13.7).
 
 ## 13. Workers, the page and controls
 
@@ -639,7 +594,7 @@ The master is `contracts/schemas/data-of-interest.json`:
 
 | Worker | Runs | Started by |
 |---|---|---|
-| `backend.worker.ts` | Pyodide: the importer, the replay controller, the data server stand-in, the folder | the page, `?backend=python` |
+| `backend.worker.ts` | Pyodide: the importer, the data server stand-in, the folder | the page, `?backend=python` |
 | `model.worker.ts` ×3, plus one per empty slot used | Pyodide: one model each; its requests go through the relay with its service credentials | the page, Python mode |
 | `standin.worker.ts` | TypeScript: everything the back-end worker runs, plus the core models | the page, by default |
 | `sw.js` | the relay; forwards requests and streams; no logic (§9.2) | the page |
@@ -654,19 +609,20 @@ The page sends:
 
 The worker posts:
 - `progress {stage, detail, pct}`;
-- `tick {messages, server, replay}` every 100 ms;
+- `tick {messages, server}` every 100 ms;
 - `state {…}`;
 - `relay-failed {…}`.
 
-`replay` in the tick is the latest replay state, for the shell's status only. The
-display client reads the state over HTTP.
+The replay clock is the display client's, in the page (§8); no worker holds it.
 
 ### 13.3 Control actions
 
 `restart-server`, `down`, `up`, `field {name, on}`, `profile-lie`, `capture`,
-`freeze {on}`, `reset-instance`, `set-role {user, role}`, `state`.
+`reset-instance`, `set-role {user, role}`, `state`. Each carries a request `id`, which the
+worker's answer echoes (D-167).
 
-There is no `play`, `pause` or `rate`: replay is controlled only by commands (C4).
+There is no `play`, `pause`, `rate` or `freeze`: replay is the display client's (§8), and
+Freeze is withdrawn.
 
 ### 13.4 Control state
 
@@ -674,30 +630,57 @@ There is no `play`, `pause` or `rate`: replay is controlled only by commands (C4
 { server, fields, pending, lie_about_profile,
   folder: [{file, size, modified, status, dataset, pct}],
   datasets: [{id, file, start, end, superseded}],
-  replay, models: [{id, label, phase, detail, max_rate, datastreams}],
-  accounts: [{user, role}], capture_counts, backend, frozen, import_rate }
+  models: [{id, label, phase, detail, datastreams, runs: [{dataset, run_id, status, pct}]}],
+  accounts: [{user, role}], capture_counts, backend, import_rate }
 ```
 
 ### 13.5 Admin stub (FR-115)
 
 The admin stub is the `set-role {user, role}` control action, offered in the control
-panel as "OpenSensorHub administration (stand-in)". It raises the account's `epoch`
-(§9.3).
+panel as "OpenSensorHub administration (stand-in)". It changes the delivered
+user-to-role assignment, which the server reads on the next request (§9.3).
 
 ### 13.6 URL parameters
 
 `?backend=python|standin`, `?sketch=off` and `?hand-made`. `?seed` is withdrawn: the data
 folder is fixed.
 
-## 14. Waiting on the spikes
+### 13.7 Startup and readiness (FR-125a, NFR-10a)
 
-| Item | Interim in both stand-ins | Decided by |
-|---|---|---|
-| Restricted resources absent from listings, and 404 | **Decided: the access gateway** (§9.5); OpenSensorHub cannot do it | S-AUTH, question 1 |
-| `sender` on a pushed command (FR-112a) | **Decided: present as the user id**; the receiver looks the role up | S-AUTH, question 4 |
-| Role change: at once, or at the next login (FR-116) | **Decided: at once**, on the next request | S-AUTH, question 7 |
-| `401` with or without `WWW-Authenticate` | **Decided:** the server sends it, and the gateway strips it | S-AUTH, question 6 |
-| Bulk import inside the server | **Decided: feasible**, at about 300,000 rows/s (finding of 2026-11-25) | S-IMPORT |
+- **Steps.** The loading progress names each step in turn: `relay` (registering the
+  Service Worker and waiting until it controls the page), `back end` (the worker and, in
+  Python mode, Pyodide), `server` (started and answering), `import` (the silent import of
+  Mission A), `models` (each core model ready).
+- **The relay.** If a Service Worker already controls the page, it is used at once; the
+  page does not wait for `controllerchange`. A new `sw.js` calls `skipWaiting()` and
+  `clients.claim()`. If no Service Worker controls the page within **10 s**, or
+  registration fails (for example, the browser blocks Service Workers), the page says
+  which step stalled and what to do (reload; allow the site's storage and Service Workers),
+  rather than waiting silently (AT-68).
+- **Any step** that takes more than 10 s shows the same kind of message, naming the step.
+- **Nothing plays** after startup or Adopt until a user logs in, a dataset is open and Play
+  is pressed.
+- **Disabled controls say why** (FR-125a), in a `title` and `aria-describedby`:
+  - before startup completes: "Starting: <step>";
+  - before login: "Log in to the display client first";
+  - with no dataset open: "Open a dataset first".
 
-When a spike reports, this table, FR-06c and both stand-ins are brought into line with
-OpenSensorHub. **OpenSensorHub is the reference** (PR-06).
+## 14. Open with the OpenSensorHub team (4.7)
+
+The stand-ins behave as the **configured** OpenSensorHub is expected to. Each row is to be
+confirmed with the OpenSensorHub team. **OpenSensorHub is the reference** (PR-06): when an
+answer comes, this table, FR-06c and both stand-ins are brought into line.
+
+| Item | Stock OpenSensorHub 2.0.4 (findings of 2026-11-25 and 2026-11-26) | Stand-ins now | Wanted |
+|---|---|---|---|
+| Restricted resources in discovery (FR-93, SRD §15) | Listed; `403` on read | Listed; `403` on read | Not listed (the owner is raising it) |
+| Restricting by role | Grants inherit, denies do not; only an allow-list by id restricts | An allow-list, extended at each import (D-222) | Inherited denies, or a maintained allow-list confirmed |
+| `DELETE` and `PUT` (FR-28a) | `DELETE` deletes (`204`) for an allowed account | `405` for every account (D-224) | Refused by configuration |
+| Push subscriptions with access control on | Closed at once on the public endpoint | Served on `/api-internal`, service accounts only (D-223) | The internal endpoint confirmed for a developed system |
+| `WWW-Authenticate` on `401` | `basic` (a browser shows its own dialog) | Sent; the relay drops it (D-226) | Configurable, or dropped by the web server |
+| Create only under one's own systems (AT-52) | Top level enforced; subsystems can be created under any system | Enforced | Refused by configuration |
+| Another user's workspace (AT-52) | Readable | `403` | Refused |
+| The internal endpoint | Any authenticated account reads everything there | Service accounts only | Not reachable from outside the server's host |
+| `sender` on a pushed command (FR-112a) | The user id | The user id | Settled (D-152) |
+| Role change at once (FR-116) | On the next request | On the next request | Settled (D-151) |
+| Bulk import inside the server | Feasible, about 300,000 rows/s (finding of 2026-11-25) | Inside the stand-ins | Settled |

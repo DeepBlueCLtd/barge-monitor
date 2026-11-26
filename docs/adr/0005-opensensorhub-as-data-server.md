@@ -80,6 +80,14 @@ and the core models as its clients.
   - In front of a real server the gateway also bridges receivers' subscriptions to WebSocket,
     serves the profile and discovers the system tree itself (D-190 to D-192).
 
+**SRD 4.7, 2026-11-26.** The owner withdrew the access gateway (ADR 0010) and the replay
+controller (ADR 0009). Clients reach OpenSensorHub directly. Restricted resources are listed
+and refused with `403` until OpenSensorHub can hide them. Refusing delete, an allow-list
+for restricted reads, private workspaces and the internal subscription endpoint are configuration to be confirmed with the
+OpenSensorHub team (interfaces §14). Item 1, "used as shipped", holds again for access
+control. The AT-32 result above was obtained with the gateway; it is to be re-run without
+it.
+
 **Consequences.**
 
 * Less is written for this system: the display client, the models and the store adapter.

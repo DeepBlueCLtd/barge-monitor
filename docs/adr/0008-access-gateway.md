@@ -1,8 +1,6 @@
 # ADR 0008: A thin access gateway hides what a user may not see
 
-**Status:** accepted, 2026-11-26 (SRD 4.6 FR-93, FR-112a, FR-116; interfaces §9.5; the
-finding of 2026-11-25 on authentication; decisions D-147, D-150..D-153). Amends ADR 0005
-item 1 ("used as shipped").
+**Status:** superseded on 2026-11-26 by ADR 0010 (access control by OpenSensorHub, without a gateway; SRD 4.7, D-221). Kept for the record. Accepted earlier on 2026-11-26 (SRD 4.6 FR-93, FR-112a, FR-116; interfaces §9.5; the finding of 2026-11-25 on authentication; decisions D-147, D-150..D-153). Amended ADR 0005 item 1 ("used as shipped").
 
 **Context.** FR-93 requires restricted systems (CO₂, the restricted analysis, other
 users' workspaces) to be **absent**, not refused: not listed, and 404 by identifier. The

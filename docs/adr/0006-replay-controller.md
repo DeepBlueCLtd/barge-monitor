@@ -1,6 +1,6 @@
 # ADR 0006: Replay is a controller on the data server, driven by commands
 
-**Status:** accepted, 2026-11-26 (SRD 4.6 FR-86..FR-90, interfaces §8; decisions D-125, D-126, D-129, D-131, D-136).
+**Status:** superseded on 2026-11-26 by ADR 0009 (replay in the display client; SRD 4.7, D-220). Kept for the record. Accepted earlier on 2026-11-26 (SRD 4.6 FR-86..FR-90, interfaces §8; decisions D-125, D-126, D-129, D-131, D-136).
 
 **Context.** From 4.5 the demonstrator replays recorded missions instead of simulating a
 live boat. Something must own replay time. If each client kept its own clock, the models
