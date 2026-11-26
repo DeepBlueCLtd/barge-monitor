@@ -267,3 +267,39 @@ def test_the_importer_is_the_same_in_both_back_ends(standin, data_folder):
                     ra = [{k: v for k, v in x.items() if k not in ("id", "datastream@id")} for x in ra["items"]]
                     rb = [{k: v for k, v in x.items() if k not in ("id", "datastream@id")} for x in rb["items"]]
                 assert ra == rb, (sensor, out, params)
+
+
+def test_the_models_declare_the_same_outputs_in_both_back_ends(standin, data_folder):
+    """PR-06, §10: the stand-in's models are the Python ones' twins in what they publish. On Mission A each core model
+    declares the same datastreams with the same schemas, and logs a complete run 1. Values may differ: the stand-in's
+    methods are simpler (FR-06e)."""
+    from fastapi.testclient import TestClient
+
+    from barge.api import create_app
+    from barge.runtime import Runtime
+
+    rt = Runtime(seed=SEED, pregen_days=0.05, folder=data_folder, local_models=True)
+    while not (rt.running and rt.local.live and all(r.completed for r in rt.local.runners)):
+        rt.tick()
+    py = TestClient(create_app(rt), headers=OWNER)
+    js = httpx.Client(base_url=standin.base, timeout=60, headers=OWNER)
+    sys_of = lambda c, p: {s["uniqueId"]: s["id"] for s in c.get(p + "systems", params={"searchMembers": "true", "f": "application/sml+json"}).json()["items"]}  # noqa: E731
+    sy_py, sy_js = sys_of(py, "/"), sys_of(js, "")
+    a = next(d["id"] for d in rt.importer.datasets.values() if d["file"].startswith("MISSION_A"))
+    swe = {"obsFormat": "application/swe+json"}
+    for m in ("data-cleanse", "summaries", "analysis"):
+        for uid in (f"urn:x-barge:process:{m}", f"urn:x-barge:process:{m}:restricted"):
+            outs = {}
+            for c, p, sy in ((py, "/", sy_py), (js, "", sy_js)):
+                log = []
+                for _ in range(600):  # the stand-in processes in the background
+                    items = [x for x in c.get(f"{p}systems/{sy[uid]}/datastreams").json()["items"] if x["outputName"].endswith(a)]
+                    runs = next((x for x in items if x["outputName"] == f"runs__{a}"), None)
+                    log = c.get(f"{p}datastreams/{runs['id']}/observations", params={"f": "application/swe+json"}).json() if runs else []
+                    if uid.endswith(":restricted") or (log and log[-1]["status"] == "complete"):
+                        break
+                    time.sleep(0.1)
+                if not uid.endswith(":restricted"):
+                    assert log[-1]["status"] == "complete" and log[-1]["run_id"] == f"{m}-{a}-1", (p, m, log[-1:])
+                outs[p] = {x["outputName"]: c.get(f"{p}datastreams/{x['id']}/schema", params=swe).json() for x in items}
+            assert outs["/"] == outs[""], (uid, sorted(outs["/"]), sorted(outs[""]))

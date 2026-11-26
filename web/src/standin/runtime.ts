@@ -96,7 +96,7 @@ export interface Progress {
   pct: number;
 }
 
-/** The core models, run in-process on the simulation clock (local_models.py), each with its service account. */
+/** The core models, run in-process (local_models.py), each with its service account. They follow no clock (§10.2). */
 class LocalModels {
   readonly runners: Runner[] = [];
   private busy = new Set<Runner>();
@@ -114,7 +114,7 @@ class LocalModels {
 
   private async one(r: Runner): Promise<void> {
     try {
-      await r.tick(this.rt.clock.playing);
+      await r.step();
     } catch (e) { // a broken model never stops the others (FR-33)
       r.phase = 'failed';
       r.detail = `${(e as Error)?.name ?? 'Error'}: ${(e as Error)?.message ?? e}`;
@@ -141,6 +141,11 @@ class LocalModels {
 
   get live(): boolean {
     return this.runners.every((r) => r.phase === 'live');
+  }
+
+  /** Registered and subscribed: each model answers commands, and processes datasets as they come. */
+  get ready(): boolean {
+    return this.runners.every((r) => !['starting', 'subscribing'].includes(r.phase));
   }
 }
 
@@ -216,7 +221,8 @@ export class Runtime {
     progress?.({ stage: 'import', detail: 'the CSV importer: listing the data folder and importing Mission A', pct: 94 });
     srv.starting = true;
     await this.startModules(srv);
-    for (let i = 0; i < 1000 && !this.models.live; i++) {
+    // The models register and subscribe before the flowchart appears; they then process each dataset (§10.2).
+    for (let i = 0; i < 1000 && !this.models.ready; i++) {
       await this.models.tickAll();
       const r = this.models.runners.find((x) => x.phase !== 'live');
       progress?.({ stage: 'models', detail: r ? `${r.model.label}: ${r.detail || r.phase}` : 'models live', pct: 95 });

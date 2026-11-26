@@ -1,17 +1,19 @@
-// Data cleanse, stand-in (FR-34, FR-06e): the core model that runs first.
-// It reads each sensor's raw records from the data server, removes readings
-// the server's QC flags mark as anything but "pass" and readings that stand
-// out from their neighbours by more than `spike_threshold` times a simple
-// noise estimate, then smooths what is left with a 5-point mean. It publishes
-// one cleaned datastream per sensor, with the same schema as the Python model;
-// every other model reads these (AT-15). The method is simpler than the
-// Python model's (median-based noise): its results are illustrative.
+// Data cleanse, stand-in (FR-34, FR-06e; data_cleanse.py, the reference): the core
+// model that runs first. For each imported dataset it reads each sensor's
+// weather__{ds} (and each analyser's co2__{ds}), removes readings the QC flags
+// mark as anything but "pass" and readings that stand out from their neighbours
+// by more than `spike_threshold` times a simple noise estimate, then smooths what
+// is left with a 5-point mean. It publishes cleaned-<sensor>__{ds}, and CO₂ only
+// under its restricted subsystem (FR-112), one block per hour (D-280), with the
+// same schemas as the Python model; every other model reads these (AT-15). The
+// method is simpler than the Python model's (median-based noise): illustrative.
+import runsJson from '../../../../contracts/swe/runs-data-cleanse.json';
+import settingsJson from '../../../../contracts/swe/controlstreams/data-cleanse-settings.json';
 import type { Cols } from '../resources';
-import { M } from '../swe';
-import { Command, measurementFields, Model, ModelApi, PRECIP, QUANTITIES, roundArr } from './csmodel';
+import { DataRecord, M } from '../swe';
+import { blockFields, Dataset, encodeBlock, master, Model, ModelApi, QUANTITIES, roundArr, Run, SENSORS } from './csmodel';
 
-const SENSORS = ['bow', 'stern'];
-const LAG_S = 2;
+const MARGIN = 2; // seconds read either side of a window, so its edge readings have neighbours
 const SMOOTH = 5;
 
 /** Mean absolute step between neighbours, as a noise scale (≈ σ for Gaussian noise). */
@@ -28,15 +30,15 @@ function noiseScale(v: Float64Array): number {
   return n < 10 ? Infinity : (0.886 * s) / n + 1e-9;
 }
 
-export function clean(cols: Cols, threshold: number): [Record<string, unknown> & { t: Float64Array }, number] {
+export function clean(cols: Cols, names: string[], threshold: number): [Record<string, unknown> & { t: Float64Array }, number] {
   const out: Record<string, unknown> & { t: Float64Array } = { t: cols.t };
   let removed = 0;
-  for (const p of QUANTITIES) {
+  for (const p of names) {
     if (!(p in cols)) continue;
     const v = Float64Array.from(cols[p] as Float64Array);
-    const flag = (cols[`${p}_qc`] as ArrayLike<unknown> | undefined) ?? new Float64Array(v.length).fill(1);
+    const flag = cols[`${p}_qc`] as ArrayLike<unknown> | undefined;
     const bad = new Uint8Array(v.length);
-    for (let i = 0; i < v.length; i++) if (Number(flag[i]) !== 1) bad[i] = 1;
+    for (let i = 0; i < v.length; i++) if ((flag && String(flag[i]) !== '1') || !Number.isFinite(v[i])) bad[i] = 1;
     if (v.length >= 3 && p !== 'apparent_wind_direction') {
       const lim = threshold * noiseScale(v);
       for (let i = 1; i < v.length - 1; i++) if (Math.abs(v[i] - 0.5 * (v[i - 1] + v[i + 1])) > lim) bad[i] = 1;
@@ -68,63 +70,63 @@ export function clean(cols: Cols, threshold: number): [Record<string, unknown> &
     }
     out[p] = roundArr(res, 3);
   }
-  if ('precipitation_type' in cols) {
-    out.precipitation_type = Array.from(cols.precipitation_type as unknown[]);
-  }
   return [out, removed];
 }
 
 export class DataCleanse extends Model {
   readonly id = 'data-cleanse';
   readonly label = 'Data cleanse';
-  description = 'Core model, runs first: flags and removes noise before any other model sees the data.';
-  interval = 10;
-  catchUpMargin = 30; // the models that read its output must be able to come within their own margin of now
-  settings: Record<string, any> = { spike_threshold: 6.0 };
-  raw: Record<string, string | null> = {};
-  out: Record<string, string> = {};
+  description = 'Core model, runs first: removes noise before any other model sees the data.';
+  window = 3600;
+  usesCo2 = true;
+  control: [string, DataRecord] = ['settings', master(settingsJson)];
+  defaults = { spike_threshold: 6.0 };
+  runsMaster = master(runsJson);
+  readsCleanse = false; // it is the one that reads the sensors (AT-15)
+  private src = new Map<string, Map<string, { key: string; names: string[]; out: string }>>();
 
-  async setup(api: ModelApi): Promise<void> {
-    await super.setup(api);
-    const fields = [M.time(), ...measurementFields(), M.category('precipitation_type', 'Precipitation', PRECIP)];
+  async outputs(api: ModelApi, ds: Dataset): Promise<boolean> {
+    const d = ds.id;
+    const src = new Map<string, { key: string; names: string[]; out: string }>();
     for (const s of SENSORS) {
-      this.raw[s] = await api.find(`urn:x-barge:sensor:${s}`, 'weather');
-      this.out[s] = await api.createDatastream(this.system, {
-        name: `Cleaned ${s} record`, outputName: `cleaned-${s}`, schema: M.record(`Cleaned ${s} record`, fields),
-      });
+      const k = await api.find(`urn:x-barge:sensor:${s}`, `weather__${d}`);
+      if (k === null) return false;
+      const names = [...(await api.schema(k)).keys()].filter((n) => QUANTITIES.includes(n));
+      const out = await api.createDatastream(this.system, { name: `Cleaned ${s} record · ${d}`, outputName: `cleaned-${s}__${d}`,
+        schema: M.record(`Cleaned ${s} record`, blockFields(names)) });
+      src.set(s, { key: k, names, out });
     }
-    this.controlKey = await api.createControlstream(this.system, {
-      name: 'Data cleanse settings', inputName: 'settings', schema: M.record('Data cleanse settings', [
-        M.quantity('spike_threshold', 'Spike threshold, in multiples of the local noise', '1', 1, 10)]),
-    });
+    for (const s of SENSORS) { // CO₂ only under the restricted subsystem (FR-112)
+      const k = await api.find(`urn:x-barge:sensor:${s}:co2`, `co2__${d}`);
+      if (k === null) continue;
+      const out = await api.createDatastream(this.restricted!, { name: `Cleaned ${s} CO₂ · ${d}`, outputName: `cleaned-co2-${s}__${d}`,
+        schema: M.record(`Cleaned ${s} CO₂`, blockFields(['co2'])) });
+      src.set(`co2-${s}`, { key: k, names: ['co2'], out });
+    }
+    this.src.set(d, src);
+    return true;
   }
 
-  async onCommand(_api: ModelApi, cmd: Command): Promise<string> {
-    Object.assign(this.settings, cmd.parameters);
-    return `spike threshold ${this.settings.spike_threshold}`;
-  }
-
-  async step(api: ModelApi, t0: number, t1: number): Promise<number> {
-    let done = t1;
-    for (const s of SENSORS) {
-      const cols = await api.read(this.raw[s]!, t0 - LAG_S, t1);
+  async process(api: ModelApi, ds: Dataset, t0: number, t1: number, run: Run): Promise<void> {
+    const thr = Number(run.settings.spike_threshold);
+    for (const [name, { key, names, out }] of this.src.get(ds.id)!) {
+      const cols = await api.read(key, t0 - MARGIN, t1 + MARGIN - 0.001);
       const t = cols.t;
-      if (t.length < 3) return t0;
-      api.tap('scilibs', `stand-in: clean ${t.length} ${s} readings`,
-        { calls: ['QC flags', 'spike test', '5-point mean'], readings: t.length, spike_threshold: this.settings.spike_threshold });
-      const [out, removed] = clean(cols, Number(this.settings.spike_threshold));
-      const last = t[t.length - 1] - LAG_S;
-      // Times are sorted: the rows kept, (t0, last], are one run.
+      if (!t.length) continue;
+      api.tap('scilibs', `stand-in: clean ${t.length} ${name} readings`, { calls: ['QC flags', 'spike test', '5-point mean'], readings: t.length, spike_threshold: thr });
+      const [cleaned] = clean(cols, names, thr);
       let a = 0;
-      while (a < t.length && !(t0 > 0 ? t[a] > t0 : t[a] >= 0)) a++;
-      let b = t.length;
-      while (b > a && t[b - 1] > last) b--;
-      const sel: Record<string, unknown> = {};
-      for (const [k, v] of Object.entries(out)) sel[k] = (v as Float64Array | unknown[]).slice(a, b);
+      while (a < t.length && t[a] < t0) a++;
+      let b = a;
+      while (b < t.length && t[b] < t1) b++;
+      const block: Record<string, Float64Array> = { t: t.slice(a, b) };
+      let removed = 0;
+      for (const n of names) {
+        block[n] = (cleaned[n] as Float64Array).slice(a, b);
+        for (const x of block[n]) if (!Number.isFinite(x)) removed++;
+      }
       api.tap('models', `stand-in: ${b - a} cleaned, ${removed} removed`, { rows: b - a, removed });
-      await api.publishMany(this.out[s], sel);
-      done = Math.min(done, last);
+      await api.publish(out, encodeBlock(t0, block, names, removed, run.id));
     }
-    return done;
   }
 }

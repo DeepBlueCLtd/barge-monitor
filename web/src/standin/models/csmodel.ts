@@ -8,13 +8,13 @@
 // POST, commands pushed on a subscription held on the internal endpoint (§9.2), and a
 // command's outcome as its latest status report other than PENDING (D-199).
 //
-// `Model` and `Runner` below are still Version 4.1's: a model steps on the simulation
-// clock and catches up a bounded backlog at startup (D-251). Plan Phase 6 replaces
-// them with the runner of §10.2. Until then `epoch` is the simulation epoch, so times
-// are the simulation's seconds; in 4.7 it is 0 (Unix seconds).
+// `Model` and `Runner` are 4.7's (§10.2): a model follows no clock and no current
+// dataset; the runner finds datasets in the importer's catalogue, declares a new
+// one's datastreams, processes the whole dataset in windows aligned to its start
+// and logs each run in runs__{ds}. Times are Unix seconds throughout.
 import { basic, passwordOf, roleOf } from '../accounts';
 import type { HttpRequest, HttpResponse } from '../api';
-import { SIM_EPOCH_UNIX, SOSA, URN } from '../constants';
+import { DEF, SOSA, URN } from '../constants';
 import { Cols, NUMERIC } from '../resources';
 import { LineReader } from '../stream';
 import { Component, DataRecord, M } from '../swe';
@@ -44,7 +44,7 @@ export function measurementFields(): Component[] {
 export class Unavailable extends Error {}
 /** The data server refused the call. */
 export class Refused extends Error {}
-class NotFound extends Refused {}
+export class NotFound extends Refused {}
 /** A command the receiver refuses: reported as REJECTED, naming the bound (FR-27). */
 export class Rejected extends Error {}
 /** A model cannot run on what it has (Python's ValueError in the models). */
@@ -92,8 +92,8 @@ type Send = (req: HttpRequest) => Promise<HttpResponse | null>;
  */
 export class ModelApi {
   quiet = false;
-  epoch = SIM_EPOCH_UNIX; // the 4.1 models' simulation epoch (D-251); 0 in 4.7
   retryS = 1;
+  private lastReal = 0;
   readonly roleOf = roleOf;
   private readonly auth: string;
   private systems = new Map<string, string>(); // uniqueId -> id
@@ -101,12 +101,20 @@ export class ModelApi {
   private types = new Map<string, Map<string, string>>(); // datastream id -> field -> type
   readonly made = new Map<string, { kind: string; uid: string; body: Record<string, any> }>();
 
-  constructor(readonly model: string, readonly user: string, private readonly send: Send, private readonly rt: { now(): number; tap: Tap }) {
+  constructor(readonly model: string, readonly user: string, private readonly send: Send, private readonly rt: { real(): number; tap: Tap }) {
     this.auth = basic(user, passwordOf(user));
   }
 
-  now(): number {
-    return this.rt.now();
+  /** Real time, Unix seconds. */
+  realNow(): number {
+    return this.rt.real();
+  }
+
+  /** Real time for a runs entry, strictly increasing (a millisecond apart at least, D-198). */
+  real(): number {
+    const t = Math.max(Math.round(this.rt.real() * 1000) / 1000, Math.round((this.lastReal + 0.001) * 1000) / 1000);
+    this.lastReal = t;
+    return t;
   }
 
   /** Drop every identifier found or made (csmodel.Api.forget): looked up, or made, again on next use. */
@@ -117,11 +125,11 @@ export class ModelApi {
   }
 
   iso(t: number): string {
-    return isoUnix(this.epoch + t);
+    return isoUnix(t);
   }
 
   time(v: string): number {
-    return fromIso(v) - this.epoch;
+    return fromIso(v);
   }
 
   /** Capture a call into, or a result out of, the scientific libraries (models ↔ scilibs). */
@@ -320,6 +328,18 @@ export class ModelApi {
     });
   }
 
+  /** Every observation of a datastream, as records, paged by offset. */
+  async all(key: string): Promise<Record<string, any>[]> {
+    return this.on(key, async (ds) => {
+      let rows: Record<string, any>[] = [];
+      for (let offset = 0; ; offset += PAGE) {
+        const page = await this.get(`/datastreams/${ds}/observations?f=${SWE}&limit=${PAGE}&offset=${offset}`);
+        rows = rows.length ? rows.concat(page) : page;
+        if (page.length < PAGE) return rows;
+      }
+    });
+  }
+
   /** ONE observation per POST (§9.1). `row` has `t` (seconds) or `time` (ISO). */
   async publish(key: string, row: Record<string, unknown>): Promise<void> {
     return this.on(key, async (ds) => {
@@ -407,52 +427,234 @@ export class ModelApi {
     });
   }
 
+  /**
+   * Every dataset to process (§10.2): those whose file status is imported, changed or superseded, in the order they
+   * were imported, with their start and end (Unix seconds).
+   */
+  async datasets(): Promise<Dataset[]> {
+    if ((await this.find(URN + 'importer', 'catalogue')) === null) return [];
+    const order: string[] = [];
+    const current = new Map<string, Record<string, any>>();
+    for (const r of await this.all(URN + 'importer|catalogue')) {
+      const d = r.dataset;
+      if (d && DATASET_STATUSES.includes(r.status) && r.start && r.end) {
+        if (!current.has(d)) order.push(d);
+        current.set(d, r);
+      }
+    }
+    return order.map((d) => {
+      const r = current.get(d)!;
+      return { id: d, file: r.file, sha256: r.sha256, start: fromIso(r.start), end: fromIso(r.end) };
+    });
+  }
+
   // --- the demonstrator's referee (scaffolding; FR-37) -------------------------------------------
   async score(kind: string, payload: Record<string, unknown>): Promise<Record<string, number | null>> {
     return JSON.parse((await this.request('POST', `/demonstrator/referee/${kind}`, payload)).text);
   }
 }
 
-/** Subclass this. `interval` is in simulated seconds (Version 4.1, until plan Phase 6). */
+// --- 4.7: models process each dataset on import (§10.2; csmodel.py) -----------------------------------
+/** A file status that names a dataset to process. */
+export const DATASET_STATUSES = ['imported', 'changed', 'superseded'];
+export const SENSORS = ['bow', 'stern'];
+export const DC = URN + 'process:data-cleanse';
+/** The roles that include emissions (accounts.ts). */
+export const CO2_ROLES = new Set(['owner', 'viewer-emissions', 'service']);
+const DECILE = 10; // a runs entry every 10 %
+/** The longest cleaned block (Data cleanse's window). */
+export const BLOCK_MAX_S = 3600;
+
+/** A run's inputs are not there yet (Data cleanse's run on the dataset is not complete): tried again later. */
+export class NotReady extends Error {}
+
+export interface Dataset {
+  id: string;
+  file: string;
+  sha256: string;
+  start: number;
+  end: number;
+}
+
+/** A SWE Common master (contracts/swe), without its descriptions (D-276). */
+export function master(rec: Record<string, any>): DataRecord {
+  const strip = (x: any): any => (Array.isArray(x) ? x.map(strip)
+    : x && typeof x === 'object' ? Object.fromEntries(Object.entries(x).filter(([k]) => k !== 'description').map(([k, v]) => [k, strip(v)])) : x);
+  return strip(rec);
+}
+
+// --- Data cleanse's output in blocks (D-280) ---------------------------------------------------------
+/** A cleaned block: one observation per window, each quantity's readings as a JSON array in a Text (D-280). */
+export function blockFields(names: string[]): Component[] {
+  const fields: Component[] = [M.time('time', 'Start of the block'), M.text('run_id', 'Run'),
+    M.text('offsets', 'Seconds from the start of the block, for each reading (JSON array)')];
+  for (const n of names) {
+    fields.push({ type: 'Text', name: n, definition: DEF + n,
+      label: `${LABELS[n] ?? n}, each reading (JSON array, ${UNITS[n] ?? '1'}; null where removed)` });
+  }
+  fields.push(M.count('removed', 'Readings removed in the block'));
+  return fields;
+}
+
+/** A value as Python's json.dumps writes it, from numpy's round(v, 3): whole numbers without a fraction. */
+const num = (x: number): number | null => (Number.isFinite(x) ? x : null);
+
+export function encodeBlock(t0: number, cols: Record<string, ArrayLike<number>>, names: string[], removed: number, runId: string): Record<string, unknown> {
+  const t = cols.t;
+  const row: Record<string, unknown> = { t: t0, run_id: runId, offsets: JSON.stringify(Array.from(t, (x) => num(x - t0))), removed };
+  for (const n of names) row[n] = JSON.stringify(Array.from(roundArr(Float64Array.from(cols[n]), 3), num));
+  return row;
+}
+
+/** Blocks as read back into columns, readings with t0 <= time < t1 only. */
+export function decodeBlocks(cols: Cols, names: string[], t0 = -Infinity, t1 = Infinity): { t: Float64Array } & Record<string, Float64Array> {
+  const t: number[] = [];
+  const out: Record<string, number[]> = Object.fromEntries(names.map((n) => [n, []]));
+  const offsets = (cols.offsets ?? []) as unknown[];
+  for (let i = 0; i < cols.t.length; i++) {
+    const off: number[] = JSON.parse(String(offsets[i] ?? '[]'));
+    const vals = names.map((n) => (cols[n] ? JSON.parse(String((cols[n] as unknown[])[i] ?? 'null')) ?? [] : []) as (number | null)[]);
+    for (let j = 0; j < off.length; j++) {
+      const tt = cols.t[i] + off[j];
+      if (tt < t0 || tt >= t1) continue;
+      t.push(tt);
+      names.forEach((n, k) => out[n].push(vals[k][j] ?? NaN));
+    }
+  }
+  const res = { t: Float64Array.from(t) } as { t: Float64Array } & Record<string, Float64Array>;
+  for (const n of names) res[n] = Float64Array.from(out[n]);
+  return res;
+}
+
+/** One run of a model on one dataset (§10.2): `<model>-<dataset>-<n>`, with the settings it uses. */
+export class Run {
+  id: string;
+  next: number | null = null; // the start of the next window; null until it starts
+  logged = -1; // the last tenth logged
+  source: string | null = null; // Data cleanse's run it reads (every other model, AT-15)
+  state: Record<string, any> = {};
+  result: Record<string, unknown> = {};
+  renumber = false; // numbered again from the runs log (after a restart)
+  readonly start: number;
+  readonly end: number; // exclusive
+
+  constructor(readonly model: string, readonly ds: Dataset, public n: number, readonly settings: Record<string, any>,
+    readonly restricted = false, start: number | null = null, end: number | null = null, readonly command: string | null = null) {
+    this.id = `${model}-${ds.id}-${n}`;
+    this.start = start ?? ds.start;
+    this.end = end ?? ds.end + 1;
+  }
+
+  get doneUntil(): number {
+    return this.next === null ? this.start : Math.min(this.next, this.end);
+  }
+
+  get pct(): number {
+    const span = Math.max(this.end - this.start, 1);
+    return Math.min(100, Math.max(0, Math.floor(((this.doneUntil - this.start) * 100) / span)));
+  }
+}
+
+export function runNumber(runId: unknown): number {
+  const n = Number(String(runId).split('-').pop());
+  return Number.isFinite(n) ? n : 0;
+}
+
+const same = (a: unknown, b: unknown) => (typeof a === 'number' && typeof b === 'number' ? Math.abs(a - b) < 1e-9 : a === b);
+
+export interface RunRequest {
+  dataset: string | null; // null: every dataset
+  settings: Record<string, any>;
+  restricted?: boolean;
+  start?: number;
+  end?: number;
+}
+
+/** Subclass this (§10.1; csmodel.Model). The runner does everything but `outputs` and `process`. */
 export abstract class Model {
   abstract readonly id: string;
   abstract readonly label: string;
   description = '';
-  interval = 60;
-  /** How much history one step takes while catching up. The stand-in takes big steps: startup is fast. */
-  catchUpChunk = 86400;
-  /** Caught up once this close to now (never less than two intervals). */
-  catchUpMargin = 120;
-  startFrom: 'history' | 'now' = 'history';
-  /** How much history a model catches up at startup (D-251): one observation per POST makes the whole day too slow. */
-  backlog = 1800;
+  /** Seconds of data per window, aligned to the dataset's start; null: a run's whole data range at once. */
+  window: number | null = 60;
+  usesCo2 = false;
+  restrictedRuns = false;
+  /** [inputName, master record] of its control stream. */
+  control: [string, DataRecord] | null = null;
+  defaults: Record<string, any> = {};
+  runsMaster: DataRecord | null = null;
+  readsCleanse = true;
+  settings: Record<string, any> = {};
   system = '';
+  restricted: string | null = null;
   controlKey: string | null = null;
 
   get uid(): string {
     return `${URN}process:${this.id}`;
   }
 
-  systemBody(): Record<string, unknown> {
-    return { type: 'SimpleProcess', uniqueId: this.uid, label: this.label, description: this.description, definition: SOSA + 'System', assetType: 'Process' };
+  systemBody(restricted = false): Record<string, unknown> {
+    return { type: 'SimpleProcess', uniqueId: this.uid + (restricted ? ':restricted' : ''), label: restricted ? `${this.label}, restricted outputs` : this.label,
+      description: restricted ? 'Outputs derived from CO₂ (restricted, FR-112).' : this.description, definition: SOSA + 'System', assetType: 'Process' };
   }
 
-  /** Register (FR-28): its process system under Models. */
+  /** Register (FR-28): its process system under Models, its restricted subsystem, its control stream. */
   async setup(api: ModelApi): Promise<void> {
+    if (!Object.keys(this.settings).length) this.settings = { ...this.defaults };
     this.system = await api.createSystem(this.systemBody(), URN + 'process:models');
+    this.restricted = this.usesCo2 ? await api.createSystem(this.systemBody(true), this.uid) : null;
+    this.controlKey = null;
+    if (this.control) {
+      const [name, rec] = this.control;
+      this.controlKey = await api.createControlstream(this.system, { name: rec.label, inputName: name, schema: M.record(rec.label, rec.fields) });
+    }
   }
 
-  /** Process data in (t0, t1]; return the time processed up to. */
-  async step(_api: ModelApi, _t0: number, t1: number): Promise<number> {
-    return t1;
+  runsRecord(): DataRecord {
+    if (this.runsMaster) return this.runsMaster;
+    return M.record(`${this.label} runs`, [M.time('time', 'Time of the entry (real time)'), M.text('run_id', 'Run'),
+      M.category('status', 'Run status', ['processing', 'complete']), M.time('done_until', 'Processed up to'), M.count('pct', 'Progress, percent', 0, 100),
+      ...Object.entries(this.defaults).filter(([, v]) => typeof v === 'number').map(([k]) => M.quantity(k, k.replace(/_/g, ' '), '1'))]);
+  }
+
+  /** Create every datastream it may publish for a dataset, restricted ones included, and runs__{ds}. */
+  async declare(api: ModelApi, ds: Dataset): Promise<boolean> {
+    if (!(await this.outputs(api, ds))) return false;
+    const rec = this.runsRecord();
+    await api.createDatastream(this.system, { name: `${this.label} runs · ${ds.id}`, outputName: `runs__${ds.id}`, schema: rec });
+    if (this.restricted && this.restrictedRuns) {
+      await api.createDatastream(this.restricted, { name: `${this.label} runs · ${ds.id} (restricted)`, outputName: `runs__${ds.id}`, schema: rec });
+    }
+    return true;
+  }
+
+  /** Create its output datastreams for a dataset; false while its inputs are not there. */
+  async outputs(_api: ModelApi, _ds: Dataset): Promise<boolean> {
+    return true;
+  }
+
+  runsKey(ds: string, restricted = false): string {
+    return `${this.uid}${restricted ? ':restricted' : ''}|runs__${ds}`;
+  }
+
+  /** One window [t0, t1) of a dataset, in a run. */
+  async process(_api: ModelApi, _ds: Dataset, _t0: number, _t1: number, _run: Run): Promise<void> {}
+
+  /** After the last window: `run.result` for the complete entry. */
+  async finish(_api: ModelApi, _ds: Dataset, _run: Run): Promise<void> {}
+
+  /** The settings of a run this dataset still needs, given its complete runs' entries; null for none. */
+  wanted(_ds: Dataset, complete: Record<string, any>[]): Record<string, any> | null {
+    const mine = Object.entries(this.settings).filter(([, v]) => typeof v === 'number' || typeof v === 'string');
+    for (const e of complete) if (mine.every(([k, v]) => !(k in e) || same(e[k], v))) return null;
+    return { ...this.settings };
   }
 
   /** Check every parameter against its control stream's bounds; throw Rejected naming the bound (FR-27). */
-  validate(api: ModelApi, cmd: Command): void {
-    const made = this.controlKey ? api.made.get(this.controlKey) : undefined;
-    const fields: Component[] = made ? made.body.schema.parametersSchema.fields : [];
+  validate(_api: ModelApi, cmd: Command): void {
+    if (!this.control) throw new Rejected('this model takes no commands');
     const params = cmd.parameters ?? {};
-    for (const f of fields) {
+    for (const f of this.control[1].fields) {
       const n = f.name;
       if (!(n in params)) throw new Rejected(`${n} is missing: every parameter is sent on every command`);
       const v = params[n];
@@ -467,53 +669,114 @@ export abstract class Model {
       } else if (f.type === 'Category' || f.type === 'Text') {
         if (typeof v !== 'string') throw new Rejected(`${n} must be text`);
         const allowed: string[] | undefined = con.values;
-        const items = f.type === 'Text' ? v.split(',').map((x) => x.trim()) : [v];
-        if (allowed?.length) {
-          const bad = items.filter((x) => !allowed.includes(x));
-          if (bad.length || !items.length || (items.length === 1 && items[0] === '')) {
-            throw new Rejected(`${n}='${v}': ${bad.join(', ') || 'nothing'} not in the schema's AllowedTokens`);
-          }
-        }
+        if (allowed?.length && !allowed.includes(v)) throw new Rejected(`${n}='${v}' is not one of ${allowed.join(', ')}`);
       }
     }
   }
 
-  async onCommand(_api: ModelApi, _cmd: Command): Promise<string> {
-    return 'no settings to apply';
+  /** A validated command: the runs it asks for. A settings command: a new run over every dataset (§10.3). */
+  async onCommand(_api: ModelApi, cmd: Command): Promise<RunRequest> {
+    for (const [k, v] of Object.entries(cmd.parameters)) if (k in this.settings) this.settings[k] = v;
+    return { dataset: null, settings: { ...this.settings } };
   }
 
-  /** For a model that starts from now: a first run once its inputs exist. True when done. */
-  async initial(_api: ModelApi): Promise<boolean> {
-    return true;
+  /** What a runs entry carries besides its progress: the run's settings (FR-37). */
+  entry(run: Run): Record<string, unknown> {
+    return { ...run.settings };
+  }
+
+  /** Data cleanse's latest complete run on a dataset; null while it has none, or is processing one (§10.2). */
+  async cleanseRun(api: ModelApi, ds: string): Promise<string | null> {
+    const key = await api.find(DC, `runs__${ds}`);
+    if (key === null) return null;
+    const rows = await api.all(key);
+    const last = rows[rows.length - 1];
+    return last && last.status === 'complete' ? String(last.run_id) : null;
+  }
+
+  /** Data cleanse's readings of `source` (bow, stern, co2-bow, co2-stern) with t0 <= time < t1, of one run (D-280). */
+  async readCleaned(api: ModelApi, ds: string, source: string, t0: number, t1: number, runId: string, names: string[] | null = null) {
+    const co2 = source.startsWith('co2-');
+    const key = await api.find(DC + (co2 ? ':restricted' : ''), `cleaned-${source}__${ds}`);
+    if (key === null) throw new NotReady(`cleaned-${source}__${ds} is not there`);
+    const types = await api.schema(key);
+    const want = (names ?? [...types].filter(([n, ty]) => ty === 'Text' && n !== 'run_id' && n !== 'offsets').map(([n]) => n)).filter((n) => types.has(n));
+    const cols = await api.read(key, t0 - BLOCK_MAX_S, t1 - 0.001);
+    const runs = (cols.run_id ?? []) as unknown[];
+    const keep = runs.map((r, i) => (r === runId ? i : -1)).filter((i) => i >= 0);
+    const sel: Cols = { t: Float64Array.from(keep, (i) => cols.t[i]) };
+    for (const k of ['offsets', ...want]) sel[k] = keep.map((i) => (cols[k] as unknown[])[i]);
+    return decodeBlocks(sel, want, t0, t1);
   }
 }
 
-/** Steps a 4.1 model on the simulation clock; its commands are pushed to it (§9.2; csmodel.Runner). */
+/**
+ * Runs a model on every imported dataset (§10.2; csmodel.Runner). `step()` is called again and again: it registers,
+ * reads the catalogue (once per real second), declares a new dataset's datastreams, and processes a few windows.
+ */
 export class Runner {
-  ready = false;
-  last: number | null = null;
-  retryAt = -1; // after a step that found nothing new, wait before trying again
+  static MAX_WINDOWS = 6;
   phase = 'starting';
   detail = '';
   errors = 0;
-  initialDone = false;
+  registered = false;
   subscribed = false;
   private subscribing = false;
   handling = 0;
+  scanS = 1;
+  private scanned = -Infinity;
+  datasets = new Map<string, Dataset>();
+  private declared = new Set<string>();
+  private planned = new Set<string>();
+  private numbers = new Map<string, number>();
+  queue: Run[] = [];
+  current: Run | null = null;
+  completed: string[] = [];
 
   constructor(readonly model: Model, readonly api: ModelApi) {}
 
-  get caughtUp(): boolean {
-    return this.last !== null && this.api.now() - this.last < Math.max(2 * this.model.interval, this.model.catchUpMargin);
+  private async register(): Promise<void> {
+    const { api, model: m } = this;
+    api.quiet = true; // registering: counted, not drawn (§2)
+    try {
+      api.forget();
+      await m.setup(api);
+    } finally {
+      api.quiet = false;
+    }
+    this.registered = true;
+    // Datastreams and results persist across a restart (D-228); what was in hand is planned again.
+    this.declared.clear();
+    this.planned.clear();
+    if (this.current) {
+      this.queue.unshift(this.current); // a run cut short is restarted as a new run (§10.2)
+      this.current = null;
+    }
+    this.numbers.clear(); // numbered again from the runs logs, which a Reset instance (FR-50a) empties
+    for (const r of this.queue) {
+      r.next = null;
+      r.logged = -1;
+      r.renumber = true;
+    }
+    this.scanned = -Infinity;
+    if (m.controlKey && !this.subscribing) {
+      this.subscribing = true;
+      void api.subscribe(m.controlKey, this.onCommand, this.onOpen);
+    } else if (!m.controlKey) this.subscribed = true;
   }
 
   private onOpen = (closed: boolean): void => {
     if (closed) { // the server went away: register again once it answers, and resubscribe (AT-38)
       this.subscribed = false;
-      this.ready = false;
-      this.api.forget(); // after Reset instance (FR-50a) every identifier it held has gone
+      this.registered = false;
     } else this.subscribed = true;
   };
+
+  private newRun(ds: Dataset, settings: Record<string, any>, restricted = false, start: number | null = null, end: number | null = null, command: string | null = null): Run {
+    const n = (this.numbers.get(ds.id) ?? 0) + 1;
+    this.numbers.set(ds.id, n);
+    return new Run(this.model.id, ds, n, settings, restricted, start, end, command);
+  }
 
   private onCommand = async (cmd: Command): Promise<void> => {
     const { api, model: m } = this;
@@ -528,8 +791,19 @@ export class Runner {
       }
       await api.commandStatus(key, cmd.id, 'ACCEPTED');
       try {
-        const msg = await m.onCommand(api, cmd);
-        await api.commandStatus(key, cmd.id, 'COMPLETED', msg || '');
+        const req = await m.onCommand(api, cmd);
+        const every = req.dataset === null;
+        let targets: Dataset[];
+        if (every) targets = [...this.datasets.values()].reverse(); // a new run over every dataset, newest first
+        else if (this.datasets.has(req.dataset!)) targets = [this.datasets.get(req.dataset!)!];
+        else throw new Rejected(`dataset ${req.dataset} has not been imported`);
+        const runs: Run[] = [];
+        for (const ds of targets) {
+          if (every) this.queue = this.queue.filter((x) => x.ds.id !== ds.id || x.command !== null);
+          runs.push(this.newRun(ds, req.settings, req.restricted ?? false, req.start ?? null, req.end ?? null, cmd.id));
+        }
+        this.queue.unshift(...runs);
+        await api.commandStatus(key, cmd.id, 'COMPLETED', `new run${runs.length !== 1 ? 's' : ''}: ${runs.map((r) => r.id).join(', ') || 'none'}`);
       } catch (e) {
         if (e instanceof Rejected) await api.commandStatus(key, cmd.id, 'REJECTED', e.message);
         else if (e instanceof Unavailable || e instanceof Refused) throw e;
@@ -543,60 +817,161 @@ export class Runner {
     }
   };
 
-  async tick(playing: boolean): Promise<void> {
-    const { api, model: m } = this;
-    const now = api.now();
-    try {
-      if (!this.ready) {
-        api.quiet = true;
-        await m.setup(api);
-        this.ready = true;
-        if (this.last === null) this.last = m.startFrom === 'history' ? Math.max(0, now - m.backlog) : now;
-        this.phase = 'catching up';
-        if (m.controlKey && !this.subscribing) {
-          this.subscribing = true;
-          void api.subscribe(m.controlKey, this.onCommand, this.onOpen);
+  /** Append to the run's log (FR-35b): processing at its start and every 10 %, complete at its end. */
+  private async log(run: Run, status: string): Promise<void> {
+    const m = this.model;
+    const rec: Record<string, unknown> = { ...m.entry(run), t: this.api.real(), run_id: run.id, status, done_until: run.doneUntil,
+      pct: status === 'complete' ? 100 : run.pct };
+    if (status === 'complete') Object.assign(rec, run.result);
+    await this.api.publish(m.runsKey(run.ds.id, run.restricted), rec);
+  }
+
+  private async entries(ds: string): Promise<Record<string, any>[]> {
+    const m = this.model;
+    const out: Record<string, any>[] = [];
+    for (const restricted of m.restricted && m.restrictedRuns ? [false, true] : [false]) {
+      try {
+        out.push(...(await this.api.all(m.runsKey(ds, restricted))));
+      } catch (e) {
+        if (!(e instanceof NotFound)) throw e;
+      }
+    }
+    return out;
+  }
+
+  private async plan(ds: Dataset): Promise<void> {
+    const entries = await this.entries(ds.id);
+    this.numbers.set(ds.id, Math.max(this.numbers.get(ds.id) ?? 0, ...entries.map((e) => runNumber(e.run_id))));
+    for (const r of this.queue) {
+      if (r.ds.id === ds.id && r.renumber) {
+        r.n = this.numbers.get(ds.id)! + 1;
+        this.numbers.set(ds.id, r.n);
+        r.id = `${this.model.id}-${ds.id}-${r.n}`;
+        r.renumber = false;
+      }
+    }
+    if (this.queue.some((r) => r.ds.id === ds.id) || this.current?.ds.id === ds.id) return;
+    const last = new Map<string, Record<string, any>>();
+    for (const e of entries) last.set(e.run_id, e);
+    const settings = this.model.wanted(ds, [...last.values()].filter((e) => e.status === 'complete'));
+    if (settings) this.queue.push(this.newRun(ds, settings));
+  }
+
+  /** Read the catalogue (§10.2): declare each new dataset, then plan its runs. */
+  private async scan(): Promise<void> {
+    const found = await this.api.datasets();
+    this.datasets = new Map(found.map((d) => [d.id, this.datasets.get(d.id) ?? d]));
+    // A dataset no longer in the catalogue (after Reset instance) is not processed any further.
+    this.queue = this.queue.filter((r) => this.datasets.has(r.ds.id));
+    if (this.current && !this.datasets.has(this.current.ds.id)) this.current = null;
+    for (const id of [...this.declared]) if (!this.datasets.has(id)) this.declared.delete(id);
+    for (const id of [...this.planned]) if (!this.datasets.has(id)) this.planned.delete(id);
+    for (const ds of found) {
+      if (!this.declared.has(ds.id)) {
+        if (!(await this.model.declare(this.api, ds))) {
+          this.detail = `waiting for the inputs of ${ds.id}`;
+          continue;
         }
+        this.declared.add(ds.id);
+      }
+      if (!this.planned.has(ds.id)) {
+        await this.plan(ds);
+        this.planned.add(ds.id);
+      }
+    }
+  }
+
+  private async take(): Promise<Run | null> {
+    for (const r of [...this.queue]) {
+      if (!this.declared.has(r.ds.id) || r.renumber) continue;
+      if (this.model.readsCleanse) {
+        const src = await this.model.cleanseRun(this.api, r.ds.id);
+        if (src === null) {
+          this.detail = `waiting for Data cleanse on ${r.ds.id}`;
+          continue;
+        }
+        r.source = src;
+      }
+      this.queue.splice(this.queue.indexOf(r), 1);
+      return r;
+    }
+    return null;
+  }
+
+  /** A few windows of the run in hand, oldest first; the last, partial window at the dataset's end. */
+  private async work(): Promise<void> {
+    const { api, model: m } = this;
+    if (!this.current) {
+      this.current = await this.take();
+      if (!this.current) return;
+    }
+    const run = this.current;
+    const ds = run.ds;
+    const width = m.window ?? run.end - run.start;
+    if (run.next === null) {
+      // Whole windows aligned to the dataset's start (D-129); a run on part of it starts in its window.
+      run.next = m.window ? ds.start + Math.floor((run.start - ds.start) / width) * width : run.start;
+      run.state = {};
+      run.result = {};
+      await this.log(run, 'processing');
+      run.logged = 0;
+    }
+    for (let i = 0; i < Runner.MAX_WINDOWS && run.next! < run.end; i++) {
+      const t0 = run.next!;
+      const t1 = Math.min(t0 + width, run.end);
+      await m.process(api, ds, Math.max(t0, run.start), t1, run);
+      run.next = t1;
+      const tenth = Math.floor(run.pct / DECILE);
+      if (tenth > run.logged && run.next < run.end) {
+        run.logged = tenth;
+        await this.log(run, 'processing');
+      }
+    }
+    this.detail = `${run.id}: ${run.pct}%`;
+    if (run.next! >= run.end) {
+      await m.finish(api, ds, run);
+      await this.log(run, 'complete');
+      this.completed.push(run.id);
+      this.current = null;
+      this.detail = `${run.id} complete`;
+    }
+  }
+
+  async step(): Promise<void> {
+    const { api, model: m } = this;
+    try {
+      if (!this.registered) {
+        this.phase = 'starting';
+        this.detail = 'registering';
+        await this.register();
       }
       if (m.controlKey && !this.subscribed) {
+        this.phase = 'subscribing';
         this.detail = 'subscribing to its commands';
-        return; // live only once its subscription is open (AT-38)
+        return; // ready only once its subscription is open (AT-38)
       }
-      if (m.startFrom === 'now' && !this.initialDone) {
-        api.quiet = true;
-        this.initialDone = await m.initial(api);
-        this.detail = this.initialDone ? '' : 'waiting for its inputs';
-        this.phase = this.initialDone ? 'live' : 'catching up';
-        return;
+      api.quiet = true; // processing a dataset is counted, not drawn (D-283)
+      const now = api.realNow();
+      if (now - this.scanned >= this.scanS) {
+        this.scanned = now;
+        await this.scan();
       }
-      if (!this.caughtUp) {
-        api.quiet = true;
-        const last = this.last!;
-        const upto = Math.min(now, last + m.catchUpChunk);
-        const done = await m.step(api, last, upto);
-        this.last = Math.max(last, done);
-        this.detail = `${Math.min(100, Math.max(0, Math.round(100 * (1 - (now - this.last) / Math.max(m.backlog, 1)))))}% of its backlog`;
-        if (this.caughtUp) {
-          this.phase = 'live';
-          this.detail = '';
-        }
-        return;
-      }
-      api.quiet = false;
-      this.phase = 'live';
-      this.detail = '';
-      if (playing && now - this.last! >= m.interval && now >= this.retryAt) {
-        const done = await m.step(api, this.last!, now);
-        // Its inputs are not there yet: try again a little later (as backend/models/csmodel.py).
-        if (done <= this.last!) this.retryAt = now + Math.min(m.interval, 10);
-        this.last = Math.max(this.last!, done);
-      }
+      await this.work();
+      if (!this.current && !this.queue.length) {
+        this.phase = 'live';
+        this.detail = this.datasets.size ? 'every dataset processed' : 'no dataset imported yet';
+      } else this.phase = 'processing';
     } catch (e) {
-      if (e instanceof Unavailable) {
-        this.ready = false; // the server may have restarted: register again once it answers
-        this.detail = `waiting: ${e.message}`;
+      if (e instanceof NotReady) {
+        this.phase = 'waiting';
+        this.detail = e.message;
+      } else if (e instanceof Unavailable) {
+        this.registered = false; // the server may have restarted: register again once it answers
+        this.phase = 'waiting';
+        this.detail = e.message;
       } else if (e instanceof Refused) {
         this.errors += 1;
+        this.phase = 'waiting';
         this.detail = `refused: ${e.message}`;
       } else throw e;
     } finally {
