@@ -93,6 +93,13 @@ export async function putEverythingBack() {
   await control('up');
   await sleep(300);
   await until(() => runtime.server.value === 'running');
+  // A client that refused the server (a misconfigured server, FR-41) trusts nothing from it again
+  // by itself: it is restarted, as a user would reload, and logged in again.
+  if (clientSession.phase.value === 'rejected') {
+    const user = clientSession.user.value ?? 'owner';
+    clientSession.restart();
+    await loggedIn(user);
+  }
 }
 
 /** FR-79a: the friend's crafted request for CO₂, sent with the friend's credentials, as a guest at the screen might. */
@@ -201,14 +208,13 @@ export const DEMOS: Demo[] = [
   {
     id: 'lie', title: 'A misconfigured server', shows: 'A claim of the profile is checked, not trusted',
     steps: [{
-      label: 'Remove air temperature but still claim the profile',
+      label: 'Publish the catalogue without its status, but still claim the profile',
       run: async () => {
         await playing();
-        await field('air_temperature', false);
         await control('profile-lie', { on: true });
         await control('restart-server');
       },
-      watch: 'The server claims the declared profile while it no longer offers air temperature. The display client checks every essential against discovery itself, so the claim changes nothing: the dataset opens degraded, naming air temperature.',
+      watch: 'The server claims the declared profile, but its archive catalogue no longer has the status field the profile requires. The display client checks the claim against discovery itself and refuses the server at the handshake, naming the missing source. Compare "An essential source is missing": there only one dataset is degraded.',
     }],
   },
   {

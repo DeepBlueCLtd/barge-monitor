@@ -477,9 +477,11 @@ the system **needs** of it. ✓ marks what the spike confirmed.
 - **FR-95** Data of interest is kept **on the server, per analyst**: each analyst has a
   **workspace** system with an append-only `data-of-interest` datastream. Saving appends a
   record; removing appends a removal. Nothing about it is kept in the browser.
-- **FR-96** A data of interest whose dataset is **no longer imported** (after Reset
-  instance) is listed greyed, naming the file to import to restore it. Importing the same
-  file restores it, because the record names the file, not a server identifier.
+- **FR-96 (4.6)** A data of interest that cannot be resolved is listed **greyed**, saying
+  why: its source is no longer permitted (FR-96a), or its file is not imported, naming the
+  file. A record names the file, not a server identifier, so importing that file again
+  restores it. Reset instance does **not** grey records: it deletes them with everything
+  else (FR-50a).
 - **FR-96a (4.5)** A user can only save data of interest from sources they can see. If a
   user's role later loses emissions, any of their records naming CO₂ sources is listed
   greyed as "no longer permitted", and nothing from those sources is drawn.
@@ -889,7 +891,7 @@ pace), and in 4.4 and 4.6:
 | **AT-45** | A saved data of interest, opened after switching dataset, regenerates exactly the same values | C3 |
 | **AT-46** | Two data of interest compared on elapsed time are drawn from each one's start, at the coarser resolution, labelled "elapsed" | C3 |
 | **AT-47** | A resolution with no datastream is refused, naming those available | C3 |
-| **AT-48** | After Reset instance, every data of interest is greyed naming its file; re-importing the file restores it | C1, C3 |
+| **AT-48** | After Reset instance, every user's data of interest list is empty; re-importing a file restores nothing saved before the reset | C1, C3 |
 | **AT-49** | Every request and push subscription without valid credentials is refused with 401, discovery and the catalogue included | C5 |
 | **AT-50** | After inactivity, or on Lock, every view and list is blanked, the credentials are discarded, and no request is sent until login | C5 |
 | **AT-51** | Nothing sensitive is in browser storage at any time: no credentials, dataset names or data of interest | C5 |
@@ -900,7 +902,7 @@ pace), and in 4.4 and 4.6:
 | **AT-56** | Every model output with CO₂ among its inputs, and every runs-log entry naming CO₂, is published only under a restricted subsystem; no unrestricted datastream contains a CO₂ value or name | C6 |
 | **AT-57** | A weather-only user's command naming CO₂ is rejected by the model, whatever the client sent | C6 |
 | **AT-58** | The display client's code contains no reference to CO₂ or to roles; the same build shows CO₂ to the owner and nothing of it to the friend | C2, C6 |
-| **AT-59** | Changing a user's role from emissions to weather only logs them out; at their next login CO₂ is absent and their CO₂ data of interest is greyed as no longer permitted | C6 |
+| **AT-59** | Changing a user's role from emissions to weather only takes effect at their next request: CO₂ disappears and their CO₂ data of interest is greyed as no longer permitted (FR-116) | C6 |
 | **AT-60** | A weather-only user is not degraded on any dataset that has every essential source | C2, C6 |
 | **AT-61** | A new model from an empty slot cannot read CO₂ unless the owner grants it | C3, C6 |
 | **AT-62** | Without the `hand-made` flag the demonstrator opens as FR-77 describes; with it, in the adoption opening; reloading with it repeats the opening | Architecture view |
@@ -913,13 +915,9 @@ pace), and in 4.4 and 4.6:
 
 ## 15. Open questions
 
-- **Reset instance and greyed data of interest (raised in implementation, D-169).**
-  FR-50a says Reset instance leaves "no data of interest", but FR-96, FR-108 and AT-48
-  expect data of interest to survive a Reset instance, greyed, and to be restored by
-  re-importing. Both cannot hold. Options: (a) workspaces survive Reset instance (it
-  deletes datasets and results only); (b) Reset instance deletes everything and AT-48 is
-  restated as greying after a role change (AT-59 already covers that). The implementation
-  currently follows FR-50a (b).
+- **Reset instance and greyed data of interest (answered 2026-11-26).** FR-50a stands:
+  Reset instance deletes everything, data of interest included. FR-96 and AT-48 are
+  restated; greying is shown through a change of role (AT-59).
 
 - **The CSV importer as an OpenSensorHub module (answered 2026-11-25: feasible, at about
   300,000 rows/s, through internal classes that need a retest on each upgrade; see the

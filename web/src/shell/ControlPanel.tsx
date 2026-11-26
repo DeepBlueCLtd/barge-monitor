@@ -77,7 +77,7 @@ export function ControlPanel({ onClose }: { onClose: () => void }) {
             </table>
           </div>
           <label className="switch"><input type="checkbox" checked={st.lie_about_profile} data-testid="profile-lie"
-            onChange={(e) => send('profile-lie', { on: e.target.checked })} /> Misconfigured server: claim the declared profile even when what it publishes cannot meet it</label>
+            onChange={(e) => send('profile-lie', { on: e.target.checked })} /> Misconfigured server: publish the catalogue without its status, and still claim the declared profile</label>
           <p className="hint">A toggle takes effect only at the next server start; what is stored is unchanged. Raw parameters switch both sensors together. A model output whose inputs are off is not published.</p>
           <h3>OpenSensorHub administration (stand-in)</h3>
           <p className="hint">Stands in for OpenSensorHub's own administration screen, where the owner assigns each account a role (FR-115). A change takes effect at the account's next request (D-151).</p>

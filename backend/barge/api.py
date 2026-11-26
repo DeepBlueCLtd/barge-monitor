@@ -41,6 +41,8 @@ from . import swe
 from .store import URN, Subscription
 from .times import iso, iso_many, parse_iso, world_seconds
 
+MISCONFIGURED_DROP = {"catalogue": "status"}  # what a misconfigured server leaves out (FR-79a)
+
 SOSA = "http://www.w3.org/ns/sosa/"
 CS1 = "http://www.opengis.net/spec/ogcapi-connectedsystems-1/1.0/conf/"
 CS2 = "http://www.opengis.net/spec/ogcapi-connectedsystems-2/1.0/conf/"
@@ -310,7 +312,11 @@ def create_server(rt) -> Gate:
     def served_schema(d) -> dict:
         off = rt.live_offering
         rec = d["schema"]
-        return dict(rec, fields=[f for f in rec["fields"] if f["name"] == "time" or off.keep(f["name"])])
+        # A misconfigured server (FR-79a) publishes the catalogue without its status, a fixed
+        # essential, while still claiming the profile: the client rejects it at the handshake.
+        broken = MISCONFIGURED_DROP.get(d["outputName"]) if rt.live_lie else None
+        return dict(rec, fields=[f for f in rec["fields"]
+                                 if f["name"] == "time" or (off.keep(f["name"]) and f["name"] != broken)])
 
     def declared_now(d) -> bool:
         # D-186: a model's datastream is listed only once the model has declared it again since this server

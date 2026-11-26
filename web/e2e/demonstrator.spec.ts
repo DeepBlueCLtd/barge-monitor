@@ -404,7 +404,7 @@ test('the friend: no trace of CO₂ in the client or its traffic, not degraded; 
   await expect(page.getByTestId('demo-found')).toContainText('REJECTED: a requested source is not available');
 });
 
-test('a role change: CO₂ gone at the next login, the record naming it greyed as no longer permitted (AT-59)', async ({ page }) => {
+test('a role change: CO₂ gone at the next request, the record naming it greyed as no longer permitted (AT-59)', async ({ page }) => {
   await open(page);
   await login(page, 'analyst', 'demo-analyst'); // Viewer with emissions
   const co2 = page.getByTestId('chip').filter({ hasText: 'Bow · CO₂' });
@@ -426,9 +426,14 @@ test('a role change: CO₂ gone at the next login, the record naming it greyed a
   await expect(rec).toContainText('No longer permitted');
 });
 
-test('Reset instance asks, naming what is lost; afterwards nothing is imported (FR-50a)', async ({ page }) => {
+test('Reset instance asks, naming what is lost; afterwards nothing is imported and no data of interest is left (FR-50a, AT-48)', async ({ page }) => {
   await open(page);
   await login(page);
+  await page.getByTestId('chip').first().click();
+  await page.getByTestId('doi-label').fill('Before the reset');
+  await page.getByTestId('doi-resolution').fill('PT1S');
+  await page.getByTestId('doi-save').click();
+  await expect(page.getByTestId('doi-item').filter({ hasText: 'Before the reset' })).toHaveCount(1);
   await page.getByTestId('control-panel-toggle').click();
   await page.getByTestId('reset-instance').click();
   await expect(page.getByTestId('reset-confirm')).toContainText('1 imported dataset');
@@ -441,6 +446,7 @@ test('Reset instance asks, naming what is lost; afterwards nothing is imported (
   await page.getByTestId('demo-login-owner').click();
   await expect(page.getByTestId('dc-no-dataset')).toBeVisible({ timeout: SLOW });
   await expect(page.getByTestId('dataset-row').filter({ hasText: 'MISSION_A' })).toHaveAttribute('data-status', 'not-imported');
+  await expect(page.getByTestId('doi-item')).toHaveCount(0); // AT-48: deleted with everything else, not greyed
 });
 
 test('failure demos: the server down and up, restarts; an essential missing; a misconfigured server (AT-11, AT-31)', async ({ page }) => {
@@ -463,11 +469,12 @@ test('failure demos: the server down and up, restarts; an essential missing; a m
   await expect(page.getByTestId('dc-degraded')).toContainText('air temperature', { timeout: SLOW });
   await page.getByTestId('demo-reset').click();
   await expect(page.getByTestId('dc-degraded')).toHaveCount(0, { timeout: SLOW });
-  // A misconfigured server: the claim is not trusted.
+  // A misconfigured server: the claim is checked, and a claimed fixed essential missing rejects the server.
   await demo(page, 'lie');
-  await expect(page.getByTestId('dc-degraded')).toContainText('air temperature', { timeout: SLOW });
+  await expect(page.getByTestId('dc-rejected')).toContainText('Archive catalogue', { timeout: SLOW });
   await page.getByTestId('demo-reset').click();
-  await expect(page.getByTestId('dc-degraded')).toHaveCount(0, { timeout: SLOW });
+  await expect(page.getByTestId('dc-rejected')).toHaveCount(0, { timeout: SLOW });
+  await expect(page.getByTestId('client-state')).toHaveText('Configured', { timeout: SLOW });
   // The server restarts: the client finds it again by itself.
   const t2 = Date.now();
   await demo(page, 'restart');

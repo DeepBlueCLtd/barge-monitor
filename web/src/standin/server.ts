@@ -138,7 +138,10 @@ export class Server {
   // --- the field offering (FR-50..FR-52): a datastream's served schema and id ----------------------
   /** The schema as this instance serves it: fields switched off are left out. */
   visible(d: DatastreamRec): DataRecord {
-    const fields = d.schema.fields.filter((f) => f.name === 'time' || this.offering.keep(f.name));
+    // A misconfigured server (FR-79a) publishes the catalogue without its status, a fixed essential,
+    // while still claiming the profile: the client rejects it at the handshake.
+    const broken = this.lieAboutProfile && d.outputName === 'catalogue' ? 'status' : null;
+    const fields = d.schema.fields.filter((f) => f.name === 'time' || (this.offering.keep(f.name) && f.name !== broken));
     return fields.length === d.schema.fields.length ? d.schema : { ...d.schema, fields };
   }
 
