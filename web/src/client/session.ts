@@ -13,6 +13,11 @@
 // 503. After any period of unreachability the client repeats the handshake (FR-48);
 // so it does when a datastream it found is no longer there (a restart with a new
 // offering). Observations are asked for with f=application/swe+json, paged by offset.
+//
+// The bridge to 4.7's models (D-286): the client shows Mission A (handshake.ts). A clustering
+// command carries the selection as an unsaved data of interest (§10.3, §11): Mission A, the
+// selected bow fields, the period within the dataset, at the resolution the period reads. The
+// cluster view and change marks follow Analysis's latest *complete* run in runs__{Mission A}.
 import { nextSimSecond, SIM_EPOCH_UNIX, simClock } from '../shell/clock';
 import { runtime } from '../shell/runtime';
 import { Store } from '../shell/store';
@@ -59,6 +64,9 @@ const SWE = 'application/swe+json';
 const PAGE = 100_000;
 /** Every parameter, on every command (§9.1): what the 4.1 client does not choose is sent at its default. */
 const CLUSTERING_DEFAULTS = { clusters: 4, sensitivity: 5 };
+/** The resolution a period reads (§11, FR-94a): readings up to an hour, minute means up to a day, then hourly means. */
+const DOI_RESOLUTION: Record<PeriodId, string> = { PT1M: 'PT1S', PT1H: 'PT1S', PT6H: 'PT1M', P1D: 'PT1M', P7D: 'PT1H', P28D: 'PT1H' };
+const BOW = 'urn:x-barge:sensor:bow';
 const isoMs = (t: number) => new Date((SIM_EPOCH_UNIX + t) * 1000).toISOString();
 const isoS = (t: number) => new Date(Math.round(SIM_EPOCH_UNIX + t) * 1000).toISOString().replace('.000Z', 'Z');
 
@@ -344,7 +352,12 @@ export class ClientSession {
       return;
     }
     const sel = this.selection.value;
-    const parameters = { ...CLUSTERING_DEFAULTS, algorithm: sel.algorithm, fields: props.map((p) => p.name).join(','), period: sel.period };
+    const doi = this.doi(props, sel.period);
+    if (!doi) { // nothing of the selection in Mission A's period: the cluster view keeps Analysis's latest run
+      this.commandDirty = false;
+      return;
+    }
+    const parameters = { ...CLUSTERING_DEFAULTS, algorithm: sel.algorithm, doi: JSON.stringify(doi) };
     this.commandDirty = false;
     this.commandNote.set(null);
     this.commandId = null;
@@ -356,6 +369,22 @@ export class ClientSession {
       else if (r.status === 202) this.commandNote.set('No model is listening: the command was dropped.');
       else this.commandId = r.body?.id ?? null;
     }, () => { this.commandDirty = true; });
+  }
+
+  /** The selection as an unsaved data of interest (§11; D-286): the bow's fields in Mission A, over the period. */
+  private doi(props: Property[], period: PeriodId): Record<string, unknown> | null {
+    const ds = this.config.value?.dataset;
+    const fields = props.filter((p) => p.sources.some((s) => s.ds.systemUid === BOW && s.ds.outputName === 'weather')).map((p) => p.name);
+    if (!ds || !fields.length) return null;
+    const now = simClock.now();
+    const start = Math.max(now - periodOf(period).seconds, toSim(ds.start));
+    const end = Math.min(now, toSim(ds.end));
+    if (end - start < 60) return null;
+    return {
+      version: 1, label: 'selection', dataset: { file: ds.file, size: ds.size, modified: ds.modified, sha256: ds.sha256 },
+      start: isoS(start), end: isoS(end), resolution: DOI_RESOLUTION[period], aggregation: 'as-stored',
+      sources: [{ system: BOW, output: 'weather', fields }],
+    };
   }
 
   /** After a user action while paused: look for the command's run a few times, then stop (AT-19). */
@@ -377,9 +406,13 @@ export class ClientSession {
     const r = await this.http.get<any>(`datastreams/${runs.id}/observations`, { f: SWE, resultTime: 'latest' });
     if (r.status !== 200) return;
     const rows: any[] = Array.isArray(r.body) ? r.body : r.body?.items ?? [];
-    const latest = rows.length ? (toRow(rows[rows.length - 1]) as unknown as Run) : undefined;
-    if (!latest || latest.run_id === this.run.value?.run_id) return;
-    if (!this.commandId || latest.command_id === this.commandId) this.awaitingRun = false;
+    const row = rows.length ? toRow(rows[rows.length - 1]) : undefined;
+    // 4.7 (D-286): a run is read once complete; its data range is its start and end.
+    if (!row || row.status !== 'complete' || row.run_id === this.run.value?.run_id) return;
+    const sel = this.selection.value;
+    const latest: Run = { ...row, run_id: String(row.run_id), window_start: row.start, window_end: row.end, period: sel.period,
+      illustrative: runtime.kind === 'standin' } as Run;
+    this.awaitingRun = false;
     const clusters = runStream(config!, 'clusters');
     const changes = runStream(config!, 'changes');
     this.clusters = clusters ? await this.readRun(clusters, latest) : [];

@@ -131,5 +131,5 @@ export function readingPlan(props: Property[], period: PeriodId): Read[] {
 }
 
 export function runStream(config: Configuration, outputName: 'runs' | 'clusters' | 'changes'): Datastream | null {
-  return config.datastreams.find((d) => d.outputName === outputName && !/stern/i.test(d.systemUid)) ?? null;
+  return config.datastreams.find((d) => d.outputName === outputName && /process:analysis$/.test(d.systemUid)) ?? null;
 }

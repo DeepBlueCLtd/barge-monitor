@@ -6,6 +6,12 @@
 // 4.7 (docs/v4-interfaces.md §9): every system is found by GET /systems?searchMembers=true
 // (D-193); the profile is at profile.json beside the API, not linked (FR-41); a datastream
 // whose schema answers 403 is left out, like one the client cannot use (FR-118, D-225).
+//
+// The bridge to 4.7's models (plan Phase 6, D-286), until the display client of Phase 7 opens
+// datasets: the 4.1 client shows Mission A. Its datastreams `<output>__<Mission A>` are taken
+// under their 4.1 names, and stand in for the logger's `weather`; other datasets' are left out,
+// as are outputs the 4.1 views never draw (Data cleanse's blocks, correlation, CO₂, the
+// restricted subsystems, the runs logs of other models than Analysis).
 import { ClientHttp, HttpError } from './http';
 
 export interface SweField {
@@ -64,7 +70,20 @@ export interface ControlStream {
   fields: SweField[];
 }
 
+/** The dataset the 4.1 client shows (D-286): Mission A, as the importer's catalogue names it. */
+export interface BridgeDataset {
+  id: string;
+  file: string;
+  size: number;
+  modified: string;
+  sha256: string;
+  start: string;
+  end: string;
+}
+
 export interface Configuration {
+  /** The dataset shown (D-286); null before Mission A is imported. */
+  dataset: BridgeDataset | null;
   profile: Profile | null;
   claimed: boolean;
   /** FR-41: a claimed profile that discovery contradicts is an error. */
@@ -97,17 +116,30 @@ export async function handshake(http: ClientHttp): Promise<Configuration> {
   for (const e of profile?.essentials ?? []) if (e.resolution) named.set(`${e.system} ${e.datastream}`, e.resolution);
 
   const datastreams: Datastream[] = [];
-  for (const d of await http.all('datastreams')) {
+  const listed: any[] = await http.all('datastreams');
+  const uidOf = (d: any) => {
+    const s = bySys.get(d['system@id'] ?? d.system?.id ?? d.systemId);
+    return s?.uniqueId ?? s?.properties?.uid ?? '';
+  };
+  const shown = bridged(listed, uidOf);
+  let dataset: BridgeDataset | null = null;
+  if (shown.dataset) {
+    const cat = listed.find((d) => d.outputName === 'catalogue' && uidOf(d) === 'urn:x-barge:importer');
+    const rows: any[] = cat ? await http.all(`datastreams/${cat.id}/observations`, { f: 'application/swe+json' }) : [];
+    const row = [...rows].reverse().find((r) => r.dataset === shown.dataset);
+    if (row) dataset = { id: row.dataset, file: row.file, size: row.size, modified: row.modified, sha256: row.sha256, start: row.start, end: row.end };
+  }
+  for (const [d, outputName] of shown.list) {
     const sch = await http.get(`datastreams/${d.id}/schema`, { obsFormat: 'application/swe+json' });
     if (sch.status === 403) continue; // not for this account: left out, never reported missing (FR-118)
     const sysId = d['system@id'] ?? d.system?.id ?? d.systemId;
     const s = bySys.get(sysId);
     const uid = s?.uniqueId ?? s?.properties?.uid ?? '';
     datastreams.push({
-      id: d.id, name: d.name ?? d.outputName, outputName: d.outputName, systemId: sysId, systemUid: uid,
+      id: d.id, name: d.name ?? outputName, outputName, systemId: sysId, systemUid: uid,
       systemLabel: s?.label ?? s?.name ?? s?.properties?.name ?? sysId,
       fields: sch.status === 200 ? fieldsOf(sch.body) : [],
-      resolution: named.get(`${uid} ${d.outputName}`) ?? 'native',
+      resolution: named.get(`${uid} ${outputName}`) ?? 'native',
     });
   }
 
@@ -140,5 +172,31 @@ export async function handshake(http: ClientHttp): Promise<Configuration> {
   const rejected = claimed && problems.length
     ? `The server claims the declared profile, but its discovery contradicts the claim: ${problems.map((p) => `${essentialLabel(p.essential)} (${p.reason}: ${p.detail})`).join('; ')}.`
     : null;
-  return { profile, claimed, rejected, problems, datastreams, clustering };
+  return { dataset, profile, claimed, rejected, problems, datastreams, clustering };
+}
+
+const MISSION_A = /^mission-a-/;
+/** Outputs the 4.1 views never draw (D-286). */
+const NOT_DRAWN = /^(cleaned-|correlation$|co2$|summary-1(min|h)-co2-)/;
+
+/**
+ * The bridge (D-286): which listed datastreams the 4.1 client takes, and under which name. Mission A's per-dataset
+ * outputs under their 4.1 names, standing in for the logger's `weather`; nothing of another dataset.
+ */
+export function bridged(listed: any[], uidOf: (d: any) => string): { dataset: string | null; list: [any, string][] } {
+  const ids = listed.map((d) => String(d.outputName).split('__')[1]).filter((x): x is string => !!x && MISSION_A.test(x));
+  const dataset = ids.length ? ids[ids.length - 1] : null;
+  const list: [any, string][] = [];
+  for (const d of listed) {
+    const [name, ds] = String(d.outputName).split('__');
+    const uid = uidOf(d);
+    if (/:restricted$|:co2$/.test(uid)) continue;
+    if (ds === undefined) {
+      if (dataset && name === 'weather') continue; // Mission A's weather stands in for the logger's
+      list.push([d, name]);
+    } else if (ds === dataset && !NOT_DRAWN.test(name) && (name !== 'runs' || uid === 'urn:x-barge:process:analysis')) {
+      list.push([d, name]);
+    }
+  }
+  return { dataset, list };
 }

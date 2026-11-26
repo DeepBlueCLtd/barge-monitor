@@ -153,7 +153,7 @@ export class Server {
   satisfiesProfile(): { id: string; reason: string }[] {
     const problems: { id: string; reason: string }[] = [];
     for (const e of this.profile.essentials) {
-      const ds = this.store.datastream(e.system, e.datastream);
+      const ds = this.store.datastream(e.system, e.datastream) ?? this.perDataset(e.system, e.datastream);
       const rec = ds && this.served(ds) ? this.visible(ds.schema) : null;
       const fld = rec?.fields.find((f) => f.name === e.field);
       if (!fld) problems.push({ id: e.id, reason: 'missing' });
@@ -161,6 +161,17 @@ export class Server {
       else if ((fld.uom?.code ?? null) !== (e.uom ?? null)) problems.push({ id: e.id, reason: 'wrong unit' });
     }
     return problems;
+  }
+
+  /**
+   * The 4.1 profile names outputs without a dataset; 4.7 outputs are per dataset (§6). Until the profile switches with
+   * the display client (Phase 7, D-252), an essential is met by the newest dataset's output that carries it (D-285).
+   */
+  private perDataset(systemUid: string, output: string): DatastreamRec | null {
+    const s = this.store.systemByUid(systemUid);
+    if (!s) return null;
+    const found = [...this.store.datastreams.values()].filter((d) => d.system === s.id && d.outputName.startsWith(output + '__') && this.served(d));
+    return found.length ? found[found.length - 1] : null;
   }
 
   claimsProfile(): boolean {
