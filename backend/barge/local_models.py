@@ -7,7 +7,8 @@ the same code paths. A model's push subscription (§9.2) is a streamed answer of
 held on the internal endpoint.
 
 The models run in an event loop of their own, kept between ticks, so that a subscription stays
-open: each tick runs that loop until the models' work in hand is done.
+open: each tick runs one step of each model (§10.2: a few windows of the run in hand), then lets
+pushed commands through.
 """
 from __future__ import annotations
 
@@ -34,14 +35,13 @@ SETTLE = 400  # loop iterations a tick may take to finish the models' work in ha
 
 
 class LocalModels:
-    def __init__(self, runtime, classes=CORE, backlog: float | None = None, loop=None):
+    def __init__(self, runtime, classes=CORE, loop=None):
         from .api import create_app
 
         self.rt = runtime
         self.app = create_app(runtime)
         self.loop = loop or asyncio.new_event_loop()  # the runtime's own, which the importer shares
         atexit.register(self.close)
-        self.backlog = backlog
         self.runners = []
         for cls in classes:
             self.add(cls())
@@ -97,21 +97,19 @@ class LocalModels:
         return status, chunks()
 
     def add(self, model) -> csmodel.Runner:
-        if self.backlog is not None:
-            model.backlog = self.backlog
         user = f"svc-{model.id}"
-        api = csmodel.Api(model.id, self._transport, user, password_of(user), stream=self._stream, now=self.rt.now,
-                          epoch=csmodel.SIM_EPOCH_UNIX)
+        api = csmodel.Api(model.id, self._transport, user, password_of(user), stream=self._stream, real=self.rt.real)
         api.retry_s = 0.0  # in-process, the server answers as soon as it is up: resubscribe at the next tick
         api.tap = lambda dst, summary, content=None, m=model.id, a=api: self.rt.tap.emit(
             *(("models", "scilibs") if dst == "scilibs" else ("scilibs", "models")), "I", f"{m}: {summary}", content,
             model=m, quiet=a.quiet)
         r = csmodel.Runner(model, api)
+        r.scan_s = 0.0  # in-process: read the catalogue at every step
         self.runners.append(r)
         return r
 
     async def _tick(self, r) -> None:
-        await r.tick(self.rt.clock.playing)
+        await r.step()
 
     def settle(self) -> None:
         """Let pushed commands and their status reports go through: run the loop until nothing is waiting."""

@@ -43,7 +43,7 @@ class Runtime:
     def __init__(self, seed: int = 1, clock=None, pregen_days: float = C.PREGEN_DAYS, capture: bool = True,
                  progress=None, history: dict | None = None, local_models: bool = False,
                  store_format=None, adapter_class=None, real=real_seconds, hold_s: float = C.COMMAND_HOLD_S,
-                 model_backlog: float | None = None, folder=None, parser=None, own_loop: bool = True):
+                 folder=None, parser=None, own_loop: bool = True):
         self.seed = seed
         self.real = real  # real time, Unix seconds: commands and status reports are stamped with it (§9.1)
         self.hold_s = hold_s  # how long a command's POST is held before it is answered (§9.1)
@@ -85,7 +85,7 @@ class Runtime:
         if local_models:
             from .local_models import LocalModels
 
-            self.local = LocalModels(self, backlog=model_backlog, loop=self.loop)
+            self.local = LocalModels(self, loop=self.loop)
 
     def now(self) -> float:
         return self.clock.now()

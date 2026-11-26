@@ -800,16 +800,18 @@ def create_app(rt) -> Gate:
     @app.post(REFEREE + "/{kind}", summary="Score a result against the manifest (demonstrator scaffolding)",
               tags=["demonstrator"])
     async def referee(request: Request, kind: str = Path(...)):
-        """Scored here, outside the model: a model never sees the manifest or the position (FR-37)."""
+        """Scored here, outside the model: a model never sees the manifest or the position (FR-37). Times are
+        Unix seconds (4.7); the ground truth is the data folder's world, which counts from its epoch."""
         payload = await json_body(request)
-        w = rt.world
+        w = scoring.folder_world()
+        epoch = C.SIM_EPOCH_UNIX
         try:
             if kind == "changes":
-                det = {"t": np.asarray(payload["t"], dtype=float), "scale": np.asarray(payload["scale"], dtype=int)}
-                r = scoring.score_changes(w, det, float(payload["t0"]), float(payload["t1"]))
+                det = {"t": np.asarray(payload["t"], dtype=float) - epoch, "scale": np.asarray(payload["scale"], dtype=int)}
+                r = scoring.score_changes(w, det, float(payload["t0"]) - epoch, float(payload["t1"]) - epoch)
                 return {k: (None if v is None else float(v)) for k, v in r.items()}
             if kind == "clusters":
-                t = np.asarray(payload["t"], dtype=float)
+                t = np.asarray(payload["t"], dtype=float) - epoch
                 if len(t) < 2:
                     return {"ari_air_mass": None, "ari_reach_kind": None}
                 r = scoring.score_clusters(w, t, np.asarray(payload["labels"]))

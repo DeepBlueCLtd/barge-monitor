@@ -181,7 +181,7 @@ class Server:
         """Essential sources this offering does not satisfy (empty when it does)."""
         problems = []
         for e in self.profile["essentials"]:
-            ds = self.store.datastream(e["system"], e["datastream"])
+            ds = self.store.datastream(e["system"], e["datastream"]) or self._per_dataset(e["system"], e["datastream"])
             rec = self.visible(ds["schema"]) if ds and self.served(ds) else None
             fld = rec and next((f for f in rec["fields"] if f["name"] == e["field"]), None)
             if not fld:
@@ -191,6 +191,17 @@ class Server:
             elif (fld.get("uom") or {}).get("code") != e.get("uom"):
                 problems.append({"id": e["id"], "reason": "wrong unit"})
         return problems
+
+    def _per_dataset(self, system_uid: str, output: str) -> dict | None:
+        """The 4.1 profile names outputs without a dataset; 4.7 outputs are per dataset (§6). Until the profile
+        switches with the display client (Phase 7, D-252), an essential is met by the output of the newest dataset
+        whose datastream carries it (D-285)."""
+        s = self.store.system_by_uid(system_uid)
+        if s is None:
+            return None
+        found = [d for d in self.store.datastreams.values()
+                 if d["system"] == s["id"] and d["outputName"].startswith(output + "__") and self.served(d)]
+        return found[-1] if found else None
 
     def claims_profile(self) -> bool:
         return self.lie_about_profile or not self.satisfies_profile()
