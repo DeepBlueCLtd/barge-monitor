@@ -44,6 +44,16 @@ SWE = "application%2Fswe%2Bjson"
 CO2_ROLES = {"owner", "viewer-emissions", "service"}
 
 
+def outcome(reports: list, cmd_id: str) -> dict | None:
+    """A command's outcome: its latest status report other than ``PENDING`` (D-199, revising D-164).
+
+    OpenSensorHub stores the sender's ``PENDING`` when the ``POST`` answers (about 5 s after it was sent), which is
+    often after the receiver's ``COMPLETED``; the latest report alone would read ``PENDING``."""
+    mine = [r for r in reports if r.get("command@id") == cmd_id and r.get("statusCode") != "PENDING"]
+    mine.sort(key=lambda r: r.get("reportTime") or "")  # stable: equal times keep the server's order
+    return mine[-1] if mine else None
+
+
 class Unavailable(Exception):
     """The data server does not answer (starting, down, or not reachable): try again later."""
 
@@ -418,6 +428,13 @@ class Api:
             await self.request("POST", f"/controlstreams/{cs}/status",
                                {"command@id": cmd_id, "statusCode": status, **({"message": message} if message else {})})
         await self._on(cs_key, go)
+
+    async def command_outcome(self, cs_key: str, cmd_id: str) -> dict | None:
+        """A command's outcome, as a sender reads it: its latest status report other than ``PENDING`` (D-199)."""
+        async def go(cs):
+            _, _, payload = await self.request("GET", f"/controlstreams/{cs}/status?limit=100000")
+            return outcome(json.loads(payload).get("items", []), cmd_id)
+        return await self._on(cs_key, go)
 
     # --- the replay controller ------------------------------------------------------------------------
     async def replay_state(self) -> dict | None:

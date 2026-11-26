@@ -21,6 +21,30 @@ export class HttpError extends Error {
   }
 }
 
+/** One command status report, as `/controlstreams/{id}/status` lists it (§9.1). */
+export interface StatusReport {
+  id: string;
+  'command@id': string;
+  statusCode: string;
+  reportTime?: string;
+  message?: string;
+}
+
+/**
+ * Each command's outcome: its latest status report other than PENDING, by command id (D-199, revising D-164).
+ * OpenSensorHub stores the sender's PENDING when the POST answers, about 5 s after it was sent, which is often
+ * after the receiver's COMPLETED; the latest report alone would read PENDING.
+ */
+export function commandOutcomes(reports: StatusReport[]): Map<string, StatusReport> {
+  const out = new Map<string, StatusReport>();
+  for (const r of reports) {
+    if (r.statusCode === 'PENDING') continue;
+    const prev = out.get(r['command@id']);
+    if (!prev || (Date.parse(r.reportTime ?? '') || 0) >= (Date.parse(prev.reportTime ?? '') || 0)) out.set(r['command@id'], r);
+  }
+  return out;
+}
+
 export interface Reply<T = any> {
   status: number;
   headers: Headers;

@@ -224,7 +224,8 @@ export class Server {
 
   /**
    * Send a command (§9.1). With no subscriber it is dropped: 202 after the hold. With one,
-   * it is pushed at once and kept; the answer is 200, PENDING, after the hold. The sender
+   * it is pushed at once and kept; the answer is 200, PENDING, after the hold, and a PENDING report is
+   * stored then, as OpenSensorHub stores it (D-199). The sender
    * never waits for this answer (AT-39).
    */
   async sendCommand(a: Account, cs: ControlstreamRec, parameters: Record<string, unknown>): Promise<{ status: number; cmd: CommandRec | null }> {
@@ -249,6 +250,9 @@ export class Server {
       });
     }
     await sleep(COMMAND_HOLD_S);
+    // OpenSensorHub stores the sender's PENDING as it answers, often after the receiver's COMPLETED: readers take
+    // a command's outcome as its latest report other than PENDING (D-199).
+    cmd.status.push({ id: this.store.newId(), 'command@id': id, statusCode: 'PENDING', reportTime: iso(realNow()) });
     return { status: 200, cmd };
   }
 

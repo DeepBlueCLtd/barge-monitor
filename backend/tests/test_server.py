@@ -181,6 +181,23 @@ def test_at52_workspaces_are_private_and_services_write_only_their_own(played):
     assert r.get(f"/controlstreams/{cs['id']}/commands", {"subscribe": "1"}, user="owner").status == 403
 
 
+def test_the_gateway_refuses_replace_and_delete_for_every_account(played):
+    """D-200, SRD §17: nothing is replaced or deleted except by Reset instance. A stock OpenSensorHub deletes a
+    system or datastream on DELETE, so the gateway refuses PUT, PATCH and DELETE with 405 for every account,
+    even under the account's own systems."""
+    r = played
+    ws = r.systems("friend")[URN + "workspace:friend"]
+    doi = r.ds(URN + "workspace:friend", "data-of-interest", user="friend")
+    cleaned = r.ds(URN + "process:data-cleanse", f"cleaned-bow__{r.dataset('MISSION_A')}", user="svc-data-cleanse")
+    for user, path in (("friend", f"/systems/{ws['id']}"), ("friend", f"/datastreams/{doi['id']}"),
+                       ("owner", f"/systems/{r.systems()[URN + 'platform:barge']['id']}"),
+                       ("svc-data-cleanse", f"/datastreams/{cleaned['id']}")):
+        for method in ("PUT", "PATCH", "DELETE"):
+            st = r.request(method, path, body={} if method != "DELETE" else None, user=user).status
+            assert st == 405, (method, path, st)
+        assert r.get(path, user=user).status == 200, path
+
+
 def test_at53_no_captured_message_shows_a_credential(played):
     r = played
     r.request("POST", "/systems", body={"uniqueId": "urn:x", "label": "x", "password": "demo-owner"})
@@ -251,6 +268,9 @@ def test_at38_receivers_resubscribe_after_every_restart_and_starting_answers_not
     resp = r.command(URN + "process:data-cleanse", "settings", {"spike_threshold": 5})
     st = r.status_of(URN + "process:data-cleanse", "settings", resp.json["id"])
     assert [s["statusCode"] for s in st] == ["ACCEPTED", "COMPLETED"]
+    # the sender's PENDING is stored when the POST answers, as OpenSensorHub stores it; not the outcome (D-199)
+    every = r.status_of(URN + "process:data-cleanse", "settings", resp.json["id"], pending=True)
+    assert sorted(s["statusCode"] for s in every) == ["ACCEPTED", "COMPLETED", "PENDING"]
     resp = r.command(URN + "process:data-cleanse", "settings", {"spike_threshold": 50})
     assert r.status_of(URN + "process:data-cleanse", "settings", resp.json["id"])[-1]["statusCode"] == "REJECTED"
     r.command(URN + "process:data-cleanse", "settings", {"spike_threshold": 6})

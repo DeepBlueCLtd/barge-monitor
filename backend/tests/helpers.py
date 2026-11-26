@@ -181,10 +181,12 @@ class Rig:
         self.spin(30)
         return r
 
-    def status_of(self, uid, name, cmd_id, user="owner"):
+    def status_of(self, uid, name, cmd_id, user="owner", pending=False):
+        """A command's status reports, oldest first. The sender's ``PENDING`` (stored when the POST answers, as
+        OpenSensorHub does) is left out unless asked for: the outcome is the latest report other than it (D-199)."""
         c = self.cs(uid, name, user)
         reps = self.get(f"/controlstreams/{c['id']}/status", user=user).json["items"]
-        return [x for x in reps if x["command@id"] == cmd_id]
+        return [x for x in reps if x["command@id"] == cmd_id and (pending or x["statusCode"] != "PENDING")]
 
     def state(self):
         return self.rt.replay.state()

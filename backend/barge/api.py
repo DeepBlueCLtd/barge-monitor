@@ -690,6 +690,9 @@ def create_server(rt) -> Gate:
         st.commands[cid] = cmd
         rt.push(c, pushed)
         await asyncio.sleep(rt.hold_s)  # the sender never waits on this answer (FR-27, AT-39)
+        # OpenSensorHub stores the sender's PENDING as it answers, often after the receiver's COMPLETED: readers
+        # take a command's outcome as its latest report other than PENDING (D-199)
+        rt.command_status(cid, "PENDING")
         body = dict(command_json(request, cmd), currentStatus="PENDING")
         return JSONResponse(body, status_code=200, headers={"Location": base(request) + f"/commands/{cid}"})
 

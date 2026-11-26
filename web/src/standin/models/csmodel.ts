@@ -15,6 +15,7 @@ import { Component, DataRecord, M } from '../swe';
 import type { ComponentId, Tap } from '../tap';
 import { iso, parseIso } from '../time';
 import { NUMERIC } from '../store';
+import type { StatusReport } from '../store';
 
 /** The data server does not answer (down, starting): try again later. */
 export class Unavailable extends Error {}
@@ -50,6 +51,19 @@ export interface ApiOptions {
 }
 
 const PAGE = 10_000;
+
+/**
+ * A command's outcome: its latest status report other than PENDING (D-199, revising D-164). OpenSensorHub stores
+ * the sender's PENDING when the POST answers (about 5 s after it was sent), often after the receiver's COMPLETED.
+ */
+export function commandOutcome(reports: StatusReport[], cmdId: string): StatusReport | null {
+  let best: StatusReport | null = null;
+  for (const r of reports) {
+    if (r['command@id'] !== cmdId || r.statusCode === 'PENDING') continue;
+    if (!best || (r.reportTime ?? '') >= (best.reportTime ?? '')) best = r;
+  }
+  return best;
+}
 
 export class Api {
   quiet = false;
@@ -288,6 +302,16 @@ export class Api {
   async commandStatus(csKey: string, cmdId: string, status: string, message = ''): Promise<void> {
     const id = await this.id(csKey);
     await this.request('POST', `/controlstreams/${id}/status`, { 'command@id': cmdId, statusCode: status, message });
+  }
+
+  /**
+   * A command's outcome, as a sender reads it: its latest status report other than PENDING (D-199, revising
+   * D-164). OpenSensorHub stores the sender's PENDING when the POST answers, often after the receiver's COMPLETED.
+   */
+  async commandOutcome(csKey: string, cmdId: string): Promise<StatusReport | null> {
+    const id = await this.id(csKey);
+    const items: StatusReport[] = (await this.getJson(`/controlstreams/${id}/status?limit=100000`)).items ?? [];
+    return commandOutcome(items, cmdId);
   }
 
   /** The latest of urn:x-barge:replay|state. */

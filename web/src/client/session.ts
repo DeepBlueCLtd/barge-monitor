@@ -14,7 +14,7 @@ import {
   controlFields, Discovery, essentialLabel, fetchSchemas, findControlStream, findControlStreamByInput, findDatastream, handshake, systemByUid,
 } from './discovery';
 import { buildView, datasetDatastreams, DatasetView, essentialFor, Property, RES_SECONDS, Resolution, RESOLUTIONS, Source, sourceAt } from './fields';
-import { Closed, ClientHttp, HttpError, NetworkFailure, Unauthorized } from './http';
+import { Closed, ClientHttp, commandOutcomes, HttpError, NetworkFailure, StatusReport, Unauthorized } from './http';
 import { iso, parseIso, PeriodId, periodOf, statsRes, windowOf } from './plan';
 
 export type Phase = 'login' | 'handshake' | 'ready' | 'unreachable' | 'rejected' | 'locked' | 'error';
@@ -651,9 +651,11 @@ export class DisplayClientSession {
     const now = Date.now();
     this.statusWatch = this.statusWatch.filter((w) => w.until > now);
     for (const cs of new Set(this.statusWatch.map((w) => w.cs))) {
-      const items: any[] = await http.all(`controlstreams/${cs}/status`);
+      const items: StatusReport[] = await http.all(`controlstreams/${cs}/status`);
+      // A command's outcome is its latest report other than PENDING (D-199).
+      const outcomes = [...commandOutcomes(items).values()];
       for (const w of this.statusWatch.filter((x) => x.cs === cs)) {
-        for (const it of items) {
+        for (const it of outcomes) {
           const at = Date.parse(it.reportTime ?? '') || 0;
           if (at < w.since || w.seen.has(it.id) || this.statusSeen.has(it.id)) continue;
           w.seen.add(it.id);

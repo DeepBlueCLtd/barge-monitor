@@ -3,6 +3,7 @@
 // happens to a deployment (a server taken down, a source removed, a misconfigured
 // server) and for what a person at the screen does (a wrong password, walking away,
 // a crafted request). Replay is driven through the display client, as a viewer would.
+import { commandOutcomes, StatusReport } from '../client/http';
 import { clientSession, DisplayClientSession } from '../client/session';
 import { API_BASE, DATA_FOLDER, IDLE_LOCK_MS } from '../config';
 import { DEMO_LOGINS } from './demoAccounts';
@@ -133,8 +134,9 @@ async function craftedRequest(): Promise<string> {
   let verdict = 'no answer from the model yet';
   await until(() => false, 1500);
   for (let i = 0; i < 20; i++) {
-    const st = (await j(`controlstreams/${cs.id}/status?limit=10000`, quiet)).items as { statusCode: string; message?: string; reportTime: string }[];
-    const mine = st.filter((x) => Date.parse(x.reportTime) >= sentAt && (x.statusCode === 'REJECTED' || x.statusCode === 'COMPLETED'));
+    const st = (await j(`controlstreams/${cs.id}/status?limit=10000`, quiet)).items as StatusReport[];
+    // The outcome is the latest report other than PENDING (D-199).
+    const mine = [...commandOutcomes(st).values()].filter((x) => Date.parse(x.reportTime ?? '') >= sentAt && (x.statusCode === 'REJECTED' || x.statusCode === 'COMPLETED'));
     if (mine.length) {
       verdict = `${mine[0].statusCode}: ${mine[0].message ?? ''}`;
       break;
