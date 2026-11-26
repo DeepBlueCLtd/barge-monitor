@@ -263,6 +263,9 @@ try {
     const f0 = await fold();
     check(f0.size === 4 && f0.get('MISSION_A_20310407.csv')?.status === 'imported' && f0.get('MISSION_B_20310414.csv')?.status === 'not-imported',
       'the catalogue lists every file with its status', JSON.stringify([...f0.values()].map((o) => [o.file, o.status])));
+    const nb = f0.get('MISSION_B_20310414.csv');
+    check(nb?.records === 0 && f0.get('MISSION_A_20310407.csv')?.records === 86400,
+      'records is 0 until a file is imported, its count once imported (D-197)', JSON.stringify([nb?.records, f0.get('MISSION_A_20310407.csv')?.records]));
     const importCs = await csOf('urn:x-barge:importer', 'import');
     const before = await fold();
     void before;
@@ -321,6 +324,8 @@ try {
     await waitFor('paused', async () => ((await state()).playing === false ? true : null), 4);
     const log = await obs(await dsOf('urn:x-barge:replay', 'log'));
     check(['load', 'play', 'seek', 'pause'].every((a) => log.some((l) => l.action === a)), 'the replay log records each command', log.map((l) => l.action).join(','));
+    check(log.every((l) => l.time < '2031' && l.position >= '2031'), "the replay log's time is the real time it took effect, its position the replay time (D-198)",
+      JSON.stringify(log.slice(-2).map((l) => [l.time, l.position])));
     const c = await obs(cleaned);
     check(c.length >= 120 && c.every((o) => o.run.startsWith(`r-${DS_B}-`)) && !c.some((o) => o.air_temperature === null),
       'Data cleanse published one observation per second with its run', String(c.length));
