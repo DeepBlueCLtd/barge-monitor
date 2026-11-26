@@ -39,7 +39,7 @@ export const COMPONENTS: Record<ComponentId, ComponentInfo> = {
   },
   gateway: {
     id: 'gateway', code: 'C-10', name: 'Access gateway', role: 'hides what a user may not see', zone: 'back', valueAdd: false,
-    does: "Sits in front of the data server: every request from the display client and the models passes it, and the answers and pushed commands come back through it. It checks each request's credentials against the accounts, answering 401 itself; it removes restricted resources (the CO₂ sensors, restricted model outputs, other users' workspaces) from every listing and answers 404 under them; it lets users create and append only under their own systems; and it reads each user's role on every request, so a role change takes effect at once.",
+    does: "Sits in front of the data server: every request from the display client and the models passes it, and the answers and pushed commands come back through it. It checks each request's credentials against the accounts, answering 401 itself; it removes restricted resources (the CO₂ sensors, restricted model outputs, other users' workspaces) from every listing and answers 404 under them; it lets users create and append only under their own systems; it refuses replacing and deleting (PUT, PATCH, DELETE) for every account with 405, since OpenSensorHub would allow them; and it reads each user's role on every request, so a role change takes effect at once.",
     why: 'New build · back end: written for this system, because a stock OpenSensorHub cannot hide a system from a user (S-AUTH finding). The importer and the replay controller are modules inside the server and do not pass it.',
   },
   server: {
