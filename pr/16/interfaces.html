@@ -1,0 +1,1441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Version 4 interfaces</title>
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<div class="banner">Preview of pull request #16 (3f0dfcd). Not the published document.</div>
+<main>
+<p class="demo-link"><a href="demo/"><strong>Open the working demonstrator →</strong></a> It runs whole in your browser. · <a href="index.html">Requirements</a> · <a href="interfaces.html">Version 4 interfaces</a> · Mockups: <a href="mockups/mockup-1-display-client.png">1</a>, <a href="mockups/mockup-2-models.png">2</a>, <a href="mockups/mockup-3-data-server.png">3</a></p>
+<nav id="TOC" aria-label="Contents">
+<ul>
+<li><a href="#version-46-interfaces-implementation-contract"
+id="toc-version-46-interfaces-implementation-contract">Version 4.6
+interfaces (implementation contract)</a>
+<ul>
+<li><a href="#1-component-identifiers"
+id="toc-1-component-identifiers">1. Component identifiers</a></li>
+<li><a href="#2-flows-and-letters-srd-31-5"
+id="toc-2-flows-and-letters-srd-31-5">2. Flows and letters (SRD §3.1,
+§5)</a></li>
+<li><a href="#3-captured-message" id="toc-3-captured-message">3.
+Captured message</a></li>
+<li><a href="#4-time" id="toc-4-time">4. Time</a></li>
+<li><a href="#5-the-data-folder-and-its-csv-dialect-fr-15-fr-17"
+id="toc-5-the-data-folder-and-its-csv-dialect-fr-15-fr-17">5. The data
+folder and its CSV dialect (FR-15, FR-17)</a></li>
+<li><a href="#6-datasets-and-names" id="toc-6-datasets-and-names">6.
+Datasets and names</a></li>
+<li><a href="#7-csv-importer-fr-20-to-fr-22-fr-109-fr-110"
+id="toc-7-csv-importer-fr-20-to-fr-22-fr-109-fr-110">7. CSV importer
+(FR-20 to FR-22, FR-109, FR-110)</a></li>
+<li><a href="#8-replay-controller-fr-84-to-fr-89-fr-91"
+id="toc-8-replay-controller-fr-84-to-fr-89-fr-91">8. Replay controller
+(FR-84 to FR-89, FR-91)</a></li>
+<li><a
+href="#9-the-server-behaviour-both-stand-ins-must-have-fr-06c-pr-05-pr-06"
+id="toc-9-the-server-behaviour-both-stand-ins-must-have-fr-06c-pr-05-pr-06">9.
+The server: behaviour both stand-ins must have (FR-06c, PR-05,
+PR-06)</a></li>
+<li><a href="#10-models" id="toc-10-models">10. Models</a></li>
+<li><a href="#11-data-of-interest-fr-94-to-fr-96a-fr-104-to-fr-108"
+id="toc-11-data-of-interest-fr-94-to-fr-96a-fr-104-to-fr-108">11. Data
+of interest (FR-94 to FR-96a, FR-104 to FR-108)</a></li>
+<li><a href="#12-the-adoption-opening-srd-98"
+id="toc-12-the-adoption-opening-srd-98">12. The adoption opening (SRD
+§9.8)</a></li>
+<li><a href="#13-workers-the-page-and-controls"
+id="toc-13-workers-the-page-and-controls">13. Workers, the page and
+controls</a></li>
+<li><a href="#14-waiting-on-the-spikes"
+id="toc-14-waiting-on-the-spikes">14. Waiting on the spikes</a></li>
+</ul></li>
+</ul>
+</nav>
+<h1 id="version-46-interfaces-implementation-contract">Version 4.6
+interfaces (implementation contract)</h1>
+<p>These are the fixed points that the Python back end, the JavaScript
+stand-in, the models and the front end are built against. SRD Version
+4.6 (<code>srd-barge.md</code>) is the requirement; this file is the
+design that meets it. Where the two disagree, the SRD wins and this file
+is wrong. <code>docs/plan-v4.6.md</code> gives the order of work.</p>
+<p>Names in <code>code</code> are normative. Both back ends implement
+every section that says "the server", except where a section says
+otherwise.</p>
+<h2 id="1-component-identifiers">1. Component identifiers</h2>
+<p>Every captured message names its sender and receiver with one of
+these ids (SRD §3):</p>
+<table>
+<thead>
+<tr>
+<th>id</th>
+<th>Component</th>
+<th>Zone</th>
+<th>Value-add</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>folder</code></td>
+<td>Data folder</td>
+<td>Legacy</td>
+<td></td>
+</tr>
+<tr>
+<td><code>importer</code></td>
+<td>CSV importer</td>
+<td>New build · back end</td>
+<td></td>
+</tr>
+<tr>
+<td><code>replay</code></td>
+<td>Replay controller</td>
+<td>New build · back end</td>
+<td></td>
+</tr>
+<tr>
+<td><code>server</code></td>
+<td>Data server (OpenSensorHub; a stand-in here)</td>
+<td>Third-party libraries</td>
+<td></td>
+</tr>
+<tr>
+<td><code>models</code></td>
+<td>Models</td>
+<td>New build · back end</td>
+<td>★</td>
+</tr>
+<tr>
+<td><code>scilibs</code></td>
+<td>Scientific libraries</td>
+<td>Third-party libraries</td>
+<td></td>
+</tr>
+<tr>
+<td><code>client</code></td>
+<td>Display client</td>
+<td>New build · front end</td>
+<td>★</td>
+</tr>
+<tr>
+<td><code>gateway</code></td>
+<td>Access gateway (§9.5)</td>
+<td>New build · back end</td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<p>In the adoption opening only (§12), eight more ids stand in for
+<code>server</code>:</p>
+<p><code>sub-webapi</code>, <code>sub-registry</code>,
+<code>sub-obsstore</code>, <code>sub-query</code>,
+<code>sub-commands</code>, <code>sub-accounts</code>,
+<code>sub-permissions</code>, <code>sub-admin</code>.</p>
+<p>No message is ever captured with these eight ids.</p>
+<p>The relay is not a component, and nothing is captured to or from it
+(FR-03). The referee is scaffolding: its traffic is captured as
+<code>models ↔︎ server</code> with the letter <code>I</code>.</p>
+<h2 id="2-flows-and-letters-srd-31-5">2. Flows and letters (SRD §3.1,
+§5)</h2>
+<table>
+<thead>
+<tr>
+<th>src → dst</th>
+<th>Letters</th>
+<th>What</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>importer → folder</td>
+<td>S</td>
+<td><code>list</code> (the folder) or
+<code>read &lt;file&gt;</code></td>
+</tr>
+<tr>
+<td>folder → importer</td>
+<td>L</td>
+<td>the listing (name, size, modified), or the first three CSV rows and
+a row count</td>
+</tr>
+<tr>
+<td>importer → server</td>
+<td>I</td>
+<td><code>bulk write</code>, one message per 1,000 rows (FR-67), with
+<code>rows written n/N</code>; and each catalogue observation</td>
+</tr>
+<tr>
+<td>server → importer</td>
+<td>K</td>
+<td>a pushed <code>import</code> command</td>
+</tr>
+<tr>
+<td>client → server</td>
+<td>Q, K</td>
+<td>an HTTP request (K is a <code>POST</code> to
+<code>/controlstreams/{id}/commands</code>)</td>
+</tr>
+<tr>
+<td>server → client</td>
+<td>D, P, O, H</td>
+<td>an HTTP response (H is any status ≥ 400, including 401)</td>
+</tr>
+<tr>
+<td>server → replay</td>
+<td>K</td>
+<td>a pushed <code>replay</code> command</td>
+</tr>
+<tr>
+<td>replay → server</td>
+<td>Q, O</td>
+<td>registration (Q); state, log and command status (O)</td>
+</tr>
+<tr>
+<td>server → models</td>
+<td>D, O, H, K</td>
+<td>an HTTP response; a pushed command (K)</td>
+</tr>
+<tr>
+<td>models → server</td>
+<td>Q, O, I</td>
+<td>a request (Q); publishing (O); the referee (I)</td>
+</tr>
+<tr>
+<td>models → scilibs, scilibs → models</td>
+<td>I</td>
+<td>a call and its result</td>
+</tr>
+<tr>
+<td>client → gateway → server, models → gateway → server</td>
+<td>Q, K</td>
+<td>every request from the display client and the models passes the
+gateway (§9.5); each hop is captured</td>
+</tr>
+<tr>
+<td>server → gateway → client, server → gateway → models</td>
+<td>D, P, O, H, K</td>
+<td>responses and pushes come back through it</td>
+</tr>
+</tbody>
+</table>
+<p>The rows above that read <code>client → server</code>,
+<code>server → client</code>, <code>models → server</code> and
+<code>server → models</code> are drawn as two hops each, through
+<code>gateway</code>. The importer and the replay controller are modules
+inside the server, so they do not pass the gateway.</p>
+<p>The importer and the replay controller run inside the back-end
+worker. Their traffic is captured where §2 says, even though no HTTP is
+involved (FR-65: "inside the server").</p>
+<p><strong>Who sends a request</strong> is told to the capture by
+request headers:</p>
+<ul>
+<li><code>x-tap-model: &lt;model id&gt;</code> for a model;</li>
+<li><code>x-tap-quiet: 1</code> for work the shell counts but does not
+draw: models registering and catching up at startup, and the silent
+import of Mission A;</li>
+<li><code>x-tap-chain: &lt;chain&gt;</code> from the display
+client.</li>
+</ul>
+<p>None of these headers decides anything in the server.</p>
+<h2 id="3-captured-message">3. Captured message</h2>
+<div class="sourceCode" id="cb1"><pre class="sourceCode ts"><code class="sourceCode typescript"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">interface</span> Captured {</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  id<span class="op">:</span> <span class="dt">number</span> <span class="op">|</span> <span class="dt">string</span><span class="op">;</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>  t<span class="op">:</span> <span class="dt">number</span><span class="op">;</span>            <span class="co">// REAL seconds (Date.now()/1000) when captured; drawing is in real time (FR-78)</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  replay_t<span class="op">?:</span> <span class="dt">number</span><span class="op">;</span>    <span class="co">// the replay time then, as Unix seconds, when a dataset is loaded (for the strip only)</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>  src<span class="op">:</span> ComponentId<span class="op">;</span> dst<span class="op">:</span> ComponentId<span class="op">;</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>  letter<span class="op">:</span> <span class="st">&#39;Q&#39;</span><span class="op">|</span><span class="st">&#39;D&#39;</span><span class="op">|</span><span class="st">&#39;O&#39;</span><span class="op">|</span><span class="st">&#39;K&#39;</span><span class="op">|</span><span class="st">&#39;P&#39;</span><span class="op">|</span><span class="st">&#39;H&#39;</span><span class="op">|</span><span class="st">&#39;S&#39;</span><span class="op">|</span><span class="st">&#39;L&#39;</span><span class="op">|</span><span class="st">&#39;I&#39;</span><span class="op">;</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>  summary<span class="op">:</span> <span class="dt">string</span><span class="op">;</span>      <span class="co">// one line</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>  content<span class="op">:</span> <span class="dt">string</span><span class="op">;</span>      <span class="co">// the message, at most 4,000 characters, with credentials redacted (§9.4)</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>  failed<span class="op">?:</span> <span class="dt">boolean</span><span class="op">;</span>     <span class="co">// a request that got no answer (server down, starting or frozen past its timeout)</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>  push<span class="op">?:</span> <span class="dt">boolean</span><span class="op">;</span>       <span class="co">// a command delivered on a push subscription (drawn &quot;push&quot;)</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>  chain<span class="op">?:</span> <span class="dt">string</span><span class="op">|</span><span class="dt">null</span><span class="op">;</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>  hop<span class="op">?:</span> <span class="dt">number</span><span class="op">;</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>  model<span class="op">?:</span> <span class="dt">string</span><span class="op">;</span></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<h2 id="4-time">4. Time</h2>
+<ul>
+<li><p><strong>Replay time</strong> is absolute UTC, as written in the
+CSV files. Each dataset has its own span (§6). The replay controller
+holds the replay time and the current dataset (§8).</p></li>
+<li><p><strong>Real time</strong> paces the replay clock
+(<code>rate</code> replay seconds per real second) and the drawing. The
+shell has no speed control (FR-78).</p></li>
+<li><p>The <code>SimClock</code> of 4.1 is withdrawn, together with
+<code>CLOCK_RATES</code>, <code>RATES</code>, <code>DEFAULT_RATE</code>,
+<code>HOP_S</code> in simulated seconds, and <code>simClock</code> in
+the page. One hop takes <code>HOP_MS = 900</code> real milliseconds; a
+handshake hop takes <code>HANDSHAKE_HOP_MS = 350</code>.</p></li>
+<li><p><strong>Rates</strong> offered: <code>0.1, 0.5, 1, 10, 100</code>
+(FR-86). Each is capped by the lowest <code>max_rate</code> declared by
+an active model (§10.3).</p></li>
+<li><p><strong>Freeze</strong> (FR-92) is set by the page on the
+back-end worker, with the control <code>freeze {on}</code>. While
+frozen:</p>
+<ul>
+<li>the replay clock does not advance;</li>
+<li>every request and every push is queued in the back-end worker,
+unanswered, and released in order on unfreeze;</li>
+<li>the drawing holds its icons where they are.</li>
+</ul>
+<p>Freeze is not captured. A queued request keeps its relay timeout
+suspended: the relay asks with <code>x-relay-hold-ok: 1</code>, and the
+back-end worker sends <code>{held: true}</code> while it holds one,
+which resets the relay's timer.</p></li>
+</ul>
+<h2 id="5-the-data-folder-and-its-csv-dialect-fr-15-fr-17">5. The data
+folder and its CSV dialect (FR-15, FR-17)</h2>
+<p><strong>Location.</strong> At build time
+<code>scripts/build_data_folder.py</code> writes
+<code>web/public/data/folder/</code> and <code>.cache/data/</code> (for
+CI).</p>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Span (UTC)</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>MISSION_A_20310407.csv</code></td>
+<td>2031-04-07T00:00:00Z, +24 h</td>
+<td>Imported silently at startup (FR-15)</td>
+</tr>
+<tr>
+<td><code>MISSION_B_20310414.csv</code></td>
+<td>2031-04-14T00:00:00Z, +24 h</td>
+<td></td>
+</tr>
+<tr>
+<td><code>MISSION_B_20310414_REEXPORT.csv</code></td>
+<td>2031-04-14T06:00:00Z, +24 h</td>
+<td>Overlaps B by 18 h; about 0.1 % of the readings in the overlap
+differ (re-calibration)</td>
+</tr>
+<tr>
+<td><code>MISSION_C_20310421.csv</code></td>
+<td>2031-04-21T00:00:00Z, +12 h</td>
+<td>No <code>STN_AWS</code> column (stern wind speed)</td>
+</tr>
+<tr>
+<td><code>manifest.json</code></td>
+<td></td>
+<td>One entry per file: the seed, the generator version, the span, the
+ground truth for the referee (FR-12), sha256</td>
+</tr>
+<tr>
+<td><code>index.json</code></td>
+<td></td>
+<td>The folder listing that the browser reads in place of a directory:
+name, size, modified date (fixed per file at build time, ISO),
+sha256</td>
+</tr>
+</tbody>
+</table>
+<p>All four files come from one world (seed 1) generated across 21 days.
+Each mission is a window of it. A file's modified date is the end of its
+span plus 2 hours, so dates are reproducible.</p>
+<p><strong>The dialect</strong> is deliberately awkward (FR-17):</p>
+<ul>
+<li><p>Lines 1–3 are a comment block starting <code>#</code>: logger id,
+export tool version, and <code>#MISSION=&lt;name&gt;</code>.</p></li>
+<li><p>Line 4 is the header. Fields are separated by <code>;</code>, and
+the <strong>decimal separator is a comma</strong>.</p></li>
+<li><p>Column 1 is <code>T_HS94</code>: <strong>half-seconds since
+1994-01-01T00:00:00Z</strong>, as an integer.</p></li>
+<li><p>The other columns have the sensor prefix <code>BOW_</code> or
+<code>STN_</code>, a code, and the unit in brackets. Values are in the
+units the brackets name.</p>
+<table>
+<thead>
+<tr>
+<th>Code</th>
+<th>Field</th>
+<th>Bracketed unit, and how it is written</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>AT</code></td>
+<td><code>air_temperature</code></td>
+<td><code>[dC]</code>: tenths of a degree Celsius, integer</td>
+</tr>
+<tr>
+<td><code>RH</code></td>
+<td><code>relative_humidity</code></td>
+<td><code>[%]</code></td>
+</tr>
+<tr>
+<td><code>PR</code></td>
+<td><code>pressure</code></td>
+<td><code>[hPa]</code>, one decimal place, comma separator</td>
+</tr>
+<tr>
+<td><code>AWS</code></td>
+<td><code>apparent_wind_speed</code></td>
+<td><code>[kn]</code>: <strong>knots</strong>, one decimal place</td>
+</tr>
+<tr>
+<td><code>AWD</code></td>
+<td><code>apparent_wind_direction</code></td>
+<td><code>[deg]</code>; <code>VRB</code> when variable</td>
+</tr>
+<tr>
+<td><code>SR</code></td>
+<td><code>solar_irradiance</code></td>
+<td><code>[W/m2]</code></td>
+</tr>
+<tr>
+<td><code>WT</code></td>
+<td><code>water_temperature</code></td>
+<td><code>[dC]</code></td>
+</tr>
+<tr>
+<td><code>CO2</code></td>
+<td><code>co2</code></td>
+<td><code>[ppm]</code>, integer</td>
+</tr>
+</tbody>
+</table></li>
+<li><p><strong>Missing</strong> values are written <code>-9999</code>,
+or <code>////</code> for text. A missing column means the field is
+absent from that dataset (FR-21).</p></li>
+<li><p>Rows are in time order, at 1 Hz, with no blank lines. The line
+ending is CRLF.</p></li>
+</ul>
+<p><strong>Second dialect</strong> (AT-03, tests only):
+<code>backend/tests/second_dialect.py</code> writes the same data with
+<code>,</code> separators, <code>.</code> decimals, ISO-8601 times, °C,
+m/s, and missing values as empty fields. Only the importer may change to
+read it.</p>
+<p><strong>CO₂ (FR-09a).</strong> Per sensor, in ppm. The baseline is
+415 ± 8 (slow drift). The engine adds load × 180 ppm, where load is 1
+under way, 0.35 in a lock, and 0.05 at a wharf
+(<code>World.boat(t)</code> gives the kind of each period). The stern
+sits nearer the motor, so its gain is 1.25. Noise has σ 6 ppm, and there
+are occasional spikes. QC is computed on import, like every other field,
+with a range of 250–5000 ppm and a 60 ppm spike test (D-144); both back
+ends use these values.</p>
+<h2 id="6-datasets-and-names">6. Datasets and names</h2>
+<ul>
+<li><strong>Dataset id</strong>: <code>&lt;slug&gt;-&lt;h8&gt;</code>.
+The slug is the file name without <code>.csv</code>, lower case, with
+every run of non-alphanumerics replaced by <code>-</code>.
+<code>h8</code> is the first 8 hex characters of the file's sha256.
+Example: <code>mission-a-20310407-3fa9c0d2</code>.</li>
+<li><strong>Output names</strong> use <code>__</code> between the output
+and the dataset, because SWE Common names cannot contain spaces or
+<code>·</code> (decision D-122). On screen they are shown as
+<code>weather · mission-a…</code>.</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>System (uniqueId)</th>
+<th>outputName pattern</th>
+<th>What</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>urn:x-barge:sensor:bow</code>, <code>…:stern</code></td>
+<td><code>weather__{ds}</code></td>
+<td>The 7 quantities (6 in Mission C's stern), each with its
+<code>&lt;name&gt;_qc</code></td>
+</tr>
+<tr>
+<td><code>urn:x-barge:sensor:bow:co2</code>,
+<code>…:stern:co2</code></td>
+<td><code>co2__{ds}</code></td>
+<td><code>co2</code> (<code>[ppm]</code>) and <code>co2_qc</code>
+(<strong>restricted</strong>)</td>
+</tr>
+<tr>
+<td><code>urn:x-barge:process:data-cleanse</code></td>
+<td><code>cleaned-bow__{ds}</code>,
+<code>cleaned-stern__{ds}</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>urn:x-barge:process:data-cleanse:restricted</code></td>
+<td><code>cleaned-co2-bow__{ds}</code>,
+<code>cleaned-co2-stern__{ds}</code></td>
+<td><strong>Restricted</strong></td>
+</tr>
+<tr>
+<td><code>urn:x-barge:process:summaries</code></td>
+<td><code>summary-1min-{bow,stern}__{ds}</code>,
+<code>summary-1h-{bow,stern}__{ds}</code>,
+<code>derived-1min__{ds}</code>, <code>derived-1h__{ds}</code></td>
+<td>Minimum, mean and maximum per quantity (FR-29):
+<code>&lt;f&gt;_min</code>, <code>&lt;f&gt;</code>,
+<code>&lt;f&gt;_max</code></td>
+</tr>
+<tr>
+<td><code>urn:x-barge:process:summaries:restricted</code></td>
+<td><code>summary-1min-co2-{bow,stern}__{ds}</code>,
+<code>summary-1h-co2-{bow,stern}__{ds}</code></td>
+<td><strong>Restricted</strong></td>
+</tr>
+<tr>
+<td><code>urn:x-barge:process:analysis</code></td>
+<td><code>runs__{ds}</code>, <code>changes__{ds}</code>,
+<code>clusters__{ds}</code>, <code>correlation__{ds}</code></td>
+<td>Appended, keyed by <code>run_id</code> (FR-28a)</td>
+</tr>
+<tr>
+<td><code>urn:x-barge:process:analysis:restricted</code></td>
+<td>the same four</td>
+<td>Runs whose selection includes CO₂ (FR-112).
+<strong>Restricted</strong></td>
+</tr>
+<tr>
+<td><code>urn:x-barge:importer</code></td>
+<td><code>catalogue</code></td>
+<td>§7</td>
+</tr>
+<tr>
+<td><code>urn:x-barge:replay</code></td>
+<td><code>state</code>, <code>log</code></td>
+<td>§8</td>
+</tr>
+<tr>
+<td><code>urn:x-barge:workspace:{user}</code></td>
+<td><code>data-of-interest</code></td>
+<td>§11</td>
+</tr>
+</tbody>
+</table>
+<p><code>correlation</code> carries <code>matrix</code> as
+<strong>Text</strong> (JSON), because OpenSensorHub refused an array of
+implicit size (finding of 2026-11-23). It is recorded as a gap.</p>
+<p>Field definitions are
+<code>https://deepbluecltd.github.io/barge-monitor/def/&lt;name&gt;</code>.
+A summary or cleaned value has the definition of its raw quantity
+(unchanged from 4.1). Quantity units: <code>air_temperature</code> Cel,
+<code>apparent_wind_speed</code> m/s (converted from knots on import),
+<code>relative_humidity</code> %, <code>pressure</code> hPa,
+<code>apparent_wind_direction</code> deg, <code>solar_irradiance</code>
+W/m2, <code>water_temperature</code> Cel, <code>co2</code>
+<code>[ppm]</code>. Every <code>uom.code</code> is a UCUM code: parts
+per million is <code>[ppm]</code> in UCUM, and <code>ppm</code> is
+refused (D-195).</p>
+<p><strong>Systems</strong> (top level, with subsystems under them):</p>
+<table>
+<thead>
+<tr>
+<th>uniqueId</th>
+<th>label</th>
+<th>type / assetType</th>
+<th>parent</th>
+<th>created by</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>urn:x-barge:platform:barge</code></td>
+<td>Collection platform</td>
+<td>sosa:Platform / Platform</td>
+<td></td>
+<td>server config</td>
+</tr>
+<tr>
+<td><code>urn:x-barge:sensor:bow</code>, <code>…:stern</code></td>
+<td>Bow sensor, Stern sensor</td>
+<td>sosa:Sensor / Equipment</td>
+<td>barge</td>
+<td>server config</td>
+</tr>
+<tr>
+<td><code>urn:x-barge:sensor:bow:co2</code>,
+<code>…:stern:co2</code></td>
+<td>Bow CO₂ analyser, Stern CO₂ analyser</td>
+<td>sosa:Sensor / Equipment</td>
+<td>the sensor</td>
+<td>server config; <strong>restricted</strong></td>
+</tr>
+<tr>
+<td><code>urn:x-barge:importer</code></td>
+<td>CSV importer</td>
+<td>sosa:System / Equipment</td>
+<td></td>
+<td>the importer</td>
+</tr>
+<tr>
+<td><code>urn:x-barge:replay</code></td>
+<td>Replay controller</td>
+<td>sosa:System / Simulation</td>
+<td></td>
+<td>the replay controller</td>
+</tr>
+<tr>
+<td><code>urn:x-barge:process:models</code></td>
+<td>Models</td>
+<td>sosa:System / Process</td>
+<td></td>
+<td>server config</td>
+</tr>
+<tr>
+<td><code>urn:x-barge:process:{model}</code></td>
+<td>the model's label</td>
+<td>sosa:System / Process</td>
+<td>models</td>
+<td>the model</td>
+</tr>
+<tr>
+<td><code>urn:x-barge:process:{model}:restricted</code></td>
+<td><code>{label}, restricted outputs</code></td>
+<td>sosa:System / Process</td>
+<td>that model</td>
+<td>the model; <strong>restricted</strong></td>
+</tr>
+<tr>
+<td><code>urn:x-barge:workspace:{user}</code></td>
+<td><code>Workspace of {user}</code></td>
+<td>sosa:System / Other</td>
+<td></td>
+<td>server config (one per account)</td>
+</tr>
+</tbody>
+</table>
+<p>Identifiers are <strong>opaque</strong>, assigned by the server: 4
+base-32 characters (<code>040g</code>), like OpenSensorHub. Nobody may
+rely on them. Clients find everything by uniqueId and outputName.</p>
+<h2 id="7-csv-importer-fr-20-to-fr-22-fr-109-fr-110">7. CSV importer
+(FR-20 to FR-22, FR-109, FR-110)</h2>
+<p>Its system is <code>urn:x-barge:importer</code>. It is created at
+server start, under the importer's service account.</p>
+<p><strong><code>catalogue</code> datastream.</strong> One observation
+per file per change of status. Fields: <code>time</code>,
+<code>file</code> (Text), <code>size</code> (Count, bytes),
+<code>modified</code> (Time), <code>sha256</code> (Text),
+<code>dataset</code> (Text, empty until imported), <code>start</code>
+and <code>end</code> (Time, once read), <code>records</code> (Count),
+<code>status</code> (Category: <code>not-imported</code>,
+<code>importing</code>, <code>imported</code>, <code>changed</code>,
+<code>superseded</code>), <code>pct</code> (Count, 0–100). The latest
+observation for a file is its current status. Readers ask with
+<code>resultTime=latest</code> per file, or read the whole datastream
+and fold it.</p>
+<p><strong><code>records</code> is <code>0</code> until the file is
+imported</strong> (D-197): a Count has no missing value in
+OpenSensorHub, which refuses both <code>"NaN"</code> and
+<code>null</code> there. The status says whether it counts: it is the
+dataset's number of rows for <code>imported</code>, <code>changed</code>
+and <code>superseded</code> (the statuses that name a dataset), and
+<code>0</code> for <code>not-imported</code> and <code>importing</code>.
+A reader never shows that <code>0</code> as a count; the display client
+reads it as no count at all.</p>
+<p><strong><code>import</code> control stream.</strong> Parameters, all
+present on every command (FR-27):</p>
+<ul>
+<li><code>action</code>: Category, <code>import</code> or
+<code>rescan</code>;</li>
+<li><code>file</code>: Text; empty for <code>rescan</code>.</li>
+</ul>
+<p>The receiver validates and reports:</p>
+<ul>
+<li><code>REJECTED</code> for an unknown file, or one already
+importing;</li>
+<li><code>ACCEPTED</code>, then <code>EXECUTING</code> with
+<code>pct</code> in <code>message</code> every 10 %, then
+<code>COMPLETED</code> (or <code>FAILED</code>).</li>
+</ul>
+<p><strong>Import:</strong></p>
+<ol type="1">
+<li>Read the file through the folder, parse the dialect (§5), and map
+the columns.</li>
+<li>Compute the QC flags (QARTOD range and spike checks, as in
+4.1).</li>
+<li>Create the dataset's datastreams under the sensors and CO₂
+analysers. This is done inside the server, under the importer's service
+account.</li>
+<li>Write the rows <strong>in bulk</strong> into the store.</li>
+</ol>
+<p>A file whose name matches an imported one but whose size, date or
+sha256 differ is imported as a new dataset. The earlier one becomes
+<code>superseded</code> (FR-21a), and its datastreams stay.</p>
+<p><strong>At server start</strong> the importer lists the folder and
+publishes <code>not-imported</code>, <code>imported</code> or
+<code>changed</code> for every file. Then, <strong>once per page load
+only</strong>, it imports <code>MISSION_A_…csv</code> with
+<code>x-tap-quiet</code> (silent, FR-15). After Reset instance this
+silent import does not run until the page is reloaded.</p>
+<p><strong>Speed.</strong> The importer panel shows <code>rows/s</code>
+for the last import. In the stand-in it must beat 50,000 rows/s, so that
+24 h imports in under 4 s.</p>
+<h2 id="8-replay-controller-fr-84-to-fr-89-fr-91">8. Replay controller
+(FR-84 to FR-89, FR-91)</h2>
+<p>Its system is <code>urn:x-barge:replay</code> (Simulation). It is
+created at server start, under its own service account, and subscribes
+to its control stream before it declares itself ready.</p>
+<p><strong><code>replay</code> control stream.</strong> Parameters,
+every one present on every command:</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Bounds</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>action</code></td>
+<td>Category</td>
+<td><code>load</code>, <code>play</code>, <code>pause</code>,
+<code>seek</code></td>
+</tr>
+<tr>
+<td><code>dataset</code></td>
+<td>Text</td>
+<td>a dataset id; must be imported, for <code>load</code></td>
+</tr>
+<tr>
+<td><code>rate</code></td>
+<td>Quantity</td>
+<td>one of <code>0.1, 0.5, 1, 10, 100</code>; at most
+<code>max_rate</code></td>
+</tr>
+<tr>
+<td><code>position</code></td>
+<td>Time</td>
+<td>ISO, within the current dataset's span (<code>seek</code>)</td>
+</tr>
+</tbody>
+</table>
+<p>The client always sends all four, filling the unchanged ones from the
+latest <code>state</code>.</p>
+<p>The receiver validates every command:</p>
+<ul>
+<li>a rate above the bound is <code>REJECTED</code> with the message
+<code>rate 100 exceeds 10, the highest Analysis sustains</code> (FR-86,
+AT-35);</li>
+<li><code>load</code> of a dataset that is not imported is
+<code>REJECTED</code>, naming it.</li>
+</ul>
+<p><strong><code>state</code> datastream.</strong> One observation once
+per real second while playing, and one on every change. Fields:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>time</code></td>
+<td>Time: the replay time</td>
+</tr>
+<tr>
+<td><code>dataset</code></td>
+<td>Text</td>
+</tr>
+<tr>
+<td><code>start</code>, <code>end</code></td>
+<td>Time</td>
+</tr>
+<tr>
+<td><code>position</code></td>
+<td>Time: equal to <code>time</code></td>
+</tr>
+<tr>
+<td><code>rate</code></td>
+<td>Quantity</td>
+</tr>
+<tr>
+<td><code>max_rate</code></td>
+<td>Quantity</td>
+</tr>
+<tr>
+<td><code>max_rate_model</code></td>
+<td>Text</td>
+</tr>
+<tr>
+<td><code>playing</code></td>
+<td>Boolean</td>
+</tr>
+<tr>
+<td><code>at_end</code></td>
+<td>Boolean</td>
+</tr>
+<tr>
+<td><code>run</code></td>
+<td>Text: the current replay run id</td>
+</tr>
+<tr>
+<td><code>models_ready</code></td>
+<td>Boolean: every model under Models has created its datastreams for
+<code>dataset</code></td>
+</tr>
+</tbody>
+</table>
+<p><code>time</code> is the replay time, so
+<code>resultTime=latest</code> gives the current state.
+<code>phenomenonTime</code> is the replay time too, which makes the
+state of a dataset readable by time.</p>
+<p><strong><code>log</code> datastream.</strong> Every command applied:
+<code>time</code> (the <strong>real time</strong> it took effect),
+<code>command_id</code>, <code>action</code>, <code>dataset</code>,
+<code>rate</code>, <code>position</code> (the <strong>replay
+time</strong> it took effect), <code>run</code>, <code>sender</code>,
+<code>note</code> (D-198). <code>time</code> is real time, not the
+replay time, because OpenSensorHub keeps one observation per phenomenon
+time per datastream and replaces the first: keyed by replay time, a
+<code>load</code> and a <code>pause</code> at one position would leave
+one entry. Readers order the log by <code>time</code> and show
+<code>position</code> as where the replay was.</p>
+<p><strong>Replay runs.</strong> A run id is
+<code>r-&lt;dataset id&gt;-&lt;n&gt;</code>. A new run starts on
+<code>load</code> of a dataset, and on every <code>seek</code> (FR-87).
+Models tag their results with it (§10).</p>
+<p><strong>Models ready.</strong> After a <code>load</code>, the
+controller lists <code>/systems/{models}/subsystems</code> and
+<code>/datastreams</code> (Q, drawn) once per real second until every
+model system has at least one datastream whose output name ends
+<code>__{dataset}</code>. It then publishes the state with
+<code>models_ready: true</code>. A model that is failing is skipped
+after 10 real seconds, and named in the log. The display client starts
+the handshake that follows an import (FR-44) only once
+<code>models_ready</code> is true for the new dataset, so its profile
+check never races the models.</p>
+<p><strong>At the end</strong> of the dataset the controller pauses,
+sets <code>at_end</code>, and publishes the state (FR-88).</p>
+<p><strong>At startup</strong>, before the first login, the controller
+loads Mission A and is paused at its start (FR-77). This load is
+quiet.</p>
+<h2
+id="9-the-server-behaviour-both-stand-ins-must-have-fr-06c-pr-05-pr-06">9.
+The server: behaviour both stand-ins must have (FR-06c, PR-05,
+PR-06)</h2>
+<h3 id="91-behaving-as-a-stock-opensensorhub">9.1 Behaving as a stock
+OpenSensorHub</h3>
+<ul>
+<li>Identifiers are opaque (§6).</li>
+<li><strong>Discovery of every system</strong> is
+<code>GET /systems?searchMembers=true</code> (D-193): every system,
+subsystems included, in either encoding
+(<code>f=application/sml+json</code> gives <code>uniqueId</code>;
+GeoJSON gives <code>properties.uid</code>). <code>GET /systems</code>
+alone lists the top level; <code>/systems/{id}/subsystems</code> lists a
+system's children. <strong>A listing carries no <code>parent</code>
+link</strong>; only a single system (<code>GET /systems/{id}</code>)
+links its parent. No client relies on parent links: the system tree,
+where one is needed, is learnt from <code>/subsystems</code> (the
+gateway's discovery, D-192).
+<code>GET /collections/all_systems/items</code> answers
+<code>400</code>, as OpenSensorHub does; <code>/collections</code> lists
+<code>all_systems</code> with its <code>items</code> link to
+<code>/systems</code>.</li>
+<li><strong>SensorML is sent as
+<code>application/sml+json</code></strong> (D-194), to
+<code>POST /systems</code> and
+<code>POST /systems/{id}/subsystems</code>. A body sent as
+<code>application/json</code> (or without a <code>Content-Type</code>)
+is read as GeoJSON: anything but a <code>Feature</code> is refused with
+<code>400</code>, as OpenSensorHub refuses it.</li>
+<li><strong>Units are UCUM codes</strong> (D-195). A datastream or
+control stream whose schema carries a <code>uom.code</code> that is not
+UCUM is refused with <code>400</code> (OpenSensorHub: "Invalid UCUM
+code").</li>
+<li><strong>Clients read a body as JSON whatever its
+<code>Content-Type</code> says</strong> (D-196). OpenSensorHub labels
+the landing page, <code>/conformance</code> and
+<code>/datastreams/{id}/schema</code> asked without <code>f</code> as
+<code>Content-Type: auto</code>; the bodies are JSON. The stand-ins
+label them <code>application/json</code>.</li>
+<li><code>POST</code> creating something that already exists (same
+uniqueId, or same outputName under the same system) answers
+<code>201</code> with the <strong>existing</strong>
+<code>Location</code>. A different schema under an existing outputName
+makes a new datastream, with a new id (FR-51).</li>
+<li><strong>One observation per <code>POST</code>.</strong> An array
+body is refused with <code>400</code>.</li>
+<li>A missing value is the string <code>"NaN"</code>. JSON
+<code>null</code> in a Quantity is refused with <code>400</code>.</li>
+<li><code>PUT</code> and <code>DELETE</code> on observations, systems
+and datastreams are <strong>refused with a <code>4xx</code></strong>
+(D-200): the stand-ins answer <code>405</code>; OpenSensorHub answers
+<code>400</code> to <code>PUT</code> with an empty body. Clients rely
+only on a 4xx. A stock OpenSensorHub <strong>deletes</strong> a system
+or a datastream on <code>DELETE</code> (<code>204</code>) for an account
+its permissions allow, and for any account on its internal endpoint
+(tried on 2026-11-26), so the access gateway refuses <code>PUT</code>,
+<code>PATCH</code> and <code>DELETE</code> with <code>405</code> for
+every account (§9.5): nothing is replaced or deleted except by Reset
+instance (SRD §17).</li>
+<li>The format is chosen with <code>f=application/swe+json</code>. The
+<code>Accept</code> header is <strong>ignored</strong>: the default is
+<code>application/json</code> observation resources. Paging is by
+<code>limit</code> and <code>offset</code>, with no <code>next</code>
+link in SWE JSON. A <code>limit</code> over the maximum is <strong>not
+refused</strong>.</li>
+<li>A refusal is an <strong>HTML page</strong> (<code>text/html</code>),
+with the status line in <code>&lt;title&gt;</code>. No client may rely
+on its body.</li>
+<li>There is <strong>no instance identifier</strong> and no
+<code>503</code>. While starting, and while down, the back-end worker
+answers nothing (<code>{down: true}</code>), and the relay returns a
+network failure. A start takes about one real second, during which
+connections are refused.</li>
+<li>Command status is posted to
+<code>/controlstreams/{csId}/status</code> with
+<code>{"command@id": "...", "statusCode": "...", "message": "..."}</code>.
+Status codes: <code>ACCEPTED</code>, <code>EXECUTING</code>,
+<code>COMPLETED</code>, <code>FAILED</code>, <code>REJECTED</code>.
+Listed, each report also carries its own <code>id</code> and its
+<code>reportTime</code> (real time); readers tell reports apart by
+<code>id</code> (D-181).</li>
+<li><strong>A command's outcome is its latest status report other than
+<code>PENDING</code></strong> (D-199, revising D-164), by
+<code>reportTime</code>, among the reports since the command was sent.
+When the sender's <code>POST</code> answers, the server stores a
+<code>PENDING</code> report for the command: in OpenSensorHub that is
+often <strong>after</strong> the receiver's <code>COMPLETED</code>, so
+the latest report alone would read <code>PENDING</code>. Both stand-ins
+store it too. The display client, both <code>csmodel</code>s
+(<code>outcome</code>, <code>commandOutcome</code>), the shell and the
+suite read it this way.</li>
+<li><strong>Sending a command:</strong>
+<code>POST /controlstreams/{csId}/commands</code> with
+<code>{"parameters": {...}}</code>.
+<ul>
+<li><strong>With no subscriber</strong>, the command is dropped and not
+listed afterwards. The answer is <code>202</code> after the hold:
+<strong>5 s in the stand-ins</strong>, about <strong>29.5 s in
+OpenSensorHub</strong> 2.0.4 (AT-32 run of 2026-11-26). The stand-ins
+keep 5 s; no client waits on either.</li>
+<li><strong>With a subscriber</strong>, the command is pushed at once.
+The answer is <code>200</code> after <strong>about 5 s</strong>, with
+<code>currentStatus: PENDING</code> (FR-27), and the
+<code>PENDING</code> report is stored then. The sender never waits for
+this answer: it does not await the response before updating its display
+(AT-39).</li>
+</ul></li>
+<li>The profile is at <code>GET /profile.json</code>, beside the API
+(FR-41). It is <strong>not</strong> linked from the landing page.</li>
+</ul>
+<h3 id="92-push-subscriptions-fr-02a">9.2 Push subscriptions
+(FR-02a)</h3>
+<p><strong>Subscribing.</strong>
+<code>GET /controlstreams/{csId}/commands?subscribe=1</code>, with the
+<code>Authorization</code> header. The answer is <code>200</code> with
+<code>content-type: application/x-ndjson</code> and a body that
+<strong>never ends</strong>: one command JSON per line, as
+<code>{"id", "parameters", "issueTime", "sender"?}</code>.</p>
+<ul>
+<li><code>sender</code> is present only if S-AUTH shows that
+OpenSensorHub provides it (§14).</li>
+<li>The subscription ends when the server stops, restarts or goes down.
+The receiver then resubscribes once the server answers again (FR-48,
+AT-38).</li>
+</ul>
+<p><strong><code>PushChannel</code></strong>
+(<code>web/src/push.ts</code>, and <code>csmodel.py</code>'s
+<code>subscribe</code>) wraps this in an interface shaped like
+WebSocket: <code>onopen</code>, <code>onmessage({data})</code>,
+<code>onclose</code>, <code>close()</code>.</p>
+<p><strong>Port protocol.</strong> The back-end worker answers a
+subscription with <code>{status, headers, stream: true}</code>, then
+<code>{chunk: &lt;bytes&gt;}</code> per command, and
+<code>{end: true}</code> when the subscription stops. <code>sw.js</code>
+turns this into a <code>ReadableStream</code> response. In CPython the
+same endpoint is a FastAPI <code>StreamingResponse</code>.</p>
+<p><strong>Capture.</strong> The push is captured as
+<code>server → &lt;receiver&gt;</code> with <code>K</code> and
+<code>push: true</code>, at the moment it is written to the stream.</p>
+<h3 id="93-authentication-fr-93-fr-97-to-fr-102">9.3 Authentication
+(FR-93, FR-97 to FR-102)</h3>
+<ul>
+<li>Every request and every push subscription carries
+<code>Authorization: Basic base64(user:password)</code>. Without valid
+credentials the answer is <strong><code>401</code></strong> (an HTML
+page) with <strong>no <code>WWW-Authenticate</code> header</strong>, so
+the browser never shows a native login dialog. That header is to be
+confirmed against OpenSensorHub (§14).</li>
+<li><code>/profile.json</code> also needs credentials.</li>
+<li>Accounts, as the server's configuration
+(<code>backend/barge/accounts.py</code> and
+<code>web/src/standin/accounts.ts</code>; identical, and labelled demo
+credentials, PR-07):</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>Account</th>
+<th>Password</th>
+<th>Role / kind</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>owner</code></td>
+<td><code>demo-owner</code></td>
+<td>Owner</td>
+</tr>
+<tr>
+<td><code>friend</code></td>
+<td><code>demo-friend</code></td>
+<td>Viewer (weather only)</td>
+</tr>
+<tr>
+<td><code>analyst</code></td>
+<td><code>demo-analyst</code></td>
+<td>Viewer with emissions (for tests)</td>
+</tr>
+<tr>
+<td><code>svc-importer</code>, <code>svc-replay</code>,
+<code>svc-data-cleanse</code>, <code>svc-summaries</code>,
+<code>svc-analysis</code></td>
+<td><code>svc-demo</code></td>
+<td>service: create and append only under their own systems (and the
+importer under the sensors' datastreams); read everything, CO₂
+included</td>
+</tr>
+<tr>
+<td><code>svc-new-model-1</code>, <code>svc-new-model-2</code></td>
+<td><code>svc-demo</code></td>
+<td>service: as above, but <strong>no CO₂</strong> unless the owner
+grants it (FR-113)</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>Permissions</strong>, checked per system and inherited by
+its subsystems, datastreams and control streams:
+<ul>
+<li><strong>read</strong>: every role reads every unrestricted system,
+plus its own workspace. Owner, Viewer with emissions, and the core
+service accounts also read restricted systems;</li>
+<li><strong>command</strong>: every user may send commands to the
+importer, the replay controller and every model's unrestricted control
+stream;</li>
+<li><strong>create and append</strong>: a user only under
+<code>workspace:{self}</code>; a service account only under its own
+systems.</li>
+</ul></li>
+<li>A system the account may not read is <strong>absent</strong>
+(FR-93): it is left out of every listing (<code>/systems</code>,
+<code>/systems?searchMembers=true</code>,
+<code>/systems/{id}/subsystems</code>, <code>/datastreams</code>,
+<code>/systems/{id}/datastreams</code>, <code>/controlstreams</code>,
+<code>/collections/*/items</code>), and answers <strong>404</strong> to
+every path under it.</li>
+<li><strong>Role changes</strong> (FR-116): the stand-in keeps a
+per-account <code>epoch</code>. Raising it (the admin stub, §13.5) makes
+every request with the old credentials answer <code>401</code> until the
+next login. Whether that matches OpenSensorHub is for S-AUTH (§14).</li>
+<li>The importer, the replay controller and the core models in CPython
+and in the stand-in authenticate as their service accounts.</li>
+</ul>
+<h3
+id="95-the-access-gateway-s-auth-finding-of-2026-11-25-decision-d-150">9.5
+The access gateway (S-AUTH finding of 2026-11-25; decision D-150)</h3>
+<p>A stock OpenSensorHub <strong>cannot hide</strong> a system: a denied
+system answers 403 and its datastreams, observations and streams stay
+readable, and denies are not inherited. With access control on, it also
+closes every command subscription at once. So the restriction of FR-93
+is done by an <strong>access gateway</strong>, written for this system,
+that sits in front of the data server. It is drawn as a component of its
+own (<code>gateway</code>), never hidden inside the stand-in.</p>
+<p><strong>The gateway:</strong></p>
+<ul>
+<li><p><strong>Credentials.</strong> It authenticates every request
+against the delivered accounts, and forwards the request with the same
+credentials. Without valid credentials it answers <code>401</code>
+itself, and it <strong>strips</strong> OpenSensorHub's
+<code>WWW-Authenticate: basic</code>, so that the browser never shows
+its own login dialog.</p></li>
+<li><p><strong>Filtering.</strong> It removes restricted resources from
+every listing, matching them by unique-id prefix:</p>
+<ul>
+<li><code>urn:x-barge:sensor:*:co2</code>;</li>
+<li><code>urn:x-barge:process:*:restricted</code>;</li>
+<li>other users' <code>urn:x-barge:workspace:*</code>.</li>
+</ul>
+<p>It also removes their datastreams and control streams, and answers
+<code>404</code> to every path under them.</p></li>
+<li><p><strong>Writes.</strong> It enforces "create and append only
+under your own systems". It refuses <code>PUT</code>, <code>PATCH</code>
+and <code>DELETE</code> with <code>405</code> for <strong>every
+account</strong>, whatever the path: a stock OpenSensorHub deletes on
+<code>DELETE</code>, and nothing is replaced or deleted except by Reset
+instance (SRD §17; D-200).</p></li>
+<li><p><strong>Push subscriptions.</strong> It forwards them to the
+server's internal receiver endpoint, for service accounts only. That
+endpoint has access control off and is not reachable from
+outside.</p></li>
+<li><p><strong>Roles.</strong> It reads the delivered user-to-role
+assignment on <strong>every request</strong>, so a role change takes
+effect at once (FR-116; there is no session to end). The
+<code>epoch</code> of §9.3 is withdrawn.</p></li>
+</ul>
+<p><strong>The server (both stand-ins)</strong> behaves as OpenSensorHub
+would behind the gateway: it authenticates Basic credentials, and
+applies no permission per system. It keeps the
+<code>WWW-Authenticate: basic</code> header on its 401.</p>
+<p><strong>FR-112a.</strong> A pushed command carries
+<code>sender</code>, the user id, as OpenSensorHub's does. The receiving
+model looks up that user's role in the same delivered assignment
+(<code>accounts.py</code>, <code>accounts.ts</code>), and rejects a
+command naming CO₂ if the role lacks emissions.</p>
+<h3 id="94-redaction-fr-16a">9.4 Redaction (FR-16a)</h3>
+<p>Every captured <code>content</code> replaces the value of
+<code>Authorization</code> with <code>****</code>, and any JSON member
+named <code>password</code> with <code>"****"</code>. The tap does this
+once, centrally, in <code>tap.py</code> and <code>tap.ts</code>. AT-53
+searches every captured message for each demo password.</p>
+<h2 id="10-models">10. Models</h2>
+<h3 id="101-what-a-model-is-written-against-csmodelpy-csmodelts">10.1
+What a model is written against (<code>csmodel.py</code>,
+<code>csmodel.ts</code>)</h3>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> Api:  <span class="co"># every method is async; each is one or more HTTP requests with the model&#39;s credentials</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> find_system(<span class="va">self</span>, uid) <span class="op">-&gt;</span> <span class="bu">str</span> <span class="op">|</span> <span class="va">None</span>            <span class="co"># by uniqueId: GET /systems?searchMembers=true (D-193)</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> create_system(<span class="va">self</span>, body, parent_uid<span class="op">=</span><span class="va">None</span>) <span class="op">-&gt;</span> <span class="bu">str</span>  <span class="co"># POST /systems or /systems/{parent}/subsystems as</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>                                                                 <span class="co"># application/sml+json (D-194); 201 = success</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> create_datastream(<span class="va">self</span>, system_id, body) <span class="op">-&gt;</span> <span class="bu">str</span>  <span class="co"># returns a key &quot;system_uid|outputName&quot;</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> create_controlstream(<span class="va">self</span>, system_id, body) <span class="op">-&gt;</span> <span class="bu">str</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> find(<span class="va">self</span>, system_uid, output_name) <span class="op">-&gt;</span> <span class="bu">str</span> <span class="op">|</span> <span class="va">None</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> read(<span class="va">self</span>, key, t0, t1, fields<span class="op">=</span><span class="va">None</span>) <span class="op">-&gt;</span> <span class="bu">dict</span>    <span class="co"># f=application/swe+json, paged by offset; &quot;NaN&quot; → nan</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> latest(<span class="va">self</span>, key) <span class="op">-&gt;</span> <span class="bu">dict</span> <span class="op">|</span> <span class="va">None</span>                <span class="co"># resultTime=latest</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> publish(<span class="va">self</span>, key, row: <span class="bu">dict</span>) <span class="op">-&gt;</span> <span class="va">None</span>           <span class="co"># ONE observation per POST; nan → &quot;NaN&quot;</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> publish_many(<span class="va">self</span>, key, cols: <span class="bu">dict</span>) <span class="op">-&gt;</span> <span class="bu">int</span>      <span class="co"># loops publish(); counts</span></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> subscribe(<span class="va">self</span>, cs_key, on_command) <span class="op">-&gt;</span> <span class="va">None</span>     <span class="co"># push stream (§9.2); resubscribes after unreachability</span></span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> command_status(<span class="va">self</span>, cs_key, cmd_id, status, message<span class="op">=</span><span class="st">&quot;&quot;</span>) <span class="op">-&gt;</span> <span class="va">None</span></span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> replay_state(<span class="va">self</span>) <span class="op">-&gt;</span> <span class="bu">dict</span>                      <span class="co"># latest of urn:x-barge:replay|state</span></span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> score(<span class="va">self</span>, kind, payload) <span class="op">-&gt;</span> <span class="bu">dict</span>              <span class="co"># the referee (scaffolding)</span></span></code></pre></div>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> Model:</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>    <span class="bu">id</span>, label, description</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>    max_rate: <span class="bu">float</span>             <span class="co"># the highest replay rate it sustains (FR-37a)</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>    window: <span class="bu">float</span> <span class="op">=</span> <span class="fl">60.0</span>        <span class="co"># replay seconds per processing window, aligned to the dataset&#39;s start</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> setup(<span class="va">self</span>, api)                    <span class="co"># register; subscribe; THEN declare ready</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> process(<span class="va">self</span>, api, ds, t0, t1, run) <span class="co"># one window (t0, t1] of dataset ds, under replay run `run`</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> on_command(<span class="va">self</span>, api, cmd) <span class="op">-&gt;</span> <span class="bu">str</span>   <span class="co"># validate; raise Rejected(&quot;…bound…&quot;) to report REJECTED</span></span></code></pre></div>
+<h3 id="102-the-runner">10.2 The runner</h3>
+<p>The runner reads the replay <code>state</code> once per real second
+(drawn, like every other request), and runs on what it finds:</p>
+<ul>
+<li><p><strong>On a new dataset</strong>, it first creates all of the
+model's datastreams for that dataset, including the restricted ones it
+may publish. This is what the replay controller waits for
+(<code>models_ready</code>, §8).</p></li>
+<li><p><strong>Current dataset.</strong> It follows
+<code>state.dataset</code>. On a new dataset or run, it continues from
+where it got to for that dataset if the run is the same, and otherwise
+starts the dataset's windows again from the run's position
+(FR-87).</p></li>
+<li><p><strong>Up to the replay time.</strong> It processes whole
+windows only, up to <code>state.time</code>: every window
+<code>(t0, t1]</code> with <code>t1 ≤ replay time</code>. This is what
+makes outputs identical at any rate (FR-35, AT-34).</p></li>
+<li><p><strong>Results.</strong> Every output observation carries
+<code>run</code> (and Analysis's <code>run_id</code>). Nothing is
+replaced (FR-28a). A reader takes the <strong>latest run</strong> for
+the dataset (FR-35). Analysis's <code>runs</code> names the data range
+it used as <code>start</code> and <code>end</code> (Time), beside
+<code>run_id</code>, <code>algorithm</code>, <code>resolution</code>,
+<code>records</code>, <code>clusters</code>, <code>score_changes</code>
+and <code>score_clusters</code> (D-183).</p></li>
+<li><p><strong>Ready.</strong> A model publishes <code>ready</code> (its
+<code>phase</code>, for the shell) only after its subscription is open
+(AT-38).</p></li>
+<li><p><strong>After a server restart</strong> a model registers again
+and declares its datastreams again (the fields offered may have
+changed). A model's datastream is listed only once its model has
+declared it since this start, and <code>models_ready</code> counts only
+those. Until then (at most about 11 s) the Python back end answers only
+the models (D-186).</p></li>
+<li><p><strong>Declared rates:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Model</th>
+<th><code>max_rate</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Data cleanse</td>
+<td>100</td>
+</tr>
+<tr>
+<td>Summaries</td>
+<td>100</td>
+</tr>
+<tr>
+<td>Analysis</td>
+<td>10</td>
+</tr>
+</tbody>
+</table>
+<p>The replay controller reads them from each model system's
+<code>max_rate</code> property (SensorML <code>characteristics</code>,
+read at registration).</p></li>
+<li><p><strong>Order.</strong> Data cleanse reads
+<code>weather__{ds}</code> (and <code>co2__{ds}</code>). Every other
+model reads only Data cleanse's outputs (AT-15).</p></li>
+</ul>
+<h3 id="103-commands-to-models">10.3 Commands to models</h3>
+<table>
+<thead>
+<tr>
+<th>Model</th>
+<th>Control stream</th>
+<th>Parameters (all present)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Data cleanse</td>
+<td><code>settings</code></td>
+<td><code>spike_threshold</code> (Quantity 1–10)</td>
+</tr>
+<tr>
+<td>Summaries</td>
+<td><code>settings</code></td>
+<td><code>tendency_hours</code> (Quantity 1–6)</td>
+</tr>
+<tr>
+<td>Analysis</td>
+<td><code>clustering</code></td>
+<td>the table below</td>
+</tr>
+</tbody>
+</table>
+<p>Analysis's <code>clustering</code> parameters:</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Bounds</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>algorithm</code></td>
+<td>Category</td>
+<td>A, B, C</td>
+</tr>
+<tr>
+<td><code>doi</code></td>
+<td>Text</td>
+<td>an unsaved data of interest, as JSON (§11): its
+<code>dataset</code>, <code>start</code>, <code>end</code>,
+<code>resolution</code> and <code>sources</code></td>
+</tr>
+<tr>
+<td><code>clusters</code></td>
+<td>Count</td>
+<td>2–8</td>
+</tr>
+<tr>
+<td><code>sensitivity</code></td>
+<td>Quantity</td>
+<td>1–10</td>
+</tr>
+</tbody>
+</table>
+<p>The receiver validates every bound, and answers <code>REJECTED</code>
+naming it (FR-27).</p>
+<p><strong>CO₂ in a command (FR-112, FR-112a).</strong> If
+<code>doi.sources</code> names a CO₂ field:</p>
+<ul>
+<li>the run is published under <code>analysis:restricted</code>;</li>
+<li>if the sender is not allowed CO₂, the command is
+<code>REJECTED</code> with "a requested source is not available". How
+the receiver knows the sender is decided by S-AUTH (§14).</li>
+</ul>
+<h2 id="11-data-of-interest-fr-94-to-fr-96a-fr-104-to-fr-108">11. Data
+of interest (FR-94 to FR-96a, FR-104 to FR-108)</h2>
+<p>The master is
+<code>contracts/schemas/data-of-interest.json</code>:</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode json"><code class="sourceCode json"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span> <span class="dt">&quot;version&quot;</span><span class="fu">:</span> <span class="dv">1</span><span class="fu">,</span> <span class="dt">&quot;label&quot;</span><span class="fu">:</span> <span class="st">&quot;…&quot;</span><span class="fu">,</span> <span class="dt">&quot;note&quot;</span><span class="fu">:</span> <span class="st">&quot;…&quot;</span><span class="fu">,</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;dataset&quot;</span><span class="fu">:</span> <span class="fu">{</span><span class="dt">&quot;file&quot;</span><span class="fu">:</span> <span class="st">&quot;…&quot;</span><span class="fu">,</span> <span class="dt">&quot;size&quot;</span><span class="fu">:</span> <span class="dv">0</span><span class="fu">,</span> <span class="dt">&quot;modified&quot;</span><span class="fu">:</span> <span class="st">&quot;…&quot;</span><span class="fu">,</span> <span class="dt">&quot;sha256&quot;</span><span class="fu">:</span> <span class="st">&quot;…&quot;</span><span class="fu">},</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;start&quot;</span><span class="fu">:</span> <span class="st">&quot;…Z&quot;</span><span class="fu">,</span> <span class="dt">&quot;end&quot;</span><span class="fu">:</span> <span class="st">&quot;…Z&quot;</span><span class="fu">,</span> <span class="dt">&quot;resolution&quot;</span><span class="fu">:</span> <span class="st">&quot;PT1S|PT1M|PT1H&quot;</span><span class="fu">,</span> <span class="dt">&quot;aggregation&quot;</span><span class="fu">:</span> <span class="st">&quot;as-stored&quot;</span><span class="fu">,</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;sources&quot;</span><span class="fu">:</span> <span class="ot">[</span><span class="fu">{</span><span class="dt">&quot;system&quot;</span><span class="fu">:</span> <span class="st">&quot;urn:…&quot;</span><span class="fu">,</span> <span class="dt">&quot;output&quot;</span><span class="fu">:</span> <span class="st">&quot;weather&quot;</span><span class="fu">,</span> <span class="dt">&quot;fields&quot;</span><span class="fu">:</span> <span class="ot">[</span><span class="st">&quot;air_temperature&quot;</span><span class="ot">]</span><span class="fu">}</span><span class="ot">]</span><span class="fu">,</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;run&quot;</span><span class="fu">:</span> <span class="st">&quot;r-…&quot;</span><span class="fu">,</span> <span class="dt">&quot;created&quot;</span><span class="fu">:</span> <span class="fu">{</span><span class="dt">&quot;at&quot;</span><span class="fu">:</span> <span class="st">&quot;…Z&quot;</span><span class="fu">,</span> <span class="dt">&quot;by&quot;</span><span class="fu">:</span> <span class="st">&quot;owner&quot;</span><span class="fu">}</span> <span class="fu">}</span></span></code></pre></div>
+<ul>
+<li><code>sources[].output</code> is the output name
+<strong>without</strong> <code>__{ds}</code>. The dataset id is found
+again from <code>dataset.sha256</code> when the record is opened, so a
+re-import restores it (FR-96).</li>
+<li><strong>Saving</strong> appends an observation to
+<code>urn:x-barge:workspace:{user}|data-of-interest</code> with fields
+<code>time</code> (save time), <code>doi_id</code> (Text),
+<code>action</code> (<code>save</code> or <code>remove</code>) and
+<code>record</code> (Text, the JSON). The list is folded from
+these.</li>
+<li><strong>Resolution</strong> maps to datastreams: <code>PT1S</code>
+reads <code>cleaned-*</code> (or <code>weather</code>);
+<code>PT1M</code> reads <code>summary-1min-*</code>; <code>PT1H</code>
+reads <code>summary-1h-*</code>. Any other resolution is refused, naming
+these three (FR-94a).</li>
+</ul>
+<h2 id="12-the-adoption-opening-srd-98">12. The adoption opening (SRD
+§9.8)</h2>
+<ul>
+<li><p><strong>The flag.</strong> <code>?hand-made</code> is read once,
+by <code>web/src/shell/opening.ts</code>.</p></li>
+<li><p><strong>Layout.</strong> <code>layout-opening.json</code> holds
+two rows for the back-end band:</p>
+<ul>
+<li>row 1: <code>importer</code>, <code>replay</code>,
+<code>models</code>, <code>sub-webapi</code>, <code>sub-registry</code>,
+<code>sub-obsstore</code>;</li>
+<li>row 2: <code>sub-query</code>, <code>sub-commands</code>,
+<code>sub-accounts</code>, <code>sub-permissions</code>,
+<code>sub-admin</code>.</li>
+</ul>
+<p>The third-party zone holds <code>scilibs</code> only. The other zones
+are shifted down by one card row.</p></li>
+<li><p><strong>Lines</strong> (FR-120a) are drawn from
+<code>OPENING_FLOWS</code> in <code>opening.ts</code>, without
+letters.</p></li>
+<li><p><strong>Before Adopt:</strong></p>
+<ul>
+<li><code>runtime.start()</code> is <strong>not called</strong>: no
+worker starts and the relay is not registered (FR-122);</li>
+<li>the top bar renders only the title;</li>
+<li>the status reads "Opening";</li>
+<li>the banner is not rendered.</li>
+</ul></li>
+<li><p><strong>Adopt</strong> animates the eight cards to the
+<code>server</code> card's position over 1.5 s, with
+<code>prefers-reduced-motion</code> honoured. It then swaps to the
+normal layout, calls <code>runtime.start()</code>, and shows the
+controls.</p></li>
+</ul>
+<h2 id="13-workers-the-page-and-controls">13. Workers, the page and
+controls</h2>
+<h3 id="131-workers">13.1 Workers</h3>
+<table>
+<thead>
+<tr>
+<th>Worker</th>
+<th>Runs</th>
+<th>Started by</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>backend.worker.ts</code></td>
+<td>Pyodide: the importer, the replay controller, the data server
+stand-in, the folder</td>
+<td>the page, <code>?backend=python</code></td>
+</tr>
+<tr>
+<td><code>model.worker.ts</code> ×3, plus one per empty slot used</td>
+<td>Pyodide: one model each; its requests go through the relay with its
+service credentials</td>
+<td>the page, Python mode</td>
+</tr>
+<tr>
+<td><code>standin.worker.ts</code></td>
+<td>TypeScript: everything the back-end worker runs, plus the core
+models</td>
+<td>the page, by default</td>
+</tr>
+<tr>
+<td><code>sw.js</code></td>
+<td>the relay; forwards requests and streams; no logic (§9.2)</td>
+<td>the page</td>
+</tr>
+</tbody>
+</table>
+<h3 id="132-messages-between-the-page-and-the-back-end-worker">13.2
+Messages between the page and the back-end worker</h3>
+<p>The page sends:</p>
+<ul>
+<li><code>start {folderUrl, ...}</code>;</li>
+<li><code>connect</code>, with a port for the relay;</li>
+<li><code>model-connect {model}</code>;</li>
+<li><code>control {action, arg}</code>.</li>
+</ul>
+<p>The worker posts:</p>
+<ul>
+<li><code>progress {stage, detail, pct}</code>;</li>
+<li><code>tick {messages, server, replay}</code> every 100 ms;</li>
+<li><code>state {…}</code>;</li>
+<li><code>relay-failed {…}</code>.</li>
+</ul>
+<p><code>replay</code> in the tick is the latest replay state, for the
+shell's status only. The display client reads the state over HTTP.</p>
+<h3 id="133-control-actions">13.3 Control actions</h3>
+<p><code>restart-server</code>, <code>down</code>, <code>up</code>,
+<code>field {name, on}</code>, <code>profile-lie</code>,
+<code>capture</code>, <code>freeze {on}</code>,
+<code>reset-instance</code>, <code>set-role {user, role}</code>,
+<code>state</code>.</p>
+<p>There is no <code>play</code>, <code>pause</code> or
+<code>rate</code>: replay is controlled only by commands (C4).</p>
+<h3 id="134-control-state">13.4 Control state</h3>
+<pre><code>{ server, fields, pending, lie_about_profile,
+  folder: [{file, size, modified, status, dataset, pct}],
+  datasets: [{id, file, start, end, superseded}],
+  replay, models: [{id, label, phase, detail, max_rate, datastreams}],
+  accounts: [{user, role}], capture_counts, backend, frozen, import_rate }</code></pre>
+<h3 id="135-admin-stub-fr-115">13.5 Admin stub (FR-115)</h3>
+<p>The admin stub is the <code>set-role {user, role}</code> control
+action, offered in the control panel as "OpenSensorHub administration
+(stand-in)". It raises the account's <code>epoch</code> (§9.3).</p>
+<h3 id="136-url-parameters">13.6 URL parameters</h3>
+<p><code>?backend=python|standin</code>, <code>?sketch=off</code> and
+<code>?hand-made</code>. <code>?seed</code> is withdrawn: the data
+folder is fixed.</p>
+<h2 id="14-waiting-on-the-spikes">14. Waiting on the spikes</h2>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Interim in both stand-ins</th>
+<th>Decided by</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Restricted resources absent from listings, and 404</td>
+<td><strong>Decided: the access gateway</strong> (§9.5); OpenSensorHub
+cannot do it</td>
+<td>S-AUTH, question 1</td>
+</tr>
+<tr>
+<td><code>sender</code> on a pushed command (FR-112a)</td>
+<td><strong>Decided: present as the user id</strong>; the receiver looks
+the role up</td>
+<td>S-AUTH, question 4</td>
+</tr>
+<tr>
+<td>Role change: at once, or at the next login (FR-116)</td>
+<td><strong>Decided: at once</strong>, on the next request</td>
+<td>S-AUTH, question 7</td>
+</tr>
+<tr>
+<td><code>401</code> with or without <code>WWW-Authenticate</code></td>
+<td><strong>Decided:</strong> the server sends it, and the gateway
+strips it</td>
+<td>S-AUTH, question 6</td>
+</tr>
+<tr>
+<td>Bulk import inside the server</td>
+<td><strong>Decided: feasible</strong>, at about 300,000 rows/s (finding
+of 2026-11-25)</td>
+<td>S-IMPORT</td>
+</tr>
+</tbody>
+</table>
+<p>When a spike reports, this table, FR-06c and both stand-ins are
+brought into line with OpenSensorHub. <strong>OpenSensorHub is the
+reference</strong> (PR-06).</p>
+<footer>Rendered from <code>srd-barge.md</code>.</footer>
+</main>
+</body>
+</html>
