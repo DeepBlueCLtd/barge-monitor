@@ -15,9 +15,9 @@
 id="toc-software-requirements-document">Software Requirements
 Document</a>
 <ul>
-<li><a href="#canal-barge-weather-demonstrator-version-46-draft"
-id="toc-canal-barge-weather-demonstrator-version-46-draft">Canal barge
-weather demonstrator, Version 4.6 (draft)</a></li>
+<li><a href="#canal-barge-weather-demonstrator-version-47-draft"
+id="toc-canal-barge-weather-demonstrator-version-47-draft">Canal barge
+weather demonstrator, Version 4.7 (draft)</a></li>
 <li><a href="#1-purpose" id="toc-1-purpose">1. Purpose</a></li>
 <li><a href="#2-runtime-architecture" id="toc-2-runtime-architecture">2.
 Runtime architecture</a></li>
@@ -50,33 +50,65 @@ style</a></li>
 <li><a href="#12-delivery" id="toc-12-delivery">12. Delivery</a></li>
 <li><a href="#13-development-process"
 id="toc-13-development-process">13. Development process</a></li>
-<li><a href="#14-acceptance-criteria-46"
-id="toc-14-acceptance-criteria-46">14. Acceptance criteria
-(4.6)</a></li>
+<li><a href="#14-acceptance-criteria-47"
+id="toc-14-acceptance-criteria-47">14. Acceptance criteria
+(4.7)</a></li>
 <li><a href="#15-open-questions" id="toc-15-open-questions">15. Open
 questions</a></li>
-<li><a href="#16-deliberate-exclusions-from-version-46"
-id="toc-16-deliberate-exclusions-from-version-46">16. Deliberate
-exclusions from Version 4.6</a></li>
+<li><a href="#16-deliberate-exclusions-from-version-47"
+id="toc-16-deliberate-exclusions-from-version-47">16. Deliberate
+exclusions from Version 4.7</a></li>
 </ul></li>
 </ul>
 </nav>
 <h1 id="software-requirements-document">Software Requirements
 Document</h1>
-<h2 id="canal-barge-weather-demonstrator-version-46-draft">Canal barge
-weather demonstrator, Version 4.6 (draft)</h2>
-<p><strong>Status:</strong> Draft. Builds on Version 4.5. Version 4.6
-adds an <strong>opening act</strong> for non-engineers. The demonstrator
-opens with the data server shown as the subsystems we would have to
-build. One click adopts OpenSensorHub, and only then does the
-demonstrator come alive (§9.8). <strong>Author:</strong> Doc
-<strong>Working name:</strong> to be chosen (§15). This document says
-<em>the demonstrator</em>. <strong>Supersedes:</strong> Version 4.5 and,
-through it, every earlier version and Annex A. Earlier change lists are
-in Versions 4.2 to 4.5 (below). Requirements marked
-<strong>(4.6)</strong> are new or changed here; <strong>(4.5)</strong>,
-<strong>(4.4)</strong> and <strong>(4.3)</strong> mark those changed in
-those versions and unchanged since.</p>
+<h2 id="canal-barge-weather-demonstrator-version-47-draft">Canal barge
+weather demonstrator, Version 4.7 (draft)</h2>
+<p><strong>Status:</strong> Draft. Builds on Version 4.6, with the
+decisions of the owner's review of the first 4.6 build (2026-11-26).
+That build was withdrawn; what it did is recorded in
+<code>docs/software-changes-v4.6-branch.md</code>. Version 4.6 added an
+<strong>opening act</strong> for non-engineers: the demonstrator opens
+with the data server shown as subsystem components we would have to
+build, and one click adopts OpenSensorHub (§9.8).
+<strong>Author:</strong> Doc <strong>Working name:</strong> to be chosen
+(§15). This document says <em>the demonstrator</em>.
+<strong>Supersedes:</strong> Version 4.6 and, through it, every earlier
+version and Annex A. Earlier change lists are below. Requirements marked
+<strong>(4.7)</strong> are new or changed here; <strong>(4.6)</strong>,
+<strong>(4.5)</strong>, <strong>(4.4)</strong> and
+<strong>(4.3)</strong> mark those changed in those versions and
+unchanged since.</p>
+<h3 id="changes-from-version-46-the-owners-review-2026-11-26">Changes
+from Version 4.6 (the owner's review, 2026-11-26)</h3>
+<ul>
+<li><strong>No access gateway, for now (4.7).</strong> Clients talk to
+OpenSensorHub directly. Restricted resources are <strong>listed in
+discovery and refused with 403</strong>, as stock OpenSensorHub does,
+instead of being hidden (FR-93, FR-06c). C6 is restated. Hiding them is
+an open question the owner is taking up with the OpenSensorHub team
+(§15).</li>
+<li><strong>Replay moves into the display client (4.7).</strong> There
+is no replay controller on the server. <strong>Models process each
+dataset as soon as it is imported</strong>; each display client keeps
+its own replay clock and reveals data and results up to it (§8.6). C4 is
+restated; model rate bounds are withdrawn.</li>
+<li><strong>No Freeze (4.7).</strong> Play and Pause cover it (FR-92
+withdrawn).</li>
+<li><strong>The opening's wording (4.7).</strong> Written ourselves, the
+data server is <strong>a range of subsystem components to
+develop</strong>, among them those drawn; not a fixed count
+(FR-120).</li>
+<li><strong>Popups in the display client (4.7).</strong> The dataset
+list becomes a popup <strong>Dataset selector</strong>, and data of
+interest a popup called <strong>Favourites</strong>, opened by a star
+button; both free screen space (§8.1, FR-103, §8.5).</li>
+<li><strong>Startup says why (4.7).</strong> A control that cannot act
+yet says why, and a startup that stalls says where (FR-125a, NFR-10a).
+The first build stalled at the seam relay's start, with every control
+disabled and no explanation.</li>
+</ul>
 <h3 id="changes-from-version-45">Changes from Version 4.5</h3>
 <ul>
 <li><strong>An adoption opening (4.6)</strong>, entered with the
@@ -135,10 +167,10 @@ The savings frames predate 4.6. In them the eight subsystems sit inside
 a "built by us" box and the importer and Models are gold, and 4.6
 forbids both. Where a mockup and this document disagree, this document
 wins.</p>
-<p><strong>Companion documents to update:</strong>
-<code>docs/v4-interfaces.md</code> and the decision log describe 4.1 and
-4.2. Both need revising to 4.6 before building (§15). The implementation
-plan is <code>docs/plan-v4.6.md</code>.</p>
+<p><strong>Companion documents to update (4.7):</strong>
+<code>docs/v4-interfaces.md</code>, <code>docs/plan-v4.6.md</code>, ADR
+0006 (replay controller) and ADR 0008 (access gateway) describe 4.6.
+They need revising to 4.7 before building (§15).</p>
 <h3 id="changes-from-version-43">Changes from Version 4.3</h3>
 <ul>
 <li><strong>CSV files in a data folder (4.4).</strong> The legacy
@@ -199,17 +231,19 @@ shows sources it has never seen without new code.</li>
 company's own work (the display client and the models) sits on standards
 and third-party parts, and a new model can be added without touching
 anything else.</li>
-<li><strong>C4. Recorded data can be replayed at any rate with standard
-commands.</strong> Choosing a dataset, play, pause, rate and seek are
-Connected Systems commands, and models and the display client behave the
-same at any rate.</li>
+<li><strong>C4. Recorded data can be replayed at any rate
+(4.7).</strong> Each imported dataset is processed once by the models,
+as soon as it is imported, and the display client replays it and its
+results at any rate on its own clock. Results never depend on how, or
+how fast, anyone replays.</li>
 <li><strong>C5. The data is protected at the screen (4.4).</strong>
 Nothing is served or shown without logging in, an unattended screen
 locks, and the browser keeps nothing sensitive.</li>
-<li><strong>C6. Sensitive data is restricted per user (4.5).</strong>
-CO₂ and everything derived from it are visible only to users the owner
-permits; to anyone else they do not appear to exist. The display client
-has no restriction-specific code: it shows what discovery finds.</li>
+<li><strong>C6. Sensitive data is restricted per user (4.7).</strong>
+CO₂ and everything derived from it can be read only by users the owner
+permits. Anyone else is refused (403): for now they can see in discovery
+that such sources exist, but never their data (§15). The display client
+has no restriction-specific code: it offers only what it can read.</li>
 </ol>
 <p>The claims are supported by acceptance tests (§14), never asserted by
 the display.</p>
@@ -249,8 +283,8 @@ React)</td>
 </tr>
 <tr>
 <td>Back-end worker</td>
-<td>Data folder, CSV importer, replay controller, the data server's
-stand-in (Python, Pyodide)</td>
+<td>Data folder, CSV importer, the data server's stand-in (Python,
+Pyodide)</td>
 </tr>
 <tr>
 <td>One worker per model</td>
@@ -264,8 +298,8 @@ stand-in (Python, Pyodide)</td>
 </table>
 <h3 id="21-the-seam">2.1 The seam</h3>
 <ul>
-<li><strong>FR-02</strong> All traffic between the display client, the
-data server, the replay controller and the models crosses as
+<li><strong>FR-02 (4.7)</strong> All traffic between the display client,
+the data server, the importer and the models crosses as
 <strong>HTTP</strong>, or as a <strong>pushed stream</strong> for
 commands, and nowhere else, through a <strong>Service Worker
 relay</strong>. <strong>Every request and every push subscription
@@ -274,8 +308,7 @@ carries credentials (4.4)</strong> (§7.5).</li>
 WebSocket. So in the demonstrator, a push subscription is <strong>one
 long streaming response</strong> through the relay, with one command per
 line. It is wrapped in a class with WebSocket's interface, and drawn as
-"push". In a developed system it is OpenSensorHub's WebSocket. Freeze
-holds the stream like any other response.</li>
+"push". In a developed system it is OpenSensorHub's WebSocket.</li>
 <li><strong>FR-03</strong> The relay is an <strong>invisible
 transport</strong>, not a component, and not drawn.</li>
 <li><strong>FR-04</strong> No client code or configuration carries an
@@ -289,18 +322,19 @@ JSON Schema for anything else.</li>
 respect to clients</strong> beyond authentication.</li>
 </ul>
 <h3 id="22-honest-ports">2.2 Honest ports</h3>
-<p>The <strong>seam transport</strong>, the <strong>replay
-clock</strong>, the <strong>RNG</strong> and the <strong>CSV
-importer</strong> (4.4). Nothing else is presented as pluggable.</p>
+<p>The <strong>seam transport</strong>, the display client's
+<strong>replay clock</strong> (4.7), the <strong>RNG</strong> and the
+<strong>CSV importer</strong> (4.4). Nothing else is presented as
+pluggable.</p>
 <h3 id="23-two-back-ends">2.3 Two back ends</h3>
 <p>The stand-in is <strong>demonstrator scaffolding only</strong>: it
 has no counterpart in a developed system and says nothing about its
 effort or contingency.</p>
 <ul>
-<li><p><strong>FR-06a</strong> Two back ends behind the same seam: the
-<strong>Python back end</strong> and the <strong>JavaScript
-stand-in</strong>, each with its own importer, replay controller,
-data-server stand-in and core models.</p></li>
+<li><p><strong>FR-06a (4.7)</strong> Two back ends behind the same seam:
+the <strong>Python back end</strong> and the <strong>JavaScript
+stand-in</strong>, each with its own importer, data-server stand-in and
+core models.</p></li>
 <li><p><strong>FR-06b</strong> The stand-in is the default;
 <code>?backend=python</code> and <code>?backend=standin</code>
 choose.</p></li>
@@ -315,8 +349,8 @@ spike, §15): opaque identifiers; <code>201</code> with the existing
 <code>"NaN"</code>; commands pushed to a subscribed receiver; no
 instance identifier; connections refused while starting;
 <strong><code>401</code> without valid credentials</strong>;
-<strong>restricted resources hidden from discovery and refused to users
-without permission (4.5)</strong>.</p></li>
+<strong>restricted resources listed in discovery and refused with 403 to
+users without permission (4.7)</strong>.</p></li>
 <li><p><strong>FR-06d (4.4)</strong> Both back ends read the
 <strong>same data folder</strong>.</p></li>
 <li><p><strong>FR-06e</strong> The stand-in's models are simpler,
@@ -402,14 +436,6 @@ ends.</p></li>
 files; lists the folder; imports a file in bulk (§6.2)</td>
 </tr>
 <tr>
-<td>C-09</td>
-<td>Replay controller</td>
-<td>New build · back end</td>
-<td></td>
-<td>Holds the current dataset and the replay clock; takes load, play,
-pause, rate and seek as commands (§6.6)</td>
-</tr>
-<tr>
 <td>C-04</td>
 <td>Data server</td>
 <td>Third-party libraries</td>
@@ -438,17 +464,20 @@ worker</td>
 <td>Display client</td>
 <td>New build · front end</td>
 <td><strong>★</strong></td>
-<td>The real system's screen: login, dataset picker, replay, views, data
-of interest</td>
+<td>The real system's screen: login, dataset selector, its own replay
+clock, views, Favourites (data of interest)</td>
 </tr>
 </tbody>
 </table>
 <p>Withdrawn: <strong>C-01 Collection platform</strong> (4.3),
-<strong>C-06 FastAPI</strong> (4.2), and in 4.4 the <strong>legacy
+<strong>C-06 FastAPI</strong> (4.2), in 4.4 the <strong>legacy
 archive</strong> and <strong>store adapter</strong> of 4.3, replaced by
-the data folder and the CSV importer. The <strong>demonstrator
-shell</strong> frames everything and is not a component.</p>
-<h3 id="31-flows-44">3.1 Flows (4.4)</h3>
+the data folder and the CSV importer, and in 4.7 <strong>C-09 Replay
+controller</strong> (replay is the display client's, §8.6) and the
+<strong>access gateway</strong> of the first 4.6 build. The
+<strong>demonstrator shell</strong> frames everything and is not a
+component.</p>
+<h3 id="31-flows-47">3.1 Flows (4.7)</h3>
 <table>
 <thead>
 <tr>
@@ -488,16 +517,6 @@ catalogue)</td>
 <td>Data server</td>
 <td>Display client</td>
 <td>D, P, O, H (HTTP)</td>
-</tr>
-<tr>
-<td>Data server</td>
-<td>Replay controller</td>
-<td>K (pushed: load, play, pause, rate, seek)</td>
-</tr>
-<tr>
-<td>Replay controller</td>
-<td>Data server</td>
-<td>Q, O (register; publish state and log; report command status)</td>
 </tr>
 <tr>
 <td>Data server</td>
@@ -701,12 +720,11 @@ it. ✓ marks what the spike confirmed.</p>
 <ul>
 <li><strong>FR-23</strong> <strong>Discovery</strong> ✓. The system does
 not rely on a served OpenAPI document.</li>
-<li><strong>FR-24 (4.5)</strong> <strong>Systems</strong> ✓: the
+<li><strong>FR-24 (4.7)</strong> <strong>Systems</strong> ✓: the
 collection platform as a <strong>Platform</strong> with bow and stern
 <strong>Sensors</strong>, and under each sensor a <strong>CO₂
 analyser</strong> subsystem (Sensor); the importer as a System
-(<code>assetType</code> Equipment); the replay controller
-(<code>assetType</code> Simulation); each model (<code>assetType</code>
+(<code>assetType</code> Equipment); each model (<code>assetType</code>
 Process), with a <strong>restricted</strong> subsystem for its
 CO₂-derived outputs (FR-112); and one <strong>workspace</strong> system
 per user (FR-95).</li>
@@ -725,33 +743,32 @@ and its QC flag.</li>
 <code>phenomenonTime</code> and <code>resultTime=latest</code>, with
 <code>f=application/swe+json</code>, paging by <code>offset</code>,
 missing values as <code>"NaN"</code>.</li>
-<li><strong>FR-27 (4.3)</strong> <strong>Commands are pushed</strong> to
-each receiver (the importer, the replay controller, each model), which
-holds a subscription to its control stream and subscribes before
-declaring itself ready. A command carries every parameter. The
-<strong>receiver validates</strong> bounds and reports
-<code>REJECTED</code> naming the bound. The <strong>sender never
-waits</strong> on its <code>POST</code>.</li>
+<li><strong>FR-27 (4.7)</strong> <strong>Commands are pushed</strong> to
+each receiver (the importer and each model), which holds a subscription
+to its control stream and subscribes before declaring itself ready. A
+command carries every parameter. The <strong>receiver validates</strong>
+bounds and reports <code>REJECTED</code> naming the bound. The
+<strong>sender never waits</strong> on its <code>POST</code>.</li>
 <li><strong>FR-28</strong> <strong>Registration</strong> ✓ with ordinary
 resource creation; <code>201</code> with the existing
 <code>Location</code> is success.</li>
-<li><strong>FR-28a (4.3)</strong> <strong>Nothing is replaced or
-deleted.</strong> Results are appended under a new
-<code>run_id</code>.</li>
+<li><strong>FR-28a (4.7)</strong> <strong>Nothing is replaced or
+deleted.</strong> Results are appended under a new <code>run_id</code>.
+Stock OpenSensorHub lets an account delete what it created (the delete
+probe of 2026-11-26), so the delivered configuration must forbid
+replacing and deleting (§15).</li>
 <li><strong>FR-29</strong> <strong>Summary datastreams</strong> per
 dataset: 1-minute and hourly minimum, mean and maximum.</li>
 <li><strong>FR-30 (4.3)</strong> The system does not rely on refusal
 bodies or enforced size limits.</li>
-<li><strong>FR-31</strong> Declared queries (the last hour at replay
-time; one field over a whole dataset from a summary) meet a declared
-time budget.</li>
+<li><strong>FR-31</strong> Declared queries (the last hour before a
+client's replay time; one field over a whole dataset from a summary)
+meet a declared time budget.</li>
 <li><strong>FR-32</strong> QC flags are computed on import, never by
 altering the files.</li>
-<li><strong>FR-93 (4.6)</strong> <strong>Authentication and
-permissions</strong>, required of the server. OpenSensorHub refuses
-(403) rather than hides, so hiding is done by a thin <strong>access
-gateway</strong> in front of it (§15, D-150), drawn as a component of
-its own:
+<li><strong>FR-93 (4.7)</strong> <strong>Authentication and
+permissions</strong>, required of the server, which clients reach
+directly; there is no gateway of ours in front of it:
 <ul>
 <li>every request, discovery included, and every push subscription
 (FR-02a) needs <strong>valid credentials</strong>; without them the
@@ -759,18 +776,18 @@ answer is <strong>401</strong> and nothing is served;</li>
 <li>permissions are granted <strong>per system</strong> and
 <strong>inherited by its datastreams and control streams</strong>.
 Nothing in this system needs permission per field;</li>
-<li>a user <strong>without permission</strong> for a system finds it
-<strong>absent</strong>: not listed in discovery, not among subsystems,
-not in any datastream listing, and <strong>404</strong> if asked for by
-identifier. Absent, not refused, so its name and schema reveal
-nothing;</li>
+<li>a user <strong>without permission</strong> for a system is
+<strong>refused (403)</strong> when reading it, its datastreams, their
+schemas or their observations. <strong>For now it is still
+listed</strong> in discovery, as stock OpenSensorHub does: its existence
+and name are visible, its data never. Hiding it from discovery is
+wanted, and is an open question (§15);</li>
 <li><strong>users</strong> may read what their role permits, send
-commands to the importer, the replay controller and the models, and
-create and append only under <strong>their own workspace</strong>;</li>
-<li>each <strong>model</strong>, the <strong>importer</strong> and the
-<strong>replay controller</strong> has its own <strong>service
-account</strong>, allowed to create and append only under its own
-systems;</li>
+commands to the importer and the models, and create and append only
+under <strong>their own workspace</strong>;</li>
+<li>each <strong>model</strong> and the <strong>importer</strong> has
+its own <strong>service account</strong>, allowed to create and append
+only under its own systems;</li>
 <li>no account may read another user's workspace.</li>
 </ul></li>
 <li><strong>FR-111 (4.5)</strong> <strong>Restricted systems</strong>
@@ -786,13 +803,19 @@ else.</li>
 <li><strong>FR-34</strong> Core models: <strong>Data cleanse</strong>
 (first), <strong>Summaries</strong>, <strong>Analysis</strong> (change
 detection, correlation and clustering with three algorithms).</li>
-<li><strong>FR-35 (4.4)</strong> Models work on the <strong>current
-dataset</strong> only (FR-84a), reading up to the replay time, and
-publish <strong>per dataset</strong>. On a change of dataset, each model
-works through the new one if it has not already; its outputs for other
-datasets are kept, so returning to a dataset is immediate. On return,
-views show the dataset's <strong>latest run</strong> (4.6); earlier runs
-are reached through a saved data of interest.</li>
+<li><strong>FR-35 (4.7)</strong> Models <strong>process each dataset as
+soon as it is imported</strong>, the whole dataset, in fixed windows
+aligned to the dataset's start, and publish <strong>per
+dataset</strong>. They follow no replay clock and no current dataset.
+Outputs for every dataset are kept, so opening any processed dataset
+shows its results at once. Views show the dataset's <strong>latest
+run</strong> (4.6); earlier runs are reached through a saved data of
+interest.</li>
+<li><strong>FR-35b (4.7)</strong> Each model publishes its progress on
+each dataset in its <code>runs</code> datastream (processing, with how
+far; complete). The display client shows that a dataset's results are
+<strong>still being prepared</strong>, read generically from the runs it
+can see, until they are complete.</li>
 <li><strong>FR-35a (4.4)</strong> <strong>Analysis takes a data of
 interest</strong> (§6.7) as its input: the display client's current
 selection is sent, as an unsaved data of interest, in the command.</li>
@@ -801,8 +824,8 @@ selection is sent, as an unsaved data of interest, in the command.</li>
 <li><strong>FR-37</strong> Every result carries its settings, data range
 and <code>run_id</code>; scores come from the referee
 (scaffolding).</li>
-<li><strong>FR-37a</strong> Each model declares the highest replay rate
-it sustains.</li>
+<li><strong>FR-37a</strong> Withdrawn (4.7): models no longer follow a
+replay rate.</li>
 <li><strong>FR-112 (4.5)</strong> <strong>Anything derived from CO₂ is
 restricted.</strong> A model publishes any output with CO₂ among its
 inputs <strong>only</strong> under its <strong>restricted</strong>
@@ -832,31 +855,14 @@ that a server provides what the master states.</li>
 <li><strong>FR-39</strong> <strong>Scientific libraries</strong> (numpy,
 scikit-learn) are used by the models only.</li>
 </ul>
-<h3 id="66-replay-controller">6.6 Replay controller</h3>
+<h3 id="66-replay-47">6.6 Replay (4.7)</h3>
+<p>Withdrawn from the server in 4.7: the replay controller, its
+<code>replay</code> control stream, its state and log datastreams, and
+the readiness of models for a dataset. Replay is the display client's
+own (§8.6).</p>
 <ul>
-<li><strong>FR-84 (4.4)</strong> The replay controller holds the
-<strong>current dataset</strong> and the <strong>replay clock</strong>.
-"Now" is a time within the current dataset. The whole of every imported
-dataset remains readable; "up to replay time" is how live views and
-models read.</li>
-<li><strong>FR-84a (4.4)</strong> There is <strong>one current
-dataset</strong> at a time. Datasets have no common time axis, so the
-system never plays two at once.</li>
-<li><strong>FR-85 (4.4)</strong> Its control stream <code>replay</code>
-takes <code>action</code> (<strong>load</strong>, play, pause, seek),
-<code>dataset</code>, <code>rate</code> and <code>position</code>.
-<strong>Load</strong> makes a dataset current, refusing one not yet
-imported, naming it. Its <strong>state</strong> datastream gives the
-current dataset, its span, the replay time, rate and playing or paused;
-its <strong>replay log</strong> records every command applied.</li>
-<li><strong>FR-86</strong> Rates: 0.1×, 0.5×, 1×, 10× and 100×, bounded
-by the slowest active model.</li>
-<li><strong>FR-87</strong> <strong>Seek</strong> moves within the
-current dataset and starts a new replay run.</li>
-<li><strong>FR-88</strong> At the end of the dataset the replay pauses
-and says so.</li>
-<li><strong>FR-89</strong> <strong>One user at a time</strong> is logged
-in; there is one replay controller.</li>
+<li><strong>FR-89 (4.7)</strong> <strong>One user at a time</strong> is
+logged in (§16).</li>
 </ul>
 <h3 id="67-data-of-interest-44">6.7 Data of interest (4.4)</h3>
 <ul>
@@ -942,12 +948,12 @@ emissions, any of their records naming CO₂ sources is listed greyed as
 Functional requirements: client and server lifecycle</h2>
 <h3 id="71-declared-profile">7.1 Declared profile</h3>
 <ul>
-<li><strong>FR-40 (4.4)</strong> The profile lists the essential
+<li><strong>FR-40 (4.7)</strong> The profile lists the essential
 sources: <strong>for every imported dataset</strong>, bow and stern air
 temperature and apparent wind speed, and the core models' datastreams
-the views depend on; and the importer's catalogue and the replay
-controller's state and control streams. <strong>CO₂ is never essential
-(4.5)</strong>, so a weather-only user does not start degraded.</li>
+the views depend on; and the importer's catalogue and control stream
+(4.7). <strong>CO₂ is never essential (4.5)</strong>, so a weather-only
+user does not start degraded.</li>
 <li><strong>FR-40a (4.6)</strong> Per-dataset essentials are written as
 <strong>templates</strong>, with output names such as
 <code>weather · {dataset}</code>. The client checks each dataset against
@@ -1062,13 +1068,13 @@ once at installation as part of the delivered configuration:</p>
 <tr>
 <td><strong>Viewer (weather only)</strong></td>
 <td>Read</td>
-<td><strong>Absent</strong></td>
+<td><strong>Refused (403); listed, for now</strong></td>
 <td>No</td>
 </tr>
 </tbody>
 </table>
-<p>Every role may use the replay controller, the importer and the
-models, and keep its own workspace.</p></li>
+<p>Every role may use the importer and the models, and keep its own
+workspace.</p></li>
 <li><p><strong>FR-115</strong> The <strong>owner creates and maintains
 accounts</strong> (create, set or reset a password, assign a role,
 disable) <strong>through OpenSensorHub's own administration</strong>.
@@ -1087,10 +1093,12 @@ is built only if a stated <strong>trigger</strong> is met: the owner
 cannot complete the account tasks of FR-115 unaided in a short trial, or
 OpenSensorHub's administration cannot be used on the delivered machine.
 Until then it is excluded (§16).</p></li>
-<li><p><strong>FR-118</strong> The display client has <strong>no code
-that knows about CO₂ or roles</strong>. A weather-only user's handshake
-simply finds no CO₂ systems, so no chip, view, picker entry or
-data-of-interest source for CO₂ appears.</p></li>
+<li><p><strong>FR-118 (4.7)</strong> The display client has <strong>no
+code that knows about CO₂ or roles</strong>. It offers <strong>only
+sources it can read</strong>: a source whose schema or data is refused
+(403) is left out, generically, like any source it cannot use. So for a
+weather-only user no chip, view or data-of-interest source for CO₂
+appears, although discovery lists the CO₂ systems (FR-93).</p></li>
 </ul>
 <hr />
 <h2 id="8-functional-requirements-the-display-client">8. Functional
@@ -1098,34 +1106,49 @@ requirements: the display client</h2>
 <p>The display client is the real system's screen, inside a
 <strong>monitor frame</strong> in the detail panel. It is deliberately
 <strong>small and generic</strong>.</p>
-<h3 id="81-layout-44">8.1 Layout (4.4)</h3>
+<h3 id="81-layout-47">8.1 Layout (4.7)</h3>
 <p>Before login: the <strong>login screen</strong> only. After login,
-from top to bottom: a status strip with the analyst's name and
-<strong>Lock</strong>; the <strong>dataset picker</strong>; the
-<strong>replay bar</strong>; the <strong>field chips</strong>,
-<strong>period presets</strong> and <strong>clustering</strong> control;
-the <strong>views</strong>; the <strong>data of interest</strong>
-list.</p>
+from top to bottom: a status strip with the analyst's name, the
+<strong>dataset selector button</strong>, the <strong>Favourites
+button</strong> and <strong>Lock</strong>; the <strong>replay
+bar</strong>; the <strong>field chips</strong>, <strong>period
+presets</strong> and <strong>clustering</strong> control; the
+<strong>views</strong>. The dataset list and the data of interest list
+are <strong>popups</strong>, not always on screen, to leave the space to
+the views.</p>
+<ul>
+<li><strong>FR-127 (4.7)</strong> <strong>Popups.</strong> The Dataset
+selector (FR-103) and Favourites (§8.5) open as popup panels anchored to
+their buttons. Each closes on Escape, on a click outside it, or when its
+main action is taken. Each can be used from the keyboard. Neither is
+open at login.</li>
+</ul>
 <h3 id="82-controls">8.2 Controls</h3>
 <ul>
-<li><strong>FR-103 (4.4)</strong> <strong>Dataset picker</strong>: every
-file in the data folder, from the importer's catalogue, with its name,
-size, modified date, status and, once imported, its time span.
+<li><strong>FR-103 (4.7)</strong> <strong>Dataset selector</strong>: a
+button in the status strip shows the current dataset (or "Choose a
+dataset" when none is open) and opens a popup listing every file in the
+data folder, from the importer's catalogue, with its name, size,
+modified date, status and, once imported, its time span.
 <ul>
-<li><strong>Open</strong> on an imported file sends
-<strong>load</strong> (K) to the replay controller.</li>
+<li><strong>Open</strong> on an imported file makes it the client's
+<strong>current dataset</strong> and closes the popup. No command is
+sent: the dataset is the client's own choice (§8.6).</li>
 <li><strong>Open</strong> on a file not imported sends
-<strong>import</strong> (K) to the importer, shows progress, then sends
-<strong>load</strong> when it is ready.</li>
-<li>Superseded and changed files are marked; a file that is importing
-cannot be opened.</li>
+<strong>import</strong> (K) to the importer, shows progress, then opens
+it when it is ready. Import progress stays visible on the button while
+the popup is closed.</li>
+<li>Superseded and changed files are marked; overlapping and degraded
+datasets are marked; a file that is importing cannot be opened.</li>
 <li><strong>Rescan</strong> asks the importer to list the folder
 again.</li>
+<li>With no dataset open, the client invites the analyst to open the
+selector.</li>
 </ul></li>
-<li><strong>FR-90 (4.4)</strong> <strong>Replay bar</strong>:
+<li><strong>FR-90 (4.7)</strong> <strong>Replay bar</strong>:
 play/pause, rate, and a timeline of the <strong>current dataset</strong>
-with the replay position; seek by dragging. Each action is one command,
-not waited on. The bar shows what the state datastream says.</li>
+with the replay position; seek by dragging. It drives the client's
+<strong>own replay clock</strong> (§8.6); no command is sent.</li>
 <li><strong>FR-53</strong> <strong>Fields</strong>: chips for the
 current dataset.</li>
 <li><strong>FR-54 (4.4)</strong> <strong>Period presets</strong> ending
@@ -1148,16 +1171,24 @@ fields drawn by type; arranged in a movable, resizable grid.</li>
 datastream in use once per real second, up to the replay time.</li>
 <li><strong>FR-63a (4.3)</strong> While paused, the client polls
 nothing.</li>
+<li><strong>FR-63b (4.7)</strong> The client never reads beyond its
+replay time, even where the server holds the whole dataset and its
+results.</li>
 </ul>
-<h3 id="85-data-of-interest-44">8.5 Data of interest (4.4)</h3>
+<h3 id="85-data-of-interest-47">8.5 Data of interest (4.7)</h3>
+<p>On screen, data of interest are called <strong>Favourites</strong>.
+This document keeps "data of interest" as the requirement term.</p>
 <ul>
-<li><strong>FR-104</strong> <strong>Save as data of interest</strong>:
-the current dataset, period, resolution, fields and, where relevant, the
-run, saved under a name the analyst types, with an optional note.</li>
-<li><strong>FR-105</strong> The <strong>data of interest list</strong>
-shows the analyst's saved records with name, dataset and span. Each can
-be <strong>opened</strong> in any view, <strong>compared</strong>, or
-<strong>removed</strong>.</li>
+<li><strong>FR-104 (4.7)</strong> A <strong>Favourites</strong> button
+(a star, with a label and tooltip) opens the Favourites popup (FR-127).
+Its top shows <strong>the current data window</strong>: the dataset, the
+period, the resolution, the fields and, where relevant, the run. It can
+be saved there under a name the analyst types, with an optional note.
+The star shows when the current window is already saved.</li>
+<li><strong>FR-105 (4.7)</strong> Below it, the popup lists the
+analyst's saved records with name, dataset and span. Each can be
+<strong>opened</strong> in any view, <strong>compared</strong>, or
+<strong>removed</strong>. Opening one closes the popup.</li>
 <li><strong>FR-106</strong> <strong>Opening</strong> a record
 regenerates it from the server, as the record describes, whatever the
 current dataset. It is labelled with its dataset and span.</li>
@@ -1168,20 +1199,39 @@ is brought to the coarser one; a shorter record ends earlier.</li>
 <li><strong>FR-108</strong> A record whose dataset is not imported is
 shown greyed (FR-96).</li>
 </ul>
+<h3 id="86-replay-47">8.6 Replay (4.7)</h3>
+<ul>
+<li><strong>FR-84 (4.7)</strong> Each display client holds its
+<strong>own current dataset</strong> and <strong>replay clock</strong>.
+"Now" is a time within the current dataset. The whole of every imported
+dataset, and every model's results for it, are on the server; the client
+shows them only up to its replay time (FR-63b).</li>
+<li><strong>FR-84a (4.7)</strong> A client has <strong>one current
+dataset</strong> at a time. Datasets have no common time axis, so a
+client never plays two at once.</li>
+<li><strong>FR-86 (4.7)</strong> Rates: 0.1×, 0.5×, 1×, 10× and 100×. No
+model bounds them.</li>
+<li><strong>FR-87 (4.7)</strong> <strong>Seek</strong> moves within the
+current dataset. It changes only what the client shows.</li>
+<li><strong>FR-88</strong> At the end of the dataset the replay pauses
+and says so.</li>
+<li><strong>FR-85 (4.7)</strong> The replay clock is not on the server.
+Restart client returns it to the start of the default dataset.</li>
+</ul>
 <hr />
 <h2
 id="9-functional-requirements-the-architecture-view-demonstrator-shell">9.
 Functional requirements: the architecture view (demonstrator shell)</h2>
 <h3 id="91-layout-44">9.1 Layout (4.4)</h3>
 <ul>
-<li><strong>Top bar</strong>: title, subtitle, a mirror of the replay
-bar acting through the display client, <strong>Freeze</strong>, restart
-client, restart server, failure demos, control panel, overview.</li>
+<li><strong>Top bar (4.7)</strong>: title, subtitle, a mirror of the
+replay bar acting on the display client's clock, restart client, restart
+server, failure demos, control panel, overview.</li>
 <li><strong>Left</strong>: the stacked flowchart: front end, third-party
 libraries, back end, legacy.</li>
-<li><strong>Below it</strong>: status (logged-in analyst or locked,
-current dataset, replay time, rate, back end, server, client,
-essentials) and the message key.</li>
+<li><strong>Below it</strong>: status (logged-in analyst or locked, the
+client's current dataset, replay time and rate, back end, server,
+client, essentials) and the message key.</li>
 <li><strong>Right</strong>: the detail panel.</li>
 </ul>
 <h3 id="92-flowchart">9.2 Flowchart</h3>
@@ -1206,38 +1256,38 @@ strip, with credentials redacted (FR-16a).</li>
 message, including the models' CO₂ traffic, whoever is logged in to the
 display client. A one-line note says so, so it is not mistaken for a
 permission leak. The display client's own traffic shows what its user
-can see: a weather-only user's client sends and receives no CO₂
-message.</li>
+can read: a weather-only user's client receives no CO₂ value or schema;
+discovery listings may name CO₂ systems for now (FR-93).</li>
 </ul>
 <h3 id="94-detail-panel">9.4 Detail panel</h3>
 <ul>
-<li><strong>FR-69, FR-69a</strong> The overview, listing the importer
-and replay controller under <em>written for this system</em> and
-authentication under <em>adopted</em>.</li>
+<li><strong>FR-69, FR-69a (4.7)</strong> The overview, listing the
+importer and models under <em>written for this system</em>, and
+authentication and permissions under <em>adopted</em>.</li>
 <li><strong>FR-70</strong> <strong>Display client</strong>: the monitor,
 notes, and the message strip.</li>
 <li><strong>FR-71</strong> <strong>Models</strong>: as in 4.3, with each
 model's per-dataset outputs.</li>
 <li><strong>FR-72 (4.4)</strong> <strong>Data server</strong>:
 OpenSensorHub with a stand-in here; the Connected Systems resources
-describing this system, <strong>per dataset</strong>; the importer,
-replay controller and workspace systems; authentication and permissions;
-why it fits; gaps; what is not used.</li>
+describing this system, <strong>per dataset</strong>; the importer and
+workspace systems; authentication and permissions; why it fits; gaps;
+what is not used.</li>
 <li><strong>FR-109 (4.4)</strong> <strong>Data folder</strong>: the
 files, with sizes, dates and statuses, and a note that the system never
 writes to it.</li>
 <li><strong>FR-110 (4.4)</strong> <strong>CSV importer</strong>: what it
 does; the catalogue; the column mapping; the last import's speed in rows
 per second.</li>
-<li><strong>FR-91</strong> <strong>Replay controller</strong>: its
-control stream, state and log.</li>
+<li><strong>FR-91</strong> Withdrawn (4.7) with the replay
+controller.</li>
 <li><strong>FR-73</strong> Every other component shows an explanation
 panel.</li>
 </ul>
 <h3 id="95-value-add-reveal">9.5 Value-add reveal</h3>
 <ul>
-<li><strong>FR-74 to FR-76</strong> As in 4.3. The importer and replay
-controller are not marked.</li>
+<li><strong>FR-74 to FR-76</strong> As in 4.3. The importer is not
+marked.</li>
 <li><strong>FR-74a (4.6)</strong> With the <code>hand-made</code> flag,
 FR-74's startup state begins <strong>at adoption</strong> (FR-125), not
 at load. No component can be revealed during the opening (FR-121).</li>
@@ -1249,25 +1299,25 @@ login screen and nothing else sends. After login it handshakes; the
 replay is paused at the start of Mission A.</li>
 <li><strong>FR-78</strong> Messages are drawn in real time, whatever the
 replay rate.</li>
-<li><strong>FR-92</strong> <strong>Freeze</strong> holds the whole
-demonstrator still for inspection; it is scaffolding.</li>
-<li><strong>FR-79</strong> Controls work frozen or not; a viewer's click
-is answered at once.</li>
+<li><strong>FR-92</strong> Withdrawn (4.7): Freeze. Pause covers
+it.</li>
+<li><strong>FR-79 (4.7)</strong> A viewer's click is answered at
+once.</li>
 </ul>
 <h3 id="97-failure-demos-44">9.7 Failure demos (4.4)</h3>
 <ul>
 <li><strong>FR-79a</strong> The menu offers: the server goes down and
 comes up; the server restarts; an essential source is missing; fields
-the client has never seen; a misconfigured server; a rate above what the
-models sustain; <strong>a wrong password</strong> (refused, nothing
-shown); <strong>the screen locks</strong> (views blank, requests stop,
-login needed); <strong>an overlapping file</strong> (Mission B and its
-re-export imported side by side, never mixed); <strong>a degraded
-dataset</strong> (Mission C); <strong>the friend logs in</strong> (the
-same dataset with no trace of CO₂ anywhere in the client, and its
-traffic carrying none); <strong>the friend asks for CO₂</strong> by a
-crafted request (absent: 404 from the server, and a command naming CO₂
-rejected by the model) (4.5).</li>
+the client has never seen; a misconfigured server; <strong>a wrong
+password</strong> (refused, nothing shown); <strong>the screen
+locks</strong> (views blank, requests stop, login needed); <strong>an
+overlapping file</strong> (Mission B and its re-export imported side by
+side, never mixed); <strong>a degraded dataset</strong> (Mission C);
+<strong>the friend logs in</strong> (the same dataset with no trace of
+CO₂ anywhere in the client, and no CO₂ value in its traffic);
+<strong>the friend asks for CO₂</strong> by a crafted request (refused:
+403 from the server, and a command naming CO₂ rejected by the model)
+(4.7).</li>
 <li><strong>FR-79b, FR-79c</strong> As in 4.3.</li>
 </ul>
 <h3 id="98-adoption-opening-46">9.8 Adoption opening (4.6)</h3>
@@ -1283,13 +1333,14 @@ opening</strong>. Without the flag it opens exactly as FR-77 describes.
 The flag is read once, at load, and has no other effect. Reloading with
 the flag repeats the opening. The flag belongs to the demonstrator shell
 only; a developed system has no such flag.</p></li>
-<li><p><strong>FR-120</strong> <strong>The data server as
+<li><p><strong>FR-120 (4.7)</strong> <strong>The data server as
 subsystems.</strong> In the opening the third-party zone holds
-<strong>no data server</strong>. The back end holds <strong>eight
-subsystem components</strong> beside the CSV importer, replay controller
-and Models, and <strong>all are equals</strong>: the same card style,
-the same size, one grid. No frame, label or colour groups the eight, or
-sets them apart from the other components:</p>
+<strong>no data server</strong>. Written ourselves, the data server is
+<strong>a range of subsystem components to develop</strong>. The back
+end draws the main ones, below, beside the CSV importer and Models, and
+<strong>all are equals</strong>: the same card style, the same size, one
+grid. No frame, label or colour groups the subsystems or sets them apart
+from the other components, and the opening states no count of them:</p>
 <table>
 <thead>
 <tr>
@@ -1331,7 +1382,7 @@ sets them apart from the other components:</p>
 </tr>
 <tr>
 <td>Permissions</td>
-<td>Who may see what; hiding restricted systems</td>
+<td>Who may see and change what</td>
 <td>a policy store</td>
 </tr>
 <tr>
@@ -1343,9 +1394,9 @@ sets them apart from the other components:</p>
 </table>
 <p>The flows of §3.1 are drawn between the subsystems and the other
 components as plain lines, with no message letters (FR-120a). The
-back-end band has <strong>two rows</strong> in the opening (six cards
-and five), with every card at its normal size. The zones below it move
-down, and return at the merge.</p></li>
+back-end band has <strong>two rows</strong> in the opening (five cards
+each), with every card at its normal size. The zones below it move down,
+and return at the merge.</p></li>
 <li><p><strong>FR-120a (4.6)</strong> <strong>Flows in the
 opening.</strong> Each external flow is drawn to the subsystem it
 belongs to, and the lines between the subsystems are drawn too:</p>
@@ -1358,12 +1409,12 @@ belongs to, and the lines between the subsystems are drawn too:</p>
 </thead>
 <tbody>
 <tr>
-<td>Display client, Models, replay controller</td>
+<td>Display client, Models</td>
 <td>Web API (both ways)</td>
 </tr>
 <tr>
 <td>Commands</td>
-<td>CSV importer, replay controller, Models (push)</td>
+<td>CSV importer, Models (push)</td>
 </tr>
 <tr>
 <td>CSV importer</td>
@@ -1393,7 +1444,7 @@ opening, the detail panel included. Clicking the display client or
 Models does not reveal it.</p></li>
 <li><p><strong>FR-122</strong> <strong>Nothing runs.</strong> The top
 bar's controls are <strong>hidden, not disabled</strong>: replay mirror,
-Freeze, restart client, restart server, failure demos, control panel and
+restart client, restart server, failure demos, control panel and
 overview. No message is sent or drawn. The display client does not
 handshake. <strong>The back end does not start (4.6)</strong>: no worker
 runs and no model registers until hand-over (FR-125). The status panel
@@ -1407,18 +1458,20 @@ detail panel opens on <strong>Data server</strong> with:</p>
 OpenSensorHub</strong>, with <em>Build it ourselves</em> selected;</li>
 <li>the table of FR-120;</li>
 <li>a row, <strong>"Written by us either way"</strong>: CSV importer,
-replay controller, Models, display client, in plain style.</li>
+Models, display client, in plain style.</li>
+<li>the lead, before adoption: written ourselves, the data server is a
+range of subsystem components to develop, among them these (4.7).</li>
 </ul>
 <p>Clicking a subsystem card highlights its row in the table. Clicking
 any other card does nothing in the opening.</p></li>
 <li><p><strong>FR-124</strong> <strong>Adopt.</strong> Choosing
 <em>Adopt OpenSensorHub</em>:</p>
 <ol type="1">
-<li>moves the eight subsystem cards into the third-party zone, where
-they merge into the single <strong>Data server</strong> card
-(OpenSensorHub, OGC Connected Systems);</li>
-<li>spreads the CSV importer, replay controller and Models across the
-back end that the eight have left;</li>
+<li>moves the subsystem cards into the third-party zone, where they
+merge into the single <strong>Data server</strong> card (OpenSensorHub,
+OGC Connected Systems);</li>
+<li>spreads the CSV importer and Models across the back end that the
+subsystems have left;</li>
 <li>changes the table to "OpenSensorHub covers all of these", with each
 subsystem ticked. No number is shown (§16).</li>
 </ol>
@@ -1434,6 +1487,13 @@ progress (NFR-10), as on a load without the flag. The detail panel keeps
 the adopted savings until the viewer clicks a component or closes it.
 <strong>That panel is the only difference</strong> from a load without
 the flag.</p></li>
+<li><p><strong>FR-125a (4.7)</strong> <strong>Ready means
+usable.</strong> After hand-over, and after any load, nothing plays
+until the analyst logs in, a dataset is open (Mission A by default) and
+Play is pressed. A top-bar control that cannot act yet is
+<strong>disabled and says why</strong> on hover and to assistive
+technology (for example "Log in to the display client first"). It is
+enabled as soon as it can act.</p></li>
 <li><p><strong>FR-126</strong> <strong>One way.</strong> Adoption cannot
 be undone in a session. The switch is removed at hand-over. To show the
 opening again, reload with the flag.</p></li>
@@ -1445,11 +1505,12 @@ opening again, reload with the flag.</p></li>
 <strong>ECharts</strong>; react-grid-layout; CodeMirror 6. The views are
 charts. Decision D-53, which removed them for speed on slower laptops,
 is superseded: slower laptops are not a target for this project.</li>
-<li><strong>FR-81 (4.4)</strong> In a developed system:
+<li><strong>FR-81 (4.7)</strong> In a developed system:
 <strong>OpenSensorHub</strong>, with its own authentication, the CSV
-importer as its module writing in bulk, and the replay controller and
-models as separate processes with service accounts, each subscribed to
-its control stream. In the demonstrator: the stand-ins.</li>
+importer as its module writing in bulk, and the models as separate
+processes with service accounts, each subscribed to its control stream.
+Replay is the display client's (4.7). In the demonstrator: the
+stand-ins.</li>
 <li><strong>NFR-04</strong> TypeScript types are generated from the
 masters.</li>
 <li><strong>NFR-05</strong> The startup budget includes each model's
@@ -1460,10 +1521,10 @@ worker.</li>
 <p>As Version 4.2 §11, with the changes of 4.3 (four zones; messages at
 a fixed on-screen pace), and in 4.4 and 4.6:</p>
 <ul>
-<li><strong>VS-25 (4.6)</strong> In the adoption opening the eight
-subsystem cards are drawn with the same sketch renderer, line weight,
-fill and font as every other component card. The merge moves the cards;
-it does not redraw their outlines.</li>
+<li><strong>VS-25 (4.7)</strong> In the adoption opening the subsystem
+cards are drawn with the same sketch renderer, line weight, fill and
+font as every other component card. The merge moves the cards; it does
+not redraw their outlines.</li>
 <li><strong>VS-24 (4.4)</strong> The <strong>login and lock
 screens</strong> are plain, inside the monitor frame, in the display
 client's own sans-serif. The demonstrator's pre-populated credentials
@@ -1474,15 +1535,23 @@ carry a visible "demo credentials" label.</li>
 <ul>
 <li><strong>NFR-06 to NFR-10</strong> As in 4.3. The data folder's files
 are part of the build.</li>
+<li><strong>NFR-10a (4.7)</strong> <strong>A stalled start says
+where.</strong> The loading progress names each step. If a step does not
+finish within 10 seconds (for example the seam relay cannot start,
+because the browser blocks Service Workers or an older one is in
+control), the page says which step and what the viewer can do (reload,
+allow the site), rather than waiting silently with its controls
+disabled.</li>
 <li><strong>NFR-11</strong> Kiosk mode in a developed system
 (§7.5).</li>
 </ul>
 <h2 id="13-development-process">13. Development process</h2>
 <ul>
 <li><strong>PR-01 to PR-03</strong> As in 4.2.</li>
-<li><strong>PR-04</strong> One server-neutral contract suite, finding
-resources by unique id and output name, run against both stand-ins and a
-stock OpenSensorHub, <strong>with credentials (4.4)</strong>.</li>
+<li><strong>PR-04 (4.7)</strong> One server-neutral contract suite,
+finding resources by unique id and output name, run against both
+stand-ins and a stock OpenSensorHub, <strong>with credentials
+(4.4)</strong>, talking to OpenSensorHub directly (4.7).</li>
 <li><strong>PR-05</strong> The stand-ins have no capability
 OpenSensorHub lacks.</li>
 <li><strong>PR-06</strong> OpenSensorHub is the reference.</li>
@@ -1491,7 +1560,7 @@ except the demonstrator's demo credentials, which are labelled as such
 and grant nothing outside the demonstrator.</li>
 </ul>
 <hr />
-<h2 id="14-acceptance-criteria-46">14. Acceptance criteria (4.6)</h2>
+<h2 id="14-acceptance-criteria-47">14. Acceptance criteria (4.7)</h2>
 <table>
 <thead>
 <tr>
@@ -1582,8 +1651,8 @@ with capture on and off</td>
 </tr>
 <tr>
 <td>AT-19</td>
-<td>Before login, while locked, while paused and while frozen, nothing
-is sent but what each state allows</td>
+<td>Before login, while locked and while paused, nothing is sent but
+what each state allows</td>
 <td>Architecture view, C5</td>
 </tr>
 <tr>
@@ -1626,26 +1695,26 @@ OpenSensorHub, with credentials</td>
 </tr>
 <tr>
 <td>AT-33</td>
-<td>Load, play, pause, each rate and seek are commands pushed to the
-replay controller; the state follows within one real second; the log
-records each</td>
+<td>Open, play, pause, each rate and seek act on the display client's
+own clock and send no command; the views follow within one real
+second</td>
 <td>C4</td>
 </tr>
 <tr>
 <td>AT-34</td>
-<td>Over the same span, every model's outputs are identical at 0.1×, 1×
-and the highest allowed rate</td>
+<td>Every model's outputs for a dataset are identical however often it
+is processed, and whatever any client's replay does</td>
 <td>C4</td>
 </tr>
 <tr>
 <td>AT-35</td>
-<td>A rate above the slowest model's bound is rejected, naming the bound
-and the model</td>
-<td>C4</td>
+<td>Withdrawn (4.7): no model bounds the rate</td>
+<td></td>
 </tr>
 <tr>
 <td>AT-36</td>
-<td>A seek starts a new replay run; outputs never mix</td>
+<td>A seek changes only what the client shows; no model output
+changes</td>
 <td>C4</td>
 </tr>
 <tr>
@@ -1655,15 +1724,15 @@ and the model</td>
 </tr>
 <tr>
 <td>AT-38</td>
-<td>Receivers subscribe before declaring ready, and resubscribe after
-every restart</td>
-<td>C4</td>
+<td>Receivers (the importer and the models) subscribe before declaring
+ready, and resubscribe after every restart</td>
+<td>C1, C3</td>
 </tr>
 <tr>
 <td>AT-39</td>
 <td>No request waits on a command's <code>POST</code> before the display
 updates</td>
-<td>C4</td>
+<td>C1, C3</td>
 </tr>
 <tr>
 <td><strong>AT-40</strong></td>
@@ -1693,8 +1762,8 @@ earlier one is marked superseded and still opens</td>
 <tr>
 <td><strong>AT-44</strong></td>
 <td>Changing the current dataset rebuilds the field list without a full
-handshake; models resume or start on it; returning to a dataset already
-processed shows its results at once</td>
+handshake; a dataset already processed shows its results at once; one
+still being processed says so (FR-35b)</td>
 <td>C2, C3</td>
 </tr>
 <tr>
@@ -1758,9 +1827,9 @@ byte-identical</td>
 </tr>
 <tr>
 <td><strong>AT-55</strong></td>
-<td>Logged in as weather only: no CO₂ system, datastream, field name or
-schema appears in any discovery response; asking for one by identifier
-gives 404</td>
+<td>Logged in as weather only: reading any CO₂ datastream, schema or
+observation, or any restricted model output, gives 403; no CO₂ value
+reaches the client; the client offers no CO₂ source</td>
 <td>C6</td>
 </tr>
 <tr>
@@ -1820,9 +1889,9 @@ nothing</td>
 </tr>
 <tr>
 <td><strong>AT-64</strong></td>
-<td>The eight subsystem cards match the CSV importer, replay controller
-and Models cards in size, outline style, fill and font, and no element
-encloses or labels the eight as a group</td>
+<td>The subsystem cards match the CSV importer and Models cards in size,
+outline style, fill and font; no element encloses or labels them as a
+group; no count of them is shown</td>
 <td>Architecture view</td>
 </tr>
 <tr>
@@ -1840,11 +1909,49 @@ passes AT-19 and AT-20</td>
 animation</td>
 <td>Visual style</td>
 </tr>
+<tr>
+<td><strong>AT-67</strong></td>
+<td>After Adopt, nothing plays before login, an open dataset and Play;
+every disabled top-bar control says why</td>
+<td>Architecture view</td>
+</tr>
+<tr>
+<td><strong>AT-68</strong></td>
+<td>With Service Workers blocked, or an older one in control, the page
+names the stalled step and what to do within 10 seconds</td>
+<td>Delivery</td>
+</tr>
+<tr>
+<td><strong>AT-69</strong></td>
+<td>The Dataset selector and Favourites open as popups, close on Escape,
+outside click and their main action, work from the keyboard, and keep
+import progress visible on the selector button</td>
+<td>C2, C3</td>
+</tr>
+<tr>
+<td><strong>AT-70</strong></td>
+<td>Two clients replaying the same dataset at different rates and
+positions see the same results up to their own replay times, and the
+server's outputs do not change</td>
+<td>C4</td>
+</tr>
 </tbody>
 </table>
 <hr />
 <h2 id="15-open-questions">15. Open questions</h2>
 <ul>
+<li><p><strong>Hiding restricted resources from discovery (4.7,
+open).</strong> FR-93 is relaxed: restricted resources are listed and
+refused with 403, as stock OpenSensorHub does. The owner is working with
+the OpenSensorHub team so that a user is not shown resources they may
+not read. Until then C6 is the weaker claim of §1, and the friend can
+see that CO₂ sources exist.</p></li>
+<li><p><strong>Refusing replace and delete in OpenSensorHub (4.7,
+open).</strong> The delete probe of 2026-11-26 found that stock
+OpenSensorHub lets the owner, and a user on their own workspace, delete.
+FR-28a needs that forbidden by configuration. To be confirmed with the
+OpenSensorHub team; the first 4.6 build refused it in its gateway, now
+withdrawn.</p></li>
 <li><p><strong>Reset instance and greyed data of interest (answered
 2026-11-26).</strong> FR-50a stands: Reset instance deletes everything,
 data of interest included. FR-96 and AT-48 are restated; greying is
@@ -1861,8 +1968,9 @@ progress shown.</p></li>
 2026-11-25; see the finding of that date and decisions D-150 to
 D-153).</strong> Answers in brief:</p>
 <ol type="1">
-<li>Not hidden: OpenSensorHub answers 403, so the access gateway
-fallback is taken.</li>
+<li>Not hidden: OpenSensorHub answers 403. The access gateway fallback
+was taken in the first 4.6 build and withdrawn in 4.7; FR-93 is relaxed
+instead (see above).</li>
 <li>Denies are not inherited.</li>
 <li>Roles work, but they name server ids.</li>
 <li>The sender's user id is carried, but not the role. Subscriptions
@@ -1889,9 +1997,9 @@ on the delivered machine (FR-117's trigger);</li>
 workspaces.</li>
 </ol>
 <p>Fallback for 1 or 2: a thin <strong>filtering gateway</strong> that
-removes restricted resources from responses. It works, but it would be
-the second reason for a gateway in front of OpenSensorHub, and together
-they weaken "OpenSensorHub as shipped".</p></li>
+removes restricted resources from responses. It worked in the first 4.6
+build, but weakened "OpenSensorHub as shipped"; the owner withdrew it in
+4.7.</p></li>
 <li><p><strong>CO₂ in the client's real files.</strong> Column names,
 units (ppm or mg/m³) and whether CO₂ was recorded by every
 sensor.</p></li>
@@ -1902,9 +2010,10 @@ overlap or are re-exported.</p></li>
 placeholder; confirm with the barge owner.</p></li>
 <li><p><strong>Decision log numbering.</strong> Resolved: the duplicates
 are now D-107 to D-114.</p></li>
-<li><p><strong>Interfaces document.</strong>
-<code>docs/v4-interfaces.md</code> describes 4.1 and 4.2; revise to
-4.6.</p></li>
+<li><p><strong>Interfaces document (4.7).</strong>
+<code>docs/v4-interfaces.md</code>, the plan and ADRs 0006 and 0008
+describe 4.6 (the replay controller and the access gateway); revise them
+to 4.7.</p></li>
 <li><p><strong>Handshakes after imports (4.6).</strong> A full handshake
 after every import (FR-44) is drawn one request at a time (FR-42a), and
 it grows with every dataset imported. If it gets in the way of a
@@ -1914,18 +2023,23 @@ alternative.</p></li>
 dataset; a long-lived instance grows until Reset instance.</p></li>
 <li><p><strong>Resampling.</strong> Reserved in <code>aggregation</code>
 (FR-94a); not offered yet.</p></li>
-<li><p><strong>Several analysts at once.</strong> Excluded (FR-89); data
-of interest is already per analyst, so the step is smaller than it
-was.</p></li>
+<li><p><strong>Several analysts at once.</strong> Excluded (FR-89). Data
+of interest is per analyst and replay is per client (4.7), so the step
+is smaller than it was.</p></li>
 <li><p><strong>Name.</strong></p></li>
 </ul>
-<h2 id="16-deliberate-exclusions-from-version-46">16. Deliberate
-exclusions from Version 4.6</h2>
+<h2 id="16-deliberate-exclusions-from-version-47">16. Deliberate
+exclusions from Version 4.7</h2>
 <ul>
 <li><strong>A live sensor or live ingest</strong>, and any writing to
 the data folder.</li>
-<li><strong>Two datasets playing at once</strong> (FR-84a); comparison
-is by data of interest on elapsed time.</li>
+<li><strong>Two datasets playing at once in one client</strong>
+(FR-84a); comparison is by data of interest on elapsed time.</li>
+<li><strong>A shared replay clock (4.7)</strong>: there is no replay on
+the server; models do not follow replay.</li>
+<li><strong>Freeze (4.7)</strong>: Pause covers it.</li>
+<li><strong>An access gateway of ours (4.7)</strong>: clients reach
+OpenSensorHub directly (FR-93).</li>
 <li><strong>More than one analyst logged in at a time</strong>
 (FR-89).</li>
 <li><strong>Replacing and deleting</strong> anything, except Reset
