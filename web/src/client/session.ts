@@ -252,15 +252,16 @@ export class ClientSession {
     this.bump();
   }
 
-  /** A rejected server: look once a simulated second whether it has changed (it went away, or what it offered did). */
+  /** A rejected server: look once a simulated second whether it has changed (it went away, or the datastreams it lists did). */
   private async waitForChange() {
-    const first = this.config.value?.datastreams[0];
+    const known = (this.config.value?.datastreams ?? []).map((d) => d.id);
     for (;;) {
       await nextSimSecond(() => this.closed);
       if (this.closed) throw new Closed('');
       try {
-        const r = await this.http.request('GET', first ? `datastreams/${first.id}` : '');
-        if (this.lost || r.status === 404) {
+        const r = await this.http.request<any>('GET', 'datastreams', { limit: '10000' });
+        const now = new Set((r.body?.items ?? []).map((d: any) => d.id));
+        if (this.lost || r.status !== 200 || known.some((id) => !now.has(id))) { // a source it found has gone
           this.reset('The server changed: handshaking again.');
           return;
         }
