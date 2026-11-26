@@ -25,6 +25,8 @@ from __future__ import annotations
 import asyncio
 import atexit
 
+import numpy as np
+
 from . import config as C
 from .accounts import Accounts
 from .clock import real_seconds
@@ -208,6 +210,23 @@ class Runtime:
     def set_profile_lie(self, on: bool) -> None:
         self.lie_about_profile = bool(on)
 
+    def _runs(self, systems: set) -> list[dict]:
+        """A model's runs (FR-35b, interfaces §13.4), god's-eye: the latest entry of each run in its runs logs, the
+        restricted one included, as {dataset, run_id, status, pct}."""
+        out: dict[str, dict] = {}
+        for d in self.store.datastreams.values():
+            if d["system"] not in systems or d["replaced"] or not d["outputName"].startswith("runs__"):
+                continue
+            ser = d["series"]
+            n = len(ser)
+            if not n or "run_id" not in ser.cols:
+                continue
+            cols = ser.take(np.arange(n), ["run_id", "status", "pct"])
+            for run, status, pct in zip(cols["run_id"], cols.get("status", [None] * n), cols.get("pct", [np.nan] * n)):
+                out[str(run)] = {"dataset": d["outputName"][len("runs__"):], "run_id": str(run), "status": status,
+                                 "pct": None if pct is None or pct != pct else float(pct)}
+        return list(out.values())
+
     def control_state(self) -> dict:
         """What the control panel and status show (FR-49..FR-52)."""
         live = self.server.offering if self.server else None
@@ -232,13 +251,15 @@ class Runtime:
             mine = {s["id"] for s in st.systems.values() if s["id"] == sysm["id"] or s["parent"] == sysm["id"]}
             models.append({"id": mid, "label": sysm["label"], **self.phases.get(mid, {}),
                            "datastreams": [d["outputName"] for d in st.datastreams.values()
-                                           if d["system"] in mine and not d["replaced"]]})
+                                           if d["system"] in mine and not d["replaced"]],
+                           "runs": self._runs(mine)})
         return {
             "server": "down" if self.down else ("waiting" if not self.server.ready else "running"),
             # The shell's own count of server starts (god's-eye): the server serves no instance identifier (§9.1).
             "instance": str(self.server.number) if self.server else None,
             "fields": rows, "pending": pending, "lie_about_profile": self.lie_about_profile,
             "capture_counts": self.tap.counts,
+            "capture": self.tap.enabled,
             "models": models,
             "accounts": self.accounts.state(),
             "backend": "python",

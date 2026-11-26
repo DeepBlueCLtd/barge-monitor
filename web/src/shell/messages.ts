@@ -13,7 +13,7 @@ export type Letter = 'Q' | 'D' | 'O' | 'K' | 'P' | 'H' | 'S' | 'L' | 'I';
 /** A captured message (docs/v4-interfaces.md §3), as the back end and the model workers post it. */
 export interface Captured {
   id?: number | string;
-  t: number; // when it was captured, on the back end's own clock (shown, never used for drawing)
+  t: number; // when it was captured, real seconds (interfaces §3; never used for drawing)
   src: ComponentId;
   dst: ComponentId;
   letter: Letter;
@@ -23,6 +23,7 @@ export interface Captured {
   chain?: string | null;
   hop?: number;
   model?: string;
+  push?: boolean;
 }
 
 /** A message as the page holds it: a page-wide key and when it sets off on the flowchart. */
@@ -40,8 +41,8 @@ export const LETTERS: Record<Letter, { name: string; key: string; standard: stri
   K: { name: 'Command', key: 'Command', standard: 'OGC API – Connected Systems Part 2', isPublic: true, colour: LETTER_COLOURS.K },
   P: { name: 'Declared profile', key: 'Declared profile', standard: 'JSON Schema', isPublic: true, colour: LETTER_COLOURS.P },
   H: { name: 'HTTP status', key: 'HTTP status, 401, 403', standard: 'RFC 9110', isPublic: true, colour: LETTER_COLOURS.H },
-  S: { name: 'Store query', key: 'Store query, internal', standard: 'internal, no public standard', isPublic: false, colour: LETTER_COLOURS.S },
-  L: { name: 'Legacy record', key: 'Legacy record', standard: "the logger's own format, no public standard", isPublic: false, colour: LETTER_COLOURS.L },
+  S: { name: 'File request', key: 'File request, internal', standard: 'internal, no public standard', isPublic: false, colour: LETTER_COLOURS.S },
+  L: { name: 'Legacy CSV', key: 'Legacy CSV', standard: "the files' own format, no public standard", isPublic: false, colour: LETTER_COLOURS.L },
   I: { name: 'Internal object', key: 'Internal object', standard: 'internal typed object, no public standard', isPublic: false, colour: LETTER_COLOURS.I },
 };
 export const LETTER_ORDER: Letter[] = ['Q', 'D', 'O', 'K', 'P', 'H', 'S', 'L', 'I'];

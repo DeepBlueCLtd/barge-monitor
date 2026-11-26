@@ -4,7 +4,7 @@
 // requests go through the relay, like the display client's. The shell's controls (play, restart
 // server, control panel) reach the back-end worker directly: they belong to
 // the demonstrator, not the system.
-import { CORE_MODELS, HISTORY_PATH, PY_ZIP, PYODIDE_PATH, resolve, urlParam } from '../config';
+import { CORE_MODELS, PY_ZIP, PYODIDE_PATH, resolve, urlParam } from '../config';
 import type { ComponentId } from './components';
 import { bus, Captured } from './messages';
 import { STAGE_STEP, Startup } from './startup';
@@ -37,6 +37,8 @@ export interface ModelState {
   phase: string; // starting | catching up | live | failed
   detail?: string;
   datastreams?: number | string[];
+  /** Its runs (FR-35b), god's-eye: the latest entry of each (interfaces §13.4). */
+  runs?: { dataset: string; run_id: string; status: string; pct: number | null }[];
 }
 
 /** A file of the data folder, as the importer's catalogue has it now (§13.4). */
@@ -61,15 +63,15 @@ export interface DatasetState {
 /** Control state (docs/v4-interfaces.md §13.4). */
 export interface ControlState {
   server: 'running' | 'waiting' | 'down';
+  /** The shell's own count of server starts (D-260): the server serves no instance identifier. */
   instance: string | null;
-  progress?: unknown;
   fields: FieldControl[];
   pending: boolean;
   lie_about_profile: boolean;
-  clock?: unknown;
-  store?: { bytes: number; files: number; records: number };
   models?: ModelState[];
   capture_counts?: Record<string, number>;
+  /** Capture on or off (AT-18). */
+  capture?: boolean;
   backend?: BackendKind;
   folder?: FolderFile[];
   datasets?: DatasetState[];
@@ -120,13 +122,14 @@ class Runtime {
   modelWorkers = new Store<Record<string, ModelWorkerStatus>>({});
   /** Output of model workers (stdout, stderr), for the empty-slot editor. */
   modelOutput = new Store<{ model: string; stream: 'stdout' | 'stderr'; text: string }[]>([]);
-  history = { days: null as number | null, source: '' };
-  seed = 0;
   startedAt = performance.now();
   readyMs: number | null = null;
 
   private backend: Worker | null = null;
   private models = new Map<string, Worker>();
+  /** Control actions awaiting the worker's answer, by request id (§13.3, D-167). */
+  private waiting = new Map<number, { ok: (s: ControlState | null) => void; fail: (e: Error) => void }>();
+  private controlSeq = 0;
 
   private started = false;
 
@@ -151,20 +154,6 @@ class Runtime {
       throw new Error(why);
     }
     this.startup.enter('back end');
-    const seedParam = urlParam('seed');
-    const requested = seedParam && /^\d+$/.test(seedParam) ? Number(seedParam) : null;
-    // Pre-calculated history (FR-15): the build says where it is and which seeds it holds.
-    let historyUrl: string | null = null;
-    let seed = requested ?? 0;
-    try {
-      const h = await (await fetch(resolve('py/history.json'), { cache: 'no-cache' })).json();
-      historyUrl = resolve(`${HISTORY_PATH}${h.code_hash}/days-${h.days}/`);
-      if (requested == null) seed = h.seeds[Math.floor(Math.random() * h.seeds.length)];
-      this.history = { days: h.days, source: 'pre-calculated' };
-    } catch {
-      this.history = { days: null, source: 'none found' };
-    }
-    this.seed = seed;
     this.progress.set({ stage: 'backend', detail: this.startup.steps.value[1].what, pct: 2 });
     this.backend = this.kind === 'standin'
       ? new Worker(new URL('../workers/standin.worker.ts', import.meta.url), { type: 'module' })
@@ -175,7 +164,7 @@ class Runtime {
       this.progress.set({ stage: 'error', detail: why, pct: 0 });
       this.startup.fail(this.startup.current()?.id ?? 'back end', why);
     };
-    this.backend.postMessage({ type: 'start', pyodideUrl: resolve(PYODIDE_PATH), pyZipUrl: resolve(PY_ZIP), seed, historyUrl, folderUrl: resolve(folderPath()) });
+    this.backend.postMessage({ type: 'start', pyodideUrl: resolve(PYODIDE_PATH), pyZipUrl: resolve(PY_ZIP), folderUrl: resolve(folderPath()) });
     this.connect();
   }
 
@@ -245,6 +234,10 @@ class Runtime {
         break;
       case 'state':
         this.control.set(d.state);
+        if (d.id != null) {
+          this.waiting.get(d.id)?.ok(d.state);
+          this.waiting.delete(d.id);
+        }
         this.checkModels();
         if (d.state?.server) this.server.set(d.state.server);
         break;
@@ -257,6 +250,10 @@ class Runtime {
       }
       case 'control-error':
         console.warn('control action refused by the back end:', d.error);
+        if (d.id != null) {
+          this.waiting.get(d.id)?.fail(new Error(String(d.error)));
+          this.waiting.delete(d.id);
+        }
         break;
     }
   }
@@ -282,7 +279,16 @@ class Runtime {
    * set-role, state. There is no play, pause or rate: replay is the display client's own (§8, D-302).
    */
   send(action: string, arg?: unknown) {
-    this.backend?.postMessage({ type: 'control', action, arg });
+    void this.act(action, arg).catch(() => undefined);
+  }
+
+  /** A control action whose answer is awaited: the control state after it (§13.3; each carries a request id, D-167). */
+  act(action: string, arg?: unknown): Promise<ControlState | null> {
+    if (!this.backend) return Promise.resolve(this.control.value);
+    const id = ++this.controlSeq;
+    const answer = new Promise<ControlState | null>((ok, fail) => this.waiting.set(id, { ok, fail }));
+    this.backend.postMessage({ type: 'control', action, arg, id });
+    return answer;
   }
 
   /**

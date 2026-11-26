@@ -12,11 +12,23 @@ import { bus, LETTERS, Message } from '../shell/messages';
 import { selectedMessage } from '../shell/selection';
 import { useStore } from '../shell/store';
 
+/**
+ * Credentials are never shown (FR-16a, FR-68, interfaces §9.4). The tap redacts every captured message once, centrally;
+ * the strip redacts again what it shows, so that a message made in the page (a request the relay could not deliver)
+ * is held to the same rule.
+ */
+export function redact(text: string): string {
+  return text.replace(/^(authorization:[ \t]*)[^\r\n]*/gim, '$1****')
+    .replace(/("authorization"\s*:\s*)"(?:[^"\\]|\\.)*"/gi, '$1"****"')
+    .replace(/("password"\s*:\s*)"(?:[^"\\]|\\.)*"/g, '$1"****"')
+    .replace(/\bBasic [A-Za-z0-9+/=]{4,}/g, 'Basic ****');
+}
+
 export function pretty(s: string): string {
   try {
-    return JSON.stringify(JSON.parse(s), null, 2);
+    return redact(JSON.stringify(JSON.parse(s), null, 2));
   } catch {
-    return s;
+    return redact(s);
   }
 }
 
@@ -25,10 +37,10 @@ function phrase(m: Message): string {
   const k = `${m.src}>${m.dst}`;
   switch (k) {
     case 'client>server': return `${m.letter} to the data server`;
-    case 'server>adapter': return 'S to the store adapter';
-    case 'adapter>store': return "S read of the logger files, found through the adapter's index";
-    case 'store>adapter': return 'L records back up';
-    case 'adapter>server': return 'I columns to the data server';
+    case 'server>importer': return 'K pushed to the CSV importer';
+    case 'importer>folder': return 'S to the data folder';
+    case 'folder>importer': return 'L, the CSV, back to the importer';
+    case 'importer>server': return 'I written in bulk, inside the server';
     case 'server>client': return `${m.letter} to the display`;
     case 'models>server': return `${m.letter} from the model to the data server`;
     case 'server>models': return `${m.letter} back to the model`;
@@ -99,7 +111,7 @@ function Clicked({ m, onClose }: { m: Message; onClose: () => void }) {
     <div className="strip" style={{ borderColor: LETTERS[m.letter].colour }} data-testid="message-strip" data-letter={m.letter}>
       <Head m={m} />
       <button className="close small" aria-label="Clear the selected message" onClick={onClose}>×</button>
-      <p className="strip-summary">{m.summary}</p>
+      <p className="strip-summary">{redact(m.summary)}</p>
       <div className="strip-body">
         <pre className="mono" data-testid="message-content">{pretty(m.content)}</pre>
         {chain.length > 1 && (

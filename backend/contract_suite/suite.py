@@ -123,7 +123,7 @@ class Ctx:
         return next((d for d in await self.datastreams(uid, user) if d["outputName"] == output), None)
 
     async def weather(self, sensor="bow"):
-        """A sensor's weather datastream: ``weather`` (4.1 logger) or ``weather__{dataset}`` (imported)."""
+        """A sensor's weather datastream of an imported dataset, ``weather__{dataset}``."""
         d = next((d for d in await self.datastreams(f"{URN}sensor:{sensor}") if d["outputName"].startswith("weather")), None)
         assert d, f"no weather datastream on the {sensor} sensor"
         return d

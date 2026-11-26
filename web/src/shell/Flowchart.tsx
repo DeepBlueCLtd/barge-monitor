@@ -17,7 +17,7 @@ import { useRevealed } from './reveal';
 import { selectComponent, selectedComponent, selectedMessage } from './selection';
 import { sketchLine, sketchRect } from './sketch';
 import { Glyph } from './Glyph';
-import { MessageKey, StatusBox } from './StatusBox';
+import { GodsEyeNote, MessageKey, StatusBox } from './StatusBox';
 import { useStore } from './store';
 
 interface CardData {
@@ -77,9 +77,21 @@ const Zone = memo(function Zone({ data }: NodeProps<Node<ZoneData>>) {
 
 const NODE_TYPES = { card: Card, zone: Zone };
 
-/** One-line roles. The 4.1 platform card's simulated time is gone with the simulation clock (D-302); Phase 8 redraws the cards. */
+/** One-line roles (VS-12); the importer's says when it is importing. */
 function useRoles(): Record<ComponentId, string> {
-  return Object.fromEntries(COMPONENT_IDS.map((id) => [id, COMPONENTS[id].role])) as Record<ComponentId, string>;
+  const control = useStore(runtime.control);
+  const importing = control?.folder?.find((f) => f.status === 'importing');
+  return Object.fromEntries(COMPONENT_IDS.map((id) => [id,
+    id === 'importer' && importing ? `importing ${importing.file} · ${importing.pct ?? 0}%` : COMPONENTS[id].role])) as Record<ComponentId, string>;
+}
+
+/**
+ * FR-06h: which cards carry a "stand-in" tag. The data server is a stand-in for OpenSensorHub in both back ends
+ * (FR-06j); in stand-in mode the importer, the models and their numerical helpers run in the JavaScript stand-in too.
+ * The data folder is the real files in either mode.
+ */
+function standinTag(id: ComponentId, standin: boolean): boolean {
+  return id === 'server' || (standin && (id === 'importer' || id === 'models' || id === 'scilibs'));
 }
 
 function FixedView({ box }: { box: { w: number; h: number } }) {
@@ -117,7 +129,7 @@ export function Flowchart() {
       return {
         id, type: 'card', position: { x, y }, width: w, height: h, draggable: false, connectable: false, selectable: false,
         // FR-06h: in stand-in mode every component behind the seam runs in the stand-in worker.
-        data: { id, gold: rev.has(id), selected: sel === id, standin: (standin && id !== 'client') || id === 'server', role: roles[id] },
+        data: { id, gold: rev.has(id) && COMPONENTS[id].valueAdd, selected: sel === id, standin: standinTag(id, standin), role: roles[id] },
       };
     }),
   ], [rev, sel, standin, roles]);
@@ -132,6 +144,7 @@ export function Flowchart() {
         <ViewportPortal>
           <Arrows />
           <Icons />
+          <GodsEyeNote rect={layout.note as [number, number, number, number]} />
           <StatusBox rect={layout.status as [number, number, number, number]} />
           <MessageKey rect={layout.key as [number, number, number, number]} />
         </ViewportPortal>
@@ -152,7 +165,7 @@ const Arrows = memo(function Arrows() {
             {sk ? sk.map((p, i) => <path key={i} d={p.d} stroke={p.stroke} strokeWidth={p.strokeWidth} fill="none" />)
               : <polyline points={a.points.map((p) => p.join(',')).join(' ')} stroke={INK} strokeWidth={1.6} fill="none" />}
             <path d={arrowhead(a.points)} fill={INK} />
-            {a.label && a.labelAt && <text x={a.labelAt[0]} y={a.labelAt[1]} className="flow-label">{a.label}</text>}
+            {a.label && a.labelAt && <text x={a.labelAt[0]} y={a.labelAt[1]} className="flow-label" data-testid={`flow-label-${a.id}`}>{a.label}</text>}
           </g>
         );
       })}
