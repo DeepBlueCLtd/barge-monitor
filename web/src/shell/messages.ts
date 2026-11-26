@@ -153,6 +153,10 @@ class MessageBus {
 
 export const bus = new MessageBus();
 
+// Read-only, for the end-to-end tests (decision D-273): how many captured messages reached the shell, per
+// "src>dst:letter". Messages counted but not drawn (x-tap-quiet) never reach it, so a silent import adds nothing.
+(globalThis as { bargeCaptured?: () => Record<string, number> }).bargeCaptured = () => ({ ...bus.counts.value });
+
 /** Chains started by a viewer's own action in the display client: their icons wear a gold ring. */
 export const userChains = new Set<string>();
 export function isUserMessage(m: { chain?: string | null }): boolean {
