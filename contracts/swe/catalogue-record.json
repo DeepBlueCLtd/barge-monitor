@@ -1,0 +1,107 @@
+{
+ "type": "DataRecord",
+ "name": "record",
+ "label": "Archive catalogue",
+ "description": "catalogue, under urn:x-barge:importer: one observation per file per change of status; the latest for a file is its current status (interfaces §7).",
+ "fields": [
+  {
+   "type": "Time",
+   "name": "time",
+   "label": "Time of the status change",
+   "definition": "http://www.opengis.net/def/property/OGC/0/SamplingTime",
+   "referenceFrame": "http://www.opengis.net/def/trs/BIPM/0/UTC",
+   "uom": {
+    "href": "http://www.opengis.net/def/uom/ISO-8601/0/Gregorian"
+   }
+  },
+  {
+   "type": "Text",
+   "name": "file",
+   "label": "File",
+   "definition": "https://deepbluecltd.github.io/barge-monitor/def/file"
+  },
+  {
+   "type": "Count",
+   "name": "size",
+   "label": "Size, bytes",
+   "definition": "https://deepbluecltd.github.io/barge-monitor/def/size"
+  },
+  {
+   "type": "Time",
+   "name": "modified",
+   "label": "Modified",
+   "definition": "https://deepbluecltd.github.io/barge-monitor/def/modified",
+   "uom": {
+    "href": "http://www.opengis.net/def/uom/ISO-8601/0/Gregorian"
+   }
+  },
+  {
+   "type": "Text",
+   "name": "sha256",
+   "label": "SHA-256",
+   "definition": "https://deepbluecltd.github.io/barge-monitor/def/sha256"
+  },
+  {
+   "type": "Text",
+   "name": "dataset",
+   "label": "Dataset id (empty until imported)",
+   "definition": "https://deepbluecltd.github.io/barge-monitor/def/dataset"
+  },
+  {
+   "type": "Time",
+   "name": "start",
+   "label": "Start of the data",
+   "definition": "https://deepbluecltd.github.io/barge-monitor/def/start",
+   "uom": {
+    "href": "http://www.opengis.net/def/uom/ISO-8601/0/Gregorian"
+   }
+  },
+  {
+   "type": "Time",
+   "name": "end",
+   "label": "End of the data",
+   "definition": "https://deepbluecltd.github.io/barge-monitor/def/end",
+   "uom": {
+    "href": "http://www.opengis.net/def/uom/ISO-8601/0/Gregorian"
+   }
+  },
+  {
+   "type": "Count",
+   "name": "records",
+   "label": "Records (0 until imported, D-197)",
+   "definition": "https://deepbluecltd.github.io/barge-monitor/def/records"
+  },
+  {
+   "type": "Category",
+   "name": "status",
+   "label": "Status",
+   "definition": "https://deepbluecltd.github.io/barge-monitor/def/status",
+   "codeSpace": "https://deepbluecltd.github.io/barge-monitor/def/status",
+   "constraint": {
+    "type": "AllowedTokens",
+    "values": [
+     "not-imported",
+     "importing",
+     "imported",
+     "changed",
+     "superseded"
+    ]
+   }
+  },
+  {
+   "type": "Count",
+   "name": "pct",
+   "label": "Import progress, percent",
+   "definition": "https://deepbluecltd.github.io/barge-monitor/def/pct",
+   "constraint": {
+    "type": "AllowedValues",
+    "intervals": [
+     [
+      0,
+      100
+     ]
+    ]
+   }
+  }
+ ]
+}

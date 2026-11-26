@@ -1,0 +1,247 @@
+{
+ "id": "https://deepbluecltd.github.io/barge-monitor/profile/v4.7",
+ "title": "Canal barge weather display: declared profile, Version 4.7",
+ "description": "The essential sources the display client needs (SRD FR-40, FR-40a), for every imported dataset, and the importer's catalogue and control stream. Published beside the server at profile.json (FR-41). An essential with scope 'dataset' is a template: '{dataset}' in its datastream stands for a dataset id, and the client checks each dataset against it when the dataset is opened; one missing makes that dataset degraded (FR-45). 'fixed' essentials are checked at the handshake. CO₂ is never essential (FR-40). There is no replay essential: replay is the display client's own (4.7).",
+ "essentials": [
+  {
+   "id": "bow-air-temperature",
+   "label": "Bow air temperature",
+   "system": "urn:x-barge:sensor:bow",
+   "datastream": "weather__{dataset}",
+   "field": "air_temperature",
+   "type": "Quantity",
+   "uom": "Cel",
+   "resolution": "raw",
+   "views": [
+    "graphs"
+   ],
+   "scope": "dataset"
+  },
+  {
+   "id": "bow-wind-speed",
+   "label": "Bow wind speed",
+   "system": "urn:x-barge:sensor:bow",
+   "datastream": "weather__{dataset}",
+   "field": "apparent_wind_speed",
+   "type": "Quantity",
+   "uom": "m/s",
+   "resolution": "raw",
+   "views": [
+    "graphs"
+   ],
+   "scope": "dataset"
+  },
+  {
+   "id": "stern-air-temperature",
+   "label": "Stern air temperature",
+   "system": "urn:x-barge:sensor:stern",
+   "datastream": "weather__{dataset}",
+   "field": "air_temperature",
+   "type": "Quantity",
+   "uom": "Cel",
+   "resolution": "raw",
+   "views": [
+    "graphs"
+   ],
+   "scope": "dataset"
+  },
+  {
+   "id": "stern-wind-speed",
+   "label": "Stern wind speed",
+   "system": "urn:x-barge:sensor:stern",
+   "datastream": "weather__{dataset}",
+   "field": "apparent_wind_speed",
+   "type": "Quantity",
+   "uom": "m/s",
+   "resolution": "raw",
+   "views": [
+    "graphs"
+   ],
+   "scope": "dataset"
+  },
+  {
+   "id": "bow-air-temperature-1min",
+   "label": "Bow air temperature, 1-minute summary",
+   "system": "urn:x-barge:process:summaries",
+   "datastream": "summary-1min-bow__{dataset}",
+   "field": "air_temperature",
+   "type": "Quantity",
+   "uom": "Cel",
+   "resolution": "PT1M",
+   "views": [
+    "graphs"
+   ],
+   "scope": "dataset"
+  },
+  {
+   "id": "bow-wind-speed-1min",
+   "label": "Bow wind speed, 1-minute summary",
+   "system": "urn:x-barge:process:summaries",
+   "datastream": "summary-1min-bow__{dataset}",
+   "field": "apparent_wind_speed",
+   "type": "Quantity",
+   "uom": "m/s",
+   "resolution": "PT1M",
+   "views": [
+    "graphs"
+   ],
+   "scope": "dataset"
+  },
+  {
+   "id": "bow-air-temperature-1h",
+   "label": "Bow air temperature, hourly summary",
+   "system": "urn:x-barge:process:summaries",
+   "datastream": "summary-1h-bow__{dataset}",
+   "field": "air_temperature",
+   "type": "Quantity",
+   "uom": "Cel",
+   "resolution": "PT1H",
+   "views": [
+    "graphs"
+   ],
+   "scope": "dataset"
+  },
+  {
+   "id": "bow-wind-speed-1h",
+   "label": "Bow wind speed, hourly summary",
+   "system": "urn:x-barge:process:summaries",
+   "datastream": "summary-1h-bow__{dataset}",
+   "field": "apparent_wind_speed",
+   "type": "Quantity",
+   "uom": "m/s",
+   "resolution": "PT1H",
+   "views": [
+    "graphs"
+   ],
+   "scope": "dataset"
+  },
+  {
+   "id": "dew-point-1min",
+   "label": "Dew point, 1-minute",
+   "system": "urn:x-barge:process:summaries",
+   "datastream": "derived-1min__{dataset}",
+   "field": "dew_point",
+   "type": "Quantity",
+   "uom": "Cel",
+   "resolution": "PT1M",
+   "views": [
+    "graphs"
+   ],
+   "scope": "dataset"
+  },
+  {
+   "id": "bow-minus-stern-1min",
+   "label": "Bow minus stern, 1-minute",
+   "system": "urn:x-barge:process:summaries",
+   "datastream": "derived-1min__{dataset}",
+   "field": "bow_minus_stern",
+   "type": "Quantity",
+   "uom": "Cel",
+   "resolution": "PT1M",
+   "views": [
+    "graphs"
+   ],
+   "scope": "dataset"
+  },
+  {
+   "id": "dew-point-1h",
+   "label": "Dew point, hourly",
+   "system": "urn:x-barge:process:summaries",
+   "datastream": "derived-1h__{dataset}",
+   "field": "dew_point",
+   "type": "Quantity",
+   "uom": "Cel",
+   "resolution": "PT1H",
+   "views": [
+    "graphs"
+   ],
+   "scope": "dataset"
+  },
+  {
+   "id": "bow-minus-stern-1h",
+   "label": "Bow minus stern, hourly",
+   "system": "urn:x-barge:process:summaries",
+   "datastream": "derived-1h__{dataset}",
+   "field": "bow_minus_stern",
+   "type": "Quantity",
+   "uom": "Cel",
+   "resolution": "PT1H",
+   "views": [
+    "graphs"
+   ],
+   "scope": "dataset"
+  },
+  {
+   "id": "changes",
+   "label": "Change detection",
+   "system": "urn:x-barge:process:analysis",
+   "datastream": "changes__{dataset}",
+   "field": "strength",
+   "type": "Quantity",
+   "uom": "1",
+   "resolution": "run",
+   "views": [
+    "changes"
+   ],
+   "scope": "dataset"
+  },
+  {
+   "id": "clusters",
+   "label": "Clusters",
+   "system": "urn:x-barge:process:analysis",
+   "datastream": "clusters__{dataset}",
+   "field": "cluster",
+   "type": "Category",
+   "uom": null,
+   "resolution": "run",
+   "views": [
+    "clusters"
+   ],
+   "scope": "dataset"
+  },
+  {
+   "id": "runs",
+   "label": "Analysis runs",
+   "system": "urn:x-barge:process:analysis",
+   "datastream": "runs__{dataset}",
+   "field": "run_id",
+   "type": "Text",
+   "uom": null,
+   "resolution": "run",
+   "views": [
+    "clusters",
+    "changes"
+   ],
+   "scope": "dataset"
+  },
+  {
+   "id": "catalogue",
+   "label": "Archive catalogue",
+   "system": "urn:x-barge:importer",
+   "datastream": "catalogue",
+   "field": "status",
+   "type": "Category",
+   "uom": null,
+   "resolution": "latest",
+   "views": [
+    "datasets"
+   ],
+   "scope": "fixed"
+  },
+  {
+   "id": "import-control",
+   "label": "Import",
+   "system": "urn:x-barge:importer",
+   "datastream": "import",
+   "field": "action",
+   "type": "Category",
+   "uom": null,
+   "resolution": "command",
+   "views": [
+    "datasets"
+   ],
+   "scope": "fixed",
+   "kind": "controlstream"
+  }
+ ]
+}

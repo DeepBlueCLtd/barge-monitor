@@ -1,0 +1,28 @@
+{
+ "type": "DataRecord",
+ "name": "record",
+ "label": "Import",
+ "description": "import, under urn:x-barge:importer (interfaces §7).",
+ "fields": [
+  {
+   "type": "Category",
+   "name": "action",
+   "label": "Action",
+   "definition": "https://deepbluecltd.github.io/barge-monitor/def/action",
+   "codeSpace": "https://deepbluecltd.github.io/barge-monitor/def/action",
+   "constraint": {
+    "type": "AllowedTokens",
+    "values": [
+     "import",
+     "rescan"
+    ]
+   }
+  },
+  {
+   "type": "Text",
+   "name": "file",
+   "label": "File (empty for rescan)",
+   "definition": "https://deepbluecltd.github.io/barge-monitor/def/file"
+  }
+ ]
+}
