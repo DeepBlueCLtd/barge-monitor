@@ -1,6 +1,9 @@
 // The demonstrator shell (§9.1): top bar with title, subtitle and controls;
 // the stacked flowchart on the left with status and key below it; the detail
 // panel on the right. The shell frames the system and is not a component.
+// With `?hand-made` it opens on the adoption opening (SRD §9.8): only the title in the
+// top bar, and nothing started until the viewer adopts (FR-122). At hand-over the back
+// end starts with the usual named loading steps (FR-125, NFR-10a, D-332).
 import { useEffect, useState } from 'react';
 import { clientSession } from '../client/session';
 import { RATES, STARTUP_BUDGET_MS } from '../config';
@@ -8,6 +11,7 @@ import { DetailPanel } from '../detail/DetailPanel';
 import { ControlPanel } from './ControlPanel';
 import { DemoBanner, DemoMenu } from './Demos';
 import { Flowchart } from './Flowchart';
+import { opening } from './opening';
 import { runtime } from './runtime';
 import { selectComponent, unrevealAll } from './selection';
 import { sketchEnabled } from './sketch';
@@ -20,24 +24,58 @@ export const STANDIN_NOTICE = 'Running the JavaScript stand-in: the architecture
 
 export function App() {
   const progress = useStore(runtime.progress);
+  const phase = useStore(opening.phase);
   const [failure, setFailure] = useState<string | null>(null);
 
   useEffect(() => {
     document.documentElement.classList.toggle('sketch-off', !sketchEnabled);
-    runtime.start().catch((e) => setFailure(String(e?.message ?? e)));
+    const start = () => {
+      runtime.start().catch((e) => setFailure(String(e?.message ?? e)));
+    };
+    // FR-122: in the adoption opening the back end does not start (no worker, no relay) until
+    // hand-over (FR-125); without the flag it starts at once (FR-77).
+    if (opening.phase.value === 'off') start();
+    else opening.onHandOver(start);
   }, []);
   useEffect(() => {
     if (progress.stage === 'error') setFailure(progress.detail);
   }, [progress]);
 
+  // FR-122: before hand-over, the opening: the title alone in the top bar, the flowchart and its panel.
+  if (opening.active) {
+    return (
+      <div className="shell" data-opening={phase}>
+        <OpeningTopBar />
+        <Main />
+      </div>
+    );
+  }
   // FR-15: the flowchart becomes available when the server answers, Mission A imported silently.
-  // Until then the top bar is shown with its controls disabled, each saying why (FR-125a).
+  // Until then the top bar is shown with its controls disabled, each saying why (FR-125a). After
+  // the opening's hand-over this is the same startup as a load without the flag (FR-125, D-332).
   const ready = progress.stage === 'ready';
   return (
-    <div className="shell">
+    <div className="shell" data-opening={phase}>
       <TopBar ready={ready} />
       {ready ? <Main /> : <Loading pct={progress.pct} detail={progress.detail} failure={failure} />}
     </div>
+  );
+}
+
+/**
+ * FR-122: in the opening the top bar holds the title only: no control and no stand-in notice in the page. The lines
+ * below the title are kept empty, not removed, so the top bar keeps its height and the flowchart does not rescale
+ * when the controls and the notice appear at hand-over.
+ */
+function OpeningTopBar() {
+  return (
+    <header className="topbar">
+      <div className="brand">
+        <h1>{TITLE}</h1>
+        <p className="subtitle placeholder" aria-hidden="true">&nbsp;</p>
+        {runtime.kind === 'standin' && <p className="standin-notice placeholder" aria-hidden="true">&nbsp;</p>}
+      </div>
+    </header>
   );
 }
 
@@ -149,7 +187,10 @@ function TopBar({ ready }: { ready: boolean }) {
             title={control?.pending ? 'Field changes are pending until the next server start' : undefined} {...off}>Restart server</button>
           <DemoMenu reason={reason} />
           <button className="btn" onClick={() => setDrawer(!drawer)} aria-expanded={drawer} data-testid="control-panel-toggle" {...off}>Control panel</button>
-          <button className="btn" onClick={() => selectComponent(null)} data-testid="overview-button" title="What is adopted, what is written, what is not here" {...off}>Overview</button>
+          <button className="btn" onClick={() => {
+            opening.dismissPanel(); // FR-125: the overview closes the opening's savings
+            selectComponent(null);
+          }} data-testid="overview-button" title="What is adopted, what is written, what is not here" {...off}>Overview</button>
         </nav>
         {ready && <DemoBanner />}
       </header>
