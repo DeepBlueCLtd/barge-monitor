@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="site.css">
 </head>
 <body>
-<div class="banner">Preview of pull request #15 (f024ca3). Not the published document.</div>
+<div class="banner">Preview of pull request #15 (7f431d2). Not the published document.</div>
 <main>
 <p class="demo-link"><a href="demo/"><strong>Open the working demonstrator →</strong></a> It runs whole in your browser. · <a href="demo/?hand-made"><strong>Start from “before”</strong></a>: the data server as subsystems we would build ourselves, then adopting OpenSensorHub (SRD §9.8). · <a href="index.html">Requirements</a> · <a href="interfaces.html">Version 4 interfaces</a> · Mockups: <a href="mockups/mockup-1-display-client.png">1</a>, <a href="mockups/mockup-2-models.png">2</a>, <a href="mockups/mockup-3-data-server.png">3</a></p>
 <nav id="TOC" aria-label="Contents">
@@ -828,7 +828,10 @@ connections are refused.</li>
 <code>/controlstreams/{csId}/status</code> with
 <code>{"command@id": "...", "statusCode": "...", "message": "..."}</code>.
 Status codes: <code>ACCEPTED</code>, <code>EXECUTING</code>,
-<code>COMPLETED</code>, <code>FAILED</code>, <code>REJECTED</code>.</li>
+<code>COMPLETED</code>, <code>FAILED</code>, <code>REJECTED</code>.
+Listed, each report also carries its own <code>id</code> and its
+<code>reportTime</code> (real time); readers tell reports apart by
+<code>id</code> (D-181).</li>
 <li><strong>Sending a command:</strong>
 <code>POST /controlstreams/{csId}/commands</code> with
 <code>{"parameters": {...}}</code>.
@@ -1057,10 +1060,20 @@ makes outputs identical at any rate (FR-35, AT-34).</p></li>
 <li><p><strong>Results.</strong> Every output observation carries
 <code>run</code> (and Analysis's <code>run_id</code>). Nothing is
 replaced (FR-28a). A reader takes the <strong>latest run</strong> for
-the dataset (FR-35).</p></li>
+the dataset (FR-35). Analysis's <code>runs</code> names the data range
+it used as <code>start</code> and <code>end</code> (Time), beside
+<code>run_id</code>, <code>algorithm</code>, <code>resolution</code>,
+<code>records</code>, <code>clusters</code>, <code>score_changes</code>
+and <code>score_clusters</code> (D-183).</p></li>
 <li><p><strong>Ready.</strong> A model publishes <code>ready</code> (its
 <code>phase</code>, for the shell) only after its subscription is open
 (AT-38).</p></li>
+<li><p><strong>After a server restart</strong> a model registers again
+and declares its datastreams again (the fields offered may have
+changed). A model's datastream is listed only once its model has
+declared it since this start, and <code>models_ready</code> counts only
+those. Until then (at most about 11 s) the Python back end answers only
+the models (D-186).</p></li>
 <li><p><strong>Declared rates:</strong></p>
 <table>
 <thead>
