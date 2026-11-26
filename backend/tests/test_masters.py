@@ -45,9 +45,10 @@ def test_the_masters_named_in_the_interfaces_are_there():
     assert cl["clusters"]["constraint"]["intervals"] == [[2, 8]] and cl["sensitivity"]["constraint"]["intervals"] == [[1, 10]]
 
 
-@pytest.mark.parametrize("profile", ["profile.json", "interim/profile-v4.1.json"])
-def test_profiles_are_valid(profile):
-    jsonschema.Draft202012Validator(load(C / "profile.schema.json")).validate(load(C / profile))
+def test_the_profile_is_valid():
+    """The interim 4.1 profile (D-252) is retired with the 4.1 display client (D-301)."""
+    jsonschema.Draft202012Validator(load(C / "profile.schema.json")).validate(load(C / "profile.json"))
+    assert not (C / "interim").exists()
 
 
 def test_the_profile_is_a_template_without_replay_and_never_co2():

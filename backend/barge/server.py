@@ -31,9 +31,9 @@ from .store import URN, Store
 from .tap import Tap
 
 SOSA = "http://www.w3.org/ns/sosa/"
-# The profile the 4.1 display client is built against. The 4.7 template (contracts/profile.json) is served
-# from plan Phase 7, with the client that reads it (decision D-252).
-INTERIM_PROFILE = "interim/profile-v4.1.json"
+# The declared profile, the 4.7 template (FR-40, FR-40a), served beside the API (FR-41). The interim 4.1 profile
+# of D-252 is retired with the 4.1 display client (D-301).
+PROFILE = "profile.json"
 SENSORS = ("bow", "stern")
 QC_RANGE = {
     "air_temperature": (-30.0, 50.0), "relative_humidity": (0.0, 100.0), "pressure": (900.0, 1100.0),
@@ -105,7 +105,7 @@ class Server:
         self.ready = False  # answering requests
         self.store: Store = runtime.store
         self.lie_about_profile = runtime.lie_about_profile
-        self.profile = json.loads((contracts_dir() / INTERIM_PROFILE).read_text())
+        self.profile = json.loads((contracts_dir() / PROFILE).read_text())
         raw = self.offering.raw()
         fields = [swe.time_field()]
         for f in raw:
@@ -181,27 +181,35 @@ class Server:
         """Essential sources this offering does not satisfy (empty when it does)."""
         problems = []
         for e in self.profile["essentials"]:
-            ds = self.store.datastream(e["system"], e["datastream"]) or self._per_dataset(e["system"], e["datastream"])
-            rec = self.visible(ds["schema"]) if ds and self.served(ds) else None
-            fld = rec and next((f for f in rec["fields"] if f["name"] == e["field"]), None)
-            if not fld:
-                problems.append({"id": e["id"], "reason": "missing"})
-            elif fld["type"] != e["type"]:
-                problems.append({"id": e["id"], "reason": "wrong type"})
-            elif (fld.get("uom") or {}).get("code") != e.get("uom"):
-                problems.append({"id": e["id"], "reason": "wrong unit"})
+            if e.get("kind") == "controlstream":
+                if self.store.controlstream(e["system"], e["datastream"]) is None:
+                    problems.append({"id": e["id"], "reason": "missing"})
+                continue
+            found = self._per_dataset(e["system"], e["datastream"])
+            if found is None:
+                ds = self.store.datastream(e["system"], e["datastream"])
+                found = [ds] if ds and self.served(ds) else []
+            reasons = []
+            for ds in found:
+                fld = next((f for f in self.visible(ds["schema"])["fields"] if f["name"] == e["field"]), None)
+                reasons.append("missing" if not fld else "wrong type" if fld["type"] != e["type"]
+                               else "wrong unit" if (fld.get("uom") or {}).get("code") != e.get("uom") else "")
+            if "" not in reasons:
+                problems.append({"id": e["id"], "reason": reasons[-1] if reasons else "missing"})
         return problems
 
-    def _per_dataset(self, system_uid: str, output: str) -> dict | None:
-        """The 4.1 profile names outputs without a dataset; 4.7 outputs are per dataset (§6). Until the profile
-        switches with the display client (Phase 7, D-252), an essential is met by the output of the newest dataset
-        whose datastream carries it (D-285)."""
+    def _per_dataset(self, system_uid: str, template: str) -> dict | None:
+        """A template essential (``weather__{dataset}``, FR-40a) is met for the claim when some dataset's datastream
+        carries it (D-301): the client checks each dataset itself when it opens it, and a dataset missing one is
+        degraded (FR-45), not the server. The datastream returned is the newest dataset's that carries the field."""
+        if "{dataset}" not in template:
+            return None
         s = self.store.system_by_uid(system_uid)
         if s is None:
             return None
-        found = [d for d in self.store.datastreams.values()
-                 if d["system"] == s["id"] and d["outputName"].startswith(output + "__") and self.served(d)]
-        return found[-1] if found else None
+        prefix = template.replace("{dataset}", "")
+        return [d for d in self.store.datastreams.values()
+                if d["system"] == s["id"] and d["outputName"].startswith(prefix) and self.served(d)]
 
     def claims_profile(self) -> bool:
         return self.lie_about_profile or not self.satisfies_profile()

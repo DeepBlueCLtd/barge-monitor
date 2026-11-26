@@ -101,7 +101,7 @@ def test_at04_declared_queries_meet_budget_and_rebuild_identically():
 
 
 def test_at07_server_side_profile_claim_is_honest_unless_misconfigured(data_folder):
-    """The 4.1 profile's essentials include model outputs, which 4.7 makes per dataset: Mission A's (D-285)."""
+    """The 4.7 template's essentials are per dataset: met for the claim by some dataset (D-301)."""
     r = Rig(seed=4, days=0.2, folder=data_folder)
     conf = lambda: r.get("/conformance")[1]["conformsTo"]
     pid = r.get("/profile.json")[1]["id"]

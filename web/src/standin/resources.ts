@@ -265,6 +265,13 @@ export class Store {
     return null;
   }
 
+  controlstream(systemUid: string, inputName: string): ControlstreamRec | null {
+    const s = this.systemByUid(systemUid);
+    if (!s) return null;
+    for (const c of this.controlstreams.values()) if (c.system === s.id && c.inputName === inputName && !c.replaced) return c;
+    return null;
+  }
+
   appendRow(d: DatastreamRec, t: number, values: Record<string, unknown>): void {
     d.series!.appendRow(t, values, ++this.seq);
   }

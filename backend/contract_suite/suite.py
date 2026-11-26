@@ -250,29 +250,32 @@ async def the_profile_is_beside_the_server(x: Ctx):
 
 @need
 async def every_fixed_essential_is_found(x: Ctx):
-    """FR-40: each essential the profile names, found by uniqueId and outputName, with its type and unit.
-    Template essentials (``{dataset}``) are checked with the template profile (plan Phase 7, D-252)."""
+    """FR-40, FR-40a: each essential the profile names, found by uniqueId and outputName, with its type and unit.
+    A template essential (``{dataset}``) must be met by some dataset: the client checks each dataset when it opens
+    it, and a dataset missing one is degraded, not the server (D-301)."""
     st, _, prof = await x.get("profile.json")
     prof = json.loads(prof) if isinstance(prof, str) else prof
     missing = []
     for e in prof["essentials"]:
-        if "{dataset}" in e["datastream"]:
-            continue
         if e.get("kind") == "controlstream":
             if await x.cs(e["system"], e["datastream"]) is None:
                 missing.append(e["id"])
             continue
-        d = await x.ds(e["system"], e["datastream"])
-        if d is None:  # 4.7 model outputs are per dataset: the 4.1 profile's name, for any dataset (D-285)
-            d = next((y for y in reversed(await x.datastreams(e["system"]))
-                      if y["outputName"].startswith(e["datastream"] + "__")), None)
-        if d is None:
-            missing.append(e["id"])
-            continue
-        st, _, sch = await x.get(f"datastreams/{d['id']}/schema", {"obsFormat": SWE})
-        assert st == 200, (st, sch)
-        f = next((f for f in sch["recordSchema"]["fields"] if f["name"] == e["field"]), None)
-        if f is None or f["type"] != e["type"] or (e.get("uom") and (f.get("uom") or {}).get("code") != e["uom"]):
+        if "{dataset}" in e["datastream"]:
+            prefix = e["datastream"].replace("{dataset}", "")
+            found = [y for y in await x.datastreams(e["system"]) if y["outputName"].startswith(prefix)]
+        else:
+            d = await x.ds(e["system"], e["datastream"])
+            found = [d] if d else []
+        ok = False
+        for d in found:
+            st, _, sch = await x.get(f"datastreams/{d['id']}/schema", {"obsFormat": SWE})
+            assert st == 200, (st, sch)
+            f = next((f for f in sch["recordSchema"]["fields"] if f["name"] == e["field"]), None)
+            if f is not None and f["type"] == e["type"] and (not e.get("uom") or (f.get("uom") or {}).get("code") == e["uom"]):
+                ok = True
+                break
+        if not ok:
             missing.append(e["id"])
     assert not missing, f"essentials not found: {missing}"
 

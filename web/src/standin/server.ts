@@ -6,9 +6,9 @@
 // no instance identifier). The store of created
 // resources (resources.ts) outlives it, as OpenSensorHub's database does.
 //
-// The profile served is the one the 4.1 display client is built against; the 4.7
-// template (contracts/profile.json) is served from plan Phase 7 (D-252).
-import profileJson from '../../../contracts/interim/profile-v4.1.json';
+// The profile served is the 4.7 template (contracts/profile.json, FR-40a); the interim 4.1
+// profile of D-252 is retired with the 4.1 display client (D-301).
+import profileJson from '../../../contracts/profile.json';
 import { USERS } from './accounts';
 import { StoreAdapter } from './adapter';
 import { SENSORS, SOSA, URN } from './constants';
@@ -32,7 +32,7 @@ export const QC_SPIKE: Record<string, number> = {
 
 export interface Profile {
   id: string;
-  essentials: { id: string; system: string; datastream: string; field: string; type: string; uom?: string | null }[];
+  essentials: { id: string; system: string; datastream: string; field: string; type: string; uom?: string | null; kind?: string }[];
   [k: string]: unknown;
 }
 export const PROFILE = profileJson as unknown as Profile;
@@ -153,25 +153,34 @@ export class Server {
   satisfiesProfile(): { id: string; reason: string }[] {
     const problems: { id: string; reason: string }[] = [];
     for (const e of this.profile.essentials) {
-      const ds = this.store.datastream(e.system, e.datastream) ?? this.perDataset(e.system, e.datastream);
-      const rec = ds && this.served(ds) ? this.visible(ds.schema) : null;
-      const fld = rec?.fields.find((f) => f.name === e.field);
-      if (!fld) problems.push({ id: e.id, reason: 'missing' });
-      else if (fld.type !== e.type) problems.push({ id: e.id, reason: 'wrong type' });
-      else if ((fld.uom?.code ?? null) !== (e.uom ?? null)) problems.push({ id: e.id, reason: 'wrong unit' });
+      if (e.kind === 'controlstream') {
+        if (!this.store.controlstream(e.system, e.datastream)) problems.push({ id: e.id, reason: 'missing' });
+        continue;
+      }
+      let found = this.perDataset(e.system, e.datastream);
+      if (!found) {
+        const ds = this.store.datastream(e.system, e.datastream);
+        found = ds && this.served(ds) ? [ds] : [];
+      }
+      const reasons = found.map((ds) => {
+        const fld = this.visible(ds.schema).fields.find((f) => f.name === e.field);
+        return !fld ? 'missing' : fld.type !== e.type ? 'wrong type' : (fld.uom?.code ?? null) !== (e.uom ?? null) ? 'wrong unit' : '';
+      });
+      if (!reasons.includes('')) problems.push({ id: e.id, reason: reasons[reasons.length - 1] ?? 'missing' });
     }
     return problems;
   }
 
   /**
-   * The 4.1 profile names outputs without a dataset; 4.7 outputs are per dataset (§6). Until the profile switches with
-   * the display client (Phase 7, D-252), an essential is met by the newest dataset's output that carries it (D-285).
+   * A template essential (`weather__{dataset}`, FR-40a) is met for the claim when some dataset's datastream carries it
+   * (D-301): the client checks each dataset when it opens it, and a dataset missing one is degraded (FR-45), not the server.
    */
-  private perDataset(systemUid: string, output: string): DatastreamRec | null {
+  private perDataset(systemUid: string, template: string): DatastreamRec[] | null {
+    if (!template.includes('{dataset}')) return null;
     const s = this.store.systemByUid(systemUid);
     if (!s) return null;
-    const found = [...this.store.datastreams.values()].filter((d) => d.system === s.id && d.outputName.startsWith(output + '__') && this.served(d));
-    return found.length ? found[found.length - 1] : null;
+    const prefix = template.replace('{dataset}', '');
+    return [...this.store.datastreams.values()].filter((d) => d.system === s.id && d.outputName.startsWith(prefix) && this.served(d));
   }
 
   claimsProfile(): boolean {
