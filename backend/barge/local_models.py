@@ -12,6 +12,7 @@ open: each tick runs that loop until the models' work in hand is done.
 from __future__ import annotations
 
 import asyncio
+import atexit
 import sys
 from pathlib import Path
 
@@ -39,6 +40,7 @@ class LocalModels:
         self.rt = runtime
         self.app = create_app(runtime)
         self.loop = asyncio.new_event_loop()
+        atexit.register(self.close)
         self.backlog = backlog
         self.runners = []
         for cls in classes:
@@ -126,6 +128,17 @@ class LocalModels:
                 r.phase, r.detail = "failed", f"{type(e).__name__}: {e}"
             self.rt.set_phase(r.model.id, r.phase, r.detail, r.model.label)
         self.settle()
+
+    def close(self) -> None:
+        """End the models' subscriptions and close their loop (at exit: no task is left pending)."""
+        if self.loop.is_closed():
+            return
+        tasks = asyncio.all_tasks(self.loop)
+        for t in tasks:
+            t.cancel()
+        if tasks:
+            self.loop.run_until_complete(asyncio.gather(*tasks, return_exceptions=True))
+        self.loop.close()
 
     @property
     def live(self) -> bool:
