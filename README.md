@@ -29,7 +29,8 @@ Everything is fictional: the canal, its places and the weather.
 | `backend/tests/` | pytest acceptance tests, and a second, differently awkward store format with its adapter (AT-03) |
 | `backend/independent/` | AT-05: OSHConnect-Python browses the server |
 | `web/` | TypeScript and React: the demonstrator shell (stacked flowchart, detail panel, status, key, control panel), the display client (ECharts), the relay (Service Worker), the Pyodide back-end and model workers, the JavaScript stand-in, Playwright tests |
-| `scripts/build_history.py` | Pre-calculated history: the logger files for seeds 1–3 (FR-15) |
+| `scripts/build_history.py` | Pre-calculated history: the logger files for seeds 1–3 (FR-15), read by the 4.1 app |
+| `scripts/build_data_folder.py` | The 4.7 data folder: four CSV missions in the awkward dialect, `--check` for AT-28 (not read by the app yet) |
 | `docs/decisions-log.md`, `docs/adr/`, `docs/findings/` | Decisions taken while implementing, decision records, measured findings |
 
 ## Run it locally
@@ -39,13 +40,15 @@ pip install -r backend/requirements-dev.txt
 (cd backend && python -m pytest -q)                      # Python tests
 
 python scripts/build_history.py --days 1 .cache/history 1 2 3   # 24 hours, as published
+python scripts/build_data_folder.py && python scripts/build_data_folder.py --check   # web/public/data/folder
 cd web
 npm ci
 npm run pyodide          # Pyodide 0.29.5 and packages into ../.cache (once)
 npm run build            # generates TypeScript types from contracts/, packs the Python
 npm run site             # assembles ../dist-site/{demo,pyodide,history}
 npm run serve            # http://localhost:8080/demo/
-npm run e2e              # Playwright tests
+npm run e2e              # Playwright tests (E2E_PORT, default 8080, and the next port for
+                         # the site under /barge-monitor/pr/17/, as a preview is published)
 ```
 
 `?backend=python` runs the Python back end and models in Pyodide; `?backend=standin` the
