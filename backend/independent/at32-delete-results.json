@@ -1,0 +1,263 @@
+{
+ "server": "OpenSensorHub osh-core 2.0.4 (75bb094), unmodified, AT-32 configuration",
+ "gateway_refuses": [
+  {
+   "via": "gateway",
+   "user": "owner",
+   "request": "DELETE datastream (the owner's)",
+   "status": 405,
+   "after_get": 200,
+   "removed": false
+  },
+  {
+   "via": "gateway",
+   "user": "owner",
+   "request": "DELETE system (the owner's, no children left)",
+   "status": 405,
+   "after_get": 200,
+   "removed": false
+  },
+  {
+   "via": "gateway",
+   "user": "analyst",
+   "request": "DELETE datastream (its own workspace's)",
+   "status": 405,
+   "after_get": 200,
+   "removed": false
+  },
+  {
+   "via": "gateway",
+   "user": "analyst",
+   "request": "DELETE system (its own workspace's, no children left)",
+   "status": 405,
+   "after_get": 200,
+   "removed": false
+  },
+  {
+   "via": "gateway",
+   "user": "friend",
+   "request": "DELETE datastream (the owner's)",
+   "status": 405,
+   "after_get": 200,
+   "removed": false
+  },
+  {
+   "via": "gateway",
+   "user": "friend",
+   "request": "DELETE system (the owner's, no children left)",
+   "status": 405,
+   "after_get": 200,
+   "removed": false
+  },
+  {
+   "via": "direct",
+   "user": "owner",
+   "request": "DELETE datastream (the owner's)",
+   "status": 204,
+   "after_get": 404,
+   "removed": true
+  },
+  {
+   "via": "direct",
+   "user": "owner",
+   "request": "DELETE system (the owner's, no children left)",
+   "status": 204,
+   "after_get": 404,
+   "removed": true
+  },
+  {
+   "via": "direct",
+   "user": "analyst",
+   "request": "DELETE datastream (its own workspace's)",
+   "status": 204,
+   "after_get": 404,
+   "removed": true
+  },
+  {
+   "via": "direct",
+   "user": "analyst",
+   "request": "DELETE system (its own workspace's, no children left)",
+   "status": 204,
+   "after_get": 404,
+   "removed": true
+  },
+  {
+   "via": "direct",
+   "user": "svc-importer",
+   "request": "DELETE datastream (the owner's)",
+   "status": 403,
+   "after_get": 200,
+   "removed": false
+  },
+  {
+   "via": "direct",
+   "user": "svc-importer",
+   "request": "DELETE system (the owner's, no children left)",
+   "status": 403,
+   "after_get": 200,
+   "removed": false
+  },
+  {
+   "via": "internal",
+   "user": "friend",
+   "request": "DELETE datastream (the owner's)",
+   "status": 204,
+   "after_get": 404,
+   "removed": true
+  },
+  {
+   "via": "internal",
+   "user": "friend",
+   "request": "DELETE system (the owner's, no children left)",
+   "status": 204,
+   "after_get": 404,
+   "removed": true
+  },
+  {
+   "via": "direct",
+   "user": "owner",
+   "request": "DELETE system with children (bow sensor)",
+   "status": 400,
+   "after_get": 200,
+   "removed": false
+  },
+  {
+   "via": "gateway",
+   "user": "owner",
+   "request": "PUT system, empty SensorML body",
+   "status": 405,
+   "after_get": 200,
+   "removed": false
+  }
+ ],
+ "gateway_forwards_as_before_d200": [
+  {
+   "via": "gateway",
+   "user": "owner",
+   "request": "DELETE datastream (the owner's)",
+   "status": 204,
+   "after_get": 404,
+   "removed": true
+  },
+  {
+   "via": "gateway",
+   "user": "owner",
+   "request": "DELETE system (the owner's, no children left)",
+   "status": 204,
+   "after_get": 404,
+   "removed": true
+  },
+  {
+   "via": "gateway",
+   "user": "analyst",
+   "request": "DELETE datastream (its own workspace's)",
+   "status": 204,
+   "after_get": 404,
+   "removed": true
+  },
+  {
+   "via": "gateway",
+   "user": "analyst",
+   "request": "DELETE system (its own workspace's, no children left)",
+   "status": 204,
+   "after_get": 404,
+   "removed": true
+  },
+  {
+   "via": "gateway",
+   "user": "friend",
+   "request": "DELETE datastream (the owner's)",
+   "status": 403,
+   "after_get": 200,
+   "removed": false
+  },
+  {
+   "via": "gateway",
+   "user": "friend",
+   "request": "DELETE system (the owner's, no children left)",
+   "status": 403,
+   "after_get": 200,
+   "removed": false
+  },
+  {
+   "via": "direct",
+   "user": "owner",
+   "request": "DELETE datastream (the owner's)",
+   "status": 204,
+   "after_get": 404,
+   "removed": true
+  },
+  {
+   "via": "direct",
+   "user": "owner",
+   "request": "DELETE system (the owner's, no children left)",
+   "status": 204,
+   "after_get": 404,
+   "removed": true
+  },
+  {
+   "via": "direct",
+   "user": "analyst",
+   "request": "DELETE datastream (its own workspace's)",
+   "status": 204,
+   "after_get": 404,
+   "removed": true
+  },
+  {
+   "via": "direct",
+   "user": "analyst",
+   "request": "DELETE system (its own workspace's, no children left)",
+   "status": 204,
+   "after_get": 404,
+   "removed": true
+  },
+  {
+   "via": "direct",
+   "user": "svc-importer",
+   "request": "DELETE datastream (the owner's)",
+   "status": 403,
+   "after_get": 200,
+   "removed": false
+  },
+  {
+   "via": "direct",
+   "user": "svc-importer",
+   "request": "DELETE system (the owner's, no children left)",
+   "status": 403,
+   "after_get": 200,
+   "removed": false
+  },
+  {
+   "via": "internal",
+   "user": "friend",
+   "request": "DELETE datastream (the owner's)",
+   "status": 204,
+   "after_get": 404,
+   "removed": true
+  },
+  {
+   "via": "internal",
+   "user": "friend",
+   "request": "DELETE system (the owner's, no children left)",
+   "status": 204,
+   "after_get": 404,
+   "removed": true
+  },
+  {
+   "via": "direct",
+   "user": "owner",
+   "request": "DELETE system with children (bow sensor)",
+   "status": 400,
+   "after_get": 200,
+   "removed": false
+  },
+  {
+   "via": "gateway",
+   "user": "owner",
+   "request": "PUT system, empty SensorML body",
+   "status": 400,
+   "after_get": 200,
+   "removed": false
+  }
+ ]
+}

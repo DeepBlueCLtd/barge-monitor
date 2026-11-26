@@ -15,11 +15,13 @@
 > and §9.1 notes OpenSensorHub's 29.5 s against the stand-ins' 5 s (7); `PUT` and `DELETE` are
 > refused with any 4xx (8). **`DELETE` was tried** on a system and a datastream that exist, through
 > the gateway and directly (`at32_delete_probe.py`, `at32-delete-results.json`): OpenSensorHub
-> **deletes** them (204, then 404), for the owner, for a user on its own workspace through the gateway,
-> and for any account on `/api-internal`; only an account without OpenSensorHub's `delete` permission
-> is refused (403), and a system with children (400). So the access gateway now refuses `PUT`, `PATCH`
-> and `DELETE` with 405 for every account (SRD §17). AT-32 run again with all of this: see
-> `at32-osh-results.json`.
+> **deletes** them (204, then 404) for the owner, for a user on what it created itself (the analyst,
+> under its own workspace, through the gateway as it was and directly), and for any account on
+> `/api-internal`; an account on what another created is refused (403), and a system with children
+> (400). So the access gateway now refuses `PUT`, `PATCH` and `DELETE` with 405 for every account
+> (SRD §17); the same probe through it gets 405 every time and removes nothing. AT-32 run again with
+> all of this: **12 of 12 `need` checks, and 8 of 8 `standin` checks** (`at32-osh-results.json`);
+> the catalogue needed no fallback, and the D-199 outcome reads `COMPLETED` on OpenSensorHub.
 
 **Date:** 2026-11-26 · **Server:** OpenSensorHub `osh-core` 2.0.4, built from source at commit
 `75bb094`, unmodified; configured with the delivered demo accounts, HTTP Basic authentication,
