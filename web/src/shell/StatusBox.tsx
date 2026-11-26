@@ -10,7 +10,7 @@ export const SPEED_LABELS: Record<number, string> = { 0.25: '¼×', 0.5: '½×',
 
 const CLIENT_PHASE: Record<string, string> = {
   'waiting-play': 'Waiting for play', 'waiting-models': 'Waiting for models', handshake: 'Handshake', configured: 'Configured', degraded: 'Degraded',
-  rejected: 'Server rejected', waiting: 'Waiting (503)', unreachable: 'Server unreachable', error: 'Error',
+  rejected: 'Server rejected', waiting: 'Server starting', unreachable: 'Server unreachable', error: 'Error',
 };
 
 export function historyLabel(days: number | null): string {
@@ -36,7 +36,7 @@ export function StatusBox({ rect }: { rect: Box }) {
     ['Simulation', clock?.playing ? 'Playing' : 'Paused', 'sim-state'],
     ['Speed', SPEED_LABELS[clock?.rate ?? 0.5] ?? `${clock?.rate}×`, 'speed-state'],
     ['History', historyLabel(runtime.history.days), 'history-state'],
-    ['Server', server === 'running' ? `Ready${instance ? ` · ${instance.slice(0, 6)}` : ''}` : server === 'waiting' ? 'Waiting (503)' : 'Down', 'server-state'],
+    ['Server', server === 'running' ? `Ready${instance ? ` · ${instance.slice(0, 6)}` : ''}` : server === 'waiting' ? 'Starting' : 'Down', 'server-state'],
     ['Client', CLIENT_PHASE[phase] ?? phase, 'client-state'],
     ['Essentials', config ? (missing ? <span className="bad">{missing} missing</span> : <span className="good">All present</span>) : '–', 'essentials-state'],
     ['Optional', config ? `${optional} source${optional === 1 ? '' : 's'}` : '–', 'optional-state'],
