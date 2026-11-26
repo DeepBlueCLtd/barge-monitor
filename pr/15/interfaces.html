@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="site.css">
 </head>
 <body>
-<div class="banner">Preview of pull request #15 (7c9f373). Not the published document.</div>
+<div class="banner">Preview of pull request #15 (8157eef). Not the published document.</div>
 <main>
 <p class="demo-link"><a href="demo/"><strong>Open the working demonstrator →</strong></a> It runs whole in your browser. · <a href="demo/?hand-made"><strong>Start from “before”</strong></a>: the data server as subsystems we would build ourselves, then adopting OpenSensorHub (SRD §9.8). · <a href="index.html">Requirements</a> · <a href="interfaces.html">Version 4 interfaces</a> · Mockups: <a href="mockups/mockup-1-display-client.png">1</a>, <a href="mockups/mockup-2-models.png">2</a>, <a href="mockups/mockup-3-data-server.png">3</a></p>
 <nav id="TOC" aria-label="Contents">
@@ -621,6 +621,15 @@ and <code>end</code> (Time, once read), <code>records</code> (Count),
 observation for a file is its current status. Readers ask with
 <code>resultTime=latest</code> per file, or read the whole datastream
 and fold it.</p>
+<p><strong><code>records</code> is <code>0</code> until the file is
+imported</strong> (D-197): a Count has no missing value in
+OpenSensorHub, which refuses both <code>"NaN"</code> and
+<code>null</code> there. The status says whether it counts: it is the
+dataset's number of rows for <code>imported</code>, <code>changed</code>
+and <code>superseded</code> (the statuses that name a dataset), and
+<code>0</code> for <code>not-imported</code> and <code>importing</code>.
+A reader never shows that <code>0</code> as a count; the display client
+reads it as no count at all.</p>
 <p><strong><code>import</code> control stream.</strong> Parameters, all
 present on every command (FR-27):</p>
 <ul>
@@ -771,10 +780,16 @@ per real second while playing, and one on every change. Fields:</p>
 <code>phenomenonTime</code> is the replay time too, which makes the
 state of a dataset readable by time.</p>
 <p><strong><code>log</code> datastream.</strong> Every command applied:
-<code>time</code> (the replay time it took effect),
+<code>time</code> (the <strong>real time</strong> it took effect),
 <code>command_id</code>, <code>action</code>, <code>dataset</code>,
-<code>rate</code>, <code>position</code>, <code>run</code>,
-<code>sender</code>.</p>
+<code>rate</code>, <code>position</code> (the <strong>replay
+time</strong> it took effect), <code>run</code>, <code>sender</code>,
+<code>note</code> (D-198). <code>time</code> is real time, not the
+replay time, because OpenSensorHub keeps one observation per phenomenon
+time per datastream and replaces the first: keyed by replay time, a
+<code>load</code> and a <code>pause</code> at one position would leave
+one entry. Readers order the log by <code>time</code> and show
+<code>position</code> as where the replay was.</p>
 <p><strong>Replay runs.</strong> A run id is
 <code>r-&lt;dataset id&gt;-&lt;n&gt;</code>. A new run starts on
 <code>load</code> of a dataset, and on every <code>seek</code> (FR-87).
@@ -844,7 +859,16 @@ body is refused with <code>400</code>.</li>
 <li>A missing value is the string <code>"NaN"</code>. JSON
 <code>null</code> in a Quantity is refused with <code>400</code>.</li>
 <li><code>PUT</code> and <code>DELETE</code> on observations, systems
-and datastreams answer <code>405</code>.</li>
+and datastreams are <strong>refused with a <code>4xx</code></strong>
+(D-200): the stand-ins answer <code>405</code>; OpenSensorHub answers
+<code>400</code> to <code>PUT</code> with an empty body. Clients rely
+only on a 4xx. A stock OpenSensorHub <strong>deletes</strong> a system
+or a datastream on <code>DELETE</code> (<code>204</code>) for an account
+its permissions allow, and for any account on its internal endpoint
+(tried on 2026-11-26), so the access gateway refuses <code>PUT</code>,
+<code>PATCH</code> and <code>DELETE</code> with <code>405</code> for
+every account (§9.5): nothing is replaced or deleted except by Reset
+instance (SRD §17).</li>
 <li>The format is chosen with <code>f=application/swe+json</code>. The
 <code>Accept</code> header is <strong>ignored</strong>: the default is
 <code>application/json</code> observation resources. Paging is by
@@ -867,16 +891,29 @@ Status codes: <code>ACCEPTED</code>, <code>EXECUTING</code>,
 Listed, each report also carries its own <code>id</code> and its
 <code>reportTime</code> (real time); readers tell reports apart by
 <code>id</code> (D-181).</li>
+<li><strong>A command's outcome is its latest status report other than
+<code>PENDING</code></strong> (D-199, revising D-164), by
+<code>reportTime</code>, among the reports since the command was sent.
+When the sender's <code>POST</code> answers, the server stores a
+<code>PENDING</code> report for the command: in OpenSensorHub that is
+often <strong>after</strong> the receiver's <code>COMPLETED</code>, so
+the latest report alone would read <code>PENDING</code>. Both stand-ins
+store it too. The display client, both <code>csmodel</code>s
+(<code>outcome</code>, <code>commandOutcome</code>), the shell and the
+suite read it this way.</li>
 <li><strong>Sending a command:</strong>
 <code>POST /controlstreams/{csId}/commands</code> with
 <code>{"parameters": {...}}</code>.
 <ul>
-<li><strong>With no subscriber</strong>, the command is dropped. The
-answer is <code>202</code> after 5 s, and the command is not listed
-afterwards.</li>
+<li><strong>With no subscriber</strong>, the command is dropped and not
+listed afterwards. The answer is <code>202</code> after the hold:
+<strong>5 s in the stand-ins</strong>, about <strong>29.5 s in
+OpenSensorHub</strong> 2.0.4 (AT-32 run of 2026-11-26). The stand-ins
+keep 5 s; no client waits on either.</li>
 <li><strong>With a subscriber</strong>, the command is pushed at once.
 The answer is <code>200</code> after <strong>about 5 s</strong>, with
-<code>currentStatus: PENDING</code> (FR-27). The sender never waits for
+<code>currentStatus: PENDING</code> (FR-27), and the
+<code>PENDING</code> report is stored then. The sender never waits for
 this answer: it does not await the response before updating its display
 (AT-39).</li>
 </ul></li>
@@ -1024,7 +1061,11 @@ every listing, matching them by unique-id prefix:</p>
 <p>It also removes their datastreams and control streams, and answers
 <code>404</code> to every path under them.</p></li>
 <li><p><strong>Writes.</strong> It enforces "create and append only
-under your own systems".</p></li>
+under your own systems". It refuses <code>PUT</code>, <code>PATCH</code>
+and <code>DELETE</code> with <code>405</code> for <strong>every
+account</strong>, whatever the path: a stock OpenSensorHub deletes on
+<code>DELETE</code>, and nothing is replaced or deleted except by Reset
+instance (SRD §17; D-200).</p></li>
 <li><p><strong>Push subscriptions.</strong> It forwards them to the
 server's internal receiver endpoint, for service accounts only. That
 endpoint has access control off and is not reachable from
