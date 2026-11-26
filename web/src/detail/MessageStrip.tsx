@@ -2,8 +2,8 @@
 // carries the evidence. A clicked message shows its letter and name, whether it
 // meets a public standard, its sender and receiver, and its contents in
 // monospace. In the display client's panel, until a message is clicked, it
-// shows the store query (S) the current selection caused, found by the chain
-// the client's request carried, with the chain of messages that selection sends.
+// shows the display client's latest read for its selection, found by the chain
+// its request carried, with the chain of messages that read caused.
 import { useEffect, useState } from 'react';
 import { clientSession } from '../client/session';
 import { nameOf } from '../shell/components';
@@ -113,52 +113,35 @@ function Clicked({ m, onClose }: { m: Message; onClose: () => void }) {
   );
 }
 
-/** The display client's default: the S the current selection causes, and its chain (FR-70, AT-17). */
+/** The display client's default: its latest read for the selection, and that read's chain (FR-70). */
 function SelectionQuery() {
   useBusVersion();
-  const session = useStore(clientSession);
-  const last = useStore(session.lastRead);
-  const raw = session.plan.some((r) => r.raw);
-  // Found by chain: an S the data server made while answering one of this selection's requests.
-  // The selection's own read comes first; polls then repeat the chain once per simulated second.
-  const s = bus.find((m) => m.letter === 'S' && m.src === 'server' && m.dst === 'adapter' && session.http.seqOf(m.chain) >= session.planSeq)[0] ?? null;
-  if (s) {
-    const chain = bus.chain(s.chain!);
+  const last = useStore(clientSession.lastRead);
+  const chain = last ? bus.chain(last.chain) : [];
+  const q = chain.find((m) => m.src === 'client');
+  if (!last || !q) {
     return (
-      <div className="strip" style={{ borderColor: LETTERS.S.colour }} data-testid="message-strip" data-letter="S">
-        <Head m={s} note="built from the current selection" />
+      <div className="strip neutral" data-testid="message-strip" data-letter="none">
+        <header className="strip-head"><h3>The selection's read</h3></header>
         <div className="strip-body">
-          <pre className="mono" data-testid="message-content">{pretty(s.content)}</pre>
-          <div className="strip-chain">
-            <h4>This selection sends</h4>
-            <p data-testid="strip-chain">{describeChain(chain)}.</p>
-            <p className="strip-empty">The query asks for whole records: Connected Systems has no per-field filter, so the display client picks its fields from what comes back.
-              Then, once per simulated second, a poll from the last reading received repeats this chain for the new records.</p>
-          </div>
+          <p className="strip-empty" data-testid="strip-no-read">
+            {clientSession.phase.value === 'login' || clientSession.phase.value === 'locked' ? 'Nothing is read before login: log in to the display client.'
+              : 'No read captured yet for this selection: choose a field, or press Play.'}
+          </p>
         </div>
       </div>
     );
   }
-  // A period read from summary datastreams makes no store query: say so (FR-29).
-  const chain = last ? bus.chain(last.chain) : [];
-  const q = chain.find((m) => m.src === 'client');
   return (
-    <div className="strip neutral" data-testid="message-strip" data-letter="none">
-      <header className="strip-head"><h3>Store query</h3>
-        <span className="strip-meta">{' · '}internal, no public standard · from Data server to Store adapter</span></header>
+    <div className="strip" style={{ borderColor: LETTERS[q.letter].colour }} data-testid="message-strip" data-letter={q.letter}>
+      <Head m={q} note={`the selection's latest read, of ${last.outputName.replace('__', ' · ')}`} />
       <div className="strip-body">
-        <p className="strip-empty" data-testid="strip-no-s">
-          {!session.config.value ? 'No selection yet: the display client has not made its handshake (press ▶ Play).'
-            : !session.plan.length ? 'No store query: no field is selected, so the display client reads no observations.'
-              : raw ? 'No store query captured yet for this selection: it appears with the next poll.'
-                : `No store query for this selection: periods longer than an hour read summary datastreams published by the models (${session.plan.map((r) => r.ds.outputName).join(', ')}), not raw records, and none of these requests caused an S.`}
-        </p>
-        {q && chain.length > 0 && (
-          <div className="strip-chain">
-            <h4>This selection sends</h4>
-            <p data-testid="strip-chain">{describeChain(chain)}.</p>
-          </div>
-        )}
+        <pre className="mono" data-testid="message-content">{pretty(q.content)}</pre>
+        <div className="strip-chain">
+          <h4>This read sends</h4>
+          <p data-testid="strip-chain">{describeChain(chain)}.</p>
+          <p className="strip-empty">While playing, once a real second, the client asks for what is new up to its replay time, never beyond it.</p>
+        </div>
       </div>
     </div>
   );

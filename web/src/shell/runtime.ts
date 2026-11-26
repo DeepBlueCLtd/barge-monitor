@@ -5,7 +5,6 @@
 // server, control panel) reach the back-end worker directly: they belong to
 // the demonstrator, not the system.
 import { CORE_MODELS, HISTORY_PATH, PY_ZIP, PYODIDE_PATH, resolve, urlParam } from '../config';
-import { simClock } from './clock';
 import type { ComponentId } from './components';
 import { bus, Captured } from './messages';
 import { STAGE_STEP, Startup } from './startup';
@@ -78,6 +77,8 @@ export interface ControlState {
   import_rate?: { file: string; rows: number; seconds: number; rows_per_s: number; silent: boolean } | null;
   importer?: { subscribed: boolean; silent_done: boolean };
   resets?: number;
+  /** The user-to-role assignment (§13.4), changed by the admin stub (§13.5). */
+  accounts?: { user: string; role: string; kind: string; label: string }[];
 }
 
 /**
@@ -239,22 +240,18 @@ class Runtime {
         }
         break;
       case 'tick':
-        simClock.update(d.clock);
         if (d.server && d.server !== this.server.value) this.server.set(d.server);
         bus.add(d.messages ?? []);
-        // Every model reads time from the simulation clock (FR-13).
-        for (const w of this.models.values()) w.postMessage({ type: 'clock', state: d.clock, pending: d.pending_commands ?? {} });
         break;
       case 'state':
         this.control.set(d.state);
         this.checkModels();
-        if (d.state?.clock) simClock.update(d.state.clock);
         if (d.state?.server) this.server.set(d.state.server);
         break;
       case 'relay-failed': {
         // A request that got no answer (server down) is drawn stopped at the boundary (VS-14).
         const kOrQ = d.method === 'POST' && String(d.path).endsWith('/commands') ? 'K' : 'Q';
-        bus.add([{ t: simClock.now(), src: d.model ? 'models' : 'client', dst: 'server', letter: kOrQ, ...(d.model ? { model: d.model } : {}), summary: `${d.method} ${d.path}: no answer, the server is down`,
+        bus.add([{ t: 0, src: d.model ? 'models' : 'client', dst: 'server', letter: kOrQ, ...(d.model ? { model: d.model } : {}), summary: `${d.method} ${d.path}: no answer, the server is down`,
           content: `${d.method} ${d.path}\n\nnetwork failure: the relay found no server to answer`, failed: true, chain: d.chain ?? null, hop: 0 }]);
         break;
       }
@@ -280,7 +277,10 @@ class Runtime {
     sw.postMessage({ type: 'port' }, [ch.port2]);
   }
 
-  /** A control action (docs/v4-interfaces.md §13.3): play, pause, rate, restart-server, down, up, field, profile-lie, capture, reset-instance, set-role, state. */
+  /**
+   * A control action (docs/v4-interfaces.md §13.3): restart-server, down, up, field, profile-lie, capture, reset-instance,
+   * set-role, state. There is no play, pause or rate: replay is the display client's own (§8, D-302).
+   */
   send(action: string, arg?: unknown) {
     this.backend?.postMessage({ type: 'control', action, arg });
   }
@@ -301,8 +301,6 @@ class Runtime {
     const ch = new MessageChannel();
     this.backend.postMessage({ type: 'model-connect', model }, [ch.port1]);
     w.postMessage({ type: 'start', pyodideUrl: resolve(PYODIDE_PATH), pyZipUrl: resolve(PY_ZIP), model, apiUrl: resolve('api'), ...(code ? { code } : {}) }, [ch.port2]);
-    const clock = simClock.state.value;
-    if (clock) w.postMessage({ type: 'clock', state: clock });
     return true;
   }
 

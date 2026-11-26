@@ -1,45 +1,38 @@
 // Below the flowchart (§9.1): the status box and the message key (VS-08, VS-10).
+// The status mirrors the display client's own replay clock, read in the page (interfaces §8).
 import { clientSession } from '../client/session';
-import { simClock } from './clock';
+import { iso } from '../client/plan';
 import { Glyph } from './Glyph';
 import { LETTER_ORDER, LETTERS } from './messages';
 import { runtime } from './runtime';
 import { useStore } from './store';
 
-export const SPEED_LABELS: Record<number, string> = { 0.25: '¼×', 0.5: '½×', 1: '1×' };
-
 const CLIENT_PHASE: Record<string, string> = {
-  'waiting-play': 'Waiting for play', 'waiting-models': 'Waiting for models', handshake: 'Handshake', configured: 'Configured', degraded: 'Degraded',
-  rejected: 'Server rejected', waiting: 'Server starting', unreachable: 'Server unreachable', error: 'Error',
+  login: 'Not logged in', locked: 'Locked', handshake: 'Handshake', ready: 'Configured', unreachable: 'Server unreachable', rejected: 'Server rejected',
 };
-
-export function historyLabel(days: number | null): string {
-  if (days == null) return 'none';
-  if (days % 7 === 0) return days === 7 ? '1 week' : `${days / 7} weeks`;
-  return days === 1 ? '24 hours' : `${days} days`;
-}
 
 type Box = [number, number, number, number];
 
 export function StatusBox({ rect }: { rect: Box }) {
-  const clock = useStore(simClock.state);
   const server = useStore(runtime.server);
   const control = useStore(runtime.control);
-  const session = useStore(clientSession);
-  const phase = useStore(session.phase);
-  const config = useStore(session.config);
-  const props = useStore(session.props);
-  const missing = config?.problems.length ?? 0;
-  const optional = props.filter((p) => !p.essential).length;
+  const phase = useStore(clientSession.phase);
+  const user = useStore(clientSession.user);
+  const replay = useStore(clientSession.clock.state);
+  const view = useStore(clientSession.view);
+  useStore(clientSession.discovery);
   const instance = control?.instance ?? '';
+  const file = replay ? clientSession.catalogue.value.find((e) => e.dataset === replay.dataset)?.file ?? replay.dataset : null;
+  const degraded = !!view?.problems.length;
   const rows: [string, React.ReactNode, string][] = [
-    ['Simulation', clock?.playing ? 'Playing' : 'Paused', 'sim-state'],
-    ['Speed', SPEED_LABELS[clock?.rate ?? 0.5] ?? `${clock?.rate}×`, 'speed-state'],
-    ['History', historyLabel(runtime.history.days), 'history-state'],
+    ['Analyst', phase === 'locked' ? 'Locked' : phase === 'login' ? 'Not logged in' : user ?? '–', 'analyst-state'],
+    ['Dataset', file ?? 'None', 'dataset-state'],
+    ['Replay', !replay ? 'Paused' : replay.atEnd ? 'At the end' : replay.playing ? 'Playing' : 'Paused', 'sim-state'],
+    ['Replay time', replay ? iso(replay.time).slice(5, 19).replace('T', ' ') : '–', 'replay-state'],
+    ['Rate', replay ? `${replay.rate}×` : '–', 'speed-state'],
     ['Server', server === 'running' ? `Ready${instance ? ` · ${instance.slice(0, 6)}` : ''}` : server === 'waiting' ? 'Starting' : 'Down', 'server-state'],
-    ['Client', CLIENT_PHASE[phase] ?? phase, 'client-state'],
-    ['Essentials', config ? (missing ? <span className="bad">{missing} missing</span> : <span className="good">All present</span>) : '–', 'essentials-state'],
-    ['Optional', config ? `${optional} source${optional === 1 ? '' : 's'}` : '–', 'optional-state'],
+    ['Client', degraded && phase === 'ready' ? 'Degraded' : CLIENT_PHASE[phase] ?? phase, 'client-state'],
+    ['Essentials', phase === 'ready' ? (clientSession.essentialsText() === 'All present' ? <span className="good">All present</span> : <span className="bad">{clientSession.essentialsText()}</span>) : '–', 'essentials-state'],
     ['Back end', runtime.kind === 'python' ? 'Python' : 'JavaScript stand-in', 'backend-state'],
   ];
   return (

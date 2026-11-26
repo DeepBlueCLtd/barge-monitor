@@ -21,7 +21,7 @@ export interface ComponentInfo {
 
 export const COMPONENTS: Record<ComponentId, ComponentInfo> = {
   platform: {
-    id: 'platform', code: 'C-01', name: 'Collection platform', role: 'sim time', zone: 'world', valueAdd: false,
+    id: 'platform', code: 'C-01', name: 'Collection platform', role: 'recorded weather', zone: 'world', valueAdd: false,
     does: 'The uncrewed electric barge, shuttling between two wharves day and night, with weather sensors at the bow and the stern. Each sensor reports seven parameters once per simulated second, written to the logger as fixed-width records. It records no position.',
     why: 'World: it stands in for the physical barge and its sensors. It is demonstrator scaffolding with a seeded, simulated canal and weather, and its manifest is the ground truth the models are scored against.',
   },

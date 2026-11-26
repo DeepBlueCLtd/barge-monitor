@@ -1,26 +1,27 @@
 // A model card's live activity (Models panel): the illustrative view inside the
-// model and a busy indicator that turns for half of each second while the
-// simulation runs, and stands still when it is paused (FR-77).
+// model and a busy indicator that turns while the model has a run in progress
+// (4.7: models process each dataset on import, D-220; no simulation clock, D-302).
 import { useEffect, useState } from 'react';
-import { simClock } from '../shell/clock';
+import { runtime } from '../shell/runtime';
 import { useStore } from '../shell/store';
 import { ModelInner } from './ModelInner';
 
 export function ModelActivity({ model }: { model: string }) {
-  const clock = useStore(simClock.state);
-  const playing = !!clock?.playing;
+  const control = useStore(runtime.control);
+  const phase = control?.models?.find((m) => m.id === model)?.phase ?? '';
+  const playing = phase !== '' && phase !== 'live' && phase !== 'failed';
   return (
     <>
       <ModelInner model={model} playing={playing} />
       <div className="summariesctivity" data-testid={`activity-${model}`}>
         <Busy on={playing} />
-        <span className="model-quiet">{playing ? 'working' : 'paused'}</span>
+        <span className="model-quiet">{playing ? 'working' : 'idle'}</span>
       </div>
     </>
   );
 }
 
-/** Turns for 0.5 s of every second while the simulation plays. */
+/** Turns for 0.5 s of every second while the model works. */
 function Busy({ on }: { on: boolean }) {
   const [spin, setSpin] = useState(false);
   useEffect(() => {

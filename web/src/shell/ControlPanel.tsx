@@ -67,6 +67,35 @@ function DataFolder({ st }: { st: ControlState }) {
   );
 }
 
+/** The admin stub (docs/v4-interfaces.md §13.5, FR-115): OpenSensorHub's own administration, stood in for. */
+const USER_ROLES: [string, string][] = [['owner', 'Owner'], ['viewer-emissions', 'Viewer with emissions'], ['viewer', 'Viewer (weather only)']];
+
+function Administration({ st }: { st: ControlState }) {
+  const users = (st.accounts ?? []).filter((a) => a.kind === 'user');
+  return (
+    <section data-testid="admin-stub">
+      <h3>OpenSensorHub administration (stand-in)</h3>
+      <p className="hint">The owner assigns roles here (FR-115). The server reads the assignment on every request, so a change takes effect at the user’s next request (FR-116).</p>
+      <table className="fields-table">
+        <thead><tr><th>Account</th><th>Role</th></tr></thead>
+        <tbody>
+          {users.map((a) => (
+            <tr key={a.user}>
+              <td>{a.user}</td>
+              <td>
+                <select value={a.role} aria-label={`Role of ${a.user}`} data-testid={`set-role-${a.user}`}
+                  onChange={(e) => runtime.send('set-role', { user: a.user, role: e.target.value })}>
+                  {USER_ROLES.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+                </select>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+  );
+}
+
 export function ControlPanel({ onClose }: { onClose: () => void }) {
   const st = useStore(runtime.control);
   const server = useStore(runtime.server);
@@ -77,7 +106,7 @@ export function ControlPanel({ onClose }: { onClose: () => void }) {
         <h2>Control panel</h2>
         <button className="close" aria-label="Close the control panel" onClick={onClose}>×</button>
       </div>
-      <p className="hint">Part of the demonstrator, not the system. Works whether the simulation is playing or paused. Failure demos, in the top bar, set these switches for you.</p>
+      <p className="hint">Part of the demonstrator, not the system. Failure demos, in the top bar, set these switches for you.</p>
       <div className="row">
         {server === 'down'
           ? <button className="btn" onClick={() => runtime.send('up')} data-testid="server-up">Bring server up</button>
@@ -114,6 +143,7 @@ export function ControlPanel({ onClose }: { onClose: () => void }) {
             onChange={(e) => runtime.send('profile-lie', e.target.checked)} /> Misconfigured server: claim the declared profile even when what it publishes cannot meet it</label>
           <p className="hint">A toggle takes effect only at the next server start; stored history is unchanged. Raw parameters switch both sensors together. A model output whose inputs are off is not published.</p>
           <DataFolder st={st} />
+          <Administration st={st} />
         </>
       )}
     </aside>
