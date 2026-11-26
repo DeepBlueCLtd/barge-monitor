@@ -393,8 +393,9 @@ for (const backend of ['standin', 'python'] as const) {
       expect(seen.join(' ')).toMatch(/Results being prepared: .*(Summaries|Analysis|Data cleanse)/);
       // Then the results of the latest complete run, with nothing being prepared, and the dataset not degraded.
       await expect(page.getByTestId('preparing')).toHaveCount(0, { timeout: SLOW });
-      await pause(page);
       await expect(page.getByTestId('chart-errorbars')).toBeVisible({ timeout: SLOW });
+      await pause(page);
+      await expect(page.getByTestId('chart-errorbars')).toBeVisible();
       await expect(page.getByTestId('chart-clusters')).toBeVisible({ timeout: SLOW });
       await expect(page.getByTestId('dc-degraded')).toHaveCount(0);
     });
@@ -457,7 +458,7 @@ for (const backend of ['standin', 'python'] as const) {
       // At the next request (FR-116): play, and the CO₂ source is refused, then left out; the record greyed.
       await page.getByTestId('dc-rate-10').click();
       await play(page);
-      await expect.poll(chipLabels, { timeout: 30_000 }).not.toContain('CO₂');
+      await expect.poll(() => chipLabels(page), { timeout: 30_000 }).not.toContain('CO₂');
       await pause(page);
       await expect(page.getByTestId('dc-login')).toHaveCount(0); // not logged out
       await page.getByTestId('favourites-button').click();

@@ -137,6 +137,8 @@ interface Place {
 
 const DEFAULT_SELECTION: Selection = { fields: [], period: '1h' };
 const SWE = 'application/swe+json';
+/** The workspace's datastream of data of interest (interfaces §11). */
+const DOI_OUTPUT = 'data-of-interest';
 const STATUS_WATCH_S = 12;
 /** While results are being prepared or an action's effect is awaited, the client looks this often (D-304). */
 const WATCH_EVERY_MS = 2000;
@@ -605,6 +607,7 @@ export class DisplayClientSession {
     // A run newly complete: rows of an earlier run are no longer the ones shown (FR-35).
     if ([...after].some((x) => !before.has(x))) {
       this.cache.clear();
+      this.reload = true;
       if (this.view.value) {
         const nv = buildView(d, v.id, this.completeSystems());
         // A model's output awaited at the handshake, and now complete: discover it (FR-44).
@@ -723,6 +726,8 @@ export class DisplayClientSession {
           run = this.chooseRun(fresh ? rows : [...(c?.rows ?? []), ...rows]);
           rows = rows.filter((x) => String(x.run_id) === run);
         }
+        // Another run than the rows held: the whole window is read again at the next tick (FR-35).
+        if (!fresh && c && c.run !== run) this.reload = true;
         const old = fresh || (c && c.run !== run) ? [] : c?.rows ?? [];
         const lastT = old.length ? old[old.length - 1].t : -Infinity;
         const merged = [...old, ...rows.filter((x) => x.t > lastT)];
@@ -815,11 +820,14 @@ export class DisplayClientSession {
         // A model that has not yet declared its outputs for the dataset (no runs log at the handshake): discover again (FR-44).
         const logs = new Set(this.runs.value.map((l) => l.ds.systemUid));
         if ((this.view.value?.awaited ?? []).some((e) => !logs.has(e.system)) && Date.now() - this.lastHandshake > 4000) this.wantHandshake = true;
-        if (!this.preparing().length && !this.importing.value && !this.statusWatch.length && !this.awaitingCommand) this.watchUntil = 0;
+        if (!this.preparing().length && !this.reload && !this.importing.value && !this.statusWatch.length && !this.awaitingCommand) this.watchUntil = 0;
       }
-      if (playing) {
-        await this.readData(http, false);
-        await this.readAnalysis(http, false);
+      if (playing || this.reload) {
+        // A run newly complete is shown at once, playing or paused (FR-35, D-304).
+        const full = this.reload;
+        this.reload = false;
+        await this.readData(http, full);
+        await this.readAnalysis(http, full);
       } else if (watching) await this.readAnalysis(http, false);
     } catch (e) {
       this.failed(e);
@@ -829,6 +837,8 @@ export class DisplayClientSession {
   }
 
   private awaitingCommand = false;
+  /** A run became complete: the views read again, even while paused. */
+  private reload = false;
 
   private watch(seconds: number) {
     this.watchUntil = Math.max(this.watchUntil, Date.now() + seconds * 1000);
@@ -987,7 +997,36 @@ export class DisplayClientSession {
     if (!d || !user) return null;
     // The analyst's own workspace (FR-95), by the naming of interfaces §6.
     const ws = [...d.systems.values()].find((s) => s.uid.endsWith(`:workspace:${user}`));
-    return ws ? d.datastreams.find((x) => x.systemId === ws.id) ?? null : null;
+    return ws ? d.datastreams.find((x) => x.systemId === ws.id && x.outputName === DOI_OUTPUT) ?? null : null;
+  }
+
+  /**
+   * The workspace's `data-of-interest` datastream, made at the first save (interfaces §11): a user may create under
+   * their own workspace only (§9.3). Creating it again answers `201` with the existing `Location` (§9.1).
+   */
+  private async workspaceStream(http: ClientHttp): Promise<DatastreamInfo | null> {
+    const have = this.workspace();
+    const d = this.discovery.value;
+    const user = this.user.value;
+    if (have || !d || !user) return have;
+    const sys = [...d.systems.values()].find((s) => s.uid.endsWith(`:workspace:${user}`));
+    if (!sys) return null;
+    const def = (n: string) => `https://deepbluecltd.github.io/barge-monitor/def/${n}`;
+    const schema = {
+      type: 'DataRecord', label: 'Data of interest', fields: [
+        { type: 'Time', name: 'time', label: 'Saved at', definition: 'http://www.opengis.net/def/property/OGC/0/SamplingTime', uom: { href: 'http://www.opengis.net/def/uom/ISO-8601/0/Gregorian' } },
+        { type: 'Text', name: 'doi_id', label: 'Record', definition: def('doi_id') },
+        { type: 'Category', name: 'action', label: 'Action', definition: def('doi_action'), constraint: { type: 'AllowedTokens', values: ['save', 'remove'] } },
+        { type: 'Text', name: 'record', label: 'Data of interest (JSON)', definition: def('data_of_interest') },
+      ],
+    };
+    const r = await http.request('POST', `systems/${sys.id}/datastreams`, {},
+      { name: 'Data of interest', outputName: DOI_OUTPUT, schema: { obsFormat: 'application/swe+json', recordSchema: schema } });
+    const id = r.location?.split('/').filter(Boolean).pop();
+    if (r.status >= 300 || !id) return null;
+    const info: DatastreamInfo = { id, outputName: DOI_OUTPUT, systemId: sys.id, systemUid: sys.uid, fromModel: false };
+    d.datastreams.push(info);
+    return info;
   }
 
   private async readDois(http: ClientHttp) {
@@ -1054,8 +1093,7 @@ export class DisplayClientSession {
     const s = this.clock.state.value;
     const w = this.window();
     const v = this.view.value;
-    const ws = this.workspace();
-    if (!s || !w || !v || !ws) return 'Nothing to save: no dataset is open.';
+    if (!s || !w || !v) return 'Nothing to save: no dataset is open.';
     if (!label.trim()) return 'Give it a name.';
     const props = this.selection.value.fields.map((k) => v.props.find((p) => p.key === k)).filter((p): p is Property => !!p);
     if (!props.length) return 'Select at least one field.';
@@ -1078,6 +1116,8 @@ export class DisplayClientSession {
       const run = this.dataWindowRun(withRuns);
       if (run) record.run = run;
     }
+    const ws = await this.act((http) => this.workspaceStream(http));
+    if (!ws) return 'The server offers no workspace to keep it in.';
     const id = `d-${Date.now().toString(36)}${Math.floor(Math.random() * 1e4).toString(36)}`;
     const r = await this.act((http) => http.request('POST', `datastreams/${ws.id}/observations`, {},
       { time: iso(Date.now() / 1000), doi_id: id, action: 'save', record: JSON.stringify(record) }, SWE));

@@ -49,6 +49,8 @@ export interface Reply<T = any> {
   status: number;
   body: T;
   chain: string;
+  /** The `Location` of a created resource (§9.1), if any. */
+  location: string | null;
 }
 
 let sessions = 0;
@@ -152,7 +154,7 @@ export class ClientHttp {
     if (this.closed) throw new Closed('the display client was locked or restarted');
     if (paced) await this.drawn(chain);
     if (r.status === 401) throw new Unauthorized('the name or password was not accepted');
-    return { status: r.status, body: readBody(text), chain };
+    return { status: r.status, body: readBody(text), chain, location: r.headers.get('location') };
   }
 
   /** GET; a status other than 200 is an HttpError. */
