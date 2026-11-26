@@ -123,14 +123,15 @@ export class ModelApi {
     this.rt.tap.emit(src, to, 'I', `${this.model}: ${summary}`, content, { model: this.model, quiet: this.quiet });
   }
 
-  private headers(): [string, string][] {
+  private headers(quiet = this.quiet): [string, string][] {
     const h: [string, string][] = [['authorization', this.auth], ['x-tap-model', this.model]];
-    if (this.quiet) h.push(['x-tap-quiet', '1']);
+    if (quiet) h.push(['x-tap-quiet', '1']);
     return h;
   }
 
   private async raw(method: string, target: string, body?: unknown, ctype = 'application/json', internal = false): Promise<HttpResponse> {
-    const headers = this.headers();
+    // Subscribing (internal) is part of registering: counted, not drawn (§2); the commands pushed on it are drawn.
+    const headers = this.headers(this.quiet || internal);
     let raw: Uint8Array | null = null;
     if (body !== undefined) {
       raw = new TextEncoder().encode(JSON.stringify(body));

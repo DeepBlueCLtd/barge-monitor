@@ -429,7 +429,9 @@ class Api:
         while True:
             try:
                 cs = await self._id(cs_key)
-                status, chunks = await self._stream(f"/controlstreams/{cs}/commands?subscribe=1", self._headers(), True)
+                # Subscribing is part of registering: counted, not drawn (§2); the commands pushed on it are drawn.
+                status, chunks = await self._stream(f"/controlstreams/{cs}/commands?subscribe=1",
+                                                    self._headers({"x-tap-quiet": "1"}), True)
                 if status != 200:
                     raise (NotFound if status == 404 else Refused)(f"subscribe: {status}")
                 if on_open:
