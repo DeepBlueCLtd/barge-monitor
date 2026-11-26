@@ -87,7 +87,8 @@ def standin():
     port = s.getsockname()[1]
     s.close()
     hist, _ = _history_dir()
-    proc = subprocess.Popen(["node", str(SCRIPT), "--port", str(port), "--seed", str(SEED), "--history", str(hist)],
+    proc = subprocess.Popen(["node", str(SCRIPT), "--port", str(port), "--seed", str(SEED), "--history", str(hist),
+                             "--hold", "0.5"],
                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, cwd=ROOT)
     try:
         deadline = time.monotonic() + 180
@@ -109,16 +110,10 @@ def standin():
             proc.kill()
 
 
-class Client:
-    def __init__(self, base):
-        self.base = base
+from tests.test_contract_uvicorn import Client  # noqa: E402 - the same client: real HTTP, /api-internal beside the API
+from barge.accounts import basic  # noqa: E402
 
-    async def request(self, method, path, params=None, body=None, headers=None):
-        async with httpx.AsyncClient(base_url=self.base, timeout=60) as c:
-            r = await c.request(method, path, params=params, json=body, headers=headers)
-            ctype = r.headers.get("content-type", "")
-            data = r.json() if ("json" in ctype and r.content) else r.text
-            return r.status_code, dict(r.headers), data
+OWNER = {"Authorization": basic("owner", "demo-owner")}
 
 
 def test_contract_suite_against_the_standin(standin):
@@ -144,52 +139,69 @@ def test_history_observations_match_the_python_back_end(standin):
     assert rt.history_source == "pre-built", "the Python back end refused the history (code hash or length)"
     while not rt.server.ready:
         rt.tick()
-    py = TestClient(create_app(rt))
-    js = httpx.Client(base_url=standin.base, timeout=60)
+    py = TestClient(create_app(rt), headers=OWNER)
+    js = httpx.Client(base_url=standin.base, timeout=60, headers=OWNER)
+    uid = lambda c, p: {s["uniqueId"]: s["id"] for s in c.get(p + "systems", params={"searchMembers": "true", "f": "application/sml+json"}).json()["items"]}
+    sy_py, sy_js = uid(py, "/"), uid(js, "")
     for sensor in ("bow", "stern"):
-        ds_py = next(x for x in py.get(f"/systems/{sensor}/datastreams").json()["items"] if x["outputName"] == "weather")
-        ds_js = next(x for x in js.get(f"systems/{sensor}/datastreams").json()["items"] if x["outputName"] == "weather")
-        assert ds_py["id"] == ds_js["id"]  # same schema, same identifier (FR-51)
+        u = f"urn:x-barge:sensor:{sensor}"
+        assert sy_py[u] == sy_js[u]  # the same opaque identifiers, made in the same order
+        ds_py = next(x for x in py.get(f"/systems/{sy_py[u]}/datastreams").json()["items"] if x["outputName"] == "weather")
+        ds_js = next(x for x in js.get(f"systems/{sy_js[u]}/datastreams").json()["items"] if x["outputName"] == "weather")
+        assert ds_py["id"] == ds_js["id"]
         assert ds_py["phenomenonTime"] == ds_js["phenomenonTime"]
         from barge.server import iso
 
         end = manifest["days"] * 86400.0
-        for params in ({"phenomenonTime": f"{iso(end / 2 - 120)}/{iso(end / 2 + 480)}"},
-                       {"phenomenonTime": f"{iso(end - 60)}/..", "limit": "500"},  # the end of history
-                       {"limit": "50", "offset": str(int(end) - 10)},
-                       {"resultTime": "latest"}):
+        swe = {"f": "application/swe+json"}
+        for params in ({"phenomenonTime": f"{iso(end / 2 - 120)}/{iso(end / 2 + 480)}", **swe},
+                       {"phenomenonTime": f"{iso(end - 60)}/..", "limit": "500", **swe},  # the end of history
+                       {"limit": "50", "offset": str(int(end) - 10), **swe},
+                       {"resultTime": "latest", **swe},
+                       {"phenomenonTime": f"{iso(end / 2)}/..", "limit": "3"}):  # application/json, the default
             a = py.get(f"/datastreams/{ds_py['id']}/observations", params=params)
             b = js.get(f"datastreams/{ds_js['id']}/observations", params=params)
             assert a.status_code == b.status_code == 200, (a.text, b.text)
-            assert a.json() == b.json(), (sensor, params)
-            assert a.headers["x-total-count"] == b.headers["x-total-count"]
-            assert a.headers.get("link", "").split("?")[-1] == b.headers.get("link", "").split("?")[-1]
+            ja, jb = a.json(), b.json()
+            if isinstance(ja, dict):  # links carry each server's own base
+                ja, jb = ja["items"], jb["items"]
+            assert ja == jb, (sensor, params)
 
 
-def test_waiting_mode_and_instance_identifiers(standin):
-    """FR-47, FR-49: restart gives 503 with Retry-After and a new instance; down gives no answer."""
-    c = httpx.Client(base_url=standin.base, timeout=30)
-    before = c.get("").headers["x-server-instance"]
+def _answers(c) -> httpx.Response:
+    for _ in range(200):
+        try:
+            return c.get("")
+        except httpx.TransportError:
+            time.sleep(0.05)
+    raise AssertionError("the stand-in never answered again")
+
+
+def test_starting_and_down_answer_nothing_and_no_instance_identifier(standin):
+    """§9.1 (4.7): no 503 and no instance identifier; while starting and while down, no answer at all."""
+    c = httpx.Client(base_url=standin.base, timeout=30, headers=OWNER)
+    r = c.get("")
+    assert r.status_code == 200 and "x-server-instance" not in r.headers and "etag" not in r.headers
     state = standin.control("restart-server")
     assert state["backend"] == "standin" and state["server"] == "waiting"
-    r = c.get("systems")
-    assert r.status_code == 503 and int(r.headers["retry-after"]) > 0, r.text
-    assert r.json()["code"] == "ServiceUnavailable"
-    for _ in range(200):
-        r = c.get("")
-        if r.status_code == 200:
-            break
-        time.sleep(0.05)
-    assert r.status_code == 200
-    after = r.headers["x-server-instance"]
-    assert after != before and r.headers["etag"].strip('"') == after
+    r = _answers(c)
+    assert r.status_code == 200 and "x-server-instance" not in r.headers
     standin.control("down")
     with pytest.raises(httpx.TransportError):
         c.get("")
     standin.control("up")
-    for _ in range(200):
-        r = c.get("")
-        if r.status_code == 200:
-            break
-        time.sleep(0.05)
-    assert r.status_code == 200 and r.headers["x-server-instance"] not in (before, after)
+    assert _answers(c).status_code == 200
+
+
+def test_a_role_change_takes_effect_on_the_next_request(standin):
+    """FR-116, D-151, through the admin stub's control action (set-role)."""
+    friend = httpx.Client(base_url=standin.base, timeout=30, headers={"Authorization": basic("friend", "demo-friend")})
+    sy = {s["uniqueId"]: s["id"] for s in friend.get("systems", params={"searchMembers": "true", "f": "application/sml+json"}).json()["items"]}
+    co2 = sy["urn:x-barge:sensor:stern:co2"]
+    assert friend.get(f"systems/{co2}").status_code == 403
+    standin.control("set-role", {"user": "friend", "role": "viewer-emissions"})
+    try:
+        assert friend.get(f"systems/{co2}").status_code == 200
+    finally:
+        standin.control("set-role", {"user": "friend", "role": "viewer"})
+    assert friend.get(f"systems/{co2}").status_code == 403

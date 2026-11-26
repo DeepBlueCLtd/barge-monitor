@@ -3,18 +3,21 @@
 // one contract suite can run against it as it runs against the Python back
 // end under uvicorn (PR-04, AT-24). It bundles web/src/standin with esbuild
 // (in memory), loads the pre-calculated history from a local directory, and
-// serves the stand-in's HTTP interface at the root of the given port.
+// serves the stand-in's HTTP interface at the root of the given port; the
+// server's internal endpoint (§9.2, D-223) is /api-internal beside it.
 //
-// Usage: node web/scripts/standin-server.mjs [--port N] [--seed N] [--history DIR] [--play]
+// Usage: node web/scripts/standin-server.mjs [--port N] [--seed N] [--history DIR] [--play] [--hold S]
 //   DIR holds seed-<n>/manifest.json and the gzipped logger files, as
 //   scripts/build_history.py writes them; by default
 //   .cache/history/<code hash>/days-<d>/ from web/public/py/history.json.
+//   --hold S: how long a command's POST is held, in seconds (§9.1; 5 by default).
 //
 // When ready it prints one line, `READY <port> <startup ms>`. Control actions
-// (docs/v4-interfaces.md §8) are read from stdin, one JSON object a line:
+// (docs/v4-interfaces.md §13.3) are read from stdin, one JSON object a line:
 // {"action": "restart-server"}; each is answered on stdout with `STATE <json>`.
-// While the server is down a request gets no answer: the socket is closed,
-// a network failure (FR-49).
+// While the server is starting or down a request gets no answer: the socket is
+// closed, a network failure (§9.1). A push subscription (§9.2) is a chunked
+// response that stays open.
 import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { dirname, join, resolve } from 'node:path';
@@ -33,6 +36,7 @@ function arg(name, dflt) {
 
 const port = Number(arg('port', '8765'));
 const seed = Number(arg('seed', '1'));
+const hold = arg('hold', null);
 let historyDir = arg('history', null);
 if (!historyDir) {
   const h = JSON.parse(readFileSync(join(root, 'web', 'public', 'py', 'history.json'), 'utf8'));
@@ -51,7 +55,7 @@ const tBundle = performance.now();
 const manifest = JSON.parse(readFileSync(join(seedDir, 'manifest.json'), 'utf8'));
 const history = await mod.loadHistory(manifest, async (name) => new Uint8Array(gunzipSync(readFileSync(join(seedDir, `${name}.gz`)))));
 const tLoad = performance.now();
-const rt = mod.createStandin(seed, history, () => performance.now() / 1000);
+const rt = await mod.createStandin(seed, history, () => performance.now() / 1000, undefined, hold === null ? undefined : Number(hold));
 const tReady = performance.now();
 if (process.argv.includes('--play')) rt.control('play');
 
@@ -64,27 +68,36 @@ setInterval(() => {
   }
 }, 100);
 
+async function answer(req, res, body) {
+  const u = new URL(req.url, `http://${req.headers.host ?? `127.0.0.1:${port}`}`);
+  let r;
+  try {
+    r = await rt.handle({ method: req.method, path: u.pathname, query: u.search.slice(1), body,
+      headers: Object.entries(req.headers).map(([k, v]) => [k, Array.isArray(v) ? v.join(', ') : String(v)]),
+      rootPath: '', origin: u.origin });
+  } catch (e) {
+    r = { status: 500, headers: [['content-type', 'text/html']], body: new TextEncoder().encode(`<!doctype html><title>500</title><p>${String(e)}</p>`) };
+  }
+  if (r === null) {
+    req.socket.destroy(); // no answer at all: the server is starting or down
+    return;
+  }
+  if (r.stream) { // a push subscription: chunked, open until the server stops or the client goes
+    const stream = r.stream;
+    res.writeHead(r.status, r.headers.flat());
+    res.flushHeaders();
+    res.on('close', () => stream.cancel());
+    stream.attach({ chunk: (b) => res.write(Buffer.from(b)), end: () => res.end() });
+    return;
+  }
+  res.writeHead(r.status, r.headers.flat());
+  res.end(Buffer.from(r.body));
+}
+
 const server = createServer((req, res) => {
   const chunks = [];
   req.on('data', (c) => chunks.push(c));
-  req.on('end', () => {
-    const u = new URL(req.url, `http://${req.headers.host ?? `127.0.0.1:${port}`}`);
-    const body = chunks.length ? new Uint8Array(Buffer.concat(chunks)) : null;
-    let r;
-    try {
-      r = rt.handle({ method: req.method, path: u.pathname, query: u.search.slice(1), body,
-        headers: Object.entries(req.headers).map(([k, v]) => [k, Array.isArray(v) ? v.join(', ') : String(v)]),
-        rootPath: '', origin: u.origin });
-    } catch (e) {
-      r = { status: 500, headers: [['content-type', 'application/json']], body: new TextEncoder().encode(JSON.stringify({ code: 'InternalError', description: String(e) })) };
-    }
-    if (r === null) {
-      req.socket.destroy(); // no answer at all: the server is down
-      return;
-    }
-    res.writeHead(r.status, r.headers.flat());
-    res.end(Buffer.from(r.body));
-  });
+  req.on('end', () => void answer(req, res, chunks.length ? new Uint8Array(Buffer.concat(chunks)) : null));
 });
 
 server.listen(port, '127.0.0.1', () => {

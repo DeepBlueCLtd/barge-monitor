@@ -1,15 +1,18 @@
-// The data server (C-04; server.py): one running instance of the Connected
-// Systems server. An instance is created at each server start: it freezes the
-// field offering (FR-51), drops the store adapter's index so the adapter
-// rebuilds it while the server waits (FR-47), and carries a fresh instance
-// identifier. The store and the registry outlive it. It holds no client
-// sessions (FR-06).
-import profileJson from '../../../contracts/profile.json';
+// The data server (C-04; server.py): one start of the stand-in for OpenSensorHub. An
+// instance is created at each server start: it freezes the field offering (FR-51) and
+// drops the store adapter's index so the adapter rebuilds it; while it does, the server
+// answers nothing (4.7, §9.1: no 503 and no instance identifier). The store of created
+// resources (resources.ts) outlives it, as OpenSensorHub's database does.
+//
+// The profile served is the one the 4.1 display client is built against; the 4.7
+// template (contracts/profile.json) is served from plan Phase 7 (D-252).
+import profileJson from '../../../contracts/interim/profile-v4.1.json';
+import { USERS } from './accounts';
 import { StoreAdapter } from './adapter';
 import { SENSORS, SOSA, URN } from './constants';
-import { Offering, RAW, schemaId } from './fields';
-import { pyRepr, pySlice } from './py';
-import { Cols, ControlstreamRec, Registry, Series, SystemRec } from './registry';
+import { Offering, RAW } from './fields';
+import { pySlice } from './py';
+import { Cols, DatastreamRec, Store } from './resources';
 import { LoggerStore } from './store';
 import { component, DataRecord, qcField, record, timeField } from './swe';
 import type { Tap } from './tap';
@@ -27,7 +30,7 @@ export const QC_SPIKE: Record<string, number> = {
 
 export interface Profile {
   id: string;
-  essentials: { id: string; system: string; datastream: string; field: string; type: string; uom?: string }[];
+  essentials: { id: string; system: string; datastream: string; field: string; type: string; uom?: string | null }[];
   [k: string]: unknown;
 }
 export const PROFILE = profileJson as unknown as Profile;
@@ -49,22 +52,10 @@ export function qcFlags(name: string, v: Float64Array, wdVariable: Float64Array 
   return flag;
 }
 
-export interface DsView {
-  id: string;
-  key: string;
-  name: string;
-  outputName: string;
-  system: string;
-  kind: 'sensor' | 'model';
-  sensor?: string;
-  schema: DataRecord;
-  series?: Series;
-}
-
 export interface ServerHost {
   seed: number;
   logger: LoggerStore;
-  registry: Registry;
+  store: Store;
   lieAboutProfile: boolean;
   now(): number;
 }
@@ -75,20 +66,18 @@ function capitalize(s: string) {
 
 export class Server {
   readonly offering: Offering;
-  readonly instance: string;
   readonly adapter: StoreAdapter;
   ready = false;
-  readonly registry: Registry;
+  readonly store: Store;
   readonly lieAboutProfile: boolean;
   readonly profile = PROFILE;
   readonly sensorSchema: Record<string, DataRecord> = {};
-  readonly systems: Record<string, SystemRec>;
 
-  constructor(readonly rt: ServerHost, number: number, offering: Offering, readonly tap: Tap) {
+  /** `number` counts server starts, for the shell only: the server serves no instance identifier (§9.1). */
+  constructor(readonly rt: ServerHost, readonly number: number, offering: Offering, readonly tap: Tap) {
     this.offering = offering.copy();
-    this.instance = `${rt.seed}-${number}`;
     this.adapter = new StoreAdapter(rt.logger, tap);
-    this.registry = rt.registry;
+    this.store = rt.store;
     this.lieAboutProfile = rt.lieAboutProfile;
     const fields = [timeField()];
     for (const f of this.offering.raw()) {
@@ -96,17 +85,34 @@ export class Server {
       if (f.swe_type === 'Quantity') fields.push(qcField(f));
     }
     for (const s of SENSORS) this.sensorSchema[s] = record(fields, `${capitalize(s)} sensor record`);
-    this.systems = {
-      barge: sys('barge', 'Platform', 'Collection platform', 'PhysicalSystem', 'The uncrewed electric cargo barge. It records no position.'),
-      bow: sys('bow', 'Sensor', 'Bow sensor', 'PhysicalSystem', 'Seven parameters at 1 Hz.', 'barge'),
-      stern: sys('stern', 'Sensor', 'Stern sensor', 'PhysicalSystem', 'Seven parameters at 1 Hz.', 'barge'),
-      models: sys('models', 'System', 'Models', 'AggregateProcess',
-        'A home for models that turn sensor data into insight. Each model is a process system of its own, created by the model itself.',
-        undefined, 'Process'),
-    };
+    this.configure();
   }
 
-  // --- start-up: waiting mode while the index is rebuilt (FR-47) -----------------------
+  /**
+   * What OpenSensorHub's configuration creates at start (server._configure; interfaces §6): the platform,
+   * its sensors and their CO₂ analysers (restricted), Models, and a workspace per user. Each sensor's
+   * `weather` datastream is read from the logger store until the CSV importer (plan Phase 5); its schema
+   * is this start's offering, so a new offering is a new datastream (FR-51).
+   */
+  private configure(): void {
+    const st = this.store;
+    const [barge] = st.addSystem(URN + 'platform:barge', 'Collection platform', 'The uncrewed electric cargo barge. It records no position.',
+      SOSA + 'Platform', 'Platform');
+    for (const s of SENSORS) {
+      const [sensor] = st.addSystem(`${URN}sensor:${s}`, `${capitalize(s)} sensor`, 'Seven parameters at 1 Hz.', SOSA + 'Sensor', 'Equipment', barge.id);
+      st.addSystem(`${URN}sensor:${s}:co2`, `${capitalize(s)} CO₂ analyser`, 'Carbon dioxide at the sensor, in parts per million. Restricted (FR-93).',
+        SOSA + 'Sensor', 'Equipment', sensor.id);
+      st.addDatastream(sensor.id, 'weather', `${capitalize(s)} sensor record`, this.sensorSchema[s], null, 'sensor', s);
+    }
+    st.addSystem(URN + 'process:models', 'Models',
+      'A home for models that turn sensor data into insight. Each model is a process system of its own, created by the model itself.',
+      SOSA + 'System', 'Process');
+    for (const u of USERS) {
+      st.addSystem(`${URN}workspace:${u}`, `Workspace of ${u}`, 'Data of interest saved by this user (FR-94).', SOSA + 'System', 'Other', null, u);
+    }
+  }
+
+  // --- start-up: the index is rebuilt; meanwhile the server answers nothing (§9.1) -----------------------
   indexStep(): boolean {
     const done = this.adapter.indexStep();
     if (done) this.ready = true;
@@ -117,58 +123,28 @@ export class Server {
     return { indexed: this.adapter.indexedRecords(), stored: this.adapter.storeRecords() };
   }
 
-  allSystems(): Map<string, SystemRec> {
-    return new Map([...Object.entries(this.systems), ...this.registry.systems]);
-  }
-
   // --- datastreams: the offering applied to every schema (FR-50..52) ---------------------
-  private visible(rec: DataRecord): DataRecord {
+  visible(rec: DataRecord): DataRecord {
     return { ...rec, fields: rec.fields.filter((f) => f.name === 'time' || this.offering.keep(f.name)) };
   }
 
-  /** Public id -> datastream, for this instance's offering. */
-  datastreams(hidden = false): Map<string, DsView> {
-    const out = new Map<string, DsView>();
-    for (const s of SENSORS) {
-      const rec = this.visible(this.sensorSchema[s]);
-      const id = schemaId(`${s}-weather`, rec.fields.map((f) => f.name));
-      out.set(id, { id, key: `${s}:weather`, name: `${capitalize(s)} sensor record`, outputName: 'weather', system: s, kind: 'sensor', sensor: s, schema: rec });
-    }
-    for (const [key, d] of this.registry.datastreams) {
-      if (!this.registry.systems.has(d.system)) continue;
-      const rec = this.visible(d.schema);
-      if (rec.fields.length < 2 && !hidden) continue; // every output switched off: nothing to publish (FR-52)
-      const id = schemaId(`${d.system}-${d.outputName}`, rec.fields.map((f) => f.name));
-      out.set(id, { id, key, name: d.name, outputName: d.outputName, system: d.system, kind: 'model', schema: rec, series: d.series });
-    }
-    return out;
+  /** Listed and served: not replaced, and with at least one output published (FR-52). */
+  served(d: DatastreamRec): boolean {
+    return !d.replaced && this.visible(d.schema).fields.length > 1;
   }
 
-  controlstreams(): Map<string, ControlstreamRec & { id: string }> {
-    const out = new Map<string, ControlstreamRec & { id: string }>();
-    for (const c of this.registry.controlstreams.values()) {
-      if (!this.registry.systems.has(c.system)) continue;
-      const id = schemaId(`${c.system}-${c.inputName}`, c.schema.fields.map((f) => f.name));
-      out.set(id, { ...c, id });
-    }
-    return out;
-  }
-
-  timeRange(d: DsView): [number, number] | null {
+  timeRange(d: DatastreamRec): [number, number] | null {
     if (d.kind === 'sensor') return this.adapter.timeRange(d.sensor!);
-    const s = d.series!;
-    return s.length ? [s.tAt(0), s.tAt(s.length - 1)] : null;
+    return d.series!.span();
   }
 
   // --- profile (FR-40, FR-41) ----------------------------------------------------------------
   satisfiesProfile(): { id: string; reason: string }[] {
     const problems: { id: string; reason: string }[] = [];
-    const systems = [...this.allSystems().values()];
-    const dss = [...this.datastreams().values()];
     for (const e of this.profile.essentials) {
-      const sysm = systems.find((s) => s.uniqueId === e.system);
-      const ds = sysm && dss.find((d) => d.system === sysm.id && d.outputName === e.datastream);
-      const fld = ds && ds.schema.fields.find((f) => f.name === e.field);
+      const ds = this.store.datastream(e.system, e.datastream);
+      const rec = ds && this.served(ds) ? this.visible(ds.schema) : null;
+      const fld = rec?.fields.find((f) => f.name === e.field);
       if (!fld) problems.push({ id: e.id, reason: 'missing' });
       else if (fld.type !== e.type) problems.push({ id: e.id, reason: 'wrong type' });
       else if ((fld.uom?.code ?? null) !== (e.uom ?? null)) problems.push({ id: e.id, reason: 'wrong unit' });
@@ -210,51 +186,4 @@ export class Server {
     this.tap.emit('adapter', 'server', 'I', `${rows} ${sensor} records as columns`, { columns: Object.keys(out), records: rows }, { quiet });
     return out;
   }
-
-  // --- commands (FR-27) ---------------------------------------------------------------------
-  /** Check a command against its control stream's schema; throws [name, message]. */
-  validateCommand(cs: ControlstreamRec, params: Record<string, unknown>): void {
-    const fields = new Map(cs.schema.fields.map((f) => [f.name, f]));
-    for (const [k, v] of Object.entries(params)) {
-      const f = fields.get(k);
-      if (!f) throw new CommandError(k, `unknown parameter ${k}; the control stream's schema accepts ${[...fields.keys()].join(', ')}`);
-      const con = f.constraint ?? {};
-      const t = f.type;
-      if (t === 'Boolean') {
-        if (typeof v !== 'boolean') throw new CommandError(k, `${k} must be true or false`);
-      } else if (t === 'Quantity' || t === 'Count') {
-        if (typeof v !== 'number') throw new CommandError(k, `${k} must be a number`);
-        if (t === 'Count' && !Number.isInteger(v)) throw new CommandError(k, `${k} must be a whole number`);
-        if (con.intervals?.length) {
-          const [lo, hi] = con.intervals[0];
-          if (!(lo <= v && v <= hi)) throw new CommandError(k, `${k}=${v} is outside the schema's AllowedValues interval [${lo}, ${hi}]`);
-        }
-      } else if (t === 'Category' || t === 'Text') {
-        if (typeof v !== 'string') throw new CommandError(k, `${k} must be text`);
-        const allowed: string[] | undefined = con.values;
-        const items = t === 'Text' ? v.split(',').map((x) => x.trim()) : [v];
-        if (allowed?.length) {
-          const bad = items.filter((x) => !allowed.includes(x));
-          if (bad.length || !items.length || (items.length === 1 && items[0] === '')) {
-            throw new CommandError(k, `${k}=${pyRepr(v)}: ${bad.join(', ') || 'nothing'} not in the schema's AllowedTokens ${pyRepr(allowed)}`);
-          }
-        }
-      }
-    }
-  }
-}
-
-export class CommandError extends Error {
-  constructor(readonly field: string, message: string) {
-    super(message);
-  }
-}
-
-function sys(sid: string, stype: string, label: string, smlType: string, desc: string, parent?: string, asset?: string): SystemRec {
-  const s: SystemRec = {
-    type: smlType, id: sid, uniqueId: `${URN}${asset ? 'process' : stype.toLowerCase()}:${sid}`, label, description: desc,
-    definition: SOSA + stype, systemType: SOSA + stype, assetType: asset ?? 'Equipment',
-  };
-  if (parent) s.parent = parent;
-  return s;
 }

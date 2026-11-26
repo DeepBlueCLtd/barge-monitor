@@ -6,7 +6,7 @@
 // one cleaned datastream per sensor, with the same schema as the Python model;
 // every other model reads these (AT-15). The method is simpler than the
 // Python model's (median-based noise): its results are illustrative.
-import type { Cols } from '../registry';
+import type { Cols } from '../resources';
 import { M } from '../swe';
 import { Command, measurementFields, Model, ModelApi, PRECIP, QUANTITIES, roundArr } from './csmodel';
 
@@ -84,30 +84,30 @@ export class DataCleanse extends Model {
   raw: Record<string, string | null> = {};
   out: Record<string, string> = {};
 
-  setup(api: ModelApi): void {
-    super.setup(api);
+  async setup(api: ModelApi): Promise<void> {
+    await super.setup(api);
     const fields = [M.time(), ...measurementFields(), M.category('precipitation_type', 'Precipitation', PRECIP)];
     for (const s of SENSORS) {
-      this.raw[s] = api.find(`urn:x-barge:sensor:${s}`, 'weather');
-      this.out[s] = api.createDatastream(this.system, {
+      this.raw[s] = await api.find(`urn:x-barge:sensor:${s}`, 'weather');
+      this.out[s] = await api.createDatastream(this.system, {
         name: `Cleaned ${s} record`, outputName: `cleaned-${s}`, schema: M.record(`Cleaned ${s} record`, fields),
       });
     }
-    this.controlKey = api.createControlstream(this.system, {
+    this.controlKey = await api.createControlstream(this.system, {
       name: 'Data cleanse settings', inputName: 'settings', schema: M.record('Data cleanse settings', [
         M.quantity('spike_threshold', 'Spike threshold, in multiples of the local noise', '1', 1, 10)]),
     });
   }
 
-  onCommand(_api: ModelApi, cmd: Command): string {
+  async onCommand(_api: ModelApi, cmd: Command): Promise<string> {
     Object.assign(this.settings, cmd.parameters);
     return `spike threshold ${this.settings.spike_threshold}`;
   }
 
-  step(api: ModelApi, t0: number, t1: number): number {
+  async step(api: ModelApi, t0: number, t1: number): Promise<number> {
     let done = t1;
     for (const s of SENSORS) {
-      const cols = api.read(this.raw[s]!, t0 - LAG_S, t1);
+      const cols = await api.read(this.raw[s]!, t0 - LAG_S, t1);
       const t = cols.t;
       if (t.length < 3) return t0;
       api.tap('scilibs', `stand-in: clean ${t.length} ${s} readings`,
@@ -122,7 +122,7 @@ export class DataCleanse extends Model {
       const sel: Record<string, unknown> = {};
       for (const [k, v] of Object.entries(out)) sel[k] = (v as Float64Array | unknown[]).slice(a, b);
       api.tap('models', `stand-in: ${b - a} cleaned, ${removed} removed`, { rows: b - a, removed });
-      api.publish(this.out[s], sel);
+      await api.publishMany(this.out[s], sel);
       done = Math.min(done, last);
     }
     return done;
