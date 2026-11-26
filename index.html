@@ -15,19 +15,19 @@
 id="toc-software-requirements-document">Software Requirements
 Document</a>
 <ul>
-<li><a href="#canal-barge-weather-demonstrator-version-42-draft"
-id="toc-canal-barge-weather-demonstrator-version-42-draft">Canal barge
-weather demonstrator, Version 4.2 (draft)</a></li>
+<li><a href="#canal-barge-weather-demonstrator-version-46-draft"
+id="toc-canal-barge-weather-demonstrator-version-46-draft">Canal barge
+weather demonstrator, Version 4.6 (draft)</a></li>
 <li><a href="#1-purpose" id="toc-1-purpose">1. Purpose</a></li>
 <li><a href="#2-runtime-architecture" id="toc-2-runtime-architecture">2.
 Runtime architecture</a></li>
-<li><a href="#3-components-and-zones" id="toc-3-components-and-zones">3.
-Components and zones</a></li>
-<li><a href="#4-world-simulated-platform-time-and-randomness"
-id="toc-4-world-simulated-platform-time-and-randomness">4. World:
-simulated platform, time and randomness</a></li>
-<li><a href="#5-message-letters" id="toc-5-message-letters">5. Message
-letters</a></li>
+<li><a href="#3-components-and-zones-44"
+id="toc-3-components-and-zones-44">3. Components and zones
+(4.4)</a></li>
+<li><a href="#4-the-recordings" id="toc-4-the-recordings">4. The
+recordings</a></li>
+<li><a href="#5-message-letters-44" id="toc-5-message-letters-44">5.
+Message letters (4.4)</a></li>
 <li><a href="#6-functional-requirements-the-back-end"
 id="toc-6-functional-requirements-the-back-end">6. Functional
 requirements: the back end</a></li>
@@ -50,174 +50,147 @@ style</a></li>
 <li><a href="#12-delivery" id="toc-12-delivery">12. Delivery</a></li>
 <li><a href="#13-development-process"
 id="toc-13-development-process">13. Development process</a></li>
-<li><a href="#14-acceptance-criteria"
-id="toc-14-acceptance-criteria">14. Acceptance criteria</a></li>
+<li><a href="#14-acceptance-criteria-46"
+id="toc-14-acceptance-criteria-46">14. Acceptance criteria
+(4.6)</a></li>
 <li><a href="#15-open-questions" id="toc-15-open-questions">15. Open
 questions</a></li>
-<li><a href="#16-deliberate-exclusions-from-version-4"
-id="toc-16-deliberate-exclusions-from-version-4">16. Deliberate
-exclusions from Version 4</a></li>
+<li><a href="#16-deliberate-exclusions-from-version-46"
+id="toc-16-deliberate-exclusions-from-version-46">16. Deliberate
+exclusions from Version 4.6</a></li>
 </ul></li>
 </ul>
 </nav>
 <h1 id="software-requirements-document">Software Requirements
 Document</h1>
-<h2 id="canal-barge-weather-demonstrator-version-42-draft">Canal barge
-weather demonstrator, Version 4.2 (draft)</h2>
-<p><strong>Status:</strong> Draft. 4.2 changes the design the
-demonstrator stands for: OpenSensorHub as the data server (ADR 0005).
-The <strong>architecture view shows it</strong> (seven components, the
-data server among the third-party libraries, a stand-in in its place). A
-<strong>spike against a stock OpenSensorHub</strong> (finding of
-2026-11-23) confirmed sensing, discovery and reading, and found that
-<strong>commands, restart recognition and replacing a result need
-redesign</strong>; the requirements below do not yet reflect that, and
-the store adapter as its module is untried <strong>Author:</strong> Doc
+<h2 id="canal-barge-weather-demonstrator-version-46-draft">Canal barge
+weather demonstrator, Version 4.6 (draft)</h2>
+<p><strong>Status:</strong> Draft. Builds on Version 4.5. Version 4.6
+adds an <strong>opening act</strong> for non-engineers. The demonstrator
+opens with the data server shown as the subsystems we would have to
+build. One click adopts OpenSensorHub, and only then does the
+demonstrator come alive (§9.8). <strong>Author:</strong> Doc
 <strong>Working name:</strong> to be chosen (§15). This document says
-<em>the demonstrator</em>. <strong>Supersedes:</strong> SRD Version 3.3
-and Annex A (Visual style). Both are folded in here; nothing in them
-applies unless restated.</p>
-<p><strong>Companion mockups (non-normative):</strong> three static
-frames, one for each detail panel (§9.4), plus one interactive
-frame:</p>
-<table>
-<thead>
-<tr>
-<th>Mockup</th>
-<th>Shows</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>SRD v4 mockup 1</td>
-<td>Display client selected: monitor, graphs, clusters, message
-strip</td>
-</tr>
-<tr>
-<td>SRD v4 mockup 2</td>
-<td>Models selected: the reveal, core models and empty slots</td>
-</tr>
-<tr>
-<td>SRD v4 mockup 3</td>
-<td>Data server selected: Connected Systems diagram and why it fits</td>
-</tr>
-<tr>
-<td>Interactive display, store queries</td>
-<td>All of the above, clickable</td>
-</tr>
-</tbody>
-</table>
-<p>The mockups fixed <strong>layout, components and labels</strong> for
-Version 4.0. They are drawn in a plain style; the visual style is §11.
-They predate Version 4.1 (they show Model A and Model B, a 1-hour
-default period, and no overview or failure demos). Where a mockup and
-this document disagree, this document wins.</p>
-<h3 id="changes-from-version-41">Changes from Version 4.1</h3>
-<p>Shown on the architecture view; to be confirmed by a spike against a
-stock OpenSensorHub (ADR 0005).</p>
+<em>the demonstrator</em>. <strong>Supersedes:</strong> Version 4.5 and,
+through it, every earlier version and Annex A. Earlier change lists are
+in Versions 4.2 to 4.5 (below). Requirements marked
+<strong>(4.6)</strong> are new or changed here; <strong>(4.5)</strong>,
+<strong>(4.4)</strong> and <strong>(4.3)</strong> mark those changed in
+those versions and unchanged since.</p>
+<h3 id="changes-from-version-45">Changes from Version 4.5</h3>
 <ul>
-<li>The <strong>data server is OpenSensorHub, off the shelf</strong>. It
-moves to the <strong>Third-party libraries</strong> zone; the
-demonstrator's own server becomes a stand-in for it (§3, §6.3,
-FR-38a).</li>
-<li><strong>FastAPI is no longer a component.</strong> The display
-client and the models talk to the data server directly (§3.1).
-Components fall from 8 to <strong>7</strong>.</li>
-<li>The <strong>store adapter</strong> becomes a module of the data
-server (FR-20a).</li>
-<li>Requirements that asked for behaviour beyond the standard are
-<strong>relaxed</strong> to what a stock server gives, each with a
-fallback: the profile link (FR-41), the instance identifier and waiting
-mode (FR-47, FR-48), 409 on creating what exists (FR-28), and the plain
-PUT (FR-28a).</li>
-<li>Already built in 4.2: the handshake is paced by its drawing
-(FR-42a), and a message selected while paused travels on at Play
-(VS-14).</li>
+<li><strong>An adoption opening (4.6)</strong>, entered with the
+<code>hand-made</code> flag in the URL's query (FR-119). The data server
+starts out as <strong>eight subsystems</strong> in the back end, drawn
+as equals of the CSV importer, replay controller and Models
+(FR-120).</li>
+<li><strong>Nothing is gold, and nothing runs, before adoption
+(4.6).</strong> The opening comes before the value-add reveal. The top
+bar's controls are hidden and no message is sent (FR-121, FR-122).</li>
+<li><strong>Adopt OpenSensorHub (4.6)</strong> merges the eight into one
+data server in the third-party zone, shows what that saves, and hands
+over to the normal startup (FR-123 to FR-126).</li>
+<li><strong>Savings only (4.6):</strong> the opening shows no costs
+(§16).</li>
+<li><strong>Settled in review (4.6):</strong>
+<ul>
+<li>the opening starts nothing until Adopt (FR-122);</li>
+<li>the opening's flows are mapped to the subsystems, with the lines
+between them (FR-120a);</li>
+<li>pushed commands travel as a stream through the relay (FR-02);</li>
+<li>Mission A is imported silently at every load (FR-15);</li>
+<li>a full handshake follows each import (FR-44);</li>
+<li>the profile is a template (FR-40);</li>
+<li>the latest run is shown on return to a dataset (FR-35);</li>
+<li>charts stay, and D-53 is superseded (FR-80).</li>
+</ul></li>
 </ul>
-<h3 id="changes-from-version-40">Changes from Version 4.0</h3>
+<h3 id="changes-from-version-44">Changes from Version 4.4</h3>
 <ul>
-<li><strong>Models use the Connected Systems HTTP interface</strong>,
-like the display client: each creates its own process system,
-datastreams and control stream, publishes observations, reads its
-commands and reports their status with ordinary requests (§3.1, §6.3,
-§6.4). The internal interface between models and the data server is
-gone.</li>
-<li><strong>Models are named by function</strong>: Data cleanse,
-<strong>Summaries</strong>, <strong>Analysis</strong>; the empty slots
-are <strong>New model 1</strong> and <strong>New model 2</strong>
-(FR-34).</li>
-<li>The detail panel opens on an <strong>overview</strong>: what is
-adopted rather than designed, what is written for this system, and what
-is <strong>not in the demonstrator</strong> (§9.4).</li>
-<li><strong>Failure demos</strong> in the top bar run the control
-panel's scenarios in one click, each with what to watch for (§9.7).</li>
-<li>The Data server panel <strong>no longer claims system
-events</strong> (the server refuses them) and says what is not used
-(FR-72).</li>
-<li><strong>24 hours of history</strong> are pre-loaded, not four weeks;
-the <strong>stand-in is the default back end</strong>; the default
-period is <strong>1 minute</strong> (FR-06b, FR-15, FR-54).</li>
-<li>Text meets the declared minimum sizes at 1920 × 1080; no requirement
-number appears on screen (VS-05).</li>
+<li><strong>CO₂ is measured (4.5)</strong> by both sensors, in ppm, and
+is an <strong>optional, restricted</strong> source (FR-09).</li>
+<li><strong>Restriction is by resource, never by field (4.5).</strong>
+CO₂ lives in its own <strong>CO₂ analyser subsystems</strong> and
+datastreams, never inside the weather record, so the server can permit
+or deny it whole (FR-24, FR-25, FR-21c).</li>
+<li><strong>Anything derived from CO₂ is restricted (4.5)</strong>,
+including the record of an analysis run whose settings name CO₂
+(FR-112).</li>
+<li><strong>Restricted resources are hidden, not merely refused
+(4.5)</strong>: a user without access cannot discover that they exist
+(FR-93).</li>
+<li><strong>Three roles (4.5)</strong>: Owner, Viewer with emissions,
+Viewer (weather only). The owner manages accounts through
+<strong>OpenSensorHub's own administration</strong> for now; a screen of
+ours follows only on a stated trigger (§7.6).</li>
+<li><strong>New claim C6 (4.5)</strong>: access to sensitive data is
+restricted per user, with no restriction-specific code in the display
+client.</li>
+<li><strong>Two demo accounts (4.5)</strong>, the owner and a friend,
+and a new failure demo (§9.7).</li>
 </ul>
-<h3 id="changes-from-version-33">Changes from Version 3.3</h3>
+<p><strong>Companion mockups (non-normative):</strong> SRD v4 mockups 1
+to 3, the interactive frame, and the two OpenSensorHub savings frames.
+The savings frames predate 4.6. In them the eight subsystems sit inside
+a "built by us" box and the importer and Models are gold, and 4.6
+forbids both. Where a mockup and this document disagree, this document
+wins.</p>
+<p><strong>Companion documents to update:</strong>
+<code>docs/v4-interfaces.md</code> and the decision log describe 4.1 and
+4.2. Both need revising to 4.6 before building (§15). The implementation
+plan is <code>docs/plan-v4.6.md</code>.</p>
+<h3 id="changes-from-version-43">Changes from Version 4.3</h3>
 <ul>
-<li>Components cut from 15 to <strong>8</strong>, in five zones:
-<strong>World</strong>, <strong>Legacy</strong>, <strong>New build ·
-back end</strong>, <strong>Third-party libraries</strong>, <strong>New
-build · front end</strong> (§3).</li>
-<li>The scientists' workspace and the analysis service become one
-component, <strong>Models</strong>: core models (Data cleanse,
-Summaries, Analysis) and empty slots, each model in its own worker
-(§6.4).</li>
-<li><strong>Store queries</strong> become visible: a new message letter
-<strong>S</strong>, and the index moves to the store adapter (§6.2,
-§10.2).</li>
-<li>The seam relay is no longer drawn; it is an invisible transport
-(§2.1).</li>
-<li>The layout becomes a <strong>stacked flowchart on the left</strong>
-and a <strong>detail panel on the right</strong> that shows the selected
-component or message (§9).</li>
-<li>The display client becomes an <strong>interactive monitor</strong>:
-field chips, period presets, a clustering choice, three graphs and a
-cluster view (§8).</li>
-<li><strong>Summary datastreams</strong> serve long periods (§6.3).</li>
-<li><strong>Value-add marking</strong>: the display client and Models
-are revealed in gold with a glinting diamond when first clicked (§9.5,
-§11.6).</li>
-<li>The guided tour, docked panels and canal map are removed (§16).</li>
-<li><strong>Two back ends</strong>: the Python back end, and a
-<strong>JavaScript stand-in</strong> for sites where WebAssembly is
-blocked. Both serve the same interface; the stand-in says what it does
-not prove (§2.3).</li>
-<li><strong>History is pre-calculated</strong> at build time and shipped
-in the store's own format, replacing generation at startup (FR-15).</li>
+<li><strong>CSV files in a data folder (4.4).</strong> The legacy
+archive becomes a <strong>data folder</strong> of CSV files that
+scientists copy in (§6.1). Its format is awkward CSV, not fixed-width
+text.</li>
+<li><strong>Import, not serving in place (4.4).</strong> A <strong>CSV
+importer</strong>, a module of the data server, imports each chosen file
+<strong>in bulk</strong> into the server's own store and keeps it
+(§6.2). The store adapter, its index and the store query at read time
+are withdrawn.</li>
+<li><strong>Datastreams per file (4.4).</strong> Each imported file has
+its own datastreams, and every model's outputs are per file, so files
+never mix, even when their times overlap (§6.3).</li>
+<li><strong>One current dataset (4.4).</strong> The analyst chooses one
+dataset at a time with a <strong>dataset picker</strong>. The replay
+controller holds the current dataset (§6.6, §8.2).</li>
+<li><strong>Data of interest (4.4).</strong> An analyst can save a named
+record of a set of data and use it to regenerate any view, or to compare
+two records on elapsed time (§6.7, §8.5).</li>
+<li><strong>Authentication and screen lock (4.4).</strong> Every request
+needs credentials; the display client shows a login screen and locks
+after inactivity; nothing sensitive is kept in the browser (§7.5).</li>
+<li><strong>Reset instance (4.4).</strong> Clears the server's whole
+store at once; nothing is ever deleted record by record (FR-50a).</li>
 </ul>
 <hr />
 <h2 id="1-purpose">1. Purpose</h2>
 <p>The demonstrator is a <strong>system and architecture
-demonstrator</strong> set aboard an <strong>uncrewed electric cargo
-barge</strong> (the <strong>collection platform</strong>) shuttling
-between two wharves on a fictional canal, around the clock, for weeks at
-a time. It carries a weather sensor at the <strong>bow</strong> and
-another at the <strong>stern</strong>, about twenty metres apart,
-logging to an old data logger. It records <strong>no position</strong>.
-The demonstrator runs whole in one browser session.</p>
+demonstrator</strong> for an environment in which analysts
+<strong>import, replay and investigate recorded data</strong> from a
+collection platform: an uncrewed electric cargo barge that shuttled
+between two wharves on a fictional canal, with a weather sensor at the
+<strong>bow</strong> and another at the <strong>stern</strong>. Its
+recordings arrive as <strong>CSV files</strong>, a few days at a time.
+Nothing is live, and nothing records position. The demonstrator runs
+whole in one browser session.</p>
 <p>Its intention is to show that <strong>the author's understanding of
 the software architecture is complete</strong>, and therefore that
 <strong>the software need not be a risk to the project and does not need
-a large contingency</strong>. It does this by putting the architecture
-itself on screen: every component, every interaction, every real
-message, each labelled with the standard it meets, and by marking
-clearly <strong>where the company adds value</strong> and where it
-relies on standards and off-the-shelf parts.</p>
+a large contingency</strong>. It puts the architecture on screen: every
+component, every interaction, every real message, each labelled with the
+standard it meets, and it marks clearly <strong>where the company adds
+value</strong> and where it relies on standards and off-the-shelf
+parts.</p>
 <p>Its audience is <strong>stakeholders deciding whether to adopt this
-architecture</strong>. It makes three claims:</p>
+architecture</strong>. It makes six claims:</p>
 <ol type="1">
-<li><strong>C1. A standards facade over an awkward legacy store
-works.</strong> An OGC API – Connected Systems server can sit in front
-of a store it does not control, while that store grows, and serve a
-modern display and models without changing the store.</li>
+<li><strong>C1. A standards facade over awkward legacy files works
+(4.4).</strong> Legacy CSV files are imported into an off-the-shelf OGC
+API – Connected Systems server, each file kept separate and traceable,
+and the files themselves never altered.</li>
 <li><strong>C2. A client can configure itself from the server.</strong>
 The display client discovers what is on offer through standard
 discovery, degrades clearly when an essential source is missing, and
@@ -226,32 +199,41 @@ shows sources it has never seen without new code.</li>
 company's own work (the display client and the models) sits on standards
 and third-party parts, and a new model can be added without touching
 anything else.</li>
+<li><strong>C4. Recorded data can be replayed at any rate with standard
+commands.</strong> Choosing a dataset, play, pause, rate and seek are
+Connected Systems commands, and models and the display client behave the
+same at any rate.</li>
+<li><strong>C5. The data is protected at the screen (4.4).</strong>
+Nothing is served or shown without logging in, an unattended screen
+locks, and the browser keeps nothing sensitive.</li>
+<li><strong>C6. Sensitive data is restricted per user (4.5).</strong>
+CO₂ and everything derived from it are visible only to users the owner
+permits; to anyone else they do not appear to exist. The display client
+has no restriction-specific code: it shows what discovery finds.</li>
 </ol>
 <p>The claims are supported by acceptance tests (§14), never asserted by
 the display.</p>
+<p>The recordings arrive as CSV files and now include
+<strong>CO₂</strong> from both sensors (4.5).</p>
 <ul>
 <li><strong>NFR-01 (One browser session.)</strong> Every component runs
-in the browser. No step of building, testing or demonstrating requires a
-server, a container or a daemon.</li>
-<li><strong>NFR-02 (Two languages, by design.)</strong> The front end is
-TypeScript; the back end and all models are Python running in Pyodide.
-(The stand-in of §2.3 is TypeScript: it is scaffolding, and the default
-only because it starts in seconds.)</li>
+in the browser.</li>
+<li><strong>NFR-02 (Two languages, by design.)</strong> TypeScript front
+end; Python back end and models in Pyodide. The stand-in of §2.3 is
+TypeScript scaffolding.</li>
 <li><strong>NFR-03 (The back end is deployable.)</strong> The Python
-back end is a standard ASGI application that runs unchanged under an
-ordinary ASGI server (AT-02).</li>
+back end runs unchanged under an ordinary ASGI server (AT-02).</li>
 </ul>
 <h3 id="11-what-this-is-not">1.1 What this is not</h3>
 <ul>
 <li><strong>FR-01</strong> The demonstrator models no real canal, boat,
-person or place. The canal, its towns, locks and tunnel are fictional.
-The weather is synthetic. The landing page says so plainly.</li>
+person or place. The recordings are synthetic. The landing page says so
+plainly.</li>
 <li>It is not a mock of any real application's user interface. The
 display client's screen is deliberately small and generic (§8).</li>
 </ul>
 <hr />
 <h2 id="2-runtime-architecture">2. Runtime architecture</h2>
-<p>The browser holds four kinds of runtime:</p>
 <table>
 <thead>
 <tr>
@@ -267,8 +249,8 @@ React)</td>
 </tr>
 <tr>
 <td>Back-end worker</td>
-<td>World, logger store, store adapter, the data server's stand-in
-(Python, Pyodide)</td>
+<td>Data folder, CSV importer, replay controller, the data server's
+stand-in (Python, Pyodide)</td>
 </tr>
 <tr>
 <td>One worker per model</td>
@@ -283,103 +265,71 @@ React)</td>
 <h3 id="21-the-seam">2.1 The seam</h3>
 <ul>
 <li><strong>FR-02</strong> All traffic between the display client, the
-data server and the models crosses as <strong>HTTP</strong> and nowhere
-else. Requests use relative URLs, are intercepted by a <strong>Service
-Worker relay</strong>, and are passed to the worker that serves them. A
-model in its own worker makes its requests with <code>fetch</code>,
-exactly as the display client does.</li>
+data server, the replay controller and the models crosses as
+<strong>HTTP</strong>, or as a <strong>pushed stream</strong> for
+commands, and nowhere else, through a <strong>Service Worker
+relay</strong>. <strong>Every request and every push subscription
+carries credentials (4.4)</strong> (§7.5).</li>
+<li><strong>FR-02a (4.6)</strong> A Service Worker cannot carry a
+WebSocket. So in the demonstrator, a push subscription is <strong>one
+long streaming response</strong> through the relay, with one command per
+line. It is wrapped in a class with WebSocket's interface, and drawn as
+"push". In a developed system it is OpenSensorHub's WebSocket. Freeze
+holds the stream like any other response.</li>
 <li><strong>FR-03</strong> The relay is an <strong>invisible
-transport</strong>. It contains no application logic, is not a
-component, and is not drawn on the flowchart. Messages that pass through
-it are drawn as travelling directly between their real endpoints (for
-example, display client to data server).</li>
+transport</strong>, not a component, and not drawn.</li>
 <li><strong>FR-04</strong> No client code or configuration carries an
-absolute URL. Pointing the display client at a real server is a change
-of base URL alone.</li>
+absolute URL.</li>
 <li><strong>FR-05</strong> Every shape crossing the seam is governed by
-a committed master under <code>contracts/</code>: OpenAPI for the HTTP
-interface, SWE Common 3.0 schemas for observation records, the declared
-profile (§7.1), and JSON Schema for anything else. Seam traffic is
-validated against the masters in tests.</li>
+a committed master under <code>contracts/</code>: an OpenAPI document of
+what this system needs of a Connected Systems server, SWE Common 3.0
+schemas, the declared profile, the data-of-interest record (§6.7), and
+JSON Schema for anything else.</li>
 <li><strong>FR-06</strong> The data server is <strong>stateless with
-respect to clients</strong>. It holds no sessions, does not know which
-clients or models exist, and keeps no account of who has read what.</li>
+respect to clients</strong> beyond authentication.</li>
 </ul>
 <h3 id="22-honest-ports">2.2 Honest ports</h3>
-<p>Genuine ports, each with more than one implementation planned: the
-<strong>seam transport</strong>, the <strong>clock</strong>, the
-<strong>RNG</strong> and the <strong>store adapter</strong>. Nothing
-else is presented as pluggable. (The stand-in back end of §2.3 swaps in
-behind the seam, but is demonstrator scaffolding, not an architectural
-port.)</p>
+<p>The <strong>seam transport</strong>, the <strong>replay
+clock</strong>, the <strong>RNG</strong> and the <strong>CSV
+importer</strong> (4.4). Nothing else is presented as pluggable.</p>
 <h3 id="23-two-back-ends">2.3 Two back ends</h3>
-<p>Some sites block WebAssembly, so Pyodide cannot run there. Those
-audiences still need to see the architecture work.</p>
-<p>The stand-in is <strong>demonstrator scaffolding only</strong>, like
-the simulated world. It is not part of the architecture being
-demonstrated, has no counterpart in a developed system, and says nothing
-about a developed system's effort or contingency.</p>
+<p>The stand-in is <strong>demonstrator scaffolding only</strong>: it
+has no counterpart in a developed system and says nothing about its
+effort or contingency.</p>
 <ul>
-<li><p><strong>FR-06a</strong> The demonstrator has two back ends behind
-the same seam:</p>
-<ul>
-<li>the <strong>Python back end</strong> (Pyodide): the real
-implementation, described throughout this document;</li>
-<li>the <strong>JavaScript stand-in</strong>: a TypeScript
-implementation of the same back-end components (store adapter, the data
-server's stand-in, the core models) running in a Web Worker.</li>
-</ul></li>
-<li><p><strong>FR-06b</strong> The <strong>stand-in is the
-default</strong>, because it starts in a few seconds. The URL parameter
-<code>?backend=python</code> runs the Python back end, and
-<code>?backend=standin</code> names the stand-in explicitly, so either
-can be rehearsed on any machine. Without WebAssembly only the stand-in
-can run.</p></li>
-<li><p><strong>FR-06j</strong> In <strong>both</strong> back ends the
-data server is a <strong>stand-in for OpenSensorHub</strong>, which
-cannot run in a browser (FR-38a). Its card says so. What the
-demonstrator shows of the data server is its interface, not an
-implementation a developed system would keep.</p></li>
-<li><p><strong>FR-06c</strong> The stand-in serves <strong>exactly the
-same interface</strong>: the same Connected Systems subset, the same
-discovery documents, profile, schemas, encodings, refusals, waiting mode
-and instance identifiers, validated against the <strong>same committed
-masters</strong> (FR-05). The display client cannot tell which back end
-it is talking to, and has no code that depends on it.</p></li>
-<li><p><strong>FR-06d</strong> The stand-in reads the <strong>same
-pre-calculated history</strong> (FR-15) through its own store adapter,
-in the store's own format, and its world continues the run from the end
-of history on the same simulation clock.</p></li>
-<li><p><strong>FR-06e</strong> The stand-in's core models produce the
-same kinds of output (cleaned values, derived values, change flags,
-correlation, clusters, summaries) by simpler methods. Their results are
-<strong>marked as illustrative</strong>, and their scores are labelled
-"stand-in" rather than presented as the real models'
-performance.</p></li>
-<li><p><strong>FR-06f</strong> In stand-in mode the <strong>empty-slot
-model editor is unavailable</strong> (it needs Python). The Models panel
-says so, shows the steps for adding a model, and offers a link that
-reloads with the Python back end where WebAssembly is
-available.</p></li>
-<li><p><strong>FR-06g</strong> Message capture, the flowchart, every
-letter, the detail panel, restarts, waiting mode, the control panel and
-degraded mode <strong>all work identically</strong> in stand-in mode.
-The architecture view is the point, and it is complete in both
-modes.</p></li>
-<li><p><strong>FR-06h</strong> Stand-in mode is <strong>visible, never
-hidden</strong>:</p>
-<ul>
-<li>the status box shows <strong>Back end: JavaScript stand-in</strong>
-(or <strong>Python</strong>);</li>
-<li>the back-end components on the flowchart carry a small
-<strong>"stand-in"</strong> tag;</li>
-<li>a one-line notice under the title says what the stand-in does and
-does not show: <em>"Running the JavaScript stand-in: the architecture,
-interface and messages are the real design; the models' results are
-illustrative."</em></li>
-</ul></li>
-<li><p><strong>FR-06i</strong> The claims hold differently in each mode,
-and the documentation says so:</p>
+<li><p><strong>FR-06a</strong> Two back ends behind the same seam: the
+<strong>Python back end</strong> and the <strong>JavaScript
+stand-in</strong>, each with its own importer, replay controller,
+data-server stand-in and core models.</p></li>
+<li><p><strong>FR-06b</strong> The stand-in is the default;
+<code>?backend=python</code> and <code>?backend=standin</code>
+choose.</p></li>
+<li><p><strong>FR-06j</strong> In both back ends the data server is a
+<strong>stand-in for OpenSensorHub</strong>, and its card says
+so.</p></li>
+<li><p><strong>FR-06c (4.4)</strong> Both stand-ins <strong>behave as a
+stock OpenSensorHub does</strong> wherever the system relies on it (as
+recorded by the spike, and for authentication as confirmed by the next
+spike, §15): opaque identifiers; <code>201</code> with the existing
+<code>Location</code> on creating what exists; missing values as
+<code>"NaN"</code>; commands pushed to a subscribed receiver; no
+instance identifier; connections refused while starting;
+<strong><code>401</code> without valid credentials</strong>;
+<strong>restricted resources hidden from discovery and refused to users
+without permission (4.5)</strong>.</p></li>
+<li><p><strong>FR-06d (4.4)</strong> Both back ends read the
+<strong>same data folder</strong>.</p></li>
+<li><p><strong>FR-06e</strong> The stand-in's models are simpler,
+<strong>marked illustrative</strong> and unscored.</p></li>
+<li><p><strong>FR-06f</strong> In stand-in mode the model editor is
+unavailable, with a link to Python.</p></li>
+<li><p><strong>FR-06g</strong> The architecture view, import, replay,
+data of interest, authentication, restarts, the control panel and
+degraded mode <strong>work identically</strong> in both back
+ends.</p></li>
+<li><p><strong>FR-06h</strong> Stand-in mode is visible: status,
+"stand-in" tags, and a one-line notice.</p></li>
+<li><p><strong>FR-06i</strong> Claims by mode:</p>
 <table>
 <thead>
 <tr>
@@ -390,28 +340,40 @@ and the documentation says so:</p>
 </thead>
 <tbody>
 <tr>
-<td>C1, facade over an awkward store</td>
+<td>C1</td>
 <td>Shown and tested</td>
 <td>Shown; tested only in Python</td>
 </tr>
 <tr>
-<td>C2, self-configuring client</td>
+<td>C2</td>
 <td>Shown and tested</td>
-<td><strong>Shown and tested</strong>: the client is identical</td>
+<td>Shown and tested</td>
 </tr>
 <tr>
-<td>C3, value-add isolated and extensible</td>
+<td>C3</td>
 <td>Shown and tested</td>
 <td>Shown; live model editing only in Python</td>
+</tr>
+<tr>
+<td>C4</td>
+<td>Shown and tested</td>
+<td>Shown and tested</td>
+</tr>
+<tr>
+<td>C5</td>
+<td>Shown and tested</td>
+<td>Shown and tested</td>
+</tr>
+<tr>
+<td>C6</td>
+<td>Shown and tested</td>
+<td>Shown and tested</td>
 </tr>
 </tbody>
 </table></li>
 </ul>
 <hr />
-<h2 id="3-components-and-zones">3. Components and zones</h2>
-<p>Each component is one node on the flowchart and belongs to exactly
-one zone. The list corresponds <strong>one-to-one</strong> with the real
-system's architecture, under neutral names.</p>
+<h2 id="3-components-and-zones-44">3. Components and zones (4.4)</h2>
 <table>
 <thead>
 <tr>
@@ -424,35 +386,37 @@ system's architecture, under neutral names.</p>
 </thead>
 <tbody>
 <tr>
-<td>C-01</td>
-<td>Collection platform</td>
-<td>World</td>
-<td></td>
-<td>The barge and its bow and stern sensors; stands in for the physical
-world</td>
-</tr>
-<tr>
 <td>C-02</td>
-<td>Logger store</td>
+<td>Data folder</td>
 <td>Legacy</td>
 <td></td>
-<td>Deliberately awkward, append-only files (§6.1)</td>
+<td>CSV files that scientists copy in; never altered by the system
+(§6.1)</td>
 </tr>
 <tr>
 <td>C-03</td>
-<td>Store adapter</td>
+<td>CSV importer</td>
 <td>New build · back end</td>
 <td></td>
-<td>A module of the data server: the only reader of the store; holds the
-index; answers store queries</td>
+<td>A module of the data server: the only code that understands the CSV
+files; lists the folder; imports a file in bulk (§6.2)</td>
+</tr>
+<tr>
+<td>C-09</td>
+<td>Replay controller</td>
+<td>New build · back end</td>
+<td></td>
+<td>Holds the current dataset and the replay clock; takes load, play,
+pause, rate and seek as commands (§6.6)</td>
 </tr>
 <tr>
 <td>C-04</td>
 <td>Data server</td>
 <td>Third-party libraries</td>
 <td></td>
-<td><strong>OpenSensorHub</strong>, off the shelf. OGC API – Connected
-Systems: discovery, datastreams, observations, commands</td>
+<td><strong>OpenSensorHub</strong>, off the shelf: authentication,
+discovery, datastreams, observations, control streams, command delivery,
+storage</td>
 </tr>
 <tr>
 <td>C-05</td>
@@ -460,14 +424,7 @@ Systems: discovery, datastreams, observations, commands</td>
 <td>New build · back end</td>
 <td><strong>★</strong></td>
 <td>Core models and empty slots, each an OGC process system in its own
-worker, registered over the data server's HTTP interface</td>
-</tr>
-<tr>
-<td>C-06</td>
-<td><em>(withdrawn in 4.2: FastAPI)</em></td>
-<td></td>
-<td></td>
-<td>Not a component: the data server serves HTTP itself (ADR 0005)</td>
+worker</td>
 </tr>
 <tr>
 <td>C-07</td>
@@ -481,14 +438,17 @@ worker, registered over the data server's HTTP interface</td>
 <td>Display client</td>
 <td>New build · front end</td>
 <td><strong>★</strong></td>
-<td>The real system's screen: handshake, self-configuration, graphs and
-clusters</td>
+<td>The real system's screen: login, dataset picker, replay, views, data
+of interest</td>
 </tr>
 </tbody>
 </table>
-<p>The <strong>demonstrator shell</strong> (flowchart, controls, key,
-status, detail panel) frames everything and is not a component.</p>
-<h3 id="31-flows">3.1 Flows</h3>
+<p>Withdrawn: <strong>C-01 Collection platform</strong> (4.3),
+<strong>C-06 FastAPI</strong> (4.2), and in 4.4 the <strong>legacy
+archive</strong> and <strong>store adapter</strong> of 4.3, replaced by
+the data folder and the CSV importer. The <strong>demonstrator
+shell</strong> frames everything and is not a component.</p>
+<h3 id="31-flows-44">3.1 Flows (4.4)</h3>
 <table>
 <thead>
 <tr>
@@ -499,164 +459,111 @@ status, detail panel) frames everything and is not a component.</p>
 </thead>
 <tbody>
 <tr>
-<td>Collection platform</td>
-<td>Logger store</td>
-<td>L</td>
+<td>CSV importer</td>
+<td>Data folder</td>
+<td>S (list the folder; read a file)</td>
 </tr>
 <tr>
-<td>Store adapter</td>
-<td>Logger store</td>
-<td>S (file read through the index)</td>
+<td>Data folder</td>
+<td>CSV importer</td>
+<td>L (the listing; CSV rows)</td>
 </tr>
 <tr>
-<td>Logger store</td>
-<td>Store adapter</td>
-<td>L</td>
+<td>CSV importer</td>
+<td>Data server</td>
+<td>I (bulk write into the store, inside the server; and the
+catalogue)</td>
 </tr>
 <tr>
 <td>Data server</td>
-<td>Store adapter</td>
-<td>S (store query)</td>
+<td>CSV importer</td>
+<td>K (pushed: import)</td>
 </tr>
 <tr>
-<td>Store adapter</td>
+<td>Display client</td>
 <td>Data server</td>
-<td>I</td>
+<td>Q, K (HTTP)</td>
+</tr>
+<tr>
+<td>Data server</td>
+<td>Display client</td>
+<td>D, P, O, H (HTTP)</td>
+</tr>
+<tr>
+<td>Data server</td>
+<td>Replay controller</td>
+<td>K (pushed: load, play, pause, rate, seek)</td>
+</tr>
+<tr>
+<td>Replay controller</td>
+<td>Data server</td>
+<td>Q, O (register; publish state and log; report command status)</td>
+</tr>
+<tr>
+<td>Data server</td>
+<td>Models</td>
+<td>D, O, H (HTTP); K (pushed)</td>
 </tr>
 <tr>
 <td>Models</td>
 <td>Data server</td>
-<td>Q, O, I (over HTTP: register, read, publish, look for commands; I is
-the referee)</td>
-</tr>
-<tr>
-<td>Data server</td>
-<td>Models</td>
-<td>D, O, H, I (over HTTP)</td>
+<td>Q, O, I (HTTP; I is the referee)</td>
 </tr>
 <tr>
 <td>Models</td>
 <td>Scientific libraries</td>
 <td>I (calls and results)</td>
 </tr>
-<tr>
-<td>Display client</td>
-<td>Data server</td>
-<td>Q, K (over HTTP)</td>
-</tr>
-<tr>
-<td>Data server</td>
-<td>Display client</td>
-<td>D, P, O, H (over HTTP)</td>
-</tr>
 </tbody>
 </table>
-<p>Models reach the data server <strong>as the display client
-does</strong>: with ordinary HTTP requests to the Connected Systems
-interface. There is no other interface between a model and the data
-server.</p>
 <hr />
-<h2 id="4-world-simulated-platform-time-and-randomness">4. World:
-simulated platform, time and randomness</h2>
+<h2 id="4-the-recordings">4. The recordings</h2>
 <ul>
-<li><p><strong>FR-07</strong> The collection platform shuttles
-<strong>continuously, day and night</strong>, between two wharves on a
-canal declared as a <strong>centreline with chainage</strong>. It turns
-at each wharf after a declared dwell, stops at <strong>locks</strong>,
-and slows through <strong>bridges and the tunnel</strong>. Its movement
-is a pure function of the clock, the declared timetable and its seed
-stream. The timetable's period does not divide a day evenly, so the
-platform meets every part of the canal at every hour over a
-week.</p></li>
-<li><p><strong>FR-08</strong> The timetable declares occasional
-<strong>stoppages</strong>.</p></li>
+<li><p><strong>FR-07 (4.4)</strong> The recordings were made by the
+collection platform as it shuttled between two wharves, through
+<strong>reaches</strong> with their own microclimates and weather
+passing through <strong>air masses separated by fronts</strong>, with a
+diurnal cycle, noise and spikes. Each <strong>CSV file</strong> holds
+one recording: a contiguous span of time from both sensors.</p></li>
 <li><p><strong>FR-09</strong> Two sensors, <strong>bow</strong> and
-<strong>stern</strong>, separated by a declared distance, each report
-seven parameters once per simulated second:</p>
-<table>
-<thead>
-<tr>
-<th>Parameter</th>
-<th>Unit</th>
-<th>Essential (§7.1)</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Air temperature</td>
-<td>°C</td>
-<td><strong>Yes</strong></td>
-</tr>
-<tr>
-<td>Apparent wind speed</td>
-<td>m s⁻¹</td>
-<td><strong>Yes</strong></td>
-</tr>
-<tr>
-<td>Relative humidity</td>
-<td>%</td>
-<td>Optional</td>
-</tr>
-<tr>
-<td>Barometric pressure</td>
-<td>hPa</td>
-<td>Optional</td>
-</tr>
-<tr>
-<td>Apparent wind direction</td>
-<td>degrees relative to the bow</td>
-<td>Optional</td>
-</tr>
-<tr>
-<td>Solar irradiance</td>
-<td>W m⁻²</td>
-<td>Optional</td>
-</tr>
-<tr>
-<td>Water temperature</td>
-<td>°C</td>
-<td>Optional</td>
-</tr>
-</tbody>
-</table></li>
-<li><p><strong>FR-10</strong> The platform carries <strong>no position
-measurement</strong>. Its position exists only in the simulated world
-and the manifest; nothing in the store records it and no model may use
-it.</p></li>
-<li><p><strong>FR-11</strong> The canal passes through declared
-<strong>reaches</strong> with their own microclimates (open embankment,
-cutting, woodland, town, aqueduct, tunnel). The weather passes through
-<strong>several air masses separated by fronts</strong>, with a diurnal
-cycle. Readings carry declared noise and occasional spikes.</p></li>
-<li><p><strong>FR-12</strong> Every run writes a
-<strong>manifest</strong> recording the canal, reaches, timetable, air
-masses, fronts, diurnal cycle, noise model, seeds and generator version.
-It is the ground truth that models are scored against.</p></li>
-<li><p><strong>FR-13</strong> Every component, including the display
-client's polling and every model, reads time from the <strong>simulation
-clock</strong>. No host clock is used for any operational
-purpose.</p></li>
+<strong>stern</strong>, each recorded seven parameters once a second
+(air temperature and apparent wind speed <strong>essential</strong>;
+relative humidity, pressure, apparent wind direction, solar irradiance
+and water temperature optional).</p></li>
+<li><p><strong>FR-09a (4.5)</strong> Each sensor package also recorded
+<strong>CO₂</strong> once a second, in <strong>ppm</strong>, with its
+own QC flag. CO₂ is <strong>optional</strong> and
+<strong>restricted</strong> (FR-93, FR-112). In the recordings it rises
+with engine load: higher when the platform is under way, lower at the
+wharves and locks.</p></li>
+<li><p><strong>FR-10</strong> <strong>No position</strong> was recorded,
+and no model may use it.</p></li>
+<li><p><strong>FR-12</strong> A <strong>manifest</strong> per file
+records its ground truth, read only by the referee.</p></li>
 <li><p><strong>FR-14</strong> All randomness comes from named, seeded
-streams recorded in the manifest.</p></li>
-<li><p><strong>FR-15</strong> <strong>24 hours of history</strong> (86
-400 records per sensor) are <strong>pre-calculated at build
-time</strong> by the Python world generator, running the same
-sensor-to-store path under CPython with the run's seeds, and shipped as
-static files <strong>in the store's own awkward format</strong>, with
-the manifest. At startup either back end loads them as the store's
-contents, the models work through them over HTTP, and the live run
-continues from their end. Loading progress is shown honestly; the
-flowchart becomes available when it finishes. (Version 4.0 asked for
-four weeks. With models reading and publishing as JSON over HTTP, a day
-of history costs seconds to work through in a browser, so four weeks is
-not loaded; see §15.)</p></li>
-<li><p><strong>FR-15a</strong> The build fails if regenerating the
-history from the recorded seeds does not reproduce the shipped files
-exactly. The live world (in either back end) continues from the recorded
-end state, so live readings join the history without a seam.</p></li>
+streams.</p></li>
+<li><p><strong>FR-15 (4.4)</strong> The demonstrator ships a
+<strong>data folder</strong> generated at build time:</p>
+<ul>
+<li><strong>Mission A</strong>, 24 hours, <strong>already
+imported</strong> at startup, so replay can begin at once. Since nothing
+persists between visits, it is imported <strong>silently on every load
+(4.6)</strong>: before the server takes requests, without being drawn,
+and the importer's panel says so. After Reset instance it stays gone
+until the page is reloaded;</li>
+<li><strong>Mission B</strong>, 24 hours, not yet imported;</li>
+<li><strong>Mission B (re-export)</strong>, which overlaps Mission B in
+time and differs in a few readings, not yet imported, to show that
+overlapping files are kept apart;</li>
+<li><strong>Mission C</strong>, 12 hours, missing the stern's wind speed
+column, to show a dataset opening in degraded mode.</li>
+</ul>
+<p>Every file includes the two CO₂ columns (4.5).</p></li>
+<li><p><strong>FR-15a</strong> The build fails if regenerating the files
+from their seeds does not reproduce them exactly.</p></li>
 </ul>
 <hr />
-<h2 id="5-message-letters">5. Message letters</h2>
+<h2 id="5-message-letters-44">5. Message letters (4.4)</h2>
 <table>
 <thead>
 <tr>
@@ -673,19 +580,18 @@ end state, so live readings join the history without a seam.</p></li>
 </tr>
 <tr>
 <td>D</td>
-<td>Discovery resource: landing page, conformance, system and datastream
-descriptions, schemas</td>
+<td>Discovery resource</td>
 <td>OGC API – Connected Systems, Features, Common; SensorML; SWE Common
 3.0</td>
 </tr>
 <tr>
 <td>O</td>
 <td>Observations, read or published</td>
-<td>SWE Common JSON (<code>application/swe+json</code>)</td>
+<td>SWE Common JSON</td>
 </tr>
 <tr>
 <td>K</td>
-<td>Command on a control stream</td>
+<td>Command on a control stream, sent or pushed</td>
 <td>OGC API – Connected Systems Part 2</td>
 </tr>
 <tr>
@@ -695,23 +601,22 @@ descriptions, schemas</td>
 </tr>
 <tr>
 <td>H</td>
-<td>Plain HTTP status: 503 with <code>Retry-After</code></td>
+<td>HTTP status of 400 or above, including <strong>401</strong></td>
 <td>RFC 9110</td>
 </tr>
 <tr>
 <td>S</td>
-<td>Store query</td>
+<td>File request: list the data folder, or read a file</td>
 <td>Internal; no public standard</td>
 </tr>
 <tr>
 <td>L</td>
-<td>Legacy fixed-width record</td>
-<td>The logger's own format</td>
+<td>Legacy CSV: the folder listing or the file's rows</td>
+<td>The files' own format</td>
 </tr>
 <tr>
 <td>I</td>
-<td>Internal typed object; also the demonstrator's referee (§6.4), which
-is scaffolding</td>
+<td>Internal object; also the referee, which is scaffolding</td>
 <td>Internal; no public standard</td>
 </tr>
 </tbody>
@@ -719,686 +624,874 @@ is scaffolding</td>
 <ul>
 <li><strong>FR-16</strong> Messages that meet no public standard are
 named honestly as <strong>S</strong>, <strong>L</strong> or
-<strong>I</strong>, never presented as standards.</li>
+<strong>I</strong>.</li>
+<li><strong>FR-16a (4.4)</strong> <strong>Credentials are never
+shown.</strong> Every captured message shows its
+<code>Authorization</code> header, and any password field, as
+<code>****</code>.</li>
 </ul>
 <hr />
 <h2 id="6-functional-requirements-the-back-end">6. Functional
 requirements: the back end</h2>
-<h3 id="61-logger-store">6.1 Logger store</h3>
+<h3 id="61-data-folder-44">6.1 Data folder (4.4)</h3>
 <ul>
-<li><strong>FR-17</strong> The store is <strong>deliberately
-awkward</strong>: fixed-width text records, bow and stern in separate
-files rolling over daily, time in a non-standard unit and epoch, coded
-values for some fields, no index, and records appended while being
-read.</li>
-<li><strong>FR-18</strong> The store is written only by the collection
-platform and read only by the store adapter. It is <strong>independent
-of the data server</strong> and keeps receiving records while the server
-is down or restarting.</li>
-<li><strong>FR-19</strong> C1 is stated as <em>the facade works over an
-awkward store, to be confirmed against a real one</em>.</li>
+<li><strong>FR-17 (4.4)</strong> The data folder holds CSV files that
+scientists copy in. The files are <strong>deliberately awkward
+CSV</strong>: an unusual time format and epoch, units in the column
+headings, coded missing values, and the two sensors as separate column
+groups in one file.</li>
+<li><strong>FR-17a (4.4)</strong> The system <strong>never writes,
+renames or deletes</strong> anything in the data folder.</li>
+<li><strong>FR-19</strong> C1 is stated as <em>the import works for
+awkward CSV, to be confirmed against the client's real files</em>.</li>
 </ul>
-<h3 id="62-store-adapter">6.2 Store adapter</h3>
+<h3 id="62-csv-importer-44">6.2 CSV importer (4.4)</h3>
 <ul>
-<li><strong>FR-20</strong> The store adapter is the <strong>only code
-that understands the store's format</strong>.</li>
-<li><strong>FR-21</strong> It <strong>holds its own index</strong> over
-the store (time to file and offset) and answers <strong>store
-queries</strong> (S) from the data server: which sensors, which fields,
-which period. It finds the records through the index and reads them from
-the files (an S message to the store, L records back).</li>
-<li><strong>FR-20a</strong> The store adapter is a <strong>module of the
-data server</strong>, written against OpenSensorHub's extension
-interface. That interface, and so the adapter's language, is to be
-confirmed (ADR 0005). In the demonstrator it remains the Python and
-TypeScript adapter of Version 4.1.</li>
-<li><strong>FR-22</strong> The store is never altered. The index is
-rebuilt from the store when lost, including on every restart, and a
-rebuilt index gives identical results.</li>
+<li><strong>FR-20 (4.4)</strong> The importer is the <strong>only code
+that understands the CSV format</strong>.</li>
+<li><strong>FR-20a (4.4)</strong> In a developed system the importer is
+a <strong>module of the data server</strong>, written against
+OpenSensorHub's extension interface, and writes <strong>in bulk</strong>
+into the server's own store. Importing over HTTP (one observation per
+request, about 450 a second in the spike: roughly 20 minutes for three
+days of two 1 Hz sensors) is not acceptable. Whether a module can write
+in bulk is the <strong>next spike</strong> (§15).</li>
+<li><strong>FR-20b (4.4)</strong> The importer registers as a Connected
+Systems <strong>System</strong> with:
+<ul>
+<li>an <strong>archive catalogue</strong> datastream: one observation
+per file in the folder, giving the file's <strong>name, size, modified
+date and content hash</strong>, its <strong>time span</strong> and
+<strong>record count</strong> once read, and its
+<strong>status</strong>: <em>not imported</em>, <em>importing</em> (with
+percentage), <em>imported</em>, <em>changed since import</em>, or
+<em>superseded</em>;</li>
+<li>a <strong>control stream</strong> <code>import</code>, taking a file
+name.</li>
+</ul></li>
+<li><strong>FR-20c (4.4)</strong> The importer lists the folder when the
+server starts and again when asked (<code>rescan</code>), and publishes
+a new catalogue observation for any file whose status changes. The
+catalogue is append-only: its latest observation per file is the file's
+current status.</li>
+<li><strong>FR-21 (4.4)</strong> Importing a file creates <strong>its
+own datastreams</strong> (FR-25) and writes every row into them, mapping
+the file's columns to the declared fields and units. A column missing
+from a file leaves its field absent from that file's datastreams.</li>
+<li><strong>FR-21a (4.4)</strong> A file whose size, modified date or
+content hash differ from a version already imported is imported
+<strong>as a new dataset</strong>. The earlier one is marked
+<em>superseded</em>, is kept, and stays openable.</li>
+<li><strong>FR-21b (4.4)</strong> Files whose time spans
+<strong>overlap</strong> are imported and kept
+<strong>separately</strong>, each in its own datastreams. They never
+mix.</li>
+<li><strong>FR-21c (4.5)</strong> The importer writes the <strong>CO₂
+columns into the CO₂ datastreams</strong> (FR-25) and never into the
+weather datastreams. The importer's service account has access to CO₂.
+The archive catalogue names files and spans only, never their columns,
+so it reveals nothing about CO₂.</li>
+<li><strong>FR-22</strong> Nothing in a file is altered, and nothing
+imported is altered or deleted, except by Reset instance (FR-50a).</li>
 </ul>
 <h3 id="63-data-server">6.3 Data server</h3>
 <p>The data server is <strong>OpenSensorHub, used as shipped</strong>
-(ADR 0005, superseding ADR 0001). This section lists what the system
-<strong>needs</strong> of it: a subset of <strong>OGC API – Connected
-Systems Part 1 (Feature Resources)</strong> and <strong>Part 2 (Dynamic
-Data)</strong>, from the Spike 0 finding
-(<code>FINDING-2026-11-20-connected-systems.md</code>). Nothing here is
-to be written; each item is to be confirmed against a stock
-OpenSensorHub. The demonstrator's stand-in serves exactly this
-subset.</p>
+(ADR 0005). This section lists what the system <strong>needs</strong> of
+it. ✓ marks what the spike confirmed.</p>
 <ul>
-<li><strong>FR-23</strong> <strong>Discovery</strong>, including the
-prerequisites inherited from OGC API – Features Part 1 (Core) and OGC
-API – Common Part 1: landing page, conformance declaration, API
-definition, <code>/collections</code>, paging links, <code>limit</code>
-and <code>datetime</code>; and a link to the declared profile.</li>
-<li><strong>FR-24</strong> <strong>Systems</strong>: the collection
-platform is a <strong>Platform</strong>; bow and stern are
-<strong>Sensors</strong>, as its subsystems; each model is
-<code>systemType</code> <strong>System</strong> with
-<code>assetType</code> <strong>Process</strong>. No system carries a
-location.</li>
-<li><strong>FR-25</strong> <strong>Datastreams</strong>: one
-<strong>record datastream per sensor</strong>, whose SWE Common 3.0
-schema declares the seven parameters as Quantity fields with units and,
-for each, a <strong>separate Category field carrying its QC
-flag</strong> in the QARTOD vocabulary. Each model's outputs are
-datastreams of its own process system. Schemas are fetched from
-<code>/datastreams/{id}/schema?obsFormat=…</code>.</li>
-<li><strong>FR-26</strong> <strong>Observations</strong>, filtered by
-<code>phenomenonTime</code> (and <code>resultTime</code>, including
-<code>latest</code>) with <code>limit</code> and paging; discovery as
-<code>application/json</code>, observations as
-<code>application/swe+json</code>. There is no per-field filter: a
-client fetches whole records and selects fields.</li>
-<li><strong>FR-27</strong> <strong>Control streams and commands</strong>
-on each model, carrying its settings. Commands are POSTed to
-<code>/controlstreams/{id}/commands</code>; the bounds live in the
-control stream's schema; a command outside them is rejected (the
-stand-in answers <strong>HTTP 400</strong> naming the bound; what
-OpenSensorHub answers is to be confirmed). A model
-<strong>polls</strong> its control stream for pending commands
-(<code>statusCode=PENDING</code>) on the simulation clock, and reports
-each command's progress by POSTing to
-<code>/commands/{id}/status</code>. Polling is a recorded placeholder,
-as FR-63.</li>
-<li><strong>FR-28</strong> <strong>Registration</strong>: a model
-registers itself over HTTP by creating a System under the Models system
-(<code>POST /systems/models/subsystems</code>), then its datastreams and
-control stream under that system, then publishing observations
-(<code>POST /datastreams/{id}/observations</code>), using ordinary
-resource creation. There is no registration-specific endpoint. A
-restarted model must find what it made: the stand-in answers
-<strong>409</strong> with its <code>Location</code> to creating what is
-already there; if OpenSensorHub does not, a model looks its resources up
-before creating them. A datastream whose schema changes is a new
-datastream under a new identifier (FR-51).</li>
-<li><strong>FR-28a</strong> Nothing is replaced or deleted, with one
-declared exception that is <strong>not Connected Systems</strong>: a
-result that holds the latest run only is replaced with a plain HTTP
-<code>PUT</code> on the datastream's observations. If OpenSensorHub does
-not accept it, a run becomes one observation carrying arrays (§15). The
-stand-in refuses every other <code>PUT</code>, <code>PATCH</code> and
-<code>DELETE</code> by name; the system does not use them, whatever the
-server offers.</li>
-<li><strong>FR-29</strong> <strong>Summary datastreams</strong>: for
-each sensor field, models publish <strong>1-minute means</strong> and
-<strong>hourly means</strong> as ordinary datastreams. Clients read raw
-records for periods of an hour or less, 1-minute means for 6 hours and a
-day, and hourly means for a week or more. Connected Systems has no
-standard aggregation; this is the declared workaround.</li>
-<li><strong>FR-30</strong> Every unsupported resource, parameter or
-encoding is refused with the thing refused named. A query whose result
-would exceed a declared size is refused with the limit and how to narrow
-it. Nothing is silently truncated. The served conformance declaration
-matches the code.</li>
-<li><strong>FR-31</strong> Declared queries (the last hour from each
-sensor; one field over the whole history from a summary datastream) meet
-a declared time budget, tested over one week of history.</li>
-<li><strong>FR-32</strong> QC flags are computed on the way out and
-carried in the flag fields, never by altering stored records.</li>
+<li><strong>FR-23</strong> <strong>Discovery</strong> ✓. The system does
+not rely on a served OpenAPI document.</li>
+<li><strong>FR-24 (4.5)</strong> <strong>Systems</strong> ✓: the
+collection platform as a <strong>Platform</strong> with bow and stern
+<strong>Sensors</strong>, and under each sensor a <strong>CO₂
+analyser</strong> subsystem (Sensor); the importer as a System
+(<code>assetType</code> Equipment); the replay controller
+(<code>assetType</code> Simulation); each model (<code>assetType</code>
+Process), with a <strong>restricted</strong> subsystem for its
+CO₂-derived outputs (FR-112); and one <strong>workspace</strong> system
+per user (FR-95).</li>
+<li><strong>FR-25 (4.4)</strong> <strong>Datastreams per
+dataset</strong> ✓. Each imported file is a <strong>dataset</strong>
+with a dataset id derived from its name and content hash. Its
+datastreams are the bow and stern record datastreams, output name
+<code>weather · &lt;dataset id&gt;</code>, each parameter a Quantity
+with its unit and a Category QC flag referred to by
+<code>quality</code>. Every model's outputs are per dataset too (for
+example <code>cleaned · &lt;dataset id&gt;</code>). <strong>CO₂ is never
+a field of the weather record (4.5)</strong>: each CO₂ analyser has its
+own datastream, <code>co2 · &lt;dataset id&gt;</code>, with CO₂ in ppm
+and its QC flag.</li>
+<li><strong>FR-26 (4.3)</strong> <strong>Observations</strong> ✓ by
+<code>phenomenonTime</code> and <code>resultTime=latest</code>, with
+<code>f=application/swe+json</code>, paging by <code>offset</code>,
+missing values as <code>"NaN"</code>.</li>
+<li><strong>FR-27 (4.3)</strong> <strong>Commands are pushed</strong> to
+each receiver (the importer, the replay controller, each model), which
+holds a subscription to its control stream and subscribes before
+declaring itself ready. A command carries every parameter. The
+<strong>receiver validates</strong> bounds and reports
+<code>REJECTED</code> naming the bound. The <strong>sender never
+waits</strong> on its <code>POST</code>.</li>
+<li><strong>FR-28</strong> <strong>Registration</strong> ✓ with ordinary
+resource creation; <code>201</code> with the existing
+<code>Location</code> is success.</li>
+<li><strong>FR-28a (4.3)</strong> <strong>Nothing is replaced or
+deleted.</strong> Results are appended under a new
+<code>run_id</code>.</li>
+<li><strong>FR-29</strong> <strong>Summary datastreams</strong> per
+dataset: 1-minute and hourly minimum, mean and maximum.</li>
+<li><strong>FR-30 (4.3)</strong> The system does not rely on refusal
+bodies or enforced size limits.</li>
+<li><strong>FR-31</strong> Declared queries (the last hour at replay
+time; one field over a whole dataset from a summary) meet a declared
+time budget.</li>
+<li><strong>FR-32</strong> QC flags are computed on import, never by
+altering the files.</li>
+<li><strong>FR-93 (4.6)</strong> <strong>Authentication and
+permissions</strong>, required of the server. OpenSensorHub refuses
+(403) rather than hides, so hiding is done by a thin <strong>access
+gateway</strong> in front of it (§15, D-150), drawn as a component of
+its own:
+<ul>
+<li>every request, discovery included, and every push subscription
+(FR-02a) needs <strong>valid credentials</strong>; without them the
+answer is <strong>401</strong> and nothing is served;</li>
+<li>permissions are granted <strong>per system</strong> and
+<strong>inherited by its datastreams and control streams</strong>.
+Nothing in this system needs permission per field;</li>
+<li>a user <strong>without permission</strong> for a system finds it
+<strong>absent</strong>: not listed in discovery, not among subsystems,
+not in any datastream listing, and <strong>404</strong> if asked for by
+identifier. Absent, not refused, so its name and schema reveal
+nothing;</li>
+<li><strong>users</strong> may read what their role permits, send
+commands to the importer, the replay controller and the models, and
+create and append only under <strong>their own workspace</strong>;</li>
+<li>each <strong>model</strong>, the <strong>importer</strong> and the
+<strong>replay controller</strong> has its own <strong>service
+account</strong>, allowed to create and append only under its own
+systems;</li>
+<li>no account may read another user's workspace.</li>
+</ul></li>
+<li><strong>FR-111 (4.5)</strong> <strong>Restricted systems</strong>
+are the <strong>CO₂ analysers</strong>, every model's
+<strong>restricted</strong> subsystem, and nothing else. Only the roles
+of §7.6 that include emissions may read them.</li>
 </ul>
 <h3 id="64-models">6.4 Models</h3>
 <ul>
-<li><p><strong>FR-33</strong> <strong>Models</strong> is a set of
-models, each an OGC <strong>process system</strong> running in
-<strong>its own worker</strong>. A failing, slow or broken model never
-stops the data server, the other models or the display client.</p></li>
-<li><p><strong>FR-34</strong> The core models are named by what they
-do:</p>
-<ul>
-<li><strong>Data cleanse</strong>, which runs first: it flags and
-removes noise and publishes cleaned datastreams. <strong>Every other
-model reads Data cleanse's output</strong>, not the raw
-datastreams.</li>
-<li><strong>Summaries</strong>: the 1-minute and hourly summary
-datastreams (FR-29) and the derived values.</li>
-<li><strong>Analysis</strong>: change detection, correlation and
-clustering (with three selectable algorithms) on the fields and period
-the display client chooses.</li>
-</ul>
-<p>The split between Summaries and Analysis is recorded in ADR
-0003.</p></li>
-<li><p><strong>FR-35</strong> Each model reads observations from the
-data server, registers its own datastreams there (FR-28), and takes its
-settings as commands (FR-27), all through the HTTP interface. A model is
-written against a small library that makes these requests
-(<code>backend/models/csmodel.py</code>).</p></li>
-<li><p><strong>FR-36</strong> <strong>Empty slots</strong> (New model 1,
-New model 2) show where new models go. Selecting an empty slot in the
-Models panel opens an <strong>in-browser Python editor</strong>
-(CodeMirror 6). Code written there runs in a new worker as a new model,
-using the scientific libraries, and registers over HTTP like any other.
-It appears in the display client at the client's next
-handshake.</p></li>
-<li><p><strong>FR-37</strong> Every model result carries the settings
-and data range it was computed from. Change detection and clustering are
-<strong>scored against the manifest</strong>, and the score is published
-with them. Models never see the manifest or the position: a model asks
-the demonstrator's <strong>referee</strong>
-(<code>/demonstrator/referee</code>, the only code that reads the
-manifest) for a score. The referee is scaffolding and is named so in the
-interface definition.</p></li>
+<li><strong>FR-33</strong> Each model is an OGC <strong>process
+system</strong> in its own worker; a failure in one stops nothing
+else.</li>
+<li><strong>FR-34</strong> Core models: <strong>Data cleanse</strong>
+(first), <strong>Summaries</strong>, <strong>Analysis</strong> (change
+detection, correlation and clustering with three algorithms).</li>
+<li><strong>FR-35 (4.4)</strong> Models work on the <strong>current
+dataset</strong> only (FR-84a), reading up to the replay time, and
+publish <strong>per dataset</strong>. On a change of dataset, each model
+works through the new one if it has not already; its outputs for other
+datasets are kept, so returning to a dataset is immediate. On return,
+views show the dataset's <strong>latest run</strong> (4.6); earlier runs
+are reached through a saved data of interest.</li>
+<li><strong>FR-35a (4.4)</strong> <strong>Analysis takes a data of
+interest</strong> (§6.7) as its input: the display client's current
+selection is sent, as an unsaved data of interest, in the command.</li>
+<li><strong>FR-36</strong> Empty slots open an in-browser Python editor
+(Python back end only).</li>
+<li><strong>FR-37</strong> Every result carries its settings, data range
+and <code>run_id</code>; scores come from the referee
+(scaffolding).</li>
+<li><strong>FR-37a</strong> Each model declares the highest replay rate
+it sustains.</li>
+<li><strong>FR-112 (4.5)</strong> <strong>Anything derived from CO₂ is
+restricted.</strong> A model publishes any output with CO₂ among its
+inputs <strong>only</strong> under its <strong>restricted</strong>
+subsystem: cleaned CO₂, CO₂ summaries, and any Analysis run whose
+selection includes CO₂ (its changes, clusters and correlation).
+<strong>The run's entry in the runs log is restricted too</strong>,
+because its settings name CO₂. An output whose inputs exclude CO₂ is
+published as before.</li>
+<li><strong>FR-112a (4.5)</strong> A command asking a model to use CO₂
+is <strong>rejected</strong> (<code>REJECTED</code>, saying only that a
+requested source is not available) when the sender's role does not
+include emissions. The receiver checks the sender's role; it never
+relies on the client having hidden the choice. How the receiver learns
+the sender's role is decided by the authentication spike (§15, item
+4).</li>
+<li><strong>FR-113 (4.5)</strong> The core models' service accounts have
+access to CO₂. A <strong>new model</strong> written in an empty slot
+<strong>does not</strong>, unless the owner grants it.</li>
 </ul>
 <h3 id="65-third-party-libraries">6.5 Third-party libraries</h3>
 <ul>
-<li><strong>FR-38</strong> <em>(Replaced in 4.2.)</em> The <strong>data
-server is OpenSensorHub</strong>, adopted as shipped and not modified.
-The <strong>committed OpenAPI master</strong> states what this system
-needs of a Connected Systems server; the contract suite is the test that
-a server provides it.</li>
+<li><strong>FR-38</strong> The data server is
+<strong>OpenSensorHub</strong>, unmodified; the contract suite tests
+that a server provides what the master states.</li>
 <li><strong>FR-38a</strong> In the demonstrator a
-<strong>stand-in</strong> takes OpenSensorHub's place: the subset of
-§6.3, on FastAPI in the Python back end and in TypeScript in the
-JavaScript stand-in. FastAPI is an internal detail of the stand-in and
-is not drawn. A test asserts that the stand-in serves the master.</li>
-<li><strong>FR-39</strong> <strong>Scientific libraries</strong> (numpy
-and scikit-learn) are used by the models only.</li>
+<strong>stand-in</strong> takes its place (FR-06c).</li>
+<li><strong>FR-39</strong> <strong>Scientific libraries</strong> (numpy,
+scikit-learn) are used by the models only.</li>
+</ul>
+<h3 id="66-replay-controller">6.6 Replay controller</h3>
+<ul>
+<li><strong>FR-84 (4.4)</strong> The replay controller holds the
+<strong>current dataset</strong> and the <strong>replay clock</strong>.
+"Now" is a time within the current dataset. The whole of every imported
+dataset remains readable; "up to replay time" is how live views and
+models read.</li>
+<li><strong>FR-84a (4.4)</strong> There is <strong>one current
+dataset</strong> at a time. Datasets have no common time axis, so the
+system never plays two at once.</li>
+<li><strong>FR-85 (4.4)</strong> Its control stream <code>replay</code>
+takes <code>action</code> (<strong>load</strong>, play, pause, seek),
+<code>dataset</code>, <code>rate</code> and <code>position</code>.
+<strong>Load</strong> makes a dataset current, refusing one not yet
+imported, naming it. Its <strong>state</strong> datastream gives the
+current dataset, its span, the replay time, rate and playing or paused;
+its <strong>replay log</strong> records every command applied.</li>
+<li><strong>FR-86</strong> Rates: 0.1×, 0.5×, 1×, 10× and 100×, bounded
+by the slowest active model.</li>
+<li><strong>FR-87</strong> <strong>Seek</strong> moves within the
+current dataset and starts a new replay run.</li>
+<li><strong>FR-88</strong> At the end of the dataset the replay pauses
+and says so.</li>
+<li><strong>FR-89</strong> <strong>One user at a time</strong> is logged
+in; there is one replay controller.</li>
+</ul>
+<h3 id="67-data-of-interest-44">6.7 Data of interest (4.4)</h3>
+<ul>
+<li><p><strong>FR-94</strong> A <strong>data of interest</strong> is a
+named record of a set of data, enough to regenerate any view of it
+exactly. Its fields (committed as a JSON Schema master):</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>version</code></td>
+<td>The record's schema version</td>
+</tr>
+<tr>
+<td><code>label</code>, <code>note</code></td>
+<td>The analyst's name for it, and why it was kept</td>
+</tr>
+<tr>
+<td><code>dataset</code></td>
+<td>File name, size, modified date and content hash</td>
+</tr>
+<tr>
+<td><code>start</code>, <code>end</code></td>
+<td>Within that dataset's own time</td>
+</tr>
+<tr>
+<td><code>resolution</code></td>
+<td>An ISO 8601 duration (<code>PT1S</code>, <code>PT1M</code>,
+<code>PT1H</code>)</td>
+</tr>
+<tr>
+<td><code>aggregation</code></td>
+<td><code>as-stored</code>; reserved: <code>mean</code>,
+<code>min</code>, <code>max</code></td>
+</tr>
+<tr>
+<td><code>sources</code></td>
+<td>Datastreams by system unique id and output name, and the fields
+chosen</td>
+</tr>
+<tr>
+<td><code>run</code></td>
+<td>A model run's <code>run_id</code>, only where a datastream holds
+more than one run</td>
+</tr>
+<tr>
+<td><code>created</code></td>
+<td>When it was saved, and by whom</td>
+</tr>
+</tbody>
+</table>
+<p>Processing stage and model settings are <strong>not</strong> fields:
+different stages are different datastreams, and a run's settings are in
+its model's <code>runs</code> datastream.</p></li>
+<li><p><strong>FR-94a</strong> <strong>For now, a resolution that does
+not exist as a datastream is refused</strong>, naming those that do. The
+<code>aggregation</code> field exists so resampling can be added later
+without changing saved records.</p></li>
+<li><p><strong>FR-95</strong> Data of interest is kept <strong>on the
+server, per analyst</strong>: each analyst has a
+<strong>workspace</strong> system with an append-only
+<code>data-of-interest</code> datastream. Saving appends a record;
+removing appends a removal. Nothing about it is kept in the
+browser.</p></li>
+<li><p><strong>FR-96 (4.6)</strong> A data of interest that cannot be
+resolved is listed <strong>greyed</strong>, saying why: its source is no
+longer permitted (FR-96a), or its file is not imported, naming the file.
+A record names the file, not a server identifier, so importing that file
+again restores it. Reset instance does <strong>not</strong> grey
+records: it deletes them with everything else (FR-50a).</p></li>
+<li><p><strong>FR-96a (4.5)</strong> A user can only save data of
+interest from sources they can see. If a user's role later loses
+emissions, any of their records naming CO₂ sources is listed greyed as
+"no longer permitted", and nothing from those sources is drawn.</p></li>
 </ul>
 <hr />
 <h2 id="7-functional-requirements-client-and-server-lifecycle">7.
 Functional requirements: client and server lifecycle</h2>
 <h3 id="71-declared-profile">7.1 Declared profile</h3>
 <ul>
-<li><strong>FR-40</strong> A committed <strong>declared
-profile</strong>, validated by JSON Schema, lists the <strong>essential
-sources</strong>: for each, the system, datastream, field, SWE Common
-type and unit. The essentials are bow and stern <strong>air
-temperature</strong> and <strong>apparent wind speed</strong>, and the
-core models' datastreams that the display client's views depend on.</li>
-<li><strong>FR-41</strong> The profile is published with the data
-server: linked from its landing page if OpenSensorHub allows a link to
-be added, otherwise at a fixed path relative to the base URL (to be
-confirmed; the stand-in links it). The client checks both that the
-server <strong>claims</strong> the profile and that discovery
-<strong>satisfies</strong> it; a contradicted claim is an error.</li>
+<li><strong>FR-40 (4.4)</strong> The profile lists the essential
+sources: <strong>for every imported dataset</strong>, bow and stern air
+temperature and apparent wind speed, and the core models' datastreams
+the views depend on; and the importer's catalogue and the replay
+controller's state and control streams. <strong>CO₂ is never essential
+(4.5)</strong>, so a weather-only user does not start degraded.</li>
+<li><strong>FR-40a (4.6)</strong> Per-dataset essentials are written as
+<strong>templates</strong>, with output names such as
+<code>weather · {dataset}</code>. The client checks each dataset against
+them when it is loaded. The profile's schema allows the
+placeholder.</li>
+<li><strong>FR-41</strong> The profile is at a fixed path beside the
+server (<code>profile.json</code>).</li>
 </ul>
 <h3 id="72-handshake-and-self-configuration">7.2 Handshake and
 self-configuration</h3>
 <ul>
-<li><strong>FR-42</strong> The display client's
-<strong>handshake</strong> is standard discovery only: landing page,
-conformance, profile, systems, datastreams and schemas.</li>
-<li><strong>FR-42a</strong> The handshake is made <strong>one request at
-a time, at the pace it is drawn</strong>: the client sends each
-handshake request only when the reply to the one before has been drawn
-arriving at it on the flowchart, so the architecture view shows the
-exchange in its true order. Handshake messages travel at 0.3 simulated
-seconds a hop. With capture off nothing is drawn and the client does not
-wait. Only the handshake is paced: polling (FR-63) and commands are
-not.</li>
-<li><strong>FR-43</strong> From the handshake the client builds its
-<strong>field list</strong> (§8.2): every field of every datastream,
-essential and optional, including any new model's outputs.</li>
-<li><strong>FR-44</strong> Discovery happens <strong>only at
-handshake</strong>. A client never adds or removes sources while
-running.</li>
-<li><strong>FR-45</strong> If an essential source is <strong>missing, or
-has the wrong type or unit</strong>, the client starts in
-<strong>degraded mode</strong>: one warning after the handshake listing
-every unavailable essential source and why; each view that depends on it
-shown as <strong>unavailable</strong> (never an empty chart); the
-control for it disabled, naming the missing source on hover. A missing
-optional source produces no warning.</li>
+<li><strong>FR-42 (4.4)</strong> The handshake happens <strong>after
+login</strong> and is standard discovery only, finding resources by
+unique id and output name.</li>
+<li><strong>FR-42a</strong> The handshake is drawn one request at a
+time.</li>
+<li><strong>FR-43 (4.4)</strong> The field list is built <strong>for the
+current dataset</strong>, and rebuilt when the current dataset changes,
+without a full handshake.</li>
+<li><strong>FR-44 (4.6)</strong> Discovery happens only at handshake.
+When an <strong>import completes</strong>, the client repeats the
+<strong>full handshake</strong>, so that it finds the new dataset's
+datastreams.</li>
+<li><strong>FR-45 (4.4)</strong> Degraded mode is <strong>per
+dataset</strong>: a dataset missing an essential source (Mission C)
+opens degraded, naming what is missing; other datasets are
+unaffected.</li>
 </ul>
-<h3 id="73-restarts-and-waiting-mode">7.3 Restarts and waiting mode</h3>
+<h3 id="73-restarts">7.3 Restarts</h3>
 <ul>
-<li><strong>FR-46</strong> <strong>Restart client</strong> discards all
-display client state and repeats the handshake. The back end, history
-and models carry on.</li>
-<li><strong>FR-47</strong> <strong>Restart server</strong> restarts the
-data server. While the store adapter rebuilds its index the server is
-<strong>not ready</strong>. The stand-in answers every request
-<strong>HTTP 503 with <code>Retry-After</code></strong> (waiting mode)
-and gives each start a fresh <strong>instance identifier</strong>, sent
-as the landing page's <code>ETag</code> and on every response. Neither
-is required by the standard: how a starting OpenSensorHub answers, and
-how its restart can be recognised, are to be confirmed (ADR 0005).</li>
-<li><strong>FR-48</strong> A client receiving 503 waits for
-<code>Retry-After</code> and retries; a server that does not answer at
-all is treated as unreachable (FR-49). A client that <strong>recognises
-a restart</strong> clears its state and repeats the handshake: by the
-instance identifier where the server gives one, otherwise by the means
-the spike settles on. The server enforces nothing.</li>
+<li><strong>FR-46</strong> <strong>Restart client</strong> discards the
+display client's state, <strong>including the credentials</strong>, and
+returns to the login screen.</li>
+<li><strong>FR-47 (4.3)</strong> <strong>Restart server</strong>: while
+starting, the server refuses connections.</li>
+<li><strong>FR-48 (4.3)</strong> After any period of unreachability the
+client repeats the handshake; receivers resubscribe.</li>
 </ul>
 <h3 id="74-control-panel">7.4 Control panel</h3>
-<p>The control panel belongs to the demonstrator shell.</p>
 <ul>
-<li><strong>FR-49</strong> <strong>Take server down / bring server
-up.</strong> While down, the server does not answer: the relay returns a
-<strong>network failure</strong>. The client shows a "server
-unreachable" banner, keeps its last data marked as stale, and retries on
-the simulation clock.</li>
-<li><strong>FR-50</strong> <strong>Field toggles</strong> switch fields
-on or off in <strong>what the server publishes</strong>: every raw
-parameter (both sensors together, essentials included), every model
-output, and three <strong>extra fields</strong>, off by default, that
-the client has never seen, one per generic view type: a Category, a
-Quantity and a Count. Stored history is unchanged.</li>
-<li><strong>FR-51</strong> A toggle takes effect <strong>only at the
-next server start</strong>, shown as pending until then. A datastream
-whose schema changes is published under a <strong>new
-identifier</strong>.</li>
-<li><strong>FR-52</strong> A model output whose inputs are switched off
-is not published.</li>
+<li><strong>FR-49</strong> Take server down / bring server up.</li>
+<li><strong>FR-50</strong> Field toggles, taking effect at the next
+server start.</li>
+<li><strong>FR-50a (4.4)</strong> <strong>Reset instance</strong> stops
+the server, <strong>deletes its whole store</strong>, and restarts it
+empty: no dataset imported, no results, no data of interest. Nothing is
+ever deleted record by record. The data folder is untouched. Reset
+instance asks for confirmation, naming what will be lost.</li>
+<li><strong>FR-51, FR-52</strong> As in 4.3.</li>
+</ul>
+<h3 id="75-authentication-and-screen-lock-44">7.5 Authentication and
+screen lock (4.4)</h3>
+<p>The threat is a <strong>guest at an unattended screen and
+keyboard</strong>, in an area with wide access. The device itself is
+secured.</p>
+<ul>
+<li><strong>FR-97</strong> The display client opens on a <strong>login
+screen</strong>. <strong>Nothing is shown before login</strong>: no
+dataset names, no catalogue, no data.</li>
+<li><strong>FR-98</strong> Credentials are held <strong>in memory
+only</strong>, never in browser storage. Reloading or closing the page
+means logging in again. There is no "remember me".</li>
+<li><strong>FR-99</strong> The display client <strong>locks</strong>
+after a period of inactivity (5 minutes by default), and at once on a
+<strong>Lock</strong> button. On locking it blanks every view, list and
+data of interest, <strong>discards the credentials</strong> and stops
+all requests. Unlocking needs the password again, and restores the
+analyst's place.</li>
+<li><strong>FR-100</strong> The browser keeps <strong>nothing
+sensitive</strong>: only harmless preferences such as panel layout. Data
+of interest lives on the server (FR-95). Nothing is encrypted in the
+browser, because nothing sensitive is stored there.</li>
+<li><strong>FR-101</strong> A refused login says only that the name or
+password was wrong, not which.</li>
+<li><strong>FR-102 (4.5)</strong> <strong>In the demonstrator
+only</strong>, the login screen offers <strong>two demo
+accounts</strong>, each pre-populated and labelled as demo credentials:
+<strong>the owner</strong> (Owner role) and <strong>a friend</strong>
+(Viewer, weather only). <strong>A developed system never pre-populates
+credentials</strong>, and this requirement must not be carried
+over.</li>
+<li><strong>NFR-11</strong> In a developed system the browser runs in
+<strong>kiosk mode</strong>, without an address bar or developer tools,
+so a guest at an unlocked screen cannot inspect the page.</li>
+</ul>
+<h3 id="76-accounts-and-roles-45">7.6 Accounts and roles (4.5)</h3>
+<ul>
+<li><p><strong>FR-114</strong> Three <strong>roles</strong>, defined
+once at installation as part of the delivered configuration:</p>
+<table>
+<thead>
+<tr>
+<th>Role</th>
+<th>Weather data and its products</th>
+<th>CO₂ and its products</th>
+<th>Manage accounts</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Owner</strong></td>
+<td>Read</td>
+<td>Read</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td><strong>Viewer with emissions</strong></td>
+<td>Read</td>
+<td>Read</td>
+<td>No</td>
+</tr>
+<tr>
+<td><strong>Viewer (weather only)</strong></td>
+<td>Read</td>
+<td><strong>Absent</strong></td>
+<td>No</td>
+</tr>
+</tbody>
+</table>
+<p>Every role may use the replay controller, the importer and the
+models, and keep its own workspace.</p></li>
+<li><p><strong>FR-115</strong> The <strong>owner creates and maintains
+accounts</strong> (create, set or reset a password, assign a role,
+disable) <strong>through OpenSensorHub's own administration</strong>.
+The owner assigns roles but does not edit them, and so cannot expose CO₂
+by changing a permission. Granting or removing emissions is changing a
+user's role.</p></li>
+<li><p><strong>FR-116 (4.6)</strong> A change of role takes effect
+<strong>at once, on the user's next request</strong> (basic
+authentication has no session; the authentication spike confirmed
+OpenSensorHub applies a change on the next request, D-151). A logged-in
+user is not logged out: what they can no longer see disappears at their
+next poll, and their data of interest from it is shown greyed
+(FR-96a).</p></li>
+<li><p><strong>FR-117</strong> <strong>Our own account screen</strong>
+is built only if a stated <strong>trigger</strong> is met: the owner
+cannot complete the account tasks of FR-115 unaided in a short trial, or
+OpenSensorHub's administration cannot be used on the delivered machine.
+Until then it is excluded (§16).</p></li>
+<li><p><strong>FR-118</strong> The display client has <strong>no code
+that knows about CO₂ or roles</strong>. A weather-only user's handshake
+simply finds no CO₂ systems, so no chip, view, picker entry or
+data-of-interest source for CO₂ appears.</p></li>
 </ul>
 <hr />
 <h2 id="8-functional-requirements-the-display-client">8. Functional
 requirements: the display client</h2>
-<p>The display client is the real system's screen. In the demonstrator
-it appears inside a <strong>monitor frame</strong> in the detail panel
-(§9.4). Everything inside the frame is the delivered system; everything
-outside it is the demonstrator. The screen is deliberately <strong>small
-and generic</strong>, so stakeholders judge the architecture, not a UI
-proposal.</p>
-<h3 id="81-layout">8.1 Layout</h3>
-<p>From top to bottom inside the monitor: a status strip; the
-<strong>field chips</strong>; the <strong>period presets</strong> and
-the <strong>clustering</strong> control; a row of <strong>three graph
-components</strong>; the <strong>cluster view</strong> (mockup 1).</p>
+<p>The display client is the real system's screen, inside a
+<strong>monitor frame</strong> in the detail panel. It is deliberately
+<strong>small and generic</strong>.</p>
+<h3 id="81-layout-44">8.1 Layout (4.4)</h3>
+<p>Before login: the <strong>login screen</strong> only. After login,
+from top to bottom: a status strip with the analyst's name and
+<strong>Lock</strong>; the <strong>dataset picker</strong>; the
+<strong>replay bar</strong>; the <strong>field chips</strong>,
+<strong>period presets</strong> and <strong>clustering</strong> control;
+the <strong>views</strong>; the <strong>data of interest</strong>
+list.</p>
 <h3 id="82-controls">8.2 Controls</h3>
 <ul>
-<li><strong>FR-53</strong> <strong>Fields</strong>: chips built from the
-handshake (FR-43), <strong>several selectable at once</strong>. Optional
-fields are drawn dashed. Selecting or deselecting a field issues new
-observation requests (Q), which cause store queries (S) where raw
-records are needed.</li>
-<li><strong>FR-54</strong> <strong>Period presets</strong>: 1 minute
-(the default, so each new second moves the views), 1 hour, 6 hours, a
-day, a week, 4 weeks. Each preset is one set of requests, reading raw
-records or a summary datastream as FR-29 sets out. A preset longer than
-the history shows what history there is.</li>
-<li><strong>FR-55</strong> <strong>Clustering</strong>: a drop-down of
-three <strong>unnamed algorithms</strong> (Algorithm A, B and C). The
-clustering runs on the <strong>selected fields</strong>. Changing either
-sends a command (K) to the model that does the clustering.</li>
-<li><strong>FR-56</strong> With no field selected, the graphs and
-cluster view say so and ask for a field; they are never shown empty
-without explanation.</li>
+<li><strong>FR-103 (4.4)</strong> <strong>Dataset picker</strong>: every
+file in the data folder, from the importer's catalogue, with its name,
+size, modified date, status and, once imported, its time span.
+<ul>
+<li><strong>Open</strong> on an imported file sends
+<strong>load</strong> (K) to the replay controller.</li>
+<li><strong>Open</strong> on a file not imported sends
+<strong>import</strong> (K) to the importer, shows progress, then sends
+<strong>load</strong> when it is ready.</li>
+<li>Superseded and changed files are marked; a file that is importing
+cannot be opened.</li>
+<li><strong>Rescan</strong> asks the importer to list the folder
+again.</li>
+</ul></li>
+<li><strong>FR-90 (4.4)</strong> <strong>Replay bar</strong>:
+play/pause, rate, and a timeline of the <strong>current dataset</strong>
+with the replay position; seek by dragging. Each action is one command,
+not waited on. The bar shows what the state datastream says.</li>
+<li><strong>FR-53</strong> <strong>Fields</strong>: chips for the
+current dataset.</li>
+<li><strong>FR-54 (4.4)</strong> <strong>Period presets</strong> ending
+at the replay time: 1 minute, 1 hour, 6 hours, a day, <strong>the whole
+dataset</strong>.</li>
+<li><strong>FR-55</strong> <strong>Clustering</strong>: three unnamed
+algorithms on the current selection.</li>
+<li><strong>FR-56</strong> With no field selected, the views say
+so.</li>
 </ul>
 <h3 id="83-views">8.3 Views</h3>
-<p>Each view is a framed component with a value-add diamond (§11.6).</p>
 <ul>
-<li><strong>FR-57</strong> <strong>Line plot</strong>: the selected
-fields overlaid on a <strong>normalised scale</strong> (each field
-scaled to its range over the period), real values on hover, detected
-changes marked on the time axis.</li>
-<li><strong>FR-58</strong> <strong>Line plot with error bars</strong>:
-the first selected field as means with ± 1 standard deviation over
-intervals suited to the period.</li>
-<li><strong>FR-59</strong> <strong>Heat map</strong>: the selected
-fields (rows) against time (columns), each row normalised.</li>
-<li><strong>FR-60</strong> <strong>Cluster view</strong>: cluster
-assignments as a band along the time axis, a legend, the algorithm and
-fields used, and the score against ground truth.</li>
-<li><strong>FR-61</strong> All three graphs and the cluster view
-<strong>follow the current field and period selection</strong>.</li>
-<li><strong>FR-62</strong> A field the client has no specific knowledge
-of (an optional field or a new model's output) is shown <strong>by its
-SWE Common type alone</strong>: a Quantity as a line, an angular
-Quantity as points (never a false jump past 360°), a Category as a
-coloured band, a Count as steps. No measurement-specific code
-exists.</li>
+<li><strong>FR-57 to FR-62</strong> Line plot, line plot with error
+bars, heat map and cluster view, each following the selection; unknown
+fields drawn by type; arranged in a movable, resizable grid.</li>
 </ul>
 <h3 id="84-live-data">8.4 Live data</h3>
 <ul>
-<li><strong>FR-63</strong> Live data reaches the client by
-<strong>polling</strong>: raw records once per simulated second from the
-last reading received, and each summary datastream as often as it can
-change. This is a recorded placeholder: Connected Systems
-publish/subscribe (Part 3) is unpublished.</li>
+<li><strong>FR-63 (4.3)</strong> While playing, the client polls each
+datastream in use once per real second, up to the replay time.</li>
+<li><strong>FR-63a (4.3)</strong> While paused, the client polls
+nothing.</li>
+</ul>
+<h3 id="85-data-of-interest-44">8.5 Data of interest (4.4)</h3>
+<ul>
+<li><strong>FR-104</strong> <strong>Save as data of interest</strong>:
+the current dataset, period, resolution, fields and, where relevant, the
+run, saved under a name the analyst types, with an optional note.</li>
+<li><strong>FR-105</strong> The <strong>data of interest list</strong>
+shows the analyst's saved records with name, dataset and span. Each can
+be <strong>opened</strong> in any view, <strong>compared</strong>, or
+<strong>removed</strong>.</li>
+<li><strong>FR-106</strong> <strong>Opening</strong> a record
+regenerates it from the server, as the record describes, whatever the
+current dataset. It is labelled with its dataset and span.</li>
+<li><strong>FR-107</strong> <strong>Comparing</strong> two records draws
+them on one chart on <strong>elapsed time</strong> from each record's
+own start, labelled "elapsed", never as simultaneous. A finer resolution
+is brought to the coarser one; a shorter record ends earlier.</li>
+<li><strong>FR-108</strong> A record whose dataset is not imported is
+shown greyed (FR-96).</li>
 </ul>
 <hr />
 <h2
 id="9-functional-requirements-the-architecture-view-demonstrator-shell">9.
 Functional requirements: the architecture view (demonstrator shell)</h2>
-<h3 id="91-layout">9.1 Layout</h3>
-<p>Mockups 1 to 3 show the arrangement:</p>
+<h3 id="91-layout-44">9.1 Layout (4.4)</h3>
 <ul>
-<li><strong>Top bar</strong>: title, a one-line subtitle explaining that
-components and messages can be clicked, and the controls (play/pause,
-speed, restart client, restart server, failure demos, control panel,
-overview). Nothing says which components are the value-add before the
-reveal (§9.5).</li>
-<li><strong>Left</strong>: the <strong>stacked flowchart</strong>,
-layered top to bottom: front end, third-party libraries, back end,
-legacy, world. Data rises from the collection platform at the bottom to
-the display client at the top.</li>
-<li><strong>Below the flowchart</strong>: <strong>status</strong>
-(simulation, speed, history, server state and instance, client state,
-essentials, optional sources) and the <strong>message key</strong>.</li>
-<li><strong>Right</strong>: the <strong>detail panel</strong>
-(§9.4).</li>
+<li><strong>Top bar</strong>: title, subtitle, a mirror of the replay
+bar acting through the display client, <strong>Freeze</strong>, restart
+client, restart server, failure demos, control panel, overview.</li>
+<li><strong>Left</strong>: the stacked flowchart: front end, third-party
+libraries, back end, legacy.</li>
+<li><strong>Below it</strong>: status (logged-in analyst or locked,
+current dataset, replay time, rate, back end, server, client,
+essentials) and the message key.</li>
+<li><strong>Right</strong>: the detail panel.</li>
 </ul>
-<p>On the 1920 × 1080 target the flowchart is drawn at its designed size
-(840 px wide), so its labels meet VS-05; the detail panel takes the
-rest.</p>
 <h3 id="92-flowchart">9.2 Flowchart</h3>
 <ul>
-<li><strong>FR-64</strong> Drawn with <strong>React Flow
-(xyflow)</strong> from a <strong>fixed layout</strong> in a committed
-file. Zones are labelled, shaded bands. Third-party libraries form their
-<strong>own band</strong>, outside the back end.</li>
-<li><strong>FR-65</strong> Every flow in §3.1 is drawn. A two-way
-exchange is two arrows on the thirds of the facing edges. Both HTTP
-flows (display client and data server; Models and data server) are
-labelled "HTTP".</li>
+<li><strong>FR-64</strong> React Flow, from a fixed layout.</li>
+<li><strong>FR-65</strong> Every flow in §3.1 is drawn; HTTP flows are
+labelled "HTTP", pushed commands "push", and the importer's writes
+"inside the server".</li>
 </ul>
 <h3 id="93-messages">9.3 Messages</h3>
 <ul>
-<li><strong>FR-66</strong> Messages are <strong>real messages captured
-at every component boundary</strong> in §3.1, including in-process
-calls. Capture uses one tap mechanism, never alters a message or either
-side's behaviour, and is tested with capture on and off.</li>
-<li><strong>FR-67</strong> <strong>Every</strong> message is drawn as an
-icon bearing its letter, moving along its flow. None is sampled or
-merged.</li>
-<li><strong>FR-68</strong> Clicking a message shows it in the detail
-panel's <strong>message strip</strong> (§9.4): its letter and name,
-whether it meets a public standard, its sender and receiver, and its
-contents in monospace.</li>
+<li><strong>FR-66</strong> Real messages captured at every boundary,
+with capture on and off tested.</li>
+<li><strong>FR-67</strong> Every message is drawn. A bulk import is
+drawn as <strong>one I message per thousand rows written</strong>,
+labelled with the count, so an import is visible without flooding the
+flowchart.</li>
+<li><strong>FR-68</strong> Clicking a message shows it in the message
+strip, with credentials redacted (FR-16a).</li>
+<li><strong>FR-68a (4.5)</strong> The architecture view is a
+<strong>god's-eye view</strong> of a synthetic system: it shows every
+message, including the models' CO₂ traffic, whoever is logged in to the
+display client. A one-line note says so, so it is not mistaken for a
+permission leak. The display client's own traffic shows what its user
+can see: a weather-only user's client sends and receives no CO₂
+message.</li>
 </ul>
 <h3 id="94-detail-panel">9.4 Detail panel</h3>
 <ul>
-<li><strong>FR-69</strong> Clicking a component shows it in the detail
-panel; the selected component is ringed on the flowchart. The panel's ×
-and the top bar's <strong>Overview</strong> button return it to its
-<strong>opening state</strong>, the overview.</li>
-<li><strong>FR-69a</strong> The <strong>overview</strong> invites the
-viewer to click a component and shows three lists: <strong>sensible
-defaults</strong> (each decision the system did not have to make, the
-standard or off-the-shelf part adopted instead, and where it is seen);
-<strong>written for this system</strong> (store adapter, display client,
-models; the data server is among the defaults); and <strong>not in this
-demonstrator</strong> (what a developed system needs that is
-deliberately absent, by name, without estimates). It marks nothing as
-value-add (FR-74).</li>
-<li><strong>FR-70</strong> <strong>Display client</strong> (mockup 1):
-the monitor frame holding the display client (§8), short notes beside it
-on the handshake, fields, period and clustering, and the <strong>message
-strip</strong> beneath it. Until a message is clicked, the strip shows
-the store query (S) built from the current selection, with the chain of
-messages that selection sends.</li>
-<li><strong>FR-71</strong> <strong>Models</strong> (mockup 2): the
-Models component in gold with its description; beneath it, joined by
-lines, the models as cards in one row: <strong>Data cleanse</strong>,
-<strong>Summaries</strong>, <strong>Analysis</strong> (gold, registered)
-and <strong>New model 1</strong>, <strong>New model 2</strong> (dashed,
-empty slots). Each card has a diamond; each registered model shows a
-small view of what it does, labelled illustrative. Below, three steps
-for adding a model (write it, register it, see it) and a line stating
-that each model runs in its own worker and reaches the data server only
-over HTTP.</li>
-<li><strong>FR-72</strong> <strong>Data server</strong> (mockup 3): that
-it is OpenSensorHub, off the shelf, with a stand-in in its place here; a
-diagram of the Connected Systems resources that describe this system:
-the collection platform (Platform) with bow and stern sensors (Sensor),
-each with its record datastream and observations; Models (Process) with
-each model's output datastreams and observations; and a row of the other
-things used (property definitions, control streams and commands,
-resource creation). Below it, <strong>why it fits</strong> in six
-points, the <strong>gaps</strong> (no standard aggregation;
-publish/subscribe unpublished; a plain HTTP PUT for latest-run results),
-and what is <strong>not used</strong> and refused by name (deployments,
-procedures, sampling features, system events and history, command
-feasibility, replacing and deleting). The panel claims nothing the
-server refuses.</li>
-<li><strong>FR-73</strong> <strong>Every other component</strong>
-(collection platform, logger store, store adapter, scientific libraries)
-shows an explanation panel: what it does, which zone it belongs to and
-why, which letters it sends and receives, and live counters.</li>
+<li><strong>FR-69, FR-69a</strong> The overview, listing the importer
+and replay controller under <em>written for this system</em> and
+authentication under <em>adopted</em>.</li>
+<li><strong>FR-70</strong> <strong>Display client</strong>: the monitor,
+notes, and the message strip.</li>
+<li><strong>FR-71</strong> <strong>Models</strong>: as in 4.3, with each
+model's per-dataset outputs.</li>
+<li><strong>FR-72 (4.4)</strong> <strong>Data server</strong>:
+OpenSensorHub with a stand-in here; the Connected Systems resources
+describing this system, <strong>per dataset</strong>; the importer,
+replay controller and workspace systems; authentication and permissions;
+why it fits; gaps; what is not used.</li>
+<li><strong>FR-109 (4.4)</strong> <strong>Data folder</strong>: the
+files, with sizes, dates and statuses, and a note that the system never
+writes to it.</li>
+<li><strong>FR-110 (4.4)</strong> <strong>CSV importer</strong>: what it
+does; the catalogue; the column mapping; the last import's speed in rows
+per second.</li>
+<li><strong>FR-91</strong> <strong>Replay controller</strong>: its
+control stream, state and log.</li>
+<li><strong>FR-73</strong> Every other component shows an explanation
+panel.</li>
 </ul>
 <h3 id="95-value-add-reveal">9.5 Value-add reveal</h3>
 <ul>
-<li><strong>FR-74</strong> At startup <strong>every component looks the
-same</strong>, the value-add ones included, and the detail panel is
-empty.</li>
-<li><strong>FR-75</strong> The first time the <strong>display
-client</strong> or <strong>Models</strong> is clicked, it is
-<strong>revealed</strong>. Models is revealed by the click. The display
-client is revealed only when it is <strong>showing its views and its
-detail panel is on screen</strong>, both at once: never in the
-background, and not while it waits for Play, the models or its
-handshake, nor when it has rejected the server. So the presenter can
-show Models first and the display client later: its card turns gold,
-gains a ★ in its title, "our value-add" in its subtitle, and a glinting
-diamond in its top-right corner. It stays revealed until the page is
-reloaded or the client restarts.</li>
-<li><strong>FR-76</strong> Inside the revealed panels, every value-add
-part carries its own diamond: the three graphs and the cluster view in
-the monitor; Models and each model card in the Models panel.</li>
+<li><strong>FR-74 to FR-76</strong> As in 4.3. The importer and replay
+controller are not marked.</li>
+<li><strong>FR-74a (4.6)</strong> With the <code>hand-made</code> flag,
+FR-74's startup state begins <strong>at adoption</strong> (FR-125), not
+at load. No component can be revealed during the opening (FR-121).</li>
 </ul>
-<h3 id="96-time-controls">9.6 Time controls</h3>
+<h3 id="96-time-in-the-demonstrator">9.6 Time in the demonstrator</h3>
 <ul>
-<li><strong>FR-77</strong> The simulation <strong>starts off</strong>. A
-single <strong>play/pause</strong> button starts and stops the
-<strong>simulation clock</strong>, which starts and stops the whole
-system. When paused, message icons freeze in place and remain
-clickable.</li>
-<li><strong>FR-78</strong> A <strong>speed control</strong> offers ¼×,
-½× and 1×, with <strong>½× the default</strong>. The fastest rate is the
-fastest at which every icon stays legible on the target display,
-verified by measurement; there is no faster mode.</li>
-<li><strong>FR-79</strong> Restart client, restart server, the failure
-demos and the control panel work whether the simulation is playing or
-paused. A viewer's click is answered at once: the messages it causes
-wear a gold ring and set off ahead of any queue, and while the clock
-stands still the shell lets a pending command through to its model.</li>
+<li><strong>FR-77 (4.4)</strong> At load the display client shows its
+login screen and nothing else sends. After login it handshakes; the
+replay is paused at the start of Mission A.</li>
+<li><strong>FR-78</strong> Messages are drawn in real time, whatever the
+replay rate.</li>
+<li><strong>FR-92</strong> <strong>Freeze</strong> holds the whole
+demonstrator still for inspection; it is scaffolding.</li>
+<li><strong>FR-79</strong> Controls work frozen or not; a viewer's click
+is answered at once.</li>
 </ul>
-<h3 id="97-failure-demos">9.7 Failure demos</h3>
-<p>The failure demos belong to the demonstrator shell, like the control
-panel whose switches they set.</p>
+<h3 id="97-failure-demos-44">9.7 Failure demos (4.4)</h3>
 <ul>
-<li><strong>FR-79a</strong> A <strong>Failure demos</strong> menu in the
-top bar offers: the server goes down (then comes up); the server
-restarts; an essential source is missing; fields the client has never
-seen; a misconfigured server.</li>
-<li><strong>FR-79b</strong> Choosing one sets the switches, starts the
-clock if it is stopped, shows the display client, and puts a
-<strong>banner</strong> under the title saying <strong>what to watch
-for</strong>, with the next step where there is one and <strong>Put
-everything back</strong>.</li>
-<li><strong>FR-79c</strong> Put everything back restores every field to
-its default, an honest server and a running server.</li>
+<li><strong>FR-79a</strong> The menu offers: the server goes down and
+comes up; the server restarts; an essential source is missing; fields
+the client has never seen; a misconfigured server; a rate above what the
+models sustain; <strong>a wrong password</strong> (refused, nothing
+shown); <strong>the screen locks</strong> (views blank, requests stop,
+login needed); <strong>an overlapping file</strong> (Mission B and its
+re-export imported side by side, never mixed); <strong>a degraded
+dataset</strong> (Mission C); <strong>the friend logs in</strong> (the
+same dataset with no trace of CO₂ anywhere in the client, and its
+traffic carrying none); <strong>the friend asks for CO₂</strong> by a
+crafted request (absent: 404 from the server, and a command naming CO₂
+rejected by the model) (4.5).</li>
+<li><strong>FR-79b, FR-79c</strong> As in 4.3.</li>
 </ul>
-<hr />
-<h2 id="10-implementation-direction">10. Implementation direction</h2>
+<h3 id="98-adoption-opening-46">9.8 Adoption opening (4.6)</h3>
+<p>The opening is for <strong>non-engineers</strong>. It shows what the
+data server would be if we wrote it ourselves, then what adopting
+OpenSensorHub saves. It comes <strong>before</strong> the value-add
+reveal, so nothing is marked as ours in it.</p>
 <ul>
-<li><strong>FR-80</strong> Front end: <strong>TypeScript and
-React</strong>. Flowchart: <strong>React Flow (xyflow)</strong>. Charts:
-<strong>ECharts</strong>. The display client's panel layout:
-<strong>react-grid-layout</strong>. Model editor: <strong>CodeMirror
-6</strong> with Python mode.</li>
-<li><strong>FR-81</strong> Back end, in a developed system:
-<strong>OpenSensorHub</strong> with the store adapter as its module, and
-the models as separate processes. In the demonstrator: the stand-in of
-FR-38a on Pyodide. The committed OpenAPI master states what is needed of
-either.</li>
-<li><strong>NFR-04</strong> TypeScript types are generated from the
-masters; the Python back end validates against the same masters.</li>
-<li><strong>NFR-05</strong> Every model's worker loads Pyodide and the
-scientific libraries it needs; the startup budget (NFR-10) includes
-this.</li>
-</ul>
-<hr />
-<h2 id="11-visual-style">11. Visual style</h2>
-<p>The style is a <strong>light, hand-drawn architecture
-explainer</strong>: ink on paper, hand-lettered labels, sketch-edged
-boxes, coloured zones, with crisp, exact message contents. The mockups
-are plain; they fix layout only.</p>
-<h3 id="111-typography">11.1 Typography</h3>
-<ul>
-<li><strong>VS-01</strong> A legible, openly licensed
-<strong>hand-lettered face</strong> for component names, zone labels,
-panel titles, buttons and the key.</li>
-<li><strong>VS-02</strong> A <strong>monospace face</strong> for message
-contents and code. Message contents are never shown in the hand-lettered
-face.</li>
-<li><strong>VS-03</strong> Inside the monitor, the display client uses a
-<strong>plain sans-serif</strong>, so the real system's screen is
-visibly distinct from the demonstrator around it.</li>
-<li><strong>VS-04</strong> All fonts are served from the site
-itself.</li>
-<li><strong>VS-05</strong> Minimum sizes on the target display at native
-resolution: component names 20 px, other labels 16 px, message letters
-17 px, message contents 13 px. Sizes scale up together for the viewing
-distance; they never shrink to fit. Inside the monitor, the display
-client's own text (VS-03) is 13 px or larger. <strong>No requirement
-number appears on screen.</strong></li>
-</ul>
-<h3 id="112-palette">11.2 Palette</h3>
-<ul>
-<li><p><strong>VS-06</strong> <strong>Paper and ink</strong>: a warm
-off-white ground and a near-black ink.</p></li>
-<li><p><strong>VS-07</strong> <strong>Zones</strong>, each a pale fill
-with a stronger outline of one hue:</p>
+<li><p><strong>FR-119</strong> <strong>Entry.</strong> If the page's URL
+query has a <code>hand-made</code> flag (<code>?hand-made</code>, with
+any value or none), the demonstrator opens in the <strong>adoption
+opening</strong>. Without the flag it opens exactly as FR-77 describes.
+The flag is read once, at load, and has no other effect. Reloading with
+the flag repeats the opening. The flag belongs to the demonstrator shell
+only; a developed system has no such flag.</p></li>
+<li><p><strong>FR-120</strong> <strong>The data server as
+subsystems.</strong> In the opening the third-party zone holds
+<strong>no data server</strong>. The back end holds <strong>eight
+subsystem components</strong> beside the CSV importer, replay controller
+and Models, and <strong>all are equals</strong>: the same card style,
+the same size, one grid. No frame, label or colour groups the eight, or
+sets them apart from the other components:</p>
 <table>
 <thead>
 <tr>
-<th>Zone</th>
-<th>Hue</th>
-<th>Outline</th>
+<th>Subsystem</th>
+<th>What it does</th>
+<th>Keeps data in</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>World</td>
-<td>warm grey</td>
-<td>dashed</td>
+<td>Web API</td>
+<td>Connected Systems endpoints, discovery, paging, formats</td>
+<td>—</td>
 </tr>
 <tr>
-<td>Legacy</td>
-<td>burnt orange</td>
-<td>solid</td>
+<td>Registry</td>
+<td>Systems, datastreams, schemas, control streams</td>
+<td>a metadata database</td>
 </tr>
 <tr>
-<td>New build · back end</td>
-<td>blue</td>
-<td>solid</td>
+<td>Observation store</td>
+<td>Time-series storage, indexes, backups, growth</td>
+<td>a time-series database</td>
 </tr>
 <tr>
-<td>Third-party libraries</td>
-<td>violet</td>
-<td>solid</td>
+<td>Query engine</td>
+<td>Time filters, latest value, building responses</td>
+<td>indexes</td>
 </tr>
 <tr>
-<td>New build · front end</td>
-<td>green</td>
-<td>solid</td>
+<td>Commands</td>
+<td>Control streams, delivery to receivers, status</td>
+<td>a command log</td>
+</tr>
+<tr>
+<td>Accounts</td>
+<td>Users, passwords, roles, sessions</td>
+<td>a user database</td>
+</tr>
+<tr>
+<td>Permissions</td>
+<td>Who may see what; hiding restricted systems</td>
+<td>a policy store</td>
+</tr>
+<tr>
+<td>Admin</td>
+<td>Settings, start, stop, health</td>
+<td>configuration files</td>
+</tr>
+</tbody>
+</table>
+<p>The flows of §3.1 are drawn between the subsystems and the other
+components as plain lines, with no message letters (FR-120a). The
+back-end band has <strong>two rows</strong> in the opening (six cards
+and five), with every card at its normal size. The zones below it move
+down, and return at the merge.</p></li>
+<li><p><strong>FR-120a (4.6)</strong> <strong>Flows in the
+opening.</strong> Each external flow is drawn to the subsystem it
+belongs to, and the lines between the subsystems are drawn too:</p>
+<table>
+<thead>
+<tr>
+<th>From</th>
+<th>To</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Display client, Models, replay controller</td>
+<td>Web API (both ways)</td>
+</tr>
+<tr>
+<td>Commands</td>
+<td>CSV importer, replay controller, Models (push)</td>
+</tr>
+<tr>
+<td>CSV importer</td>
+<td>Observation store, Registry</td>
+</tr>
+<tr>
+<td>Web API</td>
+<td>Query engine, Registry, Commands, Permissions</td>
+</tr>
+<tr>
+<td>Query engine</td>
+<td>Observation store</td>
+</tr>
+<tr>
+<td>Accounts</td>
+<td>Permissions (both ways)</td>
+</tr>
+<tr>
+<td>Admin</td>
+<td>Web API</td>
 </tr>
 </tbody>
 </table></li>
-<li><p><strong>VS-08</strong> <strong>Message letters</strong>: Q blue,
-D teal, O green, K purple, P navy, H red, S amber, L brown, I grey. One
-colour per letter, shared by icon, key and message strip.</p></li>
-<li><p><strong>VS-09</strong> <strong>Value-add gold</strong>: a warm
-gold fill and a darker gold outline, used only for revealed value-add
-components and their parts.</p></li>
-<li><p><strong>VS-10</strong> Colour never carries meaning alone: every
-message shows its letter, every zone its label, every value-add item its
-★ and "our value-add".</p></li>
-<li><p><strong>VS-11</strong> Every text and icon colour meets
-<strong>4.5:1 contrast</strong> (3:1 at 24 px and above).</p></li>
-</ul>
-<h3 id="113-components-and-flows">11.3 Components and flows</h3>
+<li><p><strong>FR-121</strong> <strong>Nothing is gold.</strong> No card
+is gold. No ★, diamond or "our value-add" appears anywhere in the
+opening, the detail panel included. Clicking the display client or
+Models does not reveal it.</p></li>
+<li><p><strong>FR-122</strong> <strong>Nothing runs.</strong> The top
+bar's controls are <strong>hidden, not disabled</strong>: replay mirror,
+Freeze, restart client, restart server, failure demos, control panel and
+overview. No message is sent or drawn. The display client does not
+handshake. <strong>The back end does not start (4.6)</strong>: no worker
+runs and no model registers until hand-over (FR-125). The status panel
+shows only "Opening". The <strong>stand-in banner is hidden</strong>
+until hand-over, because it names OpenSensorHub before there is a data
+server on screen.</p></li>
+<li><p><strong>FR-123</strong> <strong>The opening panel.</strong> The
+detail panel opens on <strong>Data server</strong> with:</p>
 <ul>
-<li><strong>VS-12</strong> Each component is a card: white fill, ink
-outline with slightly uneven corners, its name and a one-line role.
-<strong>Text labels only</strong>; no illustrations.</li>
-<li><strong>VS-13</strong> Flows are ink arrows with filled heads,
-horizontal or vertical segments only, never crossing a card. Protocol
-labels are used sparingly.</li>
-<li><strong>VS-14</strong> A message is a circle bearing its letter. A
-<strong>selected</strong> message gains a tinted fill and a halo. One
-selected while playing stays where it was clicked, so it can be read;
-one selected while paused travels on at Play and is deselected when it
-arrives. A <strong>failed</strong> request (server down) stops at the
-boundary with its ring broken and a cross.</li>
+<li>a two-way switch, <strong>Build it ourselves | Adopt
+OpenSensorHub</strong>, with <em>Build it ourselves</em> selected;</li>
+<li>the table of FR-120;</li>
+<li>a row, <strong>"Written by us either way"</strong>: CSV importer,
+replay controller, Models, display client, in plain style.</li>
 </ul>
-<h3 id="114-sketch-rendering">11.4 Sketch rendering</h3>
-<ul>
-<li><strong>VS-15</strong> Cards, zones and arrows are drawn with a
-<strong>sketch renderer</strong> (Rough.js, served from the site),
-<strong>gently</strong>: low roughness, single stroke, no hatching.</li>
-<li><strong>VS-16</strong> <strong>Every sketched shape is
-seeded</strong> from its stable name, so it draws identically on every
-render, pause and restart.</li>
-<li><strong>VS-17</strong> Without the renderer, the same shapes fall
-back to plain CSS outlines. The demonstrator never depends on the
-effect.</li>
+<p>Clicking a subsystem card highlights its row in the table. Clicking
+any other card does nothing in the opening.</p></li>
+<li><p><strong>FR-124</strong> <strong>Adopt.</strong> Choosing
+<em>Adopt OpenSensorHub</em>:</p>
+<ol type="1">
+<li>moves the eight subsystem cards into the third-party zone, where
+they merge into the single <strong>Data server</strong> card
+(OpenSensorHub, OGC Connected Systems);</li>
+<li>spreads the CSV importer, replay controller and Models across the
+back end that the eight have left;</li>
+<li>changes the table to "OpenSensorHub covers all of these", with each
+subsystem ticked. No number is shown (§16).</li>
+</ol>
+<p>This takes about 1.5 seconds. With reduced motion it is
+immediate.</p></li>
+<li><p><strong>FR-125</strong> <strong>Hand-over.</strong> When the
+merge ends, the flowchart is <strong>exactly</strong> FR-77's startup
+layout, and FR-74 applies from that moment: every component looks the
+same, and the display client shows its login screen. The top bar's
+controls and the stand-in banner <strong>appear</strong>. The
+<strong>back end starts now (4.6)</strong>, with the usual loading
+progress (NFR-10), as on a load without the flag. The detail panel keeps
+the adopted savings until the viewer clicks a component or closes it.
+<strong>That panel is the only difference</strong> from a load without
+the flag.</p></li>
+<li><p><strong>FR-126</strong> <strong>One way.</strong> Adoption cannot
+be undone in a session. The switch is removed at hand-over. To show the
+opening again, reload with the flag.</p></li>
 </ul>
-<h3 id="115-detail-panel">11.5 Detail panel</h3>
+<hr />
+<h2 id="10-implementation-direction">10. Implementation direction</h2>
 <ul>
-<li><strong>VS-18</strong> The detail panel and message strip are
-<strong>crisp, not sketched</strong>: they carry the evidence.</li>
-<li><strong>VS-19</strong> The <strong>monitor frame</strong> is a dark
-bezel with a stand, drawn plainly.</li>
-<li><strong>VS-20</strong> Charts inside the monitor are drawn plainly
-by ECharts, with no sketch effect.</li>
+<li><strong>FR-80 (4.6)</strong> TypeScript and React; React Flow;
+<strong>ECharts</strong>; react-grid-layout; CodeMirror 6. The views are
+charts. Decision D-53, which removed them for speed on slower laptops,
+is superseded: slower laptops are not a target for this project.</li>
+<li><strong>FR-81 (4.4)</strong> In a developed system:
+<strong>OpenSensorHub</strong>, with its own authentication, the CSV
+importer as its module writing in bulk, and the replay controller and
+models as separate processes with service accounts, each subscribed to
+its control stream. In the demonstrator: the stand-ins.</li>
+<li><strong>NFR-04</strong> TypeScript types are generated from the
+masters.</li>
+<li><strong>NFR-05</strong> The startup budget includes each model's
+worker.</li>
 </ul>
-<h3 id="116-motion-and-the-diamond">11.6 Motion and the diamond</h3>
+<hr />
+<h2 id="11-visual-style">11. Visual style</h2>
+<p>As Version 4.2 §11, with the changes of 4.3 (four zones; messages at
+a fixed on-screen pace), and in 4.4 and 4.6:</p>
 <ul>
-<li><strong>VS-21</strong> Only two things move: <strong>messages
-travelling along flows</strong>, at the speed the clock sets; and the
-<strong>value-add diamonds</strong>.</li>
-<li><strong>VS-22</strong> The <strong>diamond</strong> is a small cut
-gem in the top-right corner of each value-add item. Every two seconds it
-<strong>glints</strong>: a four-pointed sparkle swells and turns, the
-top facet flashes, and a gold glow pulses. Diamonds on screen together
-are <strong>staggered</strong> so they twinkle in turn.</li>
-<li><strong>VS-23</strong> Under the operating system's
-<strong>reduced-motion</strong> setting, diamonds show a still sparkle
-and messages move without easing. When the simulation is paused,
-messages stop but diamonds continue: they belong to the frame, not the
-system.</li>
+<li><strong>VS-25 (4.6)</strong> In the adoption opening the eight
+subsystem cards are drawn with the same sketch renderer, line weight,
+fill and font as every other component card. The merge moves the cards;
+it does not redraw their outlines.</li>
+<li><strong>VS-24 (4.4)</strong> The <strong>login and lock
+screens</strong> are plain, inside the monitor frame, in the display
+client's own sans-serif. The demonstrator's pre-populated credentials
+carry a visible "demo credentials" label.</li>
 </ul>
 <hr />
 <h2 id="12-delivery">12. Delivery</h2>
 <ul>
-<li><strong>NFR-06</strong> Static assets on a public gh-pages site.
-Each visit starts a fresh seeded run; nothing persists between
-visits.</li>
-<li><strong>NFR-07</strong> Pyodide and every Python package are served
-from the site itself, over HTTPS.</li>
-<li><strong>NFR-08</strong> The target is a <strong>large presentation
-display</strong>; layout and sizes are verified on it.</li>
-<li><strong>NFR-09</strong> The demonstrator runs on machines
-<strong>with or without WebAssembly</strong> (§2.3). Before a
-demonstration, the presentation machine is checked so the presenter
-knows which back end will run.</li>
-<li><strong>NFR-10</strong> A startup time budget is declared and
-measured for <strong>each back end</strong>, including loading the
-pre-calculated history and, for the Python back end, the model workers.
-The history files' download size is declared and measured too.</li>
+<li><strong>NFR-06 to NFR-10</strong> As in 4.3. The data folder's files
+are part of the build.</li>
+<li><strong>NFR-11</strong> Kiosk mode in a developed system
+(§7.5).</li>
 </ul>
 <h2 id="13-development-process">13. Development process</h2>
 <ul>
-<li><strong>PR-01</strong> The repository is public and contains no
-material about any other project, customer or system, and no real place.
-A vocabulary gate enforces a privately held list of forbidden
-terms.</li>
-<li><strong>PR-02</strong> Spec-kit carries: constitution, specify,
-plan, tasks, analyze, implement. ADRs record contested decisions,
-including the choice of data server, the split of work between Summaries
-and Analysis, and how models reach the data server.</li>
-<li><strong>PR-03</strong> Every gate and every refusal test is watched
-failing before it is trusted.</li>
-</ul>
-<h3 id="131-keeping-the-two-back-ends-honest">13.1 Keeping the two back
-ends honest</h3>
-<ul>
-<li><strong>PR-04</strong> One <strong>contract test suite</strong> runs
-against both back ends through the seam. A change to the interface that
-passes in one and fails in the other fails the build.</li>
-<li><strong>PR-05</strong> The stand-in has <strong>no capability the
-Python back end lacks</strong>. Anything shown only in the stand-in
-would misrepresent the real system.</li>
-<li><strong>PR-06</strong> The Python back end is the reference. When
-the two disagree on anything other than the models' methods, the
-stand-in is wrong.</li>
+<li><strong>PR-01 to PR-03</strong> As in 4.2.</li>
+<li><strong>PR-04</strong> One server-neutral contract suite, finding
+resources by unique id and output name, run against both stand-ins and a
+stock OpenSensorHub, <strong>with credentials (4.4)</strong>.</li>
+<li><strong>PR-05</strong> The stand-ins have no capability
+OpenSensorHub lacks.</li>
+<li><strong>PR-06</strong> OpenSensorHub is the reference.</li>
+<li><strong>PR-07 (4.4)</strong> No credential appears in the repository
+except the demonstrator's demo credentials, which are labelled as such
+and grant nothing outside the demonstrator.</li>
 </ul>
 <hr />
-<h2 id="14-acceptance-criteria">14. Acceptance criteria</h2>
+<h2 id="14-acceptance-criteria-46">14. Acceptance criteria (4.6)</h2>
 <table>
 <thead>
 <tr>
@@ -1410,297 +1503,462 @@ stand-in is wrong.</li>
 <tbody>
 <tr>
 <td>AT-01</td>
-<td>Observations fetched through the seam match the manifest at each
-time, while the store is growing</td>
+<td>Observations served match the CSV file's rows and the manifest at
+each time</td>
 <td>C1</td>
 </tr>
 <tr>
 <td>AT-02</td>
-<td>The same ASGI application passes the same contract suite in Pyodide
-behind the relay and in CPython under an ordinary ASGI server</td>
+<td>The same application passes the same contract suite in Pyodide and
+in CPython</td>
 <td>C1</td>
 </tr>
 <tr>
 <td>AT-03</td>
-<td>Replacing the logger store with a second, differently awkward format
-changes the store adapter only: AT-01 still passes, and every response
-is identical to the first store's</td>
+<td>A second, differently awkward CSV dialect changes the importer only;
+every response is identical</td>
 <td>C1</td>
 </tr>
 <tr>
 <td>AT-04</td>
-<td>With one week of history, the declared queries of FR-31 meet their
-time budget, and rebuilding the index gives identical results</td>
+<td>The declared queries of FR-31 meet their budget over three days of
+one dataset</td>
 <td>C1</td>
 </tr>
 <tr>
 <td>AT-05</td>
-<td>The CPython build of the server is browsed by two independent
-Connected Systems clients (the OGC CSAPI Explorer and
-OSHConnect-Python): systems, datastreams, schemas and observations
-listed and read</td>
-<td>C1</td>
-</tr>
-<tr>
-<td>AT-06</td>
-<td>The served OpenAPI matches the committed master, and the conformance
-declaration matches the implemented subset</td>
+<td>The CPython build is browsed by OSHConnect-Python and the CSAPI
+Explorer, with credentials</td>
 <td>C1</td>
 </tr>
 <tr>
 <td>AT-07</td>
-<td>Removing any essential source, or changing its type or unit, starts
-the client in degraded mode with one warning naming exactly those
-sources and their views disabled; removing an optional source gives no
-warning</td>
-<td>C2</td>
-</tr>
-<tr>
-<td>AT-08</td>
-<td>A server whose profile claim is contradicted by discovery is
-rejected</td>
+<td>Mission C opens degraded, naming its missing source; Mission A and B
+are unaffected</td>
 <td>C2</td>
 </tr>
 <tr>
 <td>AT-09</td>
-<td>Each extra field (Category, Quantity, Count) appears after restart
-client with its generic view and no new display code</td>
+<td>Each extra field appears after restart client, drawn by type</td>
 <td>C2</td>
 </tr>
 <tr>
-<td>AT-10</td>
-<td>Restart server: 503 with <code>Retry-After</code> while waiting; new
-instance identifier; every client resets and repeats the handshake; no
-records lost</td>
-<td>C1, C2</td>
-</tr>
-<tr>
 <td>AT-11</td>
-<td>Server down: network failures, unreachable banner, stale data
-marked, no records lost; on bringing it up, the client
-re-handshakes</td>
+<td>Server down, then up: banner, stale data, fresh handshake</td>
 <td>C1, C2</td>
 </tr>
 <tr>
 <td>AT-12</td>
-<td>A field toggle changes nothing until the next server start;
-afterwards discovery offers exactly the configured fields, and switching
-a field back on restores its full history</td>
+<td>A field toggle changes nothing until the next server start</td>
 <td>C1, C2</td>
 </tr>
 <tr>
 <td>AT-13</td>
-<td>A model written in an empty slot registers over HTTP, appears in the
-display client after restart client, and is drawn by its schema
-type</td>
+<td>A model written in an empty slot registers and appears after restart
+client</td>
 <td>C3</td>
 </tr>
 <tr>
 <td>AT-14</td>
-<td>A model that raises errors or never returns leaves the data server,
-the other models and the display client running</td>
+<td>A failing model leaves everything else running</td>
 <td>C3</td>
 </tr>
 <tr>
 <td>AT-15</td>
-<td>Every model other than Data cleanse reads only Data cleanse's output
-datastreams</td>
+<td>Every model but Data cleanse reads only Data cleanse's output</td>
 <td>C3</td>
 </tr>
 <tr>
 <td>AT-16</td>
-<td>Change detection and clustering recover the manifest's fronts, air
-masses and reach boundaries with reported scores, without access to
-position</td>
+<td>Change detection and clustering recover each dataset's manifest
+features, with scores</td>
 <td>C3</td>
 </tr>
 <tr>
-<td>AT-17</td>
-<td>Each period preset reads the source FR-29 specifies; the S messages
-on the flowchart and in the message strip match the queries actually
-made</td>
-<td>Architecture view</td>
-</tr>
-<tr>
 <td>AT-18</td>
-<td>Every boundary in §3.1 that carries traffic produces captured
-messages with a letter from §5; outputs are identical with capture on
-and off</td>
+<td>Every boundary in §3.1 produces captured messages; outputs identical
+with capture on and off</td>
 <td>Architecture view</td>
 </tr>
 <tr>
 <td>AT-19</td>
-<td>Before play is pressed, and while paused, no component sends a
-message and the clock does not advance</td>
-<td>Architecture view</td>
+<td>Before login, while locked, while paused and while frozen, nothing
+is sent but what each state allows</td>
+<td>Architecture view, C5</td>
 </tr>
 <tr>
 <td>AT-20</td>
-<td>At startup no component is gold; clicking the display client or
-Models reveals it as FR-75 describes; no other component can be
-revealed</td>
+<td>The value-add reveal works as FR-75 describes</td>
 <td>Architecture view</td>
 </tr>
 <tr>
-<td>AT-21</td>
-<td>Rendering the flowchart twice, and after a client restart, gives
-identical sketched outlines</td>
-<td>Visual style</td>
+<td>AT-21 to AT-23</td>
+<td>Visual style and delivery</td>
+<td></td>
 </tr>
 <tr>
-<td>AT-22</td>
-<td>An automated contrast check passes for every text and icon
-colour</td>
-<td>Visual style</td>
-</tr>
-<tr>
-<td>AT-23</td>
-<td>All fonts, the sketch renderer and Pyodide are fetched from the
-site's own origin</td>
-<td>Delivery</td>
-</tr>
-<tr>
-<td>AT-24</td>
-<td>The same contract suite passes against the Python back end and the
-stand-in: discovery, profile, schemas, encodings, refusals, waiting mode
-and instance identifiers</td>
-<td>C2</td>
-</tr>
-<tr>
-<td>AT-25</td>
-<td>With WebAssembly disabled, the demonstrator starts the stand-in,
-shows "Back end: JavaScript stand-in", tags the back-end components,
-shows the notice, and marks model results as illustrative</td>
+<td>AT-25, AT-26</td>
+<td>Stand-in visibility and parity</td>
 <td>Honesty</td>
 </tr>
 <tr>
-<td>AT-26</td>
-<td>With WebAssembly disabled, every architecture-view test (AT-07 to
-AT-12, AT-17 to AT-20) passes unchanged</td>
-<td>C2, architecture view</td>
-</tr>
-<tr>
-<td>AT-27</td>
-<td>Both back ends read the same pre-calculated history files, and an
-observation query over the history returns identical values from
-each</td>
-<td>C1</td>
-</tr>
-<tr>
 <td>AT-28</td>
-<td>Regenerating the history from the recorded seeds reproduces the
-shipped files exactly</td>
+<td>Regenerating the data folder from the seeds reproduces the files
+exactly</td>
 <td>Delivery</td>
 </tr>
 <tr>
 <td>AT-29</td>
-<td>In both back ends, a system, a datastream and observations are
-created with ordinary HTTP requests and then served; creation outside a
-model's own system, and every replace or delete but the declared PUT, is
-refused by name</td>
+<td>A model creates its resources; creating them again returns the same
+<code>Location</code></td>
 <td>C3</td>
 </tr>
 <tr>
-<td>AT-30</td>
-<td>The detail panel opens on the overview (adopted, written, not here);
-the Data server panel claims nothing the server refuses; no requirement
-number appears on screen</td>
-<td>Honesty</td>
+<td>AT-31</td>
+<td>Each failure demo shows what its banner says</td>
+<td>C1, C2, C4, C5, C6</td>
 </tr>
 <tr>
 <td>AT-32</td>
-<td><em>(Run once as a spike, 2026-11-23: not passed.)</em> The contract
-suite, pointed at a stock OpenSensorHub, passes; each difference is
-recorded with the fallback taken (ADR 0005). The suite passed 0 of 15
-unchanged and must first find resources by unique id, not by the
-stand-in's identifiers</td>
+<td>The server-neutral contract suite passes against a stock
+OpenSensorHub, with credentials</td>
 <td>C1</td>
 </tr>
 <tr>
-<td>AT-31</td>
-<td>Each failure demo shows what its banner says: unreachable and stale
-then a fresh handshake; degraded with the sources named; unseen fields
-drawn by type; a contradicted claim rejected; and Put everything back
-restores a configured client</td>
-<td>C1, C2</td>
+<td>AT-33</td>
+<td>Load, play, pause, each rate and seek are commands pushed to the
+replay controller; the state follows within one real second; the log
+records each</td>
+<td>C4</td>
+</tr>
+<tr>
+<td>AT-34</td>
+<td>Over the same span, every model's outputs are identical at 0.1×, 1×
+and the highest allowed rate</td>
+<td>C4</td>
+</tr>
+<tr>
+<td>AT-35</td>
+<td>A rate above the slowest model's bound is rejected, naming the bound
+and the model</td>
+<td>C4</td>
+</tr>
+<tr>
+<td>AT-36</td>
+<td>A seek starts a new replay run; outputs never mix</td>
+<td>C4</td>
+</tr>
+<tr>
+<td>AT-37</td>
+<td>Requests per real second are the same at 0.1× and 100×</td>
+<td>C4</td>
+</tr>
+<tr>
+<td>AT-38</td>
+<td>Receivers subscribe before declaring ready, and resubscribe after
+every restart</td>
+<td>C4</td>
+</tr>
+<tr>
+<td>AT-39</td>
+<td>No request waits on a command's <code>POST</code> before the display
+updates</td>
+<td>C4</td>
+</tr>
+<tr>
+<td><strong>AT-40</strong></td>
+<td>The catalogue lists every file in the data folder with name, size,
+modified date, hash and status; a file copied in appears after
+rescan</td>
+<td>C1</td>
+</tr>
+<tr>
+<td><strong>AT-41</strong></td>
+<td>Opening a file not imported imports it, showing progress, then loads
+it; nothing in the data folder changes</td>
+<td>C1, C4</td>
+</tr>
+<tr>
+<td><strong>AT-42</strong></td>
+<td>Mission B and its re-export are imported into separate datastreams;
+a query on one never returns the other's readings</td>
+<td>C1</td>
+</tr>
+<tr>
+<td><strong>AT-43</strong></td>
+<td>A file changed since import is imported as a new dataset; the
+earlier one is marked superseded and still opens</td>
+<td>C1</td>
+</tr>
+<tr>
+<td><strong>AT-44</strong></td>
+<td>Changing the current dataset rebuilds the field list without a full
+handshake; models resume or start on it; returning to a dataset already
+processed shows its results at once</td>
+<td>C2, C3</td>
+</tr>
+<tr>
+<td><strong>AT-45</strong></td>
+<td>A saved data of interest, opened after switching dataset,
+regenerates exactly the same values</td>
+<td>C3</td>
+</tr>
+<tr>
+<td><strong>AT-46</strong></td>
+<td>Two data of interest compared on elapsed time are drawn from each
+one's start, at the coarser resolution, labelled "elapsed"</td>
+<td>C3</td>
+</tr>
+<tr>
+<td><strong>AT-47</strong></td>
+<td>A resolution with no datastream is refused, naming those
+available</td>
+<td>C3</td>
+</tr>
+<tr>
+<td><strong>AT-48</strong></td>
+<td>After Reset instance, every user's data of interest list is empty;
+re-importing a file restores nothing saved before the reset</td>
+<td>C1, C3</td>
+</tr>
+<tr>
+<td><strong>AT-49</strong></td>
+<td>Every request and push subscription without valid credentials is
+refused with 401, discovery and the catalogue included</td>
+<td>C5</td>
+</tr>
+<tr>
+<td><strong>AT-50</strong></td>
+<td>After inactivity, or on Lock, every view and list is blanked, the
+credentials are discarded, and no request is sent until login</td>
+<td>C5</td>
+</tr>
+<tr>
+<td><strong>AT-51</strong></td>
+<td>Nothing sensitive is in browser storage at any time: no credentials,
+dataset names or data of interest</td>
+<td>C5</td>
+</tr>
+<tr>
+<td><strong>AT-52</strong></td>
+<td>One analyst cannot read another's data of interest; a model's
+service account cannot create outside its own system</td>
+<td>C5</td>
+</tr>
+<tr>
+<td><strong>AT-53</strong></td>
+<td>No captured message shows a credential</td>
+<td>C5</td>
+</tr>
+<tr>
+<td><strong>AT-54</strong></td>
+<td>Reset instance empties the store and leaves the data folder
+byte-identical</td>
+<td>C1</td>
+</tr>
+<tr>
+<td><strong>AT-55</strong></td>
+<td>Logged in as weather only: no CO₂ system, datastream, field name or
+schema appears in any discovery response; asking for one by identifier
+gives 404</td>
+<td>C6</td>
+</tr>
+<tr>
+<td><strong>AT-56</strong></td>
+<td>Every model output with CO₂ among its inputs, and every runs-log
+entry naming CO₂, is published only under a restricted subsystem; no
+unrestricted datastream contains a CO₂ value or name</td>
+<td>C6</td>
+</tr>
+<tr>
+<td><strong>AT-57</strong></td>
+<td>A weather-only user's command naming CO₂ is rejected by the model,
+whatever the client sent</td>
+<td>C6</td>
+</tr>
+<tr>
+<td><strong>AT-58</strong></td>
+<td>The display client's code contains no reference to CO₂ or to roles;
+the same build shows CO₂ to the owner and nothing of it to the
+friend</td>
+<td>C2, C6</td>
+</tr>
+<tr>
+<td><strong>AT-59</strong></td>
+<td>Changing a user's role from emissions to weather only takes effect
+at their next request: CO₂ disappears and their CO₂ data of interest is
+greyed as no longer permitted (FR-116)</td>
+<td>C6</td>
+</tr>
+<tr>
+<td><strong>AT-60</strong></td>
+<td>A weather-only user is not degraded on any dataset that has every
+essential source</td>
+<td>C2, C6</td>
+</tr>
+<tr>
+<td><strong>AT-61</strong></td>
+<td>A new model from an empty slot cannot read CO₂ unless the owner
+grants it</td>
+<td>C3, C6</td>
+</tr>
+<tr>
+<td><strong>AT-62</strong></td>
+<td>Without the <code>hand-made</code> flag the demonstrator opens as
+FR-77 describes; with it, in the adoption opening; reloading with it
+repeats the opening</td>
+<td>Architecture view</td>
+</tr>
+<tr>
+<td><strong>AT-63</strong></td>
+<td>In the opening: no top-bar control and no stand-in banner is in the
+page; no back-end or model worker has started; no message is captured or
+drawn; the third-party zone has no data server; nothing gold, no ★ and
+no diamond anywhere, and clicking the display client or Models reveals
+nothing</td>
+<td>Architecture view</td>
+</tr>
+<tr>
+<td><strong>AT-64</strong></td>
+<td>The eight subsystem cards match the CSV importer, replay controller
+and Models cards in size, outline style, fill and font, and no element
+encloses or labels the eight as a group</td>
+<td>Architecture view</td>
+</tr>
+<tr>
+<td><strong>AT-65</strong></td>
+<td>After Adopt: one Data server card in the third-party zone; the table
+shows every subsystem ticked, with no number; the top-bar controls and
+banner appear and the back end starts; once it has started, everything
+but the detail panel matches a load without the flag, and the state
+passes AT-19 and AT-20</td>
+<td>Architecture view</td>
+</tr>
+<tr>
+<td><strong>AT-66</strong></td>
+<td>With reduced motion, Adopt changes the layout immediately, without
+animation</td>
+<td>Visual style</td>
 </tr>
 </tbody>
 </table>
-<p>Where each is tested: AT-01, AT-03, AT-04, AT-07 (server side), AT-10
-to AT-16, AT-18, AT-19 and AT-28 in <code>backend/tests</code>; AT-02,
-AT-06, AT-24, AT-27 and AT-29 by the contract suite against both back
-ends; AT-05 by <code>backend/independent</code> (OSHConnect; the CSAPI
-Explorer is a web tool and is checked by hand); AT-07 to AT-11, AT-13,
-AT-17, AT-19 to AT-23, AT-25, AT-30 and AT-31 in <code>web/e2e</code>.
-AT-26 is covered for AT-07 to AT-11, which run in the stand-in.</p>
 <hr />
 <h2 id="15-open-questions">15. Open questions</h2>
 <ul>
-<li><strong>Name.</strong> A coined working name with no
-association.</li>
-<li><strong>History length.</strong> Models read and publish history as
-SWE Common JSON over HTTP, which costs seconds per day of 1 Hz data in a
-browser. 24 hours is loaded. Four weeks would need a compact encoding
-for bulk reads (Connected Systems offers SWE Common binary), or models
-that summarise without republishing every cleaned reading.</li>
-<li><strong>Retention.</strong> The server keeps everything models
-publish. Data cleanse's 1 s output for a long history would need a
-retention policy that a stateless server can apply.</li>
-<li><strong>Latest-run results.</strong> Analysis replaces its previous
-run with a plain HTTP PUT. The standard-only alternative is one
-observation per run, carrying arrays.</li>
-<li><strong>Start-up.</strong> Measured figures for each back end are in
-the findings; to confirm on the presentation machine.</li>
-<li><strong>Memory.</strong> An index, a back-end worker and one Pyodide
-worker per model may press on a tab's memory. Measure in the Python back
-end.</li>
-<li><strong>Legible rate.</strong> The fastest legible speed, measured
-on the target display; it may be below 1×.</li>
-<li><strong>Pub/sub.</strong> Revisit polling, by the display client and
-by the models, when Connected Systems Part 3 is published.</li>
-<li><strong>OpenSensorHub.</strong> The spike of 2026-11-23 leaves these
-open:
-<ul>
-<li><strong>Commands.</strong> A model cannot poll for them (FR-27):
-OpenSensorHub pushes a command to a receiver and drops it without one,
-keeps the sender waiting 5 s, and does not enforce the schema's bounds.
-FR-27, FR-55 and the exclusion of push delivery need revising.</li>
-<li><strong>Latest-run results.</strong> No <code>PUT</code> (FR-28a),
-and an array inside a record was refused as the stand-in encodes
-it.</li>
-<li><strong>The store adapter</strong> as a module: untried, and loading
-over HTTP is one observation per request.</li>
-<li><strong>The stand-in</strong> now differs from the server it stands
-for (identifiers, missing values as <code>"NaN"</code>, one observation
-per request, HTML refusals, no 503, no instance identifier). Either it
-follows OpenSensorHub, or FR-06c is weakened.</li>
-<li><strong>The contract suite</strong> must be made server-neutral
-before AT-32 can be passed.</li>
-</ul></li>
-<li><strong>Conformance testing.</strong> The conformance class
-identifiers claimed are those of the published Parts 1 and 2. Whether an
-OGC test suite for Connected Systems exists is still to be checked; one
-independent client (OSHConnect) reports two differences (decisions D-31,
-D-32).</li>
+<li><p><strong>Reset instance and greyed data of interest (answered
+2026-11-26).</strong> FR-50a stands: Reset instance deletes everything,
+data of interest included. FR-96 and AT-48 are restated; greying is
+shown through a change of role (AT-59).</p></li>
+<li><p><strong>The CSV importer as an OpenSensorHub module (answered
+2026-11-25: feasible, at about 300,000 rows/s, through internal classes
+that need a retest on each upgrade; see the finding of that
+date).</strong> The question was: Can a module write a file of about
+half a million observations into the store in bulk, and how fast? This
+replaces 4.3's in-place store-adapter spike. Fallback: an importer
+outside the server writing over HTTP, accepting the import time, with
+progress shown.</p></li>
+<li><p><strong>Authentication and permissions in OpenSensorHub (answered
+2026-11-25; see the finding of that date and decisions D-150 to
+D-153).</strong> Answers in brief:</p>
+<ol type="1">
+<li>Not hidden: OpenSensorHub answers 403, so the access gateway
+fallback is taken.</li>
+<li>Denies are not inherited.</li>
+<li>Roles work, but they name server ids.</li>
+<li>The sender's user id is carried, but not the role. Subscriptions
+close with access control on.</li>
+<li>The administration screen is generic.</li>
+<li>401 with <code>WWW-Authenticate: basic</code>; workspaces are only
+half enforced.</li>
+<li>Changes take effect on the next request; FR-116 is reworded
+accordingly.</li>
+</ol>
+<p>The original question: Confirm, in this order of risk:</p>
+<ol type="1">
+<li>restricted systems are <strong>hidden from discovery</strong>, not
+only refused (FR-93);</li>
+<li>permissions per system, <strong>inherited</strong> by datastreams
+and control streams;</li>
+<li>user accounts and <strong>roles</strong>, assignable without editing
+permissions;</li>
+<li>authenticated <strong>WebSocket</strong> command subscriptions, and
+a receiver able to learn the sender's role (FR-112a);</li>
+<li>the <strong>administration</strong> usable by a non-technical owner
+on the delivered machine (FR-117's trigger);</li>
+<li>the answer to a request without credentials, and per-user
+workspaces.</li>
+</ol>
+<p>Fallback for 1 or 2: a thin <strong>filtering gateway</strong> that
+removes restricted resources from responses. It works, but it would be
+the second reason for a gateway in front of OpenSensorHub, and together
+they weaken "OpenSensorHub as shipped".</p></li>
+<li><p><strong>CO₂ in the client's real files.</strong> Column names,
+units (ppm or mg/m³) and whether CO₂ was recorded by every
+sensor.</p></li>
+<li><p><strong>The client's real CSV files.</strong> Column names, time
+format, units, missing-value codes, file sizes and whether files ever
+overlap or are re-exported.</p></li>
+<li><p><strong>Idle time before lock.</strong> 5 minutes is a
+placeholder; confirm with the barge owner.</p></li>
+<li><p><strong>Decision log numbering.</strong> Resolved: the duplicates
+are now D-107 to D-114.</p></li>
+<li><p><strong>Interfaces document.</strong>
+<code>docs/v4-interfaces.md</code> describes 4.1 and 4.2; revise to
+4.6.</p></li>
+<li><p><strong>Handshakes after imports (4.6).</strong> A full handshake
+after every import (FR-44) is drawn one request at a time (FR-42a), and
+it grows with every dataset imported. If it gets in the way of a
+demonstration, a handshake scoped to the dataset is the
+alternative.</p></li>
+<li><p><strong>Retention.</strong> Results are appended per run and per
+dataset; a long-lived instance grows until Reset instance.</p></li>
+<li><p><strong>Resampling.</strong> Reserved in <code>aggregation</code>
+(FR-94a); not offered yet.</p></li>
+<li><p><strong>Several analysts at once.</strong> Excluded (FR-89); data
+of interest is already per analyst, so the step is smaller than it
+was.</p></li>
+<li><p><strong>Name.</strong></p></li>
 </ul>
-<h2 id="16-deliberate-exclusions-from-version-4">16. Deliberate
-exclusions from Version 4</h2>
+<h2 id="16-deliberate-exclusions-from-version-46">16. Deliberate
+exclusions from Version 4.6</h2>
 <ul>
-<li><strong>Removed since 3.3</strong>: the guided tour, the docked
-panels, the canal map, the seam relay as a drawn component, the separate
-scientists' workspace, the message popup (replaced by the message
-strip), the demonstrator-shell node on the flowchart.</li>
+<li><strong>A live sensor or live ingest</strong>, and any writing to
+the data folder.</li>
+<li><strong>Two datasets playing at once</strong> (FR-84a); comparison
+is by data of interest on elapsed time.</li>
+<li><strong>More than one analyst logged in at a time</strong>
+(FR-89).</li>
+<li><strong>Replacing and deleting</strong> anything, except Reset
+instance as a whole (FR-50a).</li>
+<li><strong>Encryption in the browser</strong> (FR-100): nothing
+sensitive is stored there.</li>
+<li><strong>Pre-populated credentials in a developed system</strong>
+(FR-102).</li>
 <li><strong>Position</strong>, and every model that needs it.</li>
-<li><strong>Estimates and measures of risk</strong> on screen (effort, a
-risk register, live test results, code size). The overview names what is
-adopted, written and absent; it puts no numbers on them. Deferred, not
-rejected.</li>
-<li><strong>Replacing and deleting resources</strong>, apart from the
-one declared PUT (FR-28a).</li>
-<li><strong>Discovery while running</strong>, <strong>server-side
-sessions</strong>, <strong>replay</strong>, <strong>push
-delivery</strong>, <strong>persistence</strong> and
-<strong>authentication</strong>.</li>
+<li><strong>Estimates and measures of risk</strong> on screen.</li>
+<li><strong>Resampling to arbitrary frequencies</strong>, for now
+(FR-94a).</li>
+<li><strong>Our own account administration screen</strong>, until
+FR-117's trigger is met.</li>
+<li><strong>Permissions per field</strong> within a record: restriction
+is always per system (FR-93).</li>
+<li><strong>Roles defined or edited by the owner</strong>: roles are
+fixed at installation (FR-114).</li>
+<li><strong>Costs of adoption in the opening (4.6)</strong>, such as
+learning OpenSensorHub, its spikes, licence obligations or the risk of
+depending on it. The opening shows savings only; those costs belong in
+the ADR.</li>
+<li><strong>Counts, scores or totals in the opening (4.6)</strong>, such
+as subsystems saved or stores avoided. The merge itself makes the point;
+numbers would read as a sales pitch.</li>
+<li><strong>Marks of what is unproven in the opening (4.6).</strong>
+Every subsystem is ticked once adopted. What the authentication and
+bulk-import spikes have still to prove is recorded in §15 and ADR 0005,
+not on screen.</li>
+<li><strong>Returning to "Build it ourselves"</strong> after adoption,
+in a session (FR-126).</li>
+<li><strong>The adoption opening in a developed system (4.6)</strong>:
+it is demonstrator shell only.</li>
 </ul>
 <footer>Rendered from <code>srd-barge.md</code>.</footer>
 </main>
