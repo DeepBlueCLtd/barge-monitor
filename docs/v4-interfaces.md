@@ -643,7 +643,8 @@ user-to-role assignment, which the server reads on the next request (§9.3).
 ### 13.6 URL parameters
 
 `?backend=python|standin`, `?sketch=off` and `?hand-made`. `?seed` is withdrawn: the data
-folder is fixed.
+folder is fixed. For tests only, `?folder=<relative path>/` points the importer at another
+folder of the same site (D-272).
 
 ### 13.7 Startup and readiness (FR-125a, NFR-10a)
 
