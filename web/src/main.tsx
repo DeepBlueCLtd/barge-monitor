@@ -17,7 +17,8 @@ import { runtime } from './shell/runtime';
 (window as unknown as { __messages: () => unknown[] }).__messages = () => bus.find(() => true);
 (window as unknown as { __messageTotal: () => number }).__messageTotal = () => bus.total;
 // Start-up milestones (NFR-10) and the model workers' phases, for the start-up budget test.
-(window as unknown as { __startup: () => unknown }).__startup = () => ({ kind: runtime.kind, milestones: runtime.milestones, models: runtime.modelWorkers.value, progress: runtime.progress.value });
+(window as unknown as { __startup: () => unknown }).__startup = () => ({ kind: runtime.kind, milestones: runtime.milestones, models: runtime.modelWorkers.value, progress: runtime.progress.value,
+  server: runtime.server.value, fields: runtime.controlState.value?.fields?.filter((f) => !f.published_now || !f.on_next_start).map((f) => `${f.name}: on next start ${f.on_next_start}, published now ${f.published_now}`) });
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

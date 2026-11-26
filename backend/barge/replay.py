@@ -111,6 +111,9 @@ class Replay:
                 self._log("", "load", "svc-replay", quiet=True)
                 self.loaded_once = True
         elif self.dataset is not None:
+            # D-186: after a restart the models declare their datastreams again (a field switched on or
+            # off changes their schemas); until each has, the dataset's models are not ready.
+            self._wait_for_models(quiet)
             self.publish(quiet=quiet)
 
     async def _listen(self, sub) -> None:
@@ -192,6 +195,9 @@ class Replay:
         self.playing = False
         self.at_end = False
         self._new_run()
+        self._wait_for_models(quiet)
+
+    def _wait_for_models(self, quiet: bool) -> None:
         self.models_ready = False
         self.ready_since = self.rt.real()
         self.ready_checked = -1e18
@@ -279,7 +285,8 @@ class Replay:
                 continue
             seen += 1
             own = {m["id"]} | {s["id"] for s in st.system_list() if s["parent"] == m["id"]}
-            if any(d["system"] in own and d["outputName"].endswith(suffix) for d in st.datastreams.values()):
+            if any(d["system"] in own and d["outputName"].endswith(suffix) and not d["replaced"]
+                   and d.get("declared_at_boot", st.boot) == st.boot for d in st.datastreams.values()):
                 continue
             first = self.first_seen.setdefault(m["id"], now)
             if now - max(first, self.ready_since) < C.MODEL_READY_TIMEOUT_S:

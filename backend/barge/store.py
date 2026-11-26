@@ -142,6 +142,7 @@ class Store:
         self.ids = Ids()
         self.systems: dict[str, dict] = {}
         self.datastreams: dict[str, dict] = {}
+        self.boot = 0  # the server start that is running; a datastream notes the start that last declared it
         self.controlstreams: dict[str, dict] = {}
         self.commands: dict[str, dict] = {}
         self.status_reports: dict[str, list] = {}  # control stream id -> reports
@@ -183,11 +184,12 @@ class Store:
             if d["system"] == system_id and d["outputName"] == output and not d["replaced"]:
                 if [f["name"] for f in d["schema"]["fields"]] == names and \
                         [f["type"] for f in d["schema"]["fields"]] == [f["type"] for f in schema["fields"]]:
+                    d["declared_at_boot"] = self.boot
                     return d, False
                 d["replaced"] = True
         did = self.ids.next("datastream")
         d = {"id": did, "system": system_id, "outputName": output, "name": name, "schema": schema,
-             "series": Series(schema["fields"]), "owner": owner, "replaced": False}
+             "series": Series(schema["fields"]), "owner": owner, "replaced": False, "declared_at_boot": self.boot}
         self.datastreams[did] = d
         return d, True
 

@@ -72,6 +72,7 @@ class Runtime:
         """Start the server: it answers nothing until it has started (§9.1)."""
         self.status = "starting"
         self.boots += 1
+        self.store.boot = self.boots
         self.ready_at = self.real() + self.start_s
         self.live_offering = self.offering.copy()
         self.live_lie = self.lie_about_profile
