@@ -83,7 +83,14 @@ export async function putEverythingBack() {
     clientSession.play();
     await until(() => !!clientSession.replay.value?.playing, 8000);
   }
-  await control(runtime.server.value === 'down' ? 'up' : 'restart-server');
+  // D-185: down until the display client has seen it unreachable, then up. A plain restart refuses
+  // connections for only about a second, which a client busy with a slow poll can miss; then it
+  // would not discover the server again (FR-48) and would keep the demo's degraded view.
+  if (runtime.server.value !== 'down') {
+    await control('down');
+    if (['ready', 'handshake'].includes(clientSession.phase.value)) await until(() => clientSession.phase.value === 'unreachable', 8000);
+  }
+  await control('up');
   await sleep(300);
   await until(() => runtime.server.value === 'running');
 }
