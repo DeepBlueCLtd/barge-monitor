@@ -117,7 +117,10 @@ export class Summaries extends Model {
     for (const s of SENSORS) {
       const k = await api.find(DC, `cleaned-${s}__${d}`);
       if (k === null) return false; // Data cleanse has not declared it yet
-      const names = [...(await api.schema(k))].filter(([n, ty]) => QUANTITIES.includes(n) && ty === 'Text').map(([n]) => n);
+      // The quantities the sensor's record offers now (its schema, never its observations: AT-15), as Data cleanse
+      // takes them: both declare alike after a restart with another offering, whichever is first (FR-51).
+      const w = await api.find(`urn:x-barge:sensor:${s}`, `weather__${d}`);
+      const names = w === null ? [] : [...(await api.schema(w)).keys()].filter((n) => QUANTITIES.includes(n));
       src.set(s, names);
       for (const [res, label] of both) {
         const S = s[0].toUpperCase() + s.slice(1);

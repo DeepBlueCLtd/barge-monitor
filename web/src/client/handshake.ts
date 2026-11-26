@@ -84,6 +84,8 @@ export interface BridgeDataset {
 export interface Configuration {
   /** The dataset shown (D-286); null before Mission A is imported. */
   dataset: BridgeDataset | null;
+  /** Every datastream listed at the handshake, taken or not (D-286): one that goes means the server changed. */
+  listed: string[];
   profile: Profile | null;
   claimed: boolean;
   /** FR-41: a claimed profile that discovery contradicts is an error. */
@@ -172,7 +174,7 @@ export async function handshake(http: ClientHttp): Promise<Configuration> {
   const rejected = claimed && problems.length
     ? `The server claims the declared profile, but its discovery contradicts the claim: ${problems.map((p) => `${essentialLabel(p.essential)} (${p.reason}: ${p.detail})`).join('; ')}.`
     : null;
-  return { dataset, profile, claimed, rejected, problems, datastreams, clustering };
+  return { dataset, listed: listed.map((d) => d.id), profile, claimed, rejected, problems, datastreams, clustering };
 }
 
 const MISSION_A = /^mission-a-/;

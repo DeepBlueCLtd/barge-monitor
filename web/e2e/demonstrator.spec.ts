@@ -160,11 +160,11 @@ test('display client: chips, period, clustering, views; the strip shows the sele
   await expect(page.getByTestId('chart-heatmap').locator('canvas')).toBeVisible();
   await expect(page.getByTestId('monitor').getByTestId('diamond')).toHaveCount(4); // three graphs and the cluster view (FR-76)
   await expect(page.getByTestId('cluster-score')).toContainText('score against ground truth', { timeout: 90_000 });
-  // 1 h reads raw records: the strip shows the S that selection caused, found by its chain.
+  // 1 h reads raw records: in 4.7 they are Mission A's, imported into the server's own store, so the store
+  // adapter is not on the path and the strip says no store query was made (D-286, D-293).
   const strip = page.getByTestId('message-strip');
-  await expect(strip).toHaveAttribute('data-letter', 'S', { timeout: 30_000 });
-  await expect(page.getByTestId('strip-chain')).toContainText('S to the store adapter');
-  await expect(page.getByTestId('message-content')).toContainText('"op"');
+  await expect(strip).toHaveAttribute('data-letter', 'none', { timeout: 30_000 });
+  await expect(page.getByTestId('strip-no-s')).toContainText('No store query');
   // A week reads hourly summaries: no store query, said honestly.
   await page.getByRole('button', { name: 'Week', exact: true }).click();
   await expect(page.getByTestId('strip-no-s')).toBeVisible({ timeout: 30_000 });
@@ -357,9 +357,10 @@ test('fields the client has never seen appear after a handshake, drawn by schema
   await ready(page);
   const before = await page.getByTestId('chip').allInnerTexts();
   await demo(page, 'extra');
-  await expect.poll(async () => (await page.getByTestId('chip').allInnerTexts()).length, { timeout: SLOW_MS }).toBe(before.length + 3);
+  // 4.7 (D-293): the client reads Mission A, whose files record no precipitation, so two of the three fields appear.
+  await expect.poll(async () => (await page.getByTestId('chip').allInnerTexts()).length, { timeout: SLOW_MS }).toBe(before.length + 2);
   await expect(page.getByTestId('client-state')).toHaveText('Configured');
-  for (const name of ['Precipitation', 'Pressure tendency', 'Readings removed']) {
+  for (const name of ['Pressure tendency', 'Readings removed']) {
     const chip = page.getByTestId('chip').filter({ hasText: name });
     await expect(chip).toHaveClass(/optional/); // not in the profile: no warning, a dashed chip
     await chip.click();

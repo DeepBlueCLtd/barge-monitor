@@ -113,6 +113,7 @@ export class ClientSession {
   private commandId: string | null = null;
   /** The server did not answer at some point since the last handshake: handshake again once it does (FR-48). */
   private lost = false;
+  private lastListed = -Infinity;
 
   constructor() {
     void this.main();
@@ -188,6 +189,7 @@ export class ClientSession {
         else if (!woken) await this.poll();
         if (this.commandDirty) await this.command();
         await this.pollRun();
+        await this.checkListing();
         if (woken && !simClock.playing) await this.awaitRunWhilePaused();
         this.http.userAction = false;
         if (this.lost) {
@@ -258,6 +260,23 @@ export class ClientSession {
     this.loadedGen = 0;
     this.commandDirty = true;
     this.bump();
+  }
+
+  /**
+   * D-286: Mission A's datastreams keep their identifiers when the server restarts with another offering (their schema
+   * changes in place), so a 404 no longer tells the client. Every ten simulated seconds it looks whether a datastream
+   * listed at its handshake has gone from the listing (the logger's `weather`, made again for each offering).
+   */
+  private async checkListing() {
+    const now = simClock.now();
+    if (now - this.lastListed < 10) return;
+    this.lastListed = now;
+    const known = this.config.value?.listed ?? [];
+    if (!known.length) return;
+    const r = await this.http.request<any>('GET', 'datastreams', { limit: '10000' });
+    if (r.status !== 200) return;
+    const ids = new Set((r.body?.items ?? []).map((d: any) => d.id));
+    if (known.some((id) => !ids.has(id))) this.reset('The server changed: handshaking again.');
   }
 
   /** A rejected server: look once a simulated second whether it has changed (it went away, or the datastreams it lists did). */

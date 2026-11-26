@@ -16,7 +16,7 @@ watch for.
 
 Everything is fictional: the canal, its places and the weather.
 
-**Where the 4.7 work stands.** Phases 1 to 5 are in: the 4.7 masters and the server-neutral
+**Where the 4.7 work stands.** Phases 1 to 6 are in: the 4.7 masters and the server-neutral
 contract suite; the CSV data folder; a robust startup; the data
 server, in both back ends, behaving as a configured stock OpenSensorHub
 (`docs/v4-interfaces.md` §9): Basic credentials on every request (labelled demo accounts:
@@ -27,10 +27,13 @@ commands pushed to receivers subscribed on `/api-internal`; and the **CSV import
 the server in both back ends (`docs/v4-interfaces.md` §7): an archive `catalogue` of the folder,
 an `import` control stream (`import`, `rescan`), bulk writes into per-dataset datastreams under the
 sensors and the CO₂ analysers, QC on import, change and supersede detection, the silent import of
-Mission A at every page load, and Reset instance in the control panel. The 4.1 world, logger,
-models and display client still run beside it, on the logger's `weather` datastreams: the models
-move to datasets in Phase 6, the display client in Phase 7, and the logger goes after both. The
-display client holds the demo owner's credentials in memory until its login arrives (Phase 7).
+Mission A at every page load, and Reset instance in the control panel; and the **models on
+import** (`docs/v4-interfaces.md` §10.2): Data cleanse, Summaries and Analysis process each
+imported dataset whole, in windows aligned to its start, log each run's progress in
+`runs__{dataset}`, start a new run on a settings command, and publish anything derived from CO₂
+under restricted subsystems. The 4.1 display client still runs, bridged to Mission A's outputs
+(D-286), on the 4.1 world and clock, which stay until the display client of Phase 7 replaces it.
+It holds the demo owner's credentials in memory until its login arrives (Phase 7).
 
 ## Layout
 
@@ -81,7 +84,8 @@ hours of history (`--days 1`, decision D-79).
 | Default back end | the JavaScript stand-in (about 3 s to the flowchart) | It starts quickly. `?backend=python` runs Python in Pyodide (about 30 s to the first charts). `PYTHON_BY_DEFAULT = true` in `web/src/shell/runtime.ts` makes Python the default wherever WebAssembly runs; the browser tests name their back end, so nothing else changes |
 | History pre-loaded | 24 hours | The models read and publish history as JSON over HTTP, which costs seconds per day of 1 Hz data in a browser. `--days N` in `.github/workflows/pages.yml` and `PREGEN_DAYS` in `backend/barge/config.py` change it; see SRD §15 before asking for weeks |
 | Importing | Mission A silently at every page load; the others on an `import` command | A command over HTTP: `POST api/controlstreams/{import}/commands` with `{"parameters": {"action": "import", "file": "MISSION_C_20310421.csv"}}`. The control panel shows the folder, the last import's rows/s and Reset instance. The Dataset selector that sends it comes with the 4.7 display client (Phase 7) |
-| Models' backlog at startup | the last 30 minutes | One observation per `POST` (§9.1) makes publishing a whole day of 1 Hz results too slow; `Model.backlog` in `csmodel.py` and `csmodel.ts` sets it (D-251). Plan Phase 6 processes whole datasets instead |
+| Models | every imported dataset, whole, on import | Mission A's three runs complete about 3 s after the flowchart in the stand-in and about 30 s after it in Python (each model loads its own Pyodide first); a 12-hour dataset takes about 2 s and 15 s. Data cleanse publishes its output in hourly blocks (D-280): one observation per `POST` (§9.1) makes a reading per observation too slow. A settings command (`POST api/controlstreams/{settings}/commands`) starts a new run over every dataset |
+| The 4.1 display client | shows Mission A | Its datastreams under their 4.1 names, with the 4.1 clock; a clustering command carries the selection as a data of interest (D-286). Phase 7 replaces it |
 
 With the stand-in, the empty-slot model editor (Python) is unavailable; the Models panel
 offers a link that reloads with `?backend=python`.

@@ -84,7 +84,10 @@ class Summaries(Model):
             k = await api.find(DC, f"cleaned-{s}__{d}")
             if k is None:
                 return False  # Data cleanse has not declared it yet
-            src[s] = [n for n, ty in (await api.schema(k)).items() if n in QUANTITIES and ty == "Text"]
+            # The quantities the sensor's record offers now (its schema, never its observations: AT-15). Data cleanse
+            # takes the same, so both declare alike after a restart with another offering, whichever is first (FR-51).
+            w = await api.find(f"urn:x-barge:sensor:{s}", f"weather__{d}")
+            src[s] = [n for n in (await api.schema(w)) if n in QUANTITIES] if w else []
             for res, label in (("1min", "1-minute"), ("1h", "hourly")):
                 out[f"{res}-{s}"] = await api.create_datastream(self.system, {
                     "name": f"{s.capitalize()} {label} summary · {d}", "outputName": f"summary-{res}-{s}__{d}",

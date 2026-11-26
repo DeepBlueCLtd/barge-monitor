@@ -170,12 +170,12 @@ import, like every other field, with a range of 250–5000 ppm and a 60 ppm spik
 |---|---|---|
 | `urn:x-barge:sensor:bow`, `…:stern` | `weather__{ds}` | The 7 quantities (6 in Mission C's stern), each with its `<name>_qc` |
 | `urn:x-barge:sensor:bow:co2`, `…:stern:co2` | `co2__{ds}` | `co2` (`[ppm]`) and `co2_qc` (**restricted**) |
-| `urn:x-barge:process:data-cleanse` | `cleaned-bow__{ds}`, `cleaned-stern__{ds}` | |
-| `urn:x-barge:process:data-cleanse:restricted` | `cleaned-co2-bow__{ds}`, `cleaned-co2-stern__{ds}` | **Restricted** |
-| `urn:x-barge:process:summaries` | `summary-1min-{bow,stern}__{ds}`, `summary-1h-{bow,stern}__{ds}`, `derived-1min__{ds}`, `derived-1h__{ds}` | Minimum, mean and maximum per quantity (FR-29): `<f>_min`, `<f>`, `<f>_max` |
+| `urn:x-barge:process:data-cleanse` | `cleaned-bow__{ds}`, `cleaned-stern__{ds}` | One **block** per hour of the dataset (D-280): `time` (the block's start), `run_id`, `offsets` (Text: a JSON array of seconds from `time`, one per reading), one Text per quantity (a JSON array of its cleaned readings, `null` where removed; the field has its raw quantity's definition) and `removed` (Count) |
+| `urn:x-barge:process:data-cleanse:restricted` | `cleaned-co2-bow__{ds}`, `cleaned-co2-stern__{ds}` | **Restricted**; blocks, with `co2` |
+| `urn:x-barge:process:summaries` | `summary-1min-{bow,stern}__{ds}`, `summary-1h-{bow,stern}__{ds}`, `derived-1min__{ds}`, `derived-1h__{ds}` | Minimum, mean and maximum per quantity (FR-29): `<f>_min`, `<f>`, `<f>_max`, and `readings_removed`; derived: `dew_point`, `bow_minus_stern`, `pressure_tendency_3h`. Minutes and hours aligned to the dataset's start; each carries `run_id` |
 | `urn:x-barge:process:summaries:restricted` | `summary-1min-co2-{bow,stern}__{ds}`, `summary-1h-co2-{bow,stern}__{ds}` | **Restricted** |
 | `urn:x-barge:process:{model}` (every model) | `runs__{ds}` | Each run's progress and result on the dataset (§10.2, FR-35b) |
-| `urn:x-barge:process:analysis` | `changes__{ds}`, `clusters__{ds}`, `correlation__{ds}` | Appended, keyed by `run_id` (FR-28a) |
+| `urn:x-barge:process:analysis` | `changes__{ds}`, `clusters__{ds}`, `correlation__{ds}` | Appended, keyed by `run_id` (FR-28a): `changes` has `scale` (`minutes`, `hours`) and `strength`; `clusters` has `cluster` (`c1`…`c8`); `correlation` has `fields` and `matrix` |
 | `urn:x-barge:process:analysis:restricted` | the same four | Runs whose selection includes CO₂ (FR-112). **Restricted** |
 | `urn:x-barge:importer` | `catalogue` | §7 |
 | `urn:x-barge:workspace:{user}` | `data-of-interest` | §11 |
@@ -469,27 +469,45 @@ class Api:  # every method is async; each is one or more HTTP requests with the 
     async def publish_many(self, key, cols: dict) -> int      # loops publish(); counts
     async def subscribe(self, cs_key, on_command) -> None     # push stream (§9.2); resubscribes after unreachability
     async def command_status(self, cs_key, cmd_id, status, message="") -> None
+    async def all(self, key) -> list[dict]                    # every observation, as records, paged by offset
     async def catalogue(self) -> list[dict]                   # the importer's catalogue, folded per file (§7)
+    async def datasets(self) -> list[dict]                    # datasets to process, in import order (§10.2)
     async def score(self, kind, payload) -> dict              # the referee (scaffolding)
+    def real(self) -> float                                   # real time for a runs entry, strictly increasing
 ```
+
+Times are **Unix seconds** in every model (4.7): no simulation epoch.
 
 ```python
 class Model:
     id, label, description
-    window: float = 60.0        # seconds of data per processing window, aligned to the dataset's start
-    async def setup(self, api)                    # register; subscribe; THEN declare ready
-    async def declare(self, api, ds)              # create every datastream for dataset ds, runs__{ds} included
-    async def process(self, api, ds, t0, t1, run) # one window [t0, t1) of dataset ds, in run `run`
-    async def on_command(self, api, cmd) -> str   # validate; raise Rejected("…bound…") to report REJECTED
+    window: float | None = 60.0  # seconds of data per processing window, aligned to the dataset's start;
+                                 # None: a run's whole data range at once (Analysis)
+    uses_co2, restricted_runs    # a restricted subsystem; runs that name CO₂ are logged under it too
+    control, defaults, runs_master  # its control stream and runs record (the masters), its default settings
+    async def setup(self, api)                    # register: system, restricted subsystem, control stream
+    async def declare(self, api, ds) -> bool      # every datastream for dataset ds, runs__{ds} included (calls outputs)
+    async def outputs(self, api, ds) -> bool      # the model's own datastreams; False while its inputs are not there
+    async def process(self, api, ds, t0, t1, run) # one window [t0, t1) of dataset ds, in run `run` (its id, settings)
+    async def finish(self, api, ds, run)          # after the last window: run.result for the complete entry
+    def wanted(self, ds, complete) -> dict | None # the settings of a run ds still needs, given its complete runs
+    def validate(self, api, cmd)                  # every bound; raise Rejected("…bound…") to report REJECTED
+    async def on_command(self, api, cmd) -> dict  # the runs a command asks for: a dataset (or every one), settings
+    async def read_cleaned(self, api, ds, source, t0, t1, run_id, names) -> dict  # Data cleanse's readings (D-280)
 ```
+
+A run is `Run`: its `id`, `settings`, `start`, `end` (exclusive), `source` (Data cleanse's run it reads),
+`state` (the model's own) and `result`. The runner calls `step()` again and again; the runner, not the
+model, subscribes, finds datasets, plans runs and logs them.
 
 ### 10.2 The runner (4.7: process on import)
 
 Models follow **no replay clock and no current dataset** (FR-35, D-220). The runner:
 
-- **Finds datasets** by reading the importer's `catalogue` once per real second (drawn,
-  like every other request). Every dataset whose file status is `imported`, `changed` or
-  `superseded` is one to process.
+- **Finds datasets** by reading the importer's `catalogue` once per real second. Every
+  dataset whose file status is `imported`, `changed` or `superseded` is one to process.
+  Processing (this reading included) is **counted, not drawn** (D-283); a command and its
+  status reports are drawn.
 - **On a dataset not yet processed**, it first **declares** every datastream the model may
   publish for it, restricted ones included, and `runs__{ds}`. It then processes the
   **whole dataset**, in whole windows `[t0, t1)` aligned to the dataset's start
@@ -498,7 +516,11 @@ Models follow **no replay clock and no current dataset** (FR-35, D-220). The run
 - **Runs.** A run id is `<model>-<dataset id>-<n>`. Run 1 is the first processing of a
   dataset. A settings command (§10.3) starts a new run of that model over every imported
   dataset, newest first. Analysis's `clustering` command starts one run on the dataset its
-  `doi` names.
+  `doi` names. Numbers carry on from the dataset's runs log, so they are never reused (after
+  Reset instance the log is empty, and the next run is 1 again). The command reports
+  `ACCEPTED`, then `COMPLETED` once its runs are queued, naming them (D-284); their progress
+  is in `runs__{ds}`. Which runs a dataset needs is planned from its runs log: a model wants a
+  complete run with its current settings; Analysis wants run 1 only (D-282).
 - **Progress (FR-35b).** Each run appends to `runs__{ds}`: `time` (real time), `run_id`,
   `status` (`processing` or `complete`), `done_until` (Time: the end of the last window
   done), `pct` (Count 0–100), and the settings it used. It appends a `processing` entry at
@@ -516,7 +538,13 @@ Models follow **no replay clock and no current dataset** (FR-35, D-220). The run
   restarted as a new run. The 4.6 restart hold (D-186) is withdrawn (D-228).
 - **Order.** Data cleanse reads `weather__{ds}` (and `co2__{ds}`). Every other model reads
   only Data cleanse's outputs (AT-15), and waits until Data cleanse's run on the dataset is
-  `complete`.
+  `complete`. A run reads Data cleanse's latest complete run when it starts; it is not run
+  again when Data cleanse runs again (D-282).
+- **Windows (D-281).** Data cleanse and Summaries take an hour at a time; Analysis a run's
+  whole data range at once; the example new model an hour.
+- **Speed (D-280).** Data cleanse's blocks make a day a few hundred observations. Measured
+  in Chromium: Mission A's three runs complete about 3 s after the flowchart in the stand-in
+  and about 30 s after it in Python (each model first loads its own Pyodide).
 
 ### 10.3 Commands to models
 
@@ -562,8 +590,10 @@ The master is `contracts/schemas/data-of-interest.json`:
   `record` (Text, the JSON). The list is folded from these.
 - **On screen** these are **Favourites** (SRD §8.5). The record's name stays "data of
   interest".
-- **Resolution** maps to datastreams: `PT1S` reads `cleaned-*` (or `weather`); `PT1M`
-  reads `summary-1min-*`; `PT1H` reads `summary-1h-*`. Any other resolution is refused,
+- **Resolution** maps to datastreams: `PT1S` reads `weather` (Data cleanse's `cleaned-*`
+  are blocks, for models, D-280); `PT1M` reads `summary-1min-*`; `PT1H` reads `summary-1h-*`.
+  Analysis reads only Data cleanse's output (AT-15): at `PT1M` and `PT1H` it takes the means of
+  its readings in intervals aligned to the dataset's start (D-288). Any other resolution is refused,
   naming these three (FR-94a).
 
 ## 12. The adoption opening (SRD §9.8)
