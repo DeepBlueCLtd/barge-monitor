@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="site.css">
 </head>
 <body>
-<div class="banner">Preview of pull request #15 (08f6847). Not the published document.</div>
+<div class="banner">Preview of pull request #15 (59e1be1). Not the published document.</div>
 <main>
 <p class="demo-link"><a href="demo/"><strong>Open the working demonstrator →</strong></a> It runs whole in your browser. · <a href="demo/?hand-made"><strong>Start from “before”</strong></a>: the data server as subsystems we would build ourselves, then adopting OpenSensorHub (SRD §9.8). · <a href="index.html">Requirements</a> · <a href="interfaces.html">Version 4 interfaces</a> · Mockups: <a href="mockups/mockup-1-display-client.png">1</a>, <a href="mockups/mockup-2-models.png">2</a>, <a href="mockups/mockup-3-data-server.png">3</a></p>
 <nav id="TOC" aria-label="Contents">
@@ -927,11 +927,12 @@ server, per analyst</strong>: each analyst has a
 <code>data-of-interest</code> datastream. Saving appends a record;
 removing appends a removal. Nothing about it is kept in the
 browser.</p></li>
-<li><p><strong>FR-96</strong> A data of interest whose dataset is
-<strong>no longer imported</strong> (after Reset instance) is listed
-greyed, naming the file to import to restore it. Importing the same file
-restores it, because the record names the file, not a server
-identifier.</p></li>
+<li><p><strong>FR-96 (4.6)</strong> A data of interest that cannot be
+resolved is listed <strong>greyed</strong>, saying why: its source is no
+longer permitted (FR-96a), or its file is not imported, naming the file.
+A record names the file, not a server identifier, so importing that file
+again restores it. Reset instance does <strong>not</strong> grey
+records: it deletes them with everything else (FR-50a).</p></li>
 <li><p><strong>FR-96a (4.5)</strong> A user can only save data of
 interest from sources they can see. If a user's role later loses
 emissions, any of their records naming CO₂ sources is listed greyed as
@@ -1717,8 +1718,8 @@ available</td>
 </tr>
 <tr>
 <td><strong>AT-48</strong></td>
-<td>After Reset instance, every data of interest is greyed naming its
-file; re-importing the file restores it</td>
+<td>After Reset instance, every user's data of interest list is empty;
+re-importing a file restores nothing saved before the reset</td>
 <td>C1, C3</td>
 </tr>
 <tr>
@@ -1785,9 +1786,9 @@ friend</td>
 </tr>
 <tr>
 <td><strong>AT-59</strong></td>
-<td>Changing a user's role from emissions to weather only logs them out;
-at their next login CO₂ is absent and their CO₂ data of interest is
-greyed as no longer permitted</td>
+<td>Changing a user's role from emissions to weather only takes effect
+at their next request: CO₂ disappears and their CO₂ data of interest is
+greyed as no longer permitted (FR-116)</td>
 <td>C6</td>
 </tr>
 <tr>
@@ -1845,15 +1846,10 @@ animation</td>
 <hr />
 <h2 id="15-open-questions">15. Open questions</h2>
 <ul>
-<li><p><strong>Reset instance and greyed data of interest (raised in
-implementation, D-169).</strong> FR-50a says Reset instance leaves "no
-data of interest", but FR-96, FR-108 and AT-48 expect data of interest
-to survive a Reset instance, greyed, and to be restored by re-importing.
-Both cannot hold. Options: (a) workspaces survive Reset instance (it
-deletes datasets and results only); (b) Reset instance deletes
-everything and AT-48 is restated as greying after a role change (AT-59
-already covers that). The implementation currently follows FR-50a
-(b).</p></li>
+<li><p><strong>Reset instance and greyed data of interest (answered
+2026-11-26).</strong> FR-50a stands: Reset instance deletes everything,
+data of interest included. FR-96 and AT-48 are restated; greying is
+shown through a change of role (AT-59).</p></li>
 <li><p><strong>The CSV importer as an OpenSensorHub module (answered
 2026-11-25: feasible, at about 300,000 rows/s, through internal classes
 that need a retest on each upgrade; see the finding of that
