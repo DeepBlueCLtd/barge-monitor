@@ -116,8 +116,9 @@ test('(a) a hard reload, which loads the page without a relay in control, still 
   await context.close();
 });
 
-for (const [name, older] of [['the 4.1 relay', SW_41], ['a relay that never skips waiting or claims', SW_STUBBORN]] as const) {
-  test(`(b) reload with an older sw.js installed (${name}): still starts, no hang (AT-68)`, async ({ browser }) => {
+const OLDER = [['the 4.1 relay', SW_41], ['a relay that never skips waiting or claims', SW_STUBBORN]] as const;
+for (const [hard, [name, older]] of [false, true].flatMap((h) => OLDER.map((o) => [h, o] as const))) {
+  test(`(b) ${hard ? 'hard ' : ''}reload with an older sw.js installed (${name}): still starts, no hang (AT-68)`, async ({ browser }) => {
     const context = await browser.newContext();
     const page = await context.newPage();
     deployRelay(older);
@@ -125,7 +126,13 @@ for (const [name, older] of [['the 4.1 relay', SW_41], ['a relay that never skip
     // The older relay is now installed and active for this scope.
     await page.waitForFunction(async () => !!(await navigator.serviceWorker.getRegistration())?.active, null, { timeout: 15_000 });
     restore(); // this build is deployed over it
-    await page.reload();
+    if (hard) {
+      // Uncontrolled, with the older relay active: only an update the page asks for brings the new one.
+      const cdp = await context.newCDPSession(page);
+      await cdp.send('Page.reload', { ignoreCache: true });
+    } else {
+      await page.reload();
+    }
     await started(page);
     // The new relay has taken over from the older one.
     await expect.poll(() => relayVersion(page), { timeout: 10_000 }).toMatch(/^4\.7/);
