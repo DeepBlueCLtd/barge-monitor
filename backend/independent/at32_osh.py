@@ -16,13 +16,13 @@ What runs, all on this machine:
 * then the **contract suite**, ``contract_suite/suite.py``, unchanged, through the gateway.
 
 It prints pass or fail for every check. ``need`` checks are AT-32; ``standin`` checks are what the
-stand-ins do to stay faithful to OpenSensorHub, shown for information. With ``--proposed`` a second
-run applies, in the gateway's upstream layer, the client changes the AT-32 finding proposes
-(D-193, D-194), to show what lies beneath them; that run is **not** AT-32 as specified.
+stand-ins do to stay faithful to OpenSensorHub, shown for information. Nothing between the clients and
+OpenSensorHub rewrites a request or an answer: the client changes the AT-32 finding proposed (D-193 to
+D-196) are adopted in the clients and the contract, so the run is AT-32 as specified.
 
 Usage::
 
-    python backend/independent/at32_osh.py --osh <osh-core>/build/install/osh-core [--proposed] [--json out.json]
+    python backend/independent/at32_osh.py --osh <osh-core>/build/install/osh-core [--json out.json]
 
 Needs Java 17+, and ``websockets`` beside ``backend/requirements-dev.txt``. Exit status 0 only if
 every ``need`` check passes in the run as specified.
@@ -181,7 +181,6 @@ class ImporterClient:
         self.listing: list[dict] = []
         self.opened = asyncio.Event()
         self.rate = None
-        self.unit_substitutions: list[str] = []
         self.catalogue_refusals = 0
 
     async def start(self) -> None:
@@ -248,16 +247,9 @@ class ImporterClient:
                                         swe.measurement_record(names, f"{s.capitalize()} sensor record"))
                 outs.append((ds, Importer._columns(parsed, s, names), names))
             if (s, "co2") in parsed.values:
-                rec = swe.measurement_record(["co2"], f"{s.capitalize()} CO₂")
-                at = (d.systems[f"{URN}sensor:{s}:co2"], f"co2__{dsid}", f"{s.capitalize()} CO₂ · {dsid}")
-                try:
-                    ds = await d.datastream(*at, rec)
-                except AssertionError as e:  # OpenSensorHub refuses the UCUM code "ppm"; UCUM's is "[ppm]" (D-195)
-                    if "UCUM" not in str(e):
-                        raise
-                    self.unit_substitutions.append(f"co2__{dsid} under sensor:{s}:co2: ppm refused, written as [ppm]")
-                    rec["fields"][1]["uom"] = {"code": "[ppm]"}
-                    ds = await d.datastream(*at, rec)
+                rec = swe.measurement_record(["co2"], f"{s.capitalize()} CO₂")  # in [ppm], UCUM's code (D-195)
+                ds = await d.datastream(d.systems[f"{URN}sensor:{s}:co2"], f"co2__{dsid}", f"{s.capitalize()} CO₂ · {dsid}",
+                                        rec)
                 outs.append((ds, Importer._columns(parsed, s, ["co2"]), ["co2"]))
         rows = []
         for ds, cols, names in outs:
@@ -488,8 +480,7 @@ class Client:
     async def request(self, method, path, params=None, body=None, headers=None):
         async with httpx.AsyncClient(base_url=self.base, timeout=90, trust_env=False) as c:
             r = await c.request(method, path, params=params, json=body, headers=headers)
-            ctype = r.headers.get("content-type", "")
-            data = r.json() if ("json" in ctype and r.content) else r.text
+            data = suite.read_body(r.content)  # JSON whatever the Content-Type says (D-196)
             return r.status_code, dict(r.headers), data
 
     async def open_stream(self, path, params=None, headers=None):
@@ -500,14 +491,14 @@ class Client:
 
 
 # --- one run --------------------------------------------------------------------------------------------------
-async def run_once(home: Path, rundir: Path, folder: Path, rows: int, proposed: bool, log) -> dict:
+async def run_once(home: Path, rundir: Path, folder: Path, rows: int, log) -> dict:
     osh = Osh(home, rundir)
     tasks = []
-    out = {"proposed": proposed, "setup": {}}
+    out = {"setup": {}}
     try:
         out["setup"]["osh_start_s"] = round(await asyncio.to_thread(osh.start), 2)
         log(f"OpenSensorHub started in {out['setup']['osh_start_s']} s on port {osh.port}")
-        upstream = OshUpstream(osh.root, proposed=proposed)
+        upstream = OshUpstream(osh.root)
         gw = OshGateway(upstream)
         gport = free_port()
         srv = uvicorn.Server(uvicorn.Config(gw, host="127.0.0.1", port=gport, log_level="warning", lifespan="off"))
@@ -523,8 +514,7 @@ async def run_once(home: Path, rundir: Path, folder: Path, rows: int, proposed: 
         await imp.start()
         out["setup"]["import"] = {"datasets": list(imp.datasets), "observations": imp.written,
                                   "seconds": round(time.monotonic() - t, 1), "observations_per_s": imp.rate,
-                                  "catalogue_refusals": imp.catalogue_refusals,
-                                  "unit_substitutions": imp.unit_substitutions}
+                                  "catalogue_refusals": imp.catalogue_refusals}
         log(f"importer: {out['setup']['import']}")
         rep = ReplayClient(osh, imp)
         await rep.start()
@@ -540,7 +530,6 @@ async def run_once(home: Path, rundir: Path, folder: Path, rows: int, proposed: 
         tasks += [imp.task, rep.task, rep.ticker]
         results = await suite.run(Client(base))
         out["results"] = results
-        out["setup"]["proposed_rewrites"] = dict(upstream.rewrites)
     except Exception as e:  # noqa: BLE001 - reported
         out["error"] = f"{type(e).__name__}: {e}\n{traceback.format_exc(limit=4)}"
     finally:
@@ -551,8 +540,7 @@ async def run_once(home: Path, rundir: Path, folder: Path, rows: int, proposed: 
 
 
 def report(out: dict) -> tuple[int, int]:
-    title = "with the proposed changes (NOT AT-32 as specified)" if out["proposed"] else "AT-32 as specified"
-    print(f"\n=== Contract suite against stock OpenSensorHub 2.0.4: {title} ===")
+    print("\n=== Contract suite against stock OpenSensorHub 2.0.4: AT-32 as specified ===")
     if "error" in out:
         print("SET-UP FAILED:", out["error"])
     passed = total = 0
@@ -574,7 +562,6 @@ def main() -> int:
     ap.add_argument("--osh", help="osh-core's installed distribution (or the osh-core checkout); else $OSH_HOME")
     ap.add_argument("--folder", default=str(ROOT / "web" / "public" / "data" / "folder"))
     ap.add_argument("--rows", type=int, default=900, help="rows of Mission A imported over HTTP (0: all)")
-    ap.add_argument("--proposed", action="store_true", help="also run with the finding's proposed changes")
     ap.add_argument("--json", help="write every result to this file")
     ap.add_argument("--rundir", help="where OpenSensorHub keeps its store (default: a temporary directory)")
     a = ap.parse_args()
@@ -584,9 +571,7 @@ def main() -> int:
         raise SystemExit(f"no data folder at {folder}: python scripts/build_data_folder.py")
     base = Path(a.rundir) if a.rundir else Path(tempfile.mkdtemp(prefix="at32-osh-"))
     log = lambda m: print(f"[{time.strftime('%H:%M:%S')}] {m}", flush=True)  # noqa: E731
-    runs = [asyncio.run(run_once(home, base / "as-specified", folder, a.rows, False, log))]
-    if a.proposed:
-        runs.append(asyncio.run(run_once(home, base / "proposed", folder, a.rows, True, log)))
+    runs = [asyncio.run(run_once(home, base / "as-specified", folder, a.rows, log))]
     scores = [report(r) for r in runs]
     if a.json:  # the record: each check's first line of detail, without tracebacks (no local paths)
         for r in runs:

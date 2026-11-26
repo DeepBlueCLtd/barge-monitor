@@ -95,14 +95,18 @@ class Gateway:
         return json.loads(body) if st == 200 else None
 
     async def refresh(self, auth: str) -> None:
-        sysl = await self._ask(auth, "/collections/all_systems/items", f"f=application/sml%2Bjson&limit={BIG}")
+        """The system tree from the server's own listings (D-192): listings carry no parent link (D-193), so
+        the top level, then each system's subsystems; one request per system, counted, not drawn."""
+        m = self._maps if self._maps and self._boot == self.rt.boots else {"systems": {}, "ds": {}, "cs": {}, "cmd": {}}
+        q = f"f=application/sml%2Bjson&limit={BIG}"
+        queue = [(s, None) for s in ((await self._ask(auth, "/systems", q)) or {}).get("items", [])]
+        while queue:
+            s, parent = queue.pop()
+            m["systems"][s["id"]] = (s.get("uniqueId") or (s.get("properties") or {}).get("uid"), parent)
+            subs = await self._ask(auth, f"/systems/{s['id']}/subsystems", q)
+            queue += [(c, s["id"]) for c in (subs or {}).get("items", [])]
         dss = await self._ask(auth, "/datastreams", f"limit={BIG}")
         css = await self._ask(auth, "/controlstreams", f"limit={BIG}")
-        m = self._maps if self._maps and self._boot == self.rt.boots else {"systems": {}, "ds": {}, "cs": {}, "cmd": {}}
-        for s in (sysl or {}).get("items", []):
-            parent = next((lk["href"].rstrip("/").rsplit("/", 1)[-1] for lk in s.get("links", [])
-                           if lk.get("rel") == "parent"), None)
-            m["systems"][s["id"]] = (s["uniqueId"], parent)
         for d in (dss or {}).get("items", []):
             m["ds"][d["id"]] = d["system@id"]
         for c in (css or {}).get("items", []):

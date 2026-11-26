@@ -50,7 +50,8 @@ RAW = [
     Field("solar_irradiance", "Solar irradiance", "Quantity", "W/m2"),
     Field("water_temperature", "Water temp", "Quantity", "Cel"),
 ]
-CO2 = Field("co2", "CO₂", "Quantity", "ppm", description="Carbon dioxide at the sensor, in ppm. Restricted (FR-111).")
+CO2 = Field("co2", "CO₂", "Quantity", "[ppm]",  # UCUM's code for parts per million (D-195)
+            description="Carbon dioxide at the sensor, in ppm. Restricted (FR-111).")
 QUANTITIES = [f.name for f in RAW]
 UNITS = {f.name: f.uom for f in RAW + [CO2]}
 LABELS = {f.name: f.label for f in RAW + [CO2]}

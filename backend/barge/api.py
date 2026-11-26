@@ -38,6 +38,7 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 from . import config as C
 from . import scoring
 from . import swe
+from .ucum import bad_codes
 from .store import URN, Subscription
 from .times import iso, iso_many, parse_iso, world_seconds
 
@@ -287,7 +288,7 @@ def create_server(rt) -> Gate:
         chunk = items[offset:offset + limit]
         links = [link(request, path, "self")]
         if offset + limit < len(items):
-            links.append(link(request, f"{path}?limit={limit}&offset={offset + limit}", "next"))
+            links.append(link(request, f"{path}{'&' if '?' in path else '?'}limit={limit}&offset={offset + limit}", "next"))
         return {"items": chunk, "links": links}
 
     def fmt(f: str | None, default: str, allowed: tuple) -> str:
@@ -336,12 +337,12 @@ def create_server(rt) -> Gate:
             raise Refusal(404, f"control stream {csid} not found")
         return c
 
-    def system_json(request, s, form):
+    def system_json(request, s, form, listed=True):
         sid = s["id"]
         links = [link(request, f"/systems/{sid}", "self"), link(request, f"/systems/{sid}/datastreams", "datastreams"),
                  link(request, f"/systems/{sid}/subsystems", "subsystems"),
                  link(request, f"/systems/{sid}/controlstreams", "controlstreams")]
-        if s["parent"]:
+        if s["parent"] and not listed:  # a listing carries no parent link, as OpenSensorHub's (D-193)
             links.append(link(request, f"/systems/{s['parent']}", "parent"))
         if form == SML_JSON:
             out = {"type": "SimpleProcess" if s["asset"] in ("Process", "Simulation", "Other") or "System" in s["feature"]
@@ -418,8 +419,10 @@ def create_server(rt) -> Gate:
 
     def collection_json(request, cid):
         title, kind = COLLECTIONS[cid]
+        # OpenSensorHub's all_systems links its items to /systems and serves no /collections/all_systems/items (D-193).
+        items = "/systems" if cid == "all_systems" else f"/collections/{cid}/items"
         return {"id": cid, "title": title, "itemType": kind,
-                "links": [link(request, f"/collections/{cid}", "self"), link(request, f"/collections/{cid}/items", "items")]}
+                "links": [link(request, f"/collections/{cid}", "self"), link(request, items, "items")]}
 
     @app.get("/collections", summary="Collections")
     async def collections(request: Request, f: str | None = Query(None)):
@@ -435,27 +438,25 @@ def create_server(rt) -> Gate:
     @app.get("/collections/{collectionId}/items", summary="Items of a collection")
     async def collection_items(request: Request, collectionId: str = Path(...), limit: int = Query(C.DEFAULT_LIMIT),
                                offset: int = Query(0), f: str | None = Query(None)):
-        if collectionId == "all_systems":
-            form = fmt(f, GEO_JSON, (GEO_JSON, SML_JSON, swe.JSON))
-            items = [system_json(request, s, form) for s in visible(request)]
-            return page(items, request, f"/collections/{collectionId}/items", limit, offset)
+        if collectionId == "all_systems":  # as OpenSensorHub answers: every system is GET /systems?searchMembers=true
+            raise Refusal(400, "Invalid resource name: 'items'")
         if collectionId == "all_datastreams":
             items = [ds_json(request, d) for d in store().datastreams.values() if served(d)]
             return page(items, request, f"/collections/{collectionId}/items", limit, offset)
         raise Refusal(404, f"collection {collectionId} not found")
 
     # --- Part 1: systems --------------------------------------------------------------------
-    @app.get("/systems", summary="Systems (top level)")
+    @app.get("/systems", summary="Systems: the top level, or every system with searchMembers=true (D-193)")
     async def systems(request: Request, limit: int = Query(C.DEFAULT_LIMIT), offset: int = Query(0),
-                      f: str | None = Query(None)):
+                      f: str | None = Query(None), searchMembers: bool = Query(False)):
         form = fmt(f, GEO_JSON, (GEO_JSON, SML_JSON, swe.JSON))
-        items = [system_json(request, s, form) for s in visible(request) if not s["parent"]]
-        return page(items, request, "/systems", limit, offset)
+        items = [system_json(request, s, form) for s in visible(request) if searchMembers or not s["parent"]]
+        return page(items, request, "/systems" + ("?searchMembers=true" if searchMembers else ""), limit, offset)
 
     @app.get("/systems/{systemId}", summary="A system")
     async def system(request: Request, systemId: str = Path(...), f: str | None = Query(None)):
         form = fmt(f, GEO_JSON, (GEO_JSON, SML_JSON, swe.JSON))
-        return system_json(request, get_system(request, systemId), form)
+        return system_json(request, get_system(request, systemId), form, listed=False)
 
     @app.get("/systems/{systemId}/subsystems", summary="Subsystems")
     async def subsystems(request: Request, systemId: str = Path(...), limit: int = Query(C.DEFAULT_LIMIT),
@@ -491,16 +492,29 @@ def create_server(rt) -> Gate:
 
     async def create_system(request: Request, parent: str | None):
         a = who(request)
-        b = system_from_body(await json_body(request))
+        body = await json_body(request)
+        # D-194: SensorML is sent as application/sml+json; anything else is read as GeoJSON, as OpenSensorHub does.
+        ctype = (request.headers.get("content-type") or swe.JSON).split(";")[0].strip().lower()
+        kind = body.get("type") if isinstance(body, dict) else None
+        if ctype == SML_JSON and kind == "Feature":
+            raise Refusal(400, "a SensorML description cannot be a GeoJSON Feature")
+        if ctype != SML_JSON and kind != "Feature":
+            raise Refusal(400, "The type of a GeoJSON feature must be 'Feature' (send SensorML as application/sml+json)")
+        b = system_from_body(body)
         s, _ = store().add_system(b["uid"], b["label"], b["description"], b["feature"], b["asset"], parent=parent,
                                   owner=a.user, characteristics=b["characteristics"])
         return Response(status_code=201, headers={"Location": base(request) + f"/systems/{s['id']}"})
 
-    @app.post("/systems", status_code=201, summary="Create a system")
+    @app.post("/systems", status_code=201, summary="Create a system (SensorML as application/sml+json, D-194)",
+              openapi_extra={"requestBody": {"required": True, "content": {
+                  SML_JSON: {"schema": {"type": "object"}}, GEO_JSON: {"schema": {"type": "object"}}}}})
     async def post_system(request: Request):
         return await create_system(request, None)
 
-    @app.post("/systems/{systemId}/subsystems", status_code=201, summary="Create a subsystem (a model registers)")
+    @app.post("/systems/{systemId}/subsystems", status_code=201,
+              summary="Create a subsystem (a model registers; SensorML as application/sml+json, D-194)",
+              openapi_extra={"requestBody": {"required": True, "content": {
+                  SML_JSON: {"schema": {"type": "object"}}, GEO_JSON: {"schema": {"type": "object"}}}}})
     async def post_subsystem(request: Request, systemId: str = Path(...)):
         get_system(request, systemId)
         return await create_system(request, systemId)
@@ -539,6 +553,8 @@ def create_server(rt) -> Gate:
         if not isinstance(rec, dict) or not isinstance(rec.get("fields"), list) or not rec["fields"] or \
                 not isinstance(out, str) or not out:
             raise Refusal(400, "a datastream needs an outputName and a SWE Common DataRecord")
+        if bad := bad_codes(rec):  # D-195: OpenSensorHub checks UCUM strictly
+            raise Refusal(400, f"Invalid UCUM code '{bad[0]}'")
         first = rec["fields"][0]
         if first.get("type") != "Time" or first.get("name") != "time":
             raise Refusal(400, "the first field must be a Time named time")
@@ -631,6 +647,8 @@ def create_server(rt) -> Gate:
         name = body.get("inputName") if isinstance(body, dict) else None
         if not isinstance(rec, dict) or not isinstance(rec.get("fields"), list) or not isinstance(name, str) or not name:
             raise Refusal(400, "a control stream needs an inputName and a SWE Common DataRecord of parameters")
+        if bad := bad_codes(rec):  # D-195
+            raise Refusal(400, f"Invalid UCUM code '{bad[0]}'")
         c, _ = store().add_controlstream(systemId, name, body.get("name", name), rec, owner=a.user)
         return Response(status_code=201, headers={"Location": base(request) + f"/controlstreams/{c['id']}"})
 

@@ -8,8 +8,9 @@ everything by uniqueId and outputName, as the display client does, and carries c
 A client provides:
 
 * ``async request(method, path, params=None, body=None, headers=None)`` returning ``(status, headers,
-  body)``, where body is parsed JSON when the response is JSON and text otherwise; paths are relative
-  to the API base;
+  body)``, where body is ``read_body(content)``: parsed JSON whenever the body is JSON, whatever its
+  ``Content-Type`` says (OpenSensorHub labels some JSON ``auto``, D-196), and text otherwise; paths are
+  relative to the API base;
 * ``async open_stream(path, params=None, headers=None)`` returning an object with ``status``,
   ``async next_line(timeout)`` (a line, or None) and ``async close()``: a push subscription (§9.2).
 
@@ -28,6 +29,7 @@ from pathlib import Path
 NEED, STANDIN = [], []
 URN = "urn:x-barge:"
 SWE = "application/swe+json"
+SML = "application/sml+json"  # SensorML is sent as this, never as application/json (D-194)
 CS2 = "http://www.opengis.net/spec/ogcapi-connectedsystems-2/1.0/conf/"
 DEMO = {"owner": "demo-owner", "friend": "demo-friend", "analyst": "demo-analyst",
         "svc-new-model-2": "svc-demo"}  # demo credentials (PR-07)
@@ -45,6 +47,17 @@ def standin(fn):
 
 class Skip(Exception):
     pass
+
+
+def read_body(content: bytes):
+    """A response body as JSON whenever it is JSON, whatever the Content-Type says (D-196); else text."""
+    text = content.decode("utf-8", errors="replace")
+    if text.lstrip()[:1] in ("{", "["):
+        try:
+            return json.loads(text)
+        except ValueError:
+            pass
+    return text
 
 
 def contracts_dir() -> Path:
@@ -78,9 +91,8 @@ class Ctx:
 
     # --- finding things by uniqueId and outputName --------------------------------------------------
     async def systems(self, user="owner") -> dict:
-        """uniqueId -> system id, from discovery (either encoding)."""
-        st, _, body = await self.get("collections/all_systems/items", {"f": "application/sml+json", "limit": "100000"},
-                                     user=user)
+        """uniqueId -> system id, from discovery: every system, subsystems included (D-193)."""
+        st, _, body = await self.get("systems", {"searchMembers": "true", "f": SML, "limit": "100000"}, user=user)
         assert st == 200, (st, body)
         out = {}
         for s in body["items"]:
@@ -141,7 +153,7 @@ async def landing_and_conformance(x: Ctx):
 @need
 async def credentials_are_needed_everywhere(x: Ctx):
     """AT-49: every request without valid credentials is refused with 401, discovery and the profile included."""
-    for path in ("", "systems", "datastreams", "collections/all_systems/items", "profile.json"):
+    for path in ("", "systems", "systems?searchMembers=true", "datastreams", "profile.json"):
         st, _, _ = await x.get(path, user=None)
         assert st == 401, f"{path or '/'} without credentials answered {st}"
         st, _, _ = await x.c.request("GET", path, headers={"Authorization": basic("owner", "wrong")})
@@ -240,7 +252,7 @@ async def _model_resources(x: Ctx):
     uid = URN + "process:new-model-2"
     body = {"type": "SimpleProcess", "uniqueId": uid, "label": "New model 2", "description": "contract suite",
             "definition": "http://www.w3.org/ns/sosa/System", "assetType": "Process"}
-    st, h, _ = await x.post(f"systems/{models}/subsystems", body, user)
+    st, h, _ = await x.post(f"systems/{models}/subsystems", body, user, ctype=SML)
     assert st == 201, st
     loc = {k.lower(): v for k, v in h.items()}["location"]
     sid = loc.rstrip("/").rsplit("/", 1)[-1]
@@ -269,7 +281,7 @@ async def creating_again_answers_the_same_location(x: Ctx):
     """FR-28, AT-29: 201 with the existing Location is success."""
     r = await _model_resources(x)
     body, ds_body, _ = r["bodies"]
-    st, h, _ = await x.post(f"systems/{r['models']}/subsystems", body, r["user"])
+    st, h, _ = await x.post(f"systems/{r['models']}/subsystems", body, r["user"], ctype=SML)
     assert st == 201 and {k.lower(): v for k, v in h.items()}["location"] == r["loc"]
     st, h, _ = await x.post(f"systems/{r['system']}/datastreams", ds_body, r["user"])
     assert st == 201 and {k.lower(): v for k, v in h.items()}["location"].endswith("/" + r["ds"])
@@ -359,6 +371,24 @@ async def put_and_delete_are_not_allowed(x: Ctx):
     for method, path in (("PUT", f"systems/{sy[URN + 'sensor:bow']}"), ("DELETE", f"systems/{sy[URN + 'sensor:bow']}")):
         st, _, _ = await x.c.request(method, path, body={}, headers=x.auth())
         assert st == 405, f"{method} {path}: {st}"
+
+
+@standin
+async def sensorml_as_json_and_codes_not_ucum_are_refused(x: Ctx):
+    """D-194, D-195: SensorML sent as application/json is read as GeoJSON and refused; a unit code that is
+    not UCUM (``ppm``; UCUM's is ``[ppm]``) is refused. OpenSensorHub does both."""
+    r = await _model_resources(x)
+    body = {**r["bodies"][0], "uniqueId": r["uid"] + ":as-json"}
+    st, _, _ = await x.post(f"systems/{r['system']}/subsystems", body, r["user"], ctype="application/json")
+    assert st == 400, f"SensorML as application/json answered {st}"
+    ds_body = json.loads(json.dumps(r["bodies"][1]))
+    ds_body["outputName"] = "suite-ppm"
+    ds_body["schema"]["recordSchema"]["fields"][1]["uom"] = {"code": "ppm"}
+    st, _, _ = await x.post(f"systems/{r['system']}/datastreams", ds_body, r["user"])
+    assert st == 400, f"a datastream in ppm answered {st}"
+    ds_body["schema"]["recordSchema"]["fields"][1]["uom"] = {"code": "[ppm]"}
+    st, _, _ = await x.post(f"systems/{r['system']}/datastreams", ds_body, r["user"])
+    assert st == 201, f"a datastream in [ppm] answered {st}"
 
 
 @standin
