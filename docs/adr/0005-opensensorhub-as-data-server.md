@@ -75,7 +75,8 @@ and the core models as its clients.
   - One path fails 11 checks: OpenSensorHub serves no `/collections/all_systems/items`.
   - With four client-side changes (D-193 to D-196: discovery by `/systems?searchMembers=true`,
     SensorML as `application/sml+json`, `[ppm]` for CO₂, reading JSON whatever the content
-    type), **all 12 pass**. They are proposed, not made.
+    type), **all 12 pass**. The contract owner approved them on 2026-11-26; made in the contract,
+    the stand-ins and the clients, **AT-32 passes as specified: 12 of 12**.
   - In front of a real server the gateway also bridges receivers' subscriptions to WebSocket,
     serves the profile and discovers the system tree itself (D-190 to D-192).
 

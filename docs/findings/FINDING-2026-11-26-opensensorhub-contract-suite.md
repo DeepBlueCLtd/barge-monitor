@@ -1,5 +1,13 @@
 # Finding: the contract suite against a stock OpenSensorHub (AT-32, ADR 0005)
 
+> **Update, 2026-11-26.** The contract owner approved D-193 to D-196, and they are now made in the
+> contract (`docs/v4-interfaces.md` §5, §9.1, §10.1), both stand-ins, the display client, both
+> `csmodel`s, the gateway and the suite. The `--proposed` rewriting is removed from
+> `osh_gateway.py`. Run again as specified, **AT-32 passes: 12 of 12 `need` checks**, and 7 of 8
+> `standin` checks (a new one, SensorML as `application/json` and `ppm` refused, passes against
+> OpenSensorHub too; `PUT` on a system still answers 400, D-200). `at32-osh-results.json` is now the
+> record of that run. The rest of this finding describes the first run, before the changes.
+
 **Date:** 2026-11-26 · **Server:** OpenSensorHub `osh-core` 2.0.4, built from source at commit
 `75bb094`, unmodified; configured with the delivered demo accounts, HTTP Basic authentication,
 and two Connected Systems endpoints on one store (`/api`, access control on; `/api-internal`,

@@ -4,176 +4,23 @@
  "rows_imported": 900,
  "runs": [
   {
-   "proposed": false,
    "setup": {
-    "osh_start_s": 1.13,
+    "osh_start_s": 3.75,
     "import": {
      "datasets": [
       "mission-a-20310407-2e2e678b"
      ],
      "observations": 3600,
-     "seconds": 4.7,
-     "observations_per_s": 810,
-     "catalogue_refusals": 5,
-     "unit_substitutions": [
-      "co2__mission-a-20310407-2e2e678b under sensor:bow:co2: ppm refused, written as [ppm]",
-      "co2__mission-a-20310407-2e2e678b under sensor:stern:co2: ppm refused, written as [ppm]"
-     ]
-    },
-    "models": {
-     "data-cleanse": "waiting: refused: GET /collections/all_systems/items?f=application%2Fsml%2Bjson&limit=100000: 400",
-     "summaries": "waiting: refused: GET /collections/all_systems/items?f=application%2Fsml%2Bjson&limit=100000: 400",
-     "analysis": "waiting: refused: GET /collections/all_systems/items?f=application%2Fsml%2Bjson&limit=100000: 400"
-    },
-    "models_ready_after_s": 10.5,
-    "proposed_rewrites": {}
-   },
-   "results": [
-    {
-     "name": "landing_and_conformance",
-     "group": "need",
-     "outcome": "failed",
-     "detail": "AttributeError: 'str' object has no attribute 'get'"
-    },
-    {
-     "name": "credentials_are_needed_everywhere",
-     "group": "need",
-     "outcome": "failed",
-     "detail": "AssertionError: (400, '<html>\\n<head>\\n<meta http-equiv=\"Content-Type\" content=\"text/html;charset=ISO-8859-1\"/>\\n<title>Error 400 Invalid resource name: &apos;items&apos;</title>\\n</head>\\n<body><h2>HTTP ERROR 400 Invalid resource name: &apos;items&apos;</h2>\\n<table>\\n<tr><th>URI:</th><td>/sensorhub/api/collections/all_systems/items</td></tr>\\n<tr><th>STATUS:</th><td>400</td></tr>\\n<tr><th>MESSAG"
-    },
-    {
-     "name": "the_platform_is_found_by_unique_id",
-     "group": "need",
-     "outcome": "failed",
-     "detail": "AssertionError: (400, '<html>\\n<head>\\n<meta http-equiv=\"Content-Type\" content=\"text/html;charset=ISO-8859-1\"/>\\n<title>Error 400 Invalid resource name: &apos;items&apos;</title>\\n</head>\\n<body><h2>HTTP ERROR 400 Invalid resource name: &apos;items&apos;</h2>\\n<table>\\n<tr><th>URI:</th><td>/sensorhub/api/collections/all_systems/items</td></tr>\\n<tr><th>STATUS:</th><td>400</td></tr>\\n<tr><th>MESSAG"
-    },
-    {
-     "name": "the_profile_is_beside_the_server",
-     "group": "need",
-     "outcome": "passed",
-     "detail": ""
-    },
-    {
-     "name": "every_essential_of_the_loaded_dataset_is_found",
-     "group": "need",
-     "outcome": "failed",
-     "detail": "AssertionError: (400, '<html>\\n<head>\\n<meta http-equiv=\"Content-Type\" content=\"text/html;charset=ISO-8859-1\"/>\\n<title>Error 400 Invalid resource name: &apos;items&apos;</title>\\n</head>\\n<body><h2>HTTP ERROR 400 Invalid resource name: &apos;items&apos;</h2>\\n<table>\\n<tr><th>URI:</th><td>/sensorhub/api/collections/all_systems/items</td></tr>\\n<tr><th>STATUS:</th><td>400</td></tr>\\n<tr><th>MESSAG"
-    },
-    {
-     "name": "a_sensor_record_has_quality_flags",
-     "group": "need",
-     "outcome": "failed",
-     "detail": "AssertionError: (400, '<html>\\n<head>\\n<meta http-equiv=\"Content-Type\" content=\"text/html;charset=ISO-8859-1\"/>\\n<title>Error 400 Invalid resource name: &apos;items&apos;</title>\\n</head>\\n<body><h2>HTTP ERROR 400 Invalid resource name: &apos;items&apos;</h2>\\n<table>\\n<tr><th>URI:</th><td>/sensorhub/api/collections/all_systems/items</td></tr>\\n<tr><th>STATUS:</th><td>400</td></tr>\\n<tr><th>MESSAG"
-    },
-    {
-     "name": "observations_by_time_latest_and_offset",
-     "group": "need",
-     "outcome": "failed",
-     "detail": "AssertionError: (400, '<html>\\n<head>\\n<meta http-equiv=\"Content-Type\" content=\"text/html;charset=ISO-8859-1\"/>\\n<title>Error 400 Invalid resource name: &apos;items&apos;</title>\\n</head>\\n<body><h2>HTTP ERROR 400 Invalid resource name: &apos;items&apos;</h2>\\n<table>\\n<tr><th>URI:</th><td>/sensorhub/api/collections/all_systems/items</td></tr>\\n<tr><th>STATUS:</th><td>400</td></tr>\\n<tr><th>MESSAG"
-    },
-    {
-     "name": "creating_again_answers_the_same_location",
-     "group": "need",
-     "outcome": "failed",
-     "detail": "AssertionError: (400, '<html>\\n<head>\\n<meta http-equiv=\"Content-Type\" content=\"text/html;charset=ISO-8859-1\"/>\\n<title>Error 400 Invalid resource name: &apos;items&apos;</title>\\n</head>\\n<body><h2>HTTP ERROR 400 Invalid resource name: &apos;items&apos;</h2>\\n<table>\\n<tr><th>URI:</th><td>/sensorhub/api/collections/all_systems/items</td></tr>\\n<tr><th>STATUS:</th><td>400</td></tr>\\n<tr><th>MESSAG"
-    },
-    {
-     "name": "one_observation_with_a_missing_value",
-     "group": "need",
-     "outcome": "failed",
-     "detail": "AssertionError: (400, '<html>\\n<head>\\n<meta http-equiv=\"Content-Type\" content=\"text/html;charset=ISO-8859-1\"/>\\n<title>Error 400 Invalid resource name: &apos;items&apos;</title>\\n</head>\\n<body><h2>HTTP ERROR 400 Invalid resource name: &apos;items&apos;</h2>\\n<table>\\n<tr><th>URI:</th><td>/sensorhub/api/collections/all_systems/items</td></tr>\\n<tr><th>STATUS:</th><td>400</td></tr>\\n<tr><th>MESSAG"
-    },
-    {
-     "name": "commands_are_pushed_to_a_subscriber",
-     "group": "need",
-     "outcome": "failed",
-     "detail": "AssertionError: (400, '<html>\\n<head>\\n<meta http-equiv=\"Content-Type\" content=\"text/html;charset=ISO-8859-1\"/>\\n<title>Error 400 Invalid resource name: &apos;items&apos;</title>\\n</head>\\n<body><h2>HTTP ERROR 400 Invalid resource name: &apos;items&apos;</h2>\\n<table>\\n<tr><th>URI:</th><td>/sensorhub/api/collections/all_systems/items</td></tr>\\n<tr><th>STATUS:</th><td>400</td></tr>\\n<tr><th>MESSAG"
-    },
-    {
-     "name": "the_friend_finds_no_co2",
-     "group": "need",
-     "outcome": "failed",
-     "detail": "AssertionError: (400, '<html>\\n<head>\\n<meta http-equiv=\"Content-Type\" content=\"text/html;charset=ISO-8859-1\"/>\\n<title>Error 400 Invalid resource name: &apos;items&apos;</title>\\n</head>\\n<body><h2>HTTP ERROR 400 Invalid resource name: &apos;items&apos;</h2>\\n<table>\\n<tr><th>URI:</th><td>/sensorhub/api/collections/all_systems/items</td></tr>\\n<tr><th>STATUS:</th><td>400</td></tr>\\n<tr><th>MESSAG"
-    },
-    {
-     "name": "workspaces_are_private",
-     "group": "need",
-     "outcome": "failed",
-     "detail": "AssertionError: (400, '<html>\\n<head>\\n<meta http-equiv=\"Content-Type\" content=\"text/html;charset=ISO-8859-1\"/>\\n<title>Error 400 Invalid resource name: &apos;items&apos;</title>\\n</head>\\n<body><h2>HTTP ERROR 400 Invalid resource name: &apos;items&apos;</h2>\\n<table>\\n<tr><th>URI:</th><td>/sensorhub/api/collections/all_systems/items</td></tr>\\n<tr><th>STATUS:</th><td>400</td></tr>\\n<tr><th>MESSAG"
-    },
-    {
-     "name": "refusals_are_html_without_a_login_dialog",
-     "group": "standin",
-     "outcome": "passed",
-     "detail": ""
-    },
-    {
-     "name": "put_and_delete_are_not_allowed",
-     "group": "standin",
-     "outcome": "failed",
-     "detail": "AssertionError: (400, '<html>\\n<head>\\n<meta http-equiv=\"Content-Type\" content=\"text/html;charset=ISO-8859-1\"/>\\n<title>Error 400 Invalid resource name: &apos;items&apos;</title>\\n</head>\\n<body><h2>HTTP ERROR 400 Invalid resource name: &apos;items&apos;</h2>\\n<table>\\n<tr><th>URI:</th><td>/sensorhub/api/collections/all_systems/items</td></tr>\\n<tr><th>STATUS:</th><td>400</td></tr>\\n<tr><th>MESSAG"
-    },
-    {
-     "name": "one_observation_per_post_and_nan_not_null",
-     "group": "standin",
-     "outcome": "failed",
-     "detail": "AssertionError: (400, '<html>\\n<head>\\n<meta http-equiv=\"Content-Type\" content=\"text/html;charset=ISO-8859-1\"/>\\n<title>Error 400 Invalid resource name: &apos;items&apos;</title>\\n</head>\\n<body><h2>HTTP ERROR 400 Invalid resource name: &apos;items&apos;</h2>\\n<table>\\n<tr><th>URI:</th><td>/sensorhub/api/collections/all_systems/items</td></tr>\\n<tr><th>STATUS:</th><td>400</td></tr>\\n<tr><th>MESSAG"
-    },
-    {
-     "name": "accept_is_ignored_and_f_chooses",
-     "group": "standin",
-     "outcome": "failed",
-     "detail": "AssertionError: (400, '<html>\\n<head>\\n<meta http-equiv=\"Content-Type\" content=\"text/html;charset=ISO-8859-1\"/>\\n<title>Error 400 Invalid resource name: &apos;items&apos;</title>\\n</head>\\n<body><h2>HTTP ERROR 400 Invalid resource name: &apos;items&apos;</h2>\\n<table>\\n<tr><th>URI:</th><td>/sensorhub/api/collections/all_systems/items</td></tr>\\n<tr><th>STATUS:</th><td>400</td></tr>\\n<tr><th>MESSAG"
-    },
-    {
-     "name": "no_instance_identifier",
-     "group": "standin",
-     "outcome": "passed",
-     "detail": ""
-    },
-    {
-     "name": "a_command_without_a_subscriber_is_dropped",
-     "group": "standin",
-     "outcome": "failed",
-     "detail": "AssertionError: (400, '<html>\\n<head>\\n<meta http-equiv=\"Content-Type\" content=\"text/html;charset=ISO-8859-1\"/>\\n<title>Error 400 Invalid resource name: &apos;items&apos;</title>\\n</head>\\n<body><h2>HTTP ERROR 400 Invalid resource name: &apos;items&apos;</h2>\\n<table>\\n<tr><th>URI:</th><td>/sensorhub/api/collections/all_systems/items</td></tr>\\n<tr><th>STATUS:</th><td>400</td></tr>\\n<tr><th>MESSAG"
-    },
-    {
-     "name": "only_services_subscribe",
-     "group": "standin",
-     "outcome": "failed",
-     "detail": "AssertionError: (400, '<html>\\n<head>\\n<meta http-equiv=\"Content-Type\" content=\"text/html;charset=ISO-8859-1\"/>\\n<title>Error 400 Invalid resource name: &apos;items&apos;</title>\\n</head>\\n<body><h2>HTTP ERROR 400 Invalid resource name: &apos;items&apos;</h2>\\n<table>\\n<tr><th>URI:</th><td>/sensorhub/api/collections/all_systems/items</td></tr>\\n<tr><th>STATUS:</th><td>400</td></tr>\\n<tr><th>MESSAG"
-    }
-   ]
-  },
-  {
-   "proposed": true,
-   "setup": {
-    "osh_start_s": 1.13,
-    "import": {
-     "datasets": [
-      "mission-a-20310407-2e2e678b"
-     ],
-     "observations": 3600,
-     "seconds": 4.7,
-     "observations_per_s": 805,
-     "catalogue_refusals": 5,
-     "unit_substitutions": [
-      "co2__mission-a-20310407-2e2e678b under sensor:bow:co2: ppm refused, written as [ppm]",
-      "co2__mission-a-20310407-2e2e678b under sensor:stern:co2: ppm refused, written as [ppm]"
-     ]
+     "seconds": 5.6,
+     "observations_per_s": 673,
+     "catalogue_refusals": 5
     },
     "models": {
      "data-cleanse": "live: mission-a-20310407-2e2e678b: up to 2031-04-07T00:00:00Z",
      "summaries": "live: mission-a-20310407-2e2e678b: up to 2031-04-07T00:00:00Z",
      "analysis": "live: mission-a-20310407-2e2e678b: up to 2031-04-07T00:00:00Z"
     },
-    "models_ready_after_s": 2.5,
-    "proposed_rewrites": {
-     "D-193": 43,
-     "D-194": 13,
-     "D-196": 25,
-     "D-195": 6
-    }
+    "models_ready_after_s": 2.5
    },
    "results": [
     {
@@ -259,6 +106,12 @@
      "group": "standin",
      "outcome": "failed",
      "detail": "AssertionError: PUT systems/0410: 400"
+    },
+    {
+     "name": "sensorml_as_json_and_codes_not_ucum_are_refused",
+     "group": "standin",
+     "outcome": "passed",
+     "detail": ""
     },
     {
      "name": "one_observation_per_post_and_nan_not_null",
