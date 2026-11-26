@@ -7,7 +7,7 @@
 // changes come from a plain step detector. Every run is marked illustrative,
 // and nothing is scored: the stand-in has no referee (FR-06e).
 import { PyFloat } from '../py';
-import type { Cols } from '../registry';
+import type { Cols } from '../resources';
 import { M } from '../swe';
 import { Command, interp, Model, ModelApi, NoRun, rng } from './csmodel';
 
@@ -155,16 +155,15 @@ export class Analysis extends Model {
   runs = 0;
   lastCommand = '';
 
-  setup(api: ModelApi): void {
-    super.setup(api);
+  async setup(api: ModelApi): Promise<void> {
+    await super.setup(api);
     const defs: Record<string, ReturnType<typeof M.time>[]> = {
       changes: [M.time(), M.text('run_id', 'Run'), M.category('scale', 'Scale of the change', ['minutes', 'hours']),
         M.quantity('strength', 'Strength of the change', '1')],
       clusters: [M.time(), M.text('run_id', 'Run'), M.category('cluster', 'Cluster', Array.from({ length: MAX_CLUSTERS }, (_, i) => `c${i + 1}`))],
+      // The matrix is Text (JSON): OpenSensorHub refused an array of implicit size (interfaces §6).
       correlation: [M.time(), M.text('run_id', 'Run'), M.text('fields', 'Fields, in matrix order'),
-        { type: 'Matrix', name: 'matrix', label: 'Pearson correlation', definition: 'https://deepbluecltd.github.io/barge-monitor/def/matrix',
-          elementCount: { type: 'Count' }, elementType: { type: 'DataArray', name: 'row', elementCount: { type: 'Count' },
-            elementType: { type: 'Quantity', name: 'r', uom: { code: '1' } } } }],
+        M.text('matrix', 'Pearson correlation, as JSON rows')],
       runs: [M.time('time', 'Time the run completed'), M.text('run_id', 'Run'), M.text('command_id', 'Command'),
         M.text('algorithm', 'Algorithm'), M.text('fields', 'Fields'), M.text('period', 'Period'),
         M.time('window_start', 'Data range: start'), M.time('window_end', 'Data range: end'),
@@ -176,9 +175,9 @@ export class Analysis extends Model {
     };
     const names: Record<string, string> = { changes: 'Detected changes', clusters: 'Clusters', correlation: 'Correlation', runs: 'Runs' };
     for (const [out, fields] of Object.entries(defs)) {
-      this.out[out] = api.createDatastream(this.system, { name: names[out], outputName: out, schema: M.record(names[out], fields) });
+      this.out[out] = await api.createDatastream(this.system, { name: names[out], outputName: out, schema: M.record(names[out], fields) });
     }
-    this.controlKey = api.createControlstream(this.system, {
+    this.controlKey = await api.createControlstream(this.system, {
       name: 'Clustering', inputName: 'clustering', schema: M.record('Clustering settings', [
         M.category('algorithm', 'Algorithm', ['A', 'B', 'C']),
         M.text('fields', 'Fields, comma-separated', [...SENSOR_FIELDS, ...DERIVED_FIELDS]),
@@ -188,16 +187,16 @@ export class Analysis extends Model {
     });
   }
 
-  onCommand(api: ModelApi, cmd: Command): string {
+  async onCommand(api: ModelApi, cmd: Command): Promise<string> {
     Object.assign(this.settings, cmd.parameters);
     this.lastCommand = cmd.id;
-    const r = this.run(api);
+    const r = await this.run(api);
     return `${r.run_id} over ${r.records} records`;
   }
 
-  initial(api: ModelApi): boolean {
+  async initial(api: ModelApi): Promise<boolean> {
     try {
-      this.run(api);
+      await this.run(api);
       return true;
     } catch (e) {
       if (e instanceof NoRun) return false; // its inputs are not there yet
@@ -205,9 +204,9 @@ export class Analysis extends Model {
     }
   }
 
-  step(api: ModelApi, _t0: number, t1: number): number {
+  async step(api: ModelApi, _t0: number, t1: number): Promise<number> {
     try {
-      this.run(api);
+      await this.run(api);
     } catch (e) {
       if (!(e instanceof NoRun)) throw e;
       api.tap('models', `no run: ${e.message}`, { error: e.message });
@@ -215,10 +214,10 @@ export class Analysis extends Model {
     return t1;
   }
 
-  private key(api: ModelApi, system: string, output: string): string | null {
+  private async key(api: ModelApi, system: string, output: string): Promise<string | null> {
     const k = `${system}/${output}`;
     if (!this.src.has(k)) {
-      const found = api.find(`urn:x-barge:process:${system}`, output);
+      const found = await api.find(`urn:x-barge:process:${system}`, output);
       if (found) this.src.set(k, found); // a datastream not there yet is looked for again next time
       return found;
     }
@@ -226,35 +225,35 @@ export class Analysis extends Model {
   }
 
   /** Sample times and one column per field, on the source the period calls for. */
-  private series(api: ModelApi, t0: number, t1: number, fields: string[]): [Float64Array, Record<string, Float64Array>, number] {
+  private async series(api: ModelApi, t0: number, t1: number, fields: string[]): Promise<[Float64Array, Record<string, Float64Array>, number]> {
     const period = this.settings.period as string;
     let key: string | null;
     let dkey: string | null;
     let step: number;
-    if (period === 'PT1M') [key, dkey, step] = [this.key(api, 'data-cleanse', 'cleaned-bow'), this.key(api, 'summaries', 'derived-1min'), 1];
-    else if (period === 'PT1H') [key, dkey, step] = [this.key(api, 'data-cleanse', 'cleaned-bow'), this.key(api, 'summaries', 'derived-1min'), 5];
-    else if (period === 'PT6H' || period === 'P1D') [key, dkey, step] = [this.key(api, 'summaries', 'summary-1min-bow'), this.key(api, 'summaries', 'derived-1min'), 1];
-    else [key, dkey, step] = [this.key(api, 'summaries', 'summary-1h-bow'), this.key(api, 'summaries', 'derived-1h'), 1];
+    if (period === 'PT1M') [key, dkey, step] = [await this.key(api, 'data-cleanse', 'cleaned-bow'), await this.key(api, 'summaries', 'derived-1min'), 1];
+    else if (period === 'PT1H') [key, dkey, step] = [await this.key(api, 'data-cleanse', 'cleaned-bow'), await this.key(api, 'summaries', 'derived-1min'), 5];
+    else if (period === 'PT6H' || period === 'P1D') [key, dkey, step] = [await this.key(api, 'summaries', 'summary-1min-bow'), await this.key(api, 'summaries', 'derived-1min'), 1];
+    else [key, dkey, step] = [await this.key(api, 'summaries', 'summary-1h-bow'), await this.key(api, 'summaries', 'derived-1h'), 1];
     const sf = fields.filter((f) => SENSOR_FIELDS.includes(f));
     const df = fields.filter((f) => DERIVED_FIELDS.includes(f));
-    const base: Cols = key ? api.read(key, t0, t1, sf.length ? sf : ['air_temperature']) : { t: new Float64Array(0) };
+    const base: Cols = key ? await api.read(key, t0, t1, sf.length ? sf : ['air_temperature']) : { t: new Float64Array(0) };
     const pick = (v: Float64Array) => v.filter((_, i) => i % step === 0);
     const t = pick(base.t);
     const cols: Record<string, Float64Array> = {};
     for (const f of sf) if (f in base) cols[f] = pick(base[f] as Float64Array);
     if (df.length && dkey) {
-      const d = api.read(dkey, t0 - 3600, t1, df);
+      const d = await api.read(dkey, t0 - 3600, t1, df);
       for (const f of df) if (f in d && d.t.length) cols[f] = interp(t, d.t, d[f] as Float64Array);
     }
     return [t, cols, period === 'PT1M' || period === 'PT1H' ? step : period === 'PT6H' || period === 'P1D' ? 60 : 3600];
   }
 
-  run(api: ModelApi): { run_id: string; records: number } {
+  async run(api: ModelApi): Promise<{ run_id: string; records: number }> {
     const s = this.settings;
     const t1 = api.now();
     const t0 = Math.max(0, t1 - PERIODS[s.period]);
     const fields = String(s.fields).split(',').map((f) => f.trim()).filter(Boolean);
-    const [tAll, cols, stepS] = this.series(api, t0, t1, fields);
+    const [tAll, cols, stepS] = await this.series(api, t0, t1, fields);
     const names = fields.filter((f) => f in cols);
     if (!names.length) throw new NoRun(`none of the fields ${JSON.stringify(fields)} is published`);
     const rows: number[] = [];
@@ -276,20 +275,21 @@ export class Analysis extends Model {
     const det = detectSteps(t, names.map((_, j) => Float64Array.from(Z, (r) => r[j])), Number(s.sensitivity), stepS);
     const R = m > 1 ? corrcoef(X, m) : [[new PyFloat(1)]];
     api.tap('models', `${how}: ${new Set(labels).size} clusters; ${det.t.length} changes`, { method: how, changes: det.t.length });
-    const sc = api.score('changes', { t: det.t, scale: det.scale, t0: t[0], t1: t[t.length - 1] });
-    const cs = api.score('clusters', { t: Array.from(t), labels: Array.from(labels) });
+    const sc = await api.score('changes', { t: det.t, scale: det.scale, t0: t[0], t1: t[t.length - 1] });
+    const cs = await api.score('clusters', { t: Array.from(t), labels: Array.from(labels) });
     const scoreChanges = stepS <= 5 ? sc.boundary_recall : sc.front_recall;
     const scoreClusters = cs.ari_reach_kind;
     this.runs += 1;
     const runId = `run-${this.runs}`;
     const n = det.t.length;
-    api.publish(this.out.changes, {
+    await api.publishMany(this.out.changes, {
       t: Float64Array.from(det.t), run_id: new Array(n).fill(runId), scale: det.scale.map((x) => (x === 0 ? 'minutes' : 'hours')),
       strength: Float64Array.from(det.strength, (x) => Math.round(x * 100) / 100),
-    }, true);
-    api.publish(this.out.clusters, { t, run_id: new Array(t.length).fill(runId), cluster: relabel(labels) }, true);
-    api.publish(this.out.correlation, { t: Float64Array.of(t1), run_id: [runId], fields: [names.join(',')], matrix: [R] }, true);
-    api.publish(this.out.runs, {
+    });
+    await api.publishMany(this.out.clusters, { t, run_id: new Array(t.length).fill(runId), cluster: relabel(labels) });
+    await api.publishMany(this.out.correlation, { t: Float64Array.of(t1), run_id: [runId], fields: [names.join(',')],
+      matrix: [JSON.stringify(R.map((row) => row.map((x) => (x instanceof PyFloat ? x.v : x))))] });
+    await api.publishMany(this.out.runs, {
       t: Float64Array.of(t1), run_id: [runId], command_id: [this.lastCommand], algorithm: [s.algorithm], fields: [names.join(',')],
       period: [s.period], window_start: [t[0]], window_end: [t[t.length - 1]], records: Float64Array.of(t.length),
       clusters: Float64Array.of(k), score_changes: Float64Array.of(scoreChanges ?? NaN),

@@ -137,8 +137,8 @@ class Summaries(Model):
         derived = self._derived(rows, span, hist)
         api.tap("models", f"numpy: {n} minutes summarised", {"rows": n})
         for s in SENSORS:
-            await api.publish(self.out[f"summary-1min-{s}"], rows[s])
-        await api.publish(self.out["derived-1min"], derived)
+            await api.publish_many(self.out[f"summary-1min-{s}"], rows[s])
+        await api.publish_many(self.out["derived-1min"], derived)
         # Hours: from the minute means, once all sixty minutes of an hour are in.
         for s in SENSORS:
             for i in range(n):
@@ -175,8 +175,8 @@ class Summaries(Model):
         api.tap("scilibs", f"numpy: {len(hours)} hourly means", {"calls": ["numpy.bincount"], "hours": len(hours)})
         api.tap("models", f"numpy: {len(hours)} hours summarised", {"rows": len(hours)})
         for s in SENSORS:
-            await api.publish(self.out[f"summary-1h-{s}"], rows[s])
-        await api.publish(self.out["derived-1h"], derived)
+            await api.publish_many(self.out[f"summary-1h-{s}"], rows[s])
+        await api.publish_many(self.out["derived-1h"], derived)
         self.hour_done = hours[-1]
 
 

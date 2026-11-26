@@ -20,13 +20,22 @@ export interface Captured {
   chain: string | null;
   hop: number;
   model?: string;
+  push?: boolean;
 }
 
 export const MAX_CONTENT = 4000;
 
+/**
+ * Credentials never reach a captured message (§9.4, FR-16a; tap.redact): the value of
+ * `Authorization` becomes `****`, and so does any JSON member named `password`.
+ */
+export function redact(text: string): string {
+  return text.replace(/^(authorization:[ \t]*)[^\r\n]*/gim, '$1****').replace(/("password"\s*:\s*)"(?:[^"\\]|\\.)*"/g, '$1"****"');
+}
+
 export function clip(content: unknown): string {
   if (content === null || content === undefined) return '';
-  const s = typeof content === 'string' ? content : pyJson(content);
+  const s = redact(typeof content === 'string' ? content : pyJson(content));
   return s.length <= MAX_CONTENT ? s : s.slice(0, MAX_CONTENT) + `… (${s.length} characters in all)`;
 }
 
@@ -39,6 +48,7 @@ export interface EmitOptions {
   failed?: boolean;
   model?: string;
   quiet?: boolean;
+  push?: boolean;
 }
 
 export class Tap {
@@ -68,7 +78,7 @@ export class Tap {
     const ch = this.chain;
     this.buffer.push({
       id: this.nextId(), t: this.now(), src, dst, letter, summary, content: clip(content), failed: !!opts.failed,
-      chain: ch ? ch.id : null, hop: ch ? ++ch.hop : 0, ...(opts.model ? { model: opts.model } : {}),
+      chain: ch ? ch.id : null, hop: ch ? ++ch.hop : 0, ...(opts.model ? { model: opts.model } : {}), ...(opts.push ? { push: true } : {}),
     });
   }
 

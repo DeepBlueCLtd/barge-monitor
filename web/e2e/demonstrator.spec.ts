@@ -292,19 +292,25 @@ test('the Data server panel claims only what the server does; models register ov
   const panel = page.getByTestId('detail-server');
   await expect(panel).toContainText('ordinary resource creation');
   await expect(panel).toContainText('Not used:');
-  // What the panel says is not used is refused by name; what it says a model does, works.
+  // What the panel says is not used is refused; what it says a model does, works: a model's service account
+  // registers its process system under Models by ordinary resource creation (4.7: credentials, SensorML, 201).
   const probe = await page.evaluate(async () => {
-    const events = await fetch('api/systemEvents');
-    const made = await fetch('api/systems/models/subsystems', {
-      method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ uniqueId: 'urn:x-barge:process:e2e-probe', label: 'Probe' }),
+    const owner = { authorization: 'Basic ' + btoa('owner:demo-owner') };
+    const svc = { authorization: 'Basic ' + btoa('svc-new-model-2:svc-demo') };
+    const events = await fetch('api/systemEvents', { headers: owner });
+    const sy = await (await fetch('api/systems?searchMembers=true&f=application/sml%2Bjson', { headers: owner })).json();
+    const models = sy.items.find((s: any) => s.uniqueId === 'urn:x-barge:process:models').id;
+    const made = await fetch(`api/systems/${models}/subsystems`, {
+      method: 'POST', headers: { ...svc, 'content-type': 'application/sml+json' },
+      body: JSON.stringify({ type: 'SimpleProcess', uniqueId: 'urn:x-barge:process:new-model-2', label: 'Probe' }),
     });
-    return { events: events.status, refused: (await events.json()).refused, made: made.status, location: made.headers.get('location') };
+    const removed = await fetch(`api/systems/${models}`, { method: 'DELETE', headers: owner });
+    return { events: events.status, made: made.status, location: made.headers.get('location'), removed: removed.status };
   });
   expect(probe.events).toBe(404);
-  expect(probe.refused).toBe('systemEvents');
-  expect([201, 409]).toContain(probe.made);
-  expect(probe.location).toContain('/systems/e2e-probe');
+  expect(probe.made).toBe(201);
+  expect(probe.location).toMatch(/\/systems\/[0-9a-v]{4}$/);
+  expect(probe.removed).toBe(405);
   // The models' own traffic is on the flowchart, between Models and the data server, as HTTP.
   await expect(page.getByTestId('server-osh')).toContainText('OpenSensorHub');
   await expect(page.getByTestId('card-server').getByTestId('standin-tag')).toBeVisible(); // a stand-in in both back ends
@@ -314,7 +320,7 @@ test('the Data server panel claims only what the server does; models register ov
     { timeout: 60_000 }).toBeGreaterThan(0);
 });
 
-test('server down, then up: unreachable and stale, then waiting mode, a new instance and a fresh handshake (AT-10, AT-11)', async ({ page }) => {
+test('server down, then up: unreachable and stale, then no answer while it starts, and a fresh handshake (AT-10, AT-11, FR-48)', async ({ page }) => {
   await ready(page);
   const instance = await page.getByTestId('server-state').innerText();
   const simTime = () => page.getByTestId('role-platform').innerText();

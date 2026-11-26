@@ -13,12 +13,13 @@ instead, making the same HTTP requests of the same application.
 from __future__ import annotations
 
 from . import config as C
-from .clock import SimClock
+from .accounts import Accounts
+from .clock import SimClock, real_seconds
 from .fields import CATALOGUE, Offering
-from .registry import Registry
 from .logger import Logger
 from .sensors import Sensors
-from .server import Server
+from .server import Server, iso_real
+from .store import URN, Hub, Store
 from .tap import Tap
 from .truth import World
 from .world import generate
@@ -27,8 +28,11 @@ from .world import generate
 class Runtime:
     def __init__(self, seed: int = 1, clock=None, pregen_days: float = C.PREGEN_DAYS, capture: bool = True,
                  progress=None, history: dict | None = None, local_models: bool = False,
-                 store_format=None, adapter_class=None):
+                 store_format=None, adapter_class=None, real=real_seconds, hold_s: float = C.COMMAND_HOLD_S,
+                 model_backlog: float | None = None):
         self.seed = seed
+        self.real = real  # real time, Unix seconds: commands and status reports are stamped with it (§9.1)
+        self.hold_s = hold_s  # how long a command's POST is held before it is answered (§9.1)
         self.manifest = generate(seed)
         self.world = World(self.manifest)
         self.clock = clock if clock is not None else SimClock(start=pregen_days * 86400.0)
@@ -38,7 +42,9 @@ class Runtime:
         # The store's format and the adapter that reads it are a port (SRD §2.2): AT-03 swaps both, and nothing else.
         self.adapter_class = adapter_class
         self.sensors = Sensors(self.world, self.logger, self.tap, **({"fmt": store_format} if store_format else {}))
-        self.registry = Registry()
+        self.store = Store()  # created resources and their observations: they outlive restarts (D-11)
+        self.accounts = Accounts()  # the server's accounts and user-to-role assignment (§9.3)
+        self.hub = Hub()  # push subscriptions (§9.2)
         self.phases: dict[str, dict] = {}  # model -> {label, phase, detail}: what each model says of itself, for the shell
         self.local = None
         self.offering = Offering()  # what the next server start will publish
@@ -55,7 +61,7 @@ class Runtime:
         if local_models:
             from .local_models import LocalModels
 
-            self.local = LocalModels(self)
+            self.local = LocalModels(self, backlog=model_backlog)
 
     def now(self) -> float:
         return self.clock.now()
@@ -113,6 +119,7 @@ class Runtime:
 
     # --- server lifecycle (FR-43..FR-46e) ----------------------------------------
     def start_server(self) -> None:
+        self.hub.close_all()  # every subscription ends when the server stops (§9.2)
         self.server_starts += 1
         self.down = False
         self.server = Server(self, self.server_starts, self.offering, self.tap)
@@ -121,8 +128,39 @@ class Runtime:
         self.start_server()
 
     def take_down(self) -> None:
+        self.hub.close_all()
         self.down = True
         self.server = None
+
+    @property
+    def running(self) -> bool:
+        """Answering requests. While starting (the index rebuilt) and while down the server answers nothing."""
+        return not self.down and self.server is not None and self.server.ready
+
+    # --- commands: pushed to subscribers (§9.1, §9.2) ----------------------------------
+    def push(self, cs: dict, cmd: dict) -> int:
+        """Write a command to every subscription to its control stream, at once; captured as it is written."""
+        subs = self.hub.subscribers(cs["id"])
+        for sub in subs:
+            who = "models" if sub.account.component == "models" else "client"
+            p = ", ".join(f"{k}={v}" for k, v in cmd["parameters"].items())
+            self.tap.emit("server", who, "K", f"{sub.model + ': ' if sub.model else ''}push: {p}"[:120], cmd,
+                          model=sub.model, push=True)
+            sub.put(cmd)
+        return len(subs)
+
+    def command_status(self, cmd_id: str, code: str, message: str = "") -> dict:
+        cmd = self.store.commands[cmd_id]
+        report = {"id": self.store.ids.next("status"), "command@id": cmd_id, "statusCode": code,
+                  "reportTime": iso_real(self.real())}
+        if message:
+            report["message"] = message
+        cmd["status"].append(report)
+        self.store.status_reports.setdefault(cmd["controlstream@id"], []).append(report)
+        return report
+
+    def set_role(self, user: str, role: str) -> None:
+        self.accounts.set_role(user, role)
 
     def bring_up(self) -> None:
         self.start_server()
@@ -134,13 +172,8 @@ class Runtime:
             cur["label"] = label
 
     def pending_commands(self) -> dict:
-        """System id -> commands still PENDING. The shell uses it to let a viewer's click through while paused."""
-        out: dict[str, int] = {}
-        for c in self.registry.commands.values():
-            if c["status"][-1]["statusCode"] == "PENDING":
-                sysid = c["cs_key"].split(":", 1)[0]
-                out[sysid] = out.get(sysid, 0) + 1
-        return out
+        """Nothing waits for the clock any more: commands are pushed at once (4.7, §9.2). Kept for the 4.1 page."""
+        return {}
 
     def set_field(self, name: str, on: bool) -> None:
         if name not in CATALOGUE:
@@ -164,12 +197,21 @@ class Runtime:
             })
         pending = any(r["published_now"] != r["published_next_start"] for r in rows) or (
             self.server is not None and self.server.lie_about_profile != self.lie_about_profile)
-        models = [{"id": sid, "label": sysm["label"], **self.phases.get(sid, {}),
-                   "datastreams": [d["outputName"] for d in self.registry.datastreams.values() if d["system"] == sid]}
-                  for sid, sysm in self.registry.systems.items()]
+        st = self.store
+        home = st.system_by_uid(URN + "process:models")
+        models = []
+        for sysm in st.systems.values():
+            if home is None or sysm["parent"] != home["id"]:
+                continue
+            mid = sysm["uid"].rsplit(":", 1)[-1]
+            mine = {s["id"] for s in st.systems.values() if s["id"] == sysm["id"] or s["parent"] == sysm["id"]}
+            models.append({"id": mid, "label": sysm["label"], **self.phases.get(mid, {}),
+                           "datastreams": [d["outputName"] for d in st.datastreams.values()
+                                           if d["system"] in mine and not d["replaced"]]})
         return {
             "server": "down" if self.down else ("waiting" if not self.server.ready else "running"),
-            "instance": self.server.instance if self.server else None,
+            # The shell's own count of server starts (god's-eye): the server serves no instance identifier (§9.1).
+            "instance": f"{self.seed}-{self.server.number}" if self.server else None,
             "progress": self.server.progress() if self.server else None,
             "fields": rows, "pending": pending, "lie_about_profile": self.lie_about_profile,
             "clock": self.clock.state(),
@@ -177,5 +219,6 @@ class Runtime:
                       "records": self.sensors.next_t * 2},
             "capture_counts": self.tap.counts,
             "models": models,
+            "accounts": self.accounts.state(),
             "backend": "python",
         }

@@ -6,13 +6,18 @@
 //
 // Everything here waits on the simulation clock (FR-13): nothing is requested
 // before Play is pressed or while paused (AT-19), polling happens once per
-// simulated second (FR-63), and waits for Retry-After or a downed server are
-// counted in simulated seconds (FR-48, FR-49).
+// simulated second (FR-63), and waits for a downed server are counted in
+// simulated seconds (FR-49).
+//
+// 4.7 (docs/v4-interfaces.md §9.1): the server has no instance identifier and no
+// 503. After any period of unreachability the client repeats the handshake (FR-48);
+// so it does when a datastream it found is no longer there (a restart with a new
+// offering). Observations are asked for with f=application/swe+json, paged by offset.
 import { nextSimSecond, SIM_EPOCH_UNIX, simClock } from '../shell/clock';
 import { runtime } from '../shell/runtime';
 import { Store } from '../shell/store';
 import { Configuration, Datastream, handshake, SweField } from './handshake';
-import { Closed, ClientHttp, HttpError, InstanceChanged, NetworkFailure } from './http';
+import { Closed, ClientHttp, HttpError, NetworkFailure } from './http';
 import { PeriodId, periodOf, properties, Property, Read, readingPlan, RES_S, runStream } from './plan';
 
 export type Row = Record<string, any> & { time: string; _t: number };
@@ -42,11 +47,18 @@ export interface Run {
 
 export const toSim = (iso: string) => Date.parse(iso) / 1000 - SIM_EPOCH_UNIX;
 
-/** One record keyed by field name (application/swe+json); an observation resource's result is flattened the same way. */
+/** One record keyed by field name (application/swe+json); an observation resource's result is flattened the same way.
+ * A missing value arrives as "NaN" (§9.1); the views take it as no value. */
 function toRow(x: any): Row {
   const flat = x && typeof x.result === 'object' && x.result ? { time: x.phenomenonTime ?? x.resultTime, ...x.result } : x;
-  return { ...flat, _t: toSim(flat.time ?? flat.phenomenonTime ?? flat.resultTime) };
+  const row: Row = { ...flat, _t: toSim(flat.time ?? flat.phenomenonTime ?? flat.resultTime) };
+  for (const k of Object.keys(row)) if (row[k] === 'NaN') row[k] = null;
+  return row;
 }
+const SWE = 'application/swe+json';
+const PAGE = 100_000;
+/** Every parameter, on every command (§9.1): what the 4.1 client does not choose is sent at its default. */
+const CLUSTERING_DEFAULTS = { clusters: 4, sensitivity: 5 };
 const isoMs = (t: number) => new Date((SIM_EPOCH_UNIX + t) * 1000).toISOString();
 const isoS = (t: number) => new Date(Math.round(SIM_EPOCH_UNIX + t) * 1000).toISOString().replace('.000Z', 'Z');
 
@@ -91,6 +103,8 @@ export class ClientSession {
   private awaitingRun = false;
   /** The id of the last accepted command: the run that answers it carries it as command_id. */
   private commandId: string | null = null;
+  /** The server did not answer at some point since the last handshake: handshake again once it does (FR-48). */
+  private lost = false;
 
   constructor() {
     void this.main();
@@ -152,8 +166,8 @@ export class ClientSession {
           }
           await this.configure();
           if (this.phase.value === 'rejected') {
-            // A rejected server is not used; wait for a new instance (or Restart client).
-            await this.waitForNewInstance();
+            // A rejected server is not used; wait until it changes (or Restart client).
+            await this.waitForChange();
             continue;
           }
         }
@@ -168,18 +182,19 @@ export class ClientSession {
         await this.pollRun();
         if (woken && !simClock.playing) await this.awaitRunWhilePaused();
         this.http.userAction = false;
-        if (this.stale.value) {
-          this.stale.set(false);
-          this.banner.set(null);
-          this.phase.set(this.config.value?.problems.length ? 'degraded' : 'configured');
+        if (this.lost) {
+          // FR-48: after any period of unreachability, repeat the handshake.
+          this.lost = false;
+          this.reset('The server answers again: handshaking again.');
         }
       } catch (e) {
         if (e instanceof Closed || this.closed) return;
-        if (e instanceof InstanceChanged) {
-          // FR-48: a new server start. Clear state and repeat the handshake.
-          this.reset(`The server restarted (${e.message}): handshaking again.`);
+        if (e instanceof HttpError && e.status === 404 && e.path.startsWith('observations')) {
+          // A datastream found at the handshake is no longer there: the server restarted with another offering.
+          this.reset('A source the client found is no longer offered: handshaking again.');
         } else if (e instanceof NetworkFailure) {
           // FR-49: keep the last data, marked stale; retry on the simulation clock.
+          this.lost = true;
           this.stale.set(true);
           this.phase.set('unreachable');
           this.banner.set('Server unreachable: showing the last data received, marked stale. Retrying every simulated second.');
@@ -201,7 +216,7 @@ export class ClientSession {
     this.changes = [];
     this.plan = [];
     this.run.set(null);
-    this.http.instance = null;
+    this.lost = false;
     this.loadedGen = 0;
     this.commandDirty = true;
     this.stale.set(false);
@@ -217,10 +232,7 @@ export class ClientSession {
     this.http.onPaced = (n, path) => this.handshakeStep.set({ n, path });
     let config: Configuration;
     try {
-      config = await handshake(this.http, (s) => {
-        this.phase.set('waiting');
-        this.banner.set(`The server is starting (HTTP 503): retrying after ${s} s, as Retry-After asks.`);
-      });
+      config = await handshake(this.http);
     } finally {
       this.http.paced = false;
       this.handshakeStep.set(null);
@@ -240,18 +252,22 @@ export class ClientSession {
     this.bump();
   }
 
-  private async waitForNewInstance() {
+  /** A rejected server: look once a simulated second whether it has changed (it went away, or the datastreams it lists did). */
+  private async waitForChange() {
+    const known = (this.config.value?.datastreams ?? []).map((d) => d.id);
     for (;;) {
       await nextSimSecond(() => this.closed);
       if (this.closed) throw new Closed('');
       try {
-        await this.http.request('GET', '');
-      } catch (e) {
-        if (e instanceof InstanceChanged) {
-          this.reset('The server restarted: handshaking again.');
+        const r = await this.http.request<any>('GET', 'datastreams', { limit: '10000' });
+        const now = new Set((r.body?.items ?? []).map((d: any) => d.id));
+        if (this.lost || r.status !== 200 || known.some((id) => !now.has(id))) { // a source it found has gone
+          this.reset('The server changed: handshaking again.');
           return;
         }
+      } catch (e) {
         if (!(e instanceof NetworkFailure)) throw e;
+        this.lost = true;
       }
     }
   }
@@ -279,17 +295,15 @@ export class ClientSession {
 
   private async read(ds: Datastream, phenomenonTime: string, raw: boolean): Promise<Row[]> {
     const out: Row[] = [];
-    let params: Record<string, string> = { phenomenonTime, limit: '100000' };
-    for (let page = 0; page < 30; page++) {
-      const r = await this.http.get<any>(`datastreams/${ds.id}/observations`, params);
+    // SWE JSON carries no next link: page by offset until a page comes back short (§9.1).
+    for (let page = 0, offset = 0; page < 30; page++, offset += PAGE) {
+      const r = await this.http.get<any>(`datastreams/${ds.id}/observations`,
+        { f: SWE, phenomenonTime, limit: String(PAGE), ...(offset ? { offset: String(offset) } : {}) });
       this.lastRead.set({ chain: r.chain, raw, outputName: ds.outputName });
       if (r.status !== 200) throw new HttpError(`observations of ${ds.outputName}`, r.status, r.body);
       const rows: any[] = Array.isArray(r.body) ? r.body : r.body?.items ?? [];
       for (const x of rows) out.push(toRow(x));
-      const link = r.headers.get('link');
-      const next = link?.split(',').map((s) => s.match(/<([^>]+)>\s*;\s*rel="?next"?/)).find(Boolean);
-      if (!next || !rows.length) break;
-      params = Object.fromEntries(new URLSearchParams(next[1].split('?')[1] ?? ''));
+      if (rows.length < PAGE) break;
     }
     return out;
   }
@@ -330,17 +344,18 @@ export class ClientSession {
       return;
     }
     const sel = this.selection.value;
-    const parameters = { algorithm: sel.algorithm, fields: props.map((p) => p.name).join(','), period: sel.period };
-    const r = await this.http.request<any>('POST', `controlstreams/${cs.id}/commands`, {}, { parameters });
-    if (r.status === 503) return; // waiting mode: send it again on a later second
+    const parameters = { ...CLUSTERING_DEFAULTS, algorithm: sel.algorithm, fields: props.map((p) => p.name).join(','), period: sel.period };
     this.commandDirty = false;
-    if (r.status >= 400) {
-      this.commandNote.set(`Command refused (HTTP ${r.status}): ${r.body?.refused ?? r.body?.description ?? JSON.stringify(r.body)}`);
-      return;
-    }
     this.commandNote.set(null);
-    this.commandId = r.body?.id ?? null;
+    this.commandId = null;
     this.awaitingRun = true;
+    // The server holds the answer for about 5 s (§9.1); the sender never waits on it (FR-27, AT-39): the run that
+    // answers the command is found by polling, as before.
+    this.http.request<any>('POST', `controlstreams/${cs.id}/commands`, {}, { parameters }).then((r) => {
+      if (r.status >= 400) this.commandNote.set(`Command refused (HTTP ${r.status})`);
+      else if (r.status === 202) this.commandNote.set('No model is listening: the command was dropped.');
+      else this.commandId = r.body?.id ?? null;
+    }, () => { this.commandDirty = true; });
   }
 
   /** After a user action while paused: look for the command's run a few times, then stop (AT-19). */
@@ -359,7 +374,7 @@ export class ClientSession {
     const config = this.config.value;
     const runs = config && runStream(config, 'runs');
     if (!runs) return;
-    const r = await this.http.get<any>(`datastreams/${runs.id}/observations`, { resultTime: 'latest' });
+    const r = await this.http.get<any>(`datastreams/${runs.id}/observations`, { f: SWE, resultTime: 'latest' });
     if (r.status !== 200) return;
     const rows: any[] = Array.isArray(r.body) ? r.body : r.body?.items ?? [];
     const latest = rows.length ? (toRow(rows[rows.length - 1]) as unknown as Run) : undefined;
@@ -367,15 +382,18 @@ export class ClientSession {
     if (!this.commandId || latest.command_id === this.commandId) this.awaitingRun = false;
     const clusters = runStream(config!, 'clusters');
     const changes = runStream(config!, 'changes');
-    this.clusters = clusters ? await this.readAll(clusters) : [];
-    this.changes = changes ? await this.readAll(changes) : [];
+    this.clusters = clusters ? await this.readRun(clusters, latest) : [];
+    this.changes = changes ? await this.readRun(changes, latest) : [];
     this.run.set(latest);
     this.bump();
   }
 
-  private async readAll(ds: Datastream): Promise<Row[]> {
-    const rows = await this.http.all<any>(`datastreams/${ds.id}/observations`, { limit: '100000' });
-    return rows.map(toRow);
+  /** A run's outputs: appended, never replaced (FR-28a), so those in the run's data range that carry its run_id. */
+  private async readRun(ds: Datastream, run: Run): Promise<Row[]> {
+    const range = run.window_start && run.window_end ? `${run.window_start}/${run.window_end}` : undefined;
+    const r = await this.http.get<any>(`datastreams/${ds.id}/observations`, { f: SWE, limit: String(PAGE), ...(range ? { phenomenonTime: range } : {}) });
+    const rows: any[] = r.status === 200 && Array.isArray(r.body) ? r.body : [];
+    return rows.map(toRow).filter((x) => x.run_id === run.run_id);
   }
 
   /** The rows read for a property in the current plan. */

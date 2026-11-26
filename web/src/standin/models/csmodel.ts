@@ -1,37 +1,52 @@
-// What every stand-in model is written against: the data server's Connected
-// Systems interface (FR-35; backend/models/csmodel.py). A model has `setup` (register
-// its process system, datastreams and control stream: FR-28), `step`
-// (process newly arrived data) and `onCommand` (take its settings as
-// commands: FR-27). The Runner calls them on the simulation clock (FR-13).
-// Models see only what the server serves, never the manifest (FR-37).
+// What every stand-in model is written against: the data server, over HTTP only
+// (docs/v4-interfaces.md §10.1; backend/models/csmodel.py, the reference).
+//
+// `ModelApi` is the 4.7 interface: every method is one or more requests with the
+// model's service credentials, behaving as OpenSensorHub requires (§9.1): discovery
+// by searchMembers, SensorML as application/sml+json, 201 with the existing Location,
+// f=application/swe+json and paging by offset, "NaN" both ways, one observation per
+// POST, commands pushed on a subscription held on the internal endpoint (§9.2), and a
+// command's outcome as its latest status report other than PENDING (D-199).
+//
+// `Model` and `Runner` below are still Version 4.1's: a model steps on the simulation
+// clock and catches up a bounded backlog at startup (D-251). Plan Phase 6 replaces
+// them with the runner of §10.2. Until then `epoch` is the simulation epoch, so times
+// are the simulation's seconds; in 4.7 it is 0 (Unix seconds).
+import { basic, passwordOf, roleOf } from '../accounts';
 import type { HttpRequest, HttpResponse } from '../api';
-import { SIM_EPOCH_UNIX, SOSA } from '../constants';
-import { Cols, NUMERIC } from '../registry';
-import { iso, parseIso } from '../time';
-import { Component, M } from '../swe';
+import { SIM_EPOCH_UNIX, SOSA, URN } from '../constants';
+import { Cols, NUMERIC } from '../resources';
+import { LineReader } from '../stream';
+import { Component, DataRecord, M } from '../swe';
 import type { Tap } from '../tap';
 
 export const QUANTITIES = ['air_temperature', 'apparent_wind_speed', 'relative_humidity', 'pressure',
   'apparent_wind_direction', 'solar_irradiance', 'water_temperature'];
 export const UNITS: Record<string, string> = {
   air_temperature: 'Cel', apparent_wind_speed: 'm/s', relative_humidity: '%', pressure: 'hPa',
-  apparent_wind_direction: 'deg', solar_irradiance: 'W/m2', water_temperature: 'Cel',
+  apparent_wind_direction: 'deg', solar_irradiance: 'W/m2', water_temperature: 'Cel', co2: '[ppm]', // UCUM (D-195)
 };
 export const LABELS: Record<string, string> = {
   air_temperature: 'Air temperature', apparent_wind_speed: 'Wind speed', relative_humidity: 'Humidity', pressure: 'Pressure',
-  apparent_wind_direction: 'Wind direction', solar_irradiance: 'Solar irradiance', water_temperature: 'Water temp',
+  apparent_wind_direction: 'Wind direction', solar_irradiance: 'Solar irradiance', water_temperature: 'Water temp', co2: 'CO₂',
 };
 export const PRECIP = ['none', 'drizzle', 'rain', 'showers'];
+const PAGE = 50_000; // observations asked for per request
+const SWE = 'application%2Fswe%2Bjson';
+const IN_FLIGHT = 16; // observations published at once: one POST each, several in flight
 
 /** The seven quantities, with the definitions of the raw parameters they come from (FR-29). */
 export function measurementFields(): Component[] {
   return QUANTITIES.map((p) => M.quantity(p, LABELS[p], UNITS[p]));
 }
 
-/** The data server is waiting or down: try again on the next step. */
+/** The data server does not answer (starting, down): try again later. */
 export class Unavailable extends Error {}
 /** The data server refused the call. */
 export class Refused extends Error {}
+class NotFound extends Refused {}
+/** A command the receiver refuses: reported as REJECTED, naming the bound (FR-27). */
+export class Rejected extends Error {}
 /** A model cannot run on what it has (Python's ValueError in the models). */
 export class NoRun extends Error {}
 
@@ -39,39 +54,67 @@ export interface Command {
   id: string;
   issueTime: string;
   parameters: Record<string, unknown>;
+  sender?: string;
 }
 
-/** Models ask a datastream's observations a page at a time: the server's declared maximum. */
-const PAGE = 100_000;
-
-class NotFound extends Refused {}
-
-interface Made {
-  path: string;
-  body: Record<string, unknown>;
+/** A command's outcome: its latest status report other than PENDING (D-199). */
+export function commandOutcome(reports: Record<string, any>[], cmdId: string): Record<string, any> | null {
+  const mine = reports.filter((r) => r['command@id'] === cmdId && r.statusCode !== 'PENDING');
+  mine.sort((a, b) => String(a.reportTime ?? '').localeCompare(String(b.reportTime ?? '')));
+  return mine.length ? mine[mine.length - 1] : null;
 }
+
+function isoUnix(u: number): string {
+  const ms = Math.round(u * 1000);
+  const s = new Date(ms).toISOString();
+  return ms % 1000 === 0 ? s.slice(0, 19) + 'Z' : s;
+}
+
+function fromIso(v: string): number {
+  return Date.parse(v) / 1000;
+}
+
+/** One value as published: NaN as "NaN" (§9.1). */
+function jsonValue(ty: string, v: unknown, toIso: (t: number) => string): unknown {
+  if (ty === 'Quantity') return v === null || v === undefined || (typeof v === 'number' && Number.isNaN(v)) ? 'NaN' : Number(v);
+  if (ty === 'Count') return v === null || v === undefined || (typeof v === 'number' && Number.isNaN(v)) ? 0 : Math.trunc(Number(v));
+  if (ty === 'Boolean') return v === null || v === undefined || (typeof v === 'number' && Number.isNaN(v)) ? null : !!v;
+  if (ty === 'Time') return v === null || v === undefined || (typeof v === 'number' && Number.isNaN(v)) ? null : typeof v === 'string' ? v : toIso(Number(v));
+  return typeof v === 'number' && Number.isNaN(v) ? null : v ?? null;
+}
+
+type Send = (req: HttpRequest) => Promise<HttpResponse | null>;
 
 /**
- * What a model does with the data server, as OGC API – Connected Systems requests
- * (docs/v4-interfaces.md §7; `Api` in backend/models/csmodel.py). In the stand-in the
- * models share a worker with the server, so `send` hands each request straight to the
- * HTTP layer; nothing else differs. A model names a datastream by a key,
- * `system:outputName`, which outlives server restarts; the public identifier behind it
- * is looked up again when the server says it has gone, or a new instance answers.
+ * What a model does with the data server (§10.1; `Api` in backend/models/csmodel.py). In the stand-in the models share a
+ * worker with the server, so `send` hands each request straight to the HTTP layer; nothing else differs. A datastream or
+ * control stream is named by a key, `"<system uniqueId>|<name>"`, that outlives restarts.
  */
 export class ModelApi {
   quiet = false;
-  private instance: string | null = null;
-  private ids = new Map<string, string>(); // key -> current public identifier
-  private made = new Map<string, Made>(); // key -> what this model created
-  private types = new Map<string, Map<string, string>>(); // public identifier -> field -> SWE type
-  private systems = new Map<string, string>(); // uniqueId -> system id
+  epoch = SIM_EPOCH_UNIX; // the 4.1 models' simulation epoch (D-251); 0 in 4.7
+  retryS = 1;
+  readonly roleOf = roleOf;
+  private readonly auth: string;
+  private systems = new Map<string, string>(); // uniqueId -> id
+  private ids = new Map<string, string>(); // key -> datastream or control stream id
+  private types = new Map<string, Map<string, string>>(); // datastream id -> field -> type
+  readonly made = new Map<string, { kind: string; uid: string; body: Record<string, any> }>();
 
-  constructor(readonly model: string, private readonly send: (req: HttpRequest) => HttpResponse | null,
-    private readonly rt: { now(): number; tap: Tap }) {}
+  constructor(readonly model: string, readonly user: string, private readonly send: Send, private readonly rt: { now(): number; tap: Tap }) {
+    this.auth = basic(user, passwordOf(user));
+  }
 
   now(): number {
     return this.rt.now();
+  }
+
+  iso(t: number): string {
+    return isoUnix(this.epoch + t);
+  }
+
+  time(v: string): number {
+    return fromIso(v) - this.epoch;
   }
 
   /** Capture a call into, or a result out of, the scientific libraries (models ↔ scilibs). */
@@ -80,243 +123,365 @@ export class ModelApi {
     this.rt.tap.emit(src, to, 'I', `${this.model}: ${summary}`, content, { model: this.model, quiet: this.quiet });
   }
 
-  // --- one request ---------------------------------------------------------------------------
-  private request(method: string, target: string, body?: unknown, ctype = 'application/json', ok = [200, 201]): { status: number; headers: Map<string, string>; text: string } {
-    const headers: [string, string][] = [['accept', 'application/json, application/swe+json'], ['x-tap-model', this.model]];
-    if (this.quiet) headers.push(['x-tap-quiet', '1']);
+  private headers(quiet = this.quiet): [string, string][] {
+    const h: [string, string][] = [['authorization', this.auth], ['x-tap-model', this.model]];
+    if (quiet) h.push(['x-tap-quiet', '1']);
+    return h;
+  }
+
+  private async raw(method: string, target: string, body?: unknown, ctype = 'application/json', internal = false): Promise<HttpResponse> {
+    // Subscribing (internal) is part of registering: counted, not drawn (§2); the commands pushed on it are drawn.
+    const headers = this.headers(this.quiet || internal);
     let raw: Uint8Array | null = null;
     if (body !== undefined) {
       raw = new TextEncoder().encode(JSON.stringify(body));
       headers.push(['content-type', ctype]);
     }
     const q = target.indexOf('?');
-    const res = this.send({
+    const res = await this.send({
       method, path: q < 0 ? target : target.slice(0, q), query: q < 0 ? '' : target.slice(q + 1), body: raw, headers,
-      rootPath: '', origin: 'http://models',
+      rootPath: internal ? '/api-internal' : '', origin: 'http://models',
     });
-    if (res === null) { // the server is down: no answer at all (drawn stopped at the boundary, VS-14)
+    if (res === null) { // the server is starting or down: no answer at all
       this.rt.tap.emit('models', 'server', 'Q', `${this.model}: ${method} ${target}: no answer, the server is down`,
         `${method} ${target}\n\nnetwork failure: no server to answer`, { failed: true, model: this.model, quiet: this.quiet });
       throw new Unavailable('the data server does not answer');
     }
-    const rh = new Map(res.headers.map(([k, v]) => [k.toLowerCase(), v] as [string, string]));
-    const inst = rh.get('x-server-instance');
-    if (inst && inst !== this.instance) {
-      if (this.instance !== null) { // a new server instance: identifiers may have changed
-        this.ids.clear();
-        this.types.clear();
-      }
-      this.instance = inst;
-    }
+    return res;
+  }
+
+  async request(method: string, target: string, body?: unknown, ctype = 'application/json', ok = [200, 201]): Promise<{ status: number; headers: Map<string, string>; text: string }> {
+    const res = await this.raw(method, target, body, ctype);
     const text = new TextDecoder().decode(res.body);
-    if (res.status === 503) throw new Unavailable('the data server is waiting');
     if (!ok.includes(res.status)) {
-      let why = '';
-      try {
-        why = JSON.parse(text || '{}').description ?? '';
-      } catch { /* not JSON */ }
-      const msg = `${method} ${target}: ${res.status} ${why}`.trim();
+      const msg = `${method} ${target}: ${res.status}`;
       throw res.status === 404 ? new NotFound(msg) : new Refused(msg);
     }
-    return { status: res.status, headers: rh, text };
+    return { status: res.status, headers: new Map(res.headers.map(([k, v]) => [k.toLowerCase(), v] as [string, string])), text };
   }
 
-  /** POST a resource; an identical one already there answers 409 with its Location. */
-  private create(m: Made): string {
-    const r = this.request('POST', m.path, m.body, 'application/json', [201, 409]);
-    return r.headers.get('location')!.replace(/\/+$/, '').split('/').pop()!;
+  private async get(target: string): Promise<any> {
+    return JSON.parse((await this.request('GET', target)).text); // JSON whatever the Content-Type says (D-196)
   }
 
-  // --- registering (FR-28) ----------------------------------------------------------------------
-  createSystem(body: Record<string, unknown>): string {
-    return this.create({ path: '/systems/models/subsystems', body });
+  private static located(h: Map<string, string>): string {
+    return h.get('location')!.replace(/\/+$/, '').split('/').pop()!;
   }
 
-  createDatastream(systemId: string, body: Record<string, any>): string {
-    const key = `${systemId}:${body.outputName}`;
-    const m = {
-      path: `/systems/${systemId}/datastreams`,
-      body: { name: body.name ?? body.outputName, outputName: body.outputName, schema: { obsFormat: 'application/swe+json', recordSchema: body.schema } },
-    };
-    this.made.set(key, m);
-    this.ids.set(key, this.create(m));
-    return key;
-  }
-
-  createControlstream(systemId: string, body: Record<string, any>): string {
-    const name = body.inputName || 'settings';
-    const key = `${systemId}:${name}`;
-    const m = {
-      path: `/systems/${systemId}/controlstreams`,
-      body: { name: body.name ?? name, inputName: name, schema: { commandFormat: 'application/json', parametersSchema: body.schema } },
-    };
-    this.made.set(key, m);
-    this.ids.set(key, this.create(m));
-    return key;
-  }
-
-  // --- finding other systems' datastreams --------------------------------------------------------
-  private systemId(uid: string): string | null {
+  // --- discovery ----------------------------------------------------------------------------------
+  async findSystem(uid: string): Promise<string | null> {
     if (!this.systems.has(uid)) {
-      for (const parent of ['models', 'barge']) {
-        for (const s of JSON.parse(this.request('GET', `/systems/${parent}/subsystems?limit=1000`).text).items) this.systems.set(s.uniqueId, s.id);
+      // Every system, subsystems included (D-193); the listing carries no parent link.
+      for (const s of (await this.get('/systems?searchMembers=true&f=application%2Fsml%2Bjson&limit=100000')).items) {
+        this.systems.set(s.uniqueId ?? s.properties?.uid, s.id);
       }
     }
     return this.systems.get(uid) ?? null;
   }
 
-  private lookup(key: string): string | null {
-    const i = key.indexOf(':');
-    const items = JSON.parse(this.request('GET', `/systems/${key.slice(0, i)}/datastreams?limit=1000`).text).items as any[];
-    return items.find((d) => d.outputName === key.slice(i + 1))?.id ?? null;
-  }
-
-  /** The key of another system's datastream, or null while it is not there. */
-  find(systemUid: string, outputName: string): string | null {
-    const sid = this.systemId(systemUid);
+  /** The key of a datastream, or null while it is not there. */
+  async find(systemUid: string, outputName: string): Promise<string | null> {
+    const sid = await this.findSystem(systemUid);
     if (sid === null) return null;
-    const key = `${sid}:${outputName}`;
-    const ds = this.lookup(key);
-    if (ds === null) return null;
-    this.ids.set(key, ds);
+    const d = ((await this.get(`/systems/${sid}/datastreams?limit=100000`)).items as any[]).find((x) => x.outputName === outputName);
+    if (!d) return null;
+    const key = `${systemUid}|${outputName}`;
+    this.ids.set(key, d.id);
     return key;
   }
 
-  private id(key: string): string {
+  async findControlstream(systemUid: string, inputName: string): Promise<string | null> {
+    const sid = await this.findSystem(systemUid);
+    if (sid === null) return null;
+    const c = ((await this.get(`/systems/${sid}/controlstreams`)).items as any[]).find((x) => x.inputName === inputName);
+    if (!c) return null;
+    const key = `${systemUid}|${inputName}`;
+    this.ids.set(key, c.id);
+    return key;
+  }
+
+  // --- registering (FR-28): 201 with the existing Location is success -----------------------------
+  async createSystem(body: Record<string, unknown>, parentUid: string | null = null): Promise<string> {
+    let path = '/systems';
+    if (parentUid) {
+      const pid = await this.findSystem(parentUid);
+      if (pid === null) throw new NotFound(`system ${parentUid} is not there`);
+      path = `/systems/${pid}/subsystems`;
+    }
+    const r = await this.request('POST', path, { type: 'SimpleProcess', ...body }, 'application/sml+json'); // SensorML (D-194)
+    const sid = ModelApi.located(r.headers);
+    this.systems.set(String(body.uniqueId), sid);
+    return sid;
+  }
+
+  private uidOf(systemId: string): string {
+    for (const [u, i] of this.systems) if (i === systemId) return u;
+    throw new Error(`unknown system ${systemId}`);
+  }
+
+  async createDatastream(systemId: string, body: Record<string, any>): Promise<string> {
+    const uid = this.uidOf(systemId);
+    const key = `${uid}|${body.outputName}`;
+    const made = { name: body.name ?? body.outputName, outputName: body.outputName, schema: { obsFormat: 'application/swe+json', recordSchema: body.schema } };
+    this.made.set(key, { kind: 'datastreams', uid, body: made });
+    const id = ModelApi.located((await this.request('POST', `/systems/${systemId}/datastreams`, made)).headers);
+    this.ids.set(key, id);
+    this.types.set(id, new Map((body.schema as DataRecord).fields.map((f) => [f.name, f.type])));
+    return key;
+  }
+
+  async createControlstream(systemId: string, body: Record<string, any>): Promise<string> {
+    const uid = this.uidOf(systemId);
+    const name = body.inputName || 'settings';
+    const key = `${uid}|${name}`;
+    const made = { name: body.name ?? name, inputName: name, schema: { commandFormat: 'application/json', parametersSchema: body.schema } };
+    this.made.set(key, { kind: 'controlstreams', uid, body: made });
+    this.ids.set(key, ModelApi.located((await this.request('POST', `/systems/${systemId}/controlstreams`, made)).headers));
+    return key;
+  }
+
+  private async id(key: string): Promise<string> {
     if (!this.ids.has(key)) {
       const m = this.made.get(key);
-      const ds = m ? this.create(m) : this.lookup(key);
-      if (ds === null) throw new Refused(`datastream ${key} is not published`);
-      this.ids.set(key, ds);
+      if (m) {
+        const sid = await this.findSystem(m.uid);
+        if (sid === null) throw new NotFound(`system ${m.uid} is not there`);
+        this.ids.set(key, ModelApi.located((await this.request('POST', `/systems/${sid}/${m.kind}`, m.body)).headers));
+      } else {
+        const i = key.indexOf('|');
+        const uid = key.slice(0, i);
+        const out = key.slice(i + 1);
+        if ((await this.find(uid, out)) === null && (await this.findControlstream(uid, out)) === null) throw new NotFound(`${key} is not there`);
+      }
     }
     return this.ids.get(key)!;
   }
 
-  /** Run `call(public id)`; if the identifier has gone (a new schema, a new offering), look it up once more. */
-  private on<T>(key: string, call: (id: string) => T): T {
+  private async on<T>(key: string, call: (id: string) => Promise<T>): Promise<T> {
     try {
-      return call(this.id(key));
+      return await call(await this.id(key));
     } catch (e) {
       if (!(e instanceof NotFound)) throw e;
       this.ids.delete(key);
-      return call(this.id(key));
+      this.systems.clear();
+      return call(await this.id(key));
     }
   }
 
-  // --- observations ---------------------------------------------------------------------------
-  private fieldTypes(ds: string): Map<string, string> {
-    if (!this.types.has(ds)) {
-      const rec = JSON.parse(this.request('GET', `/datastreams/${ds}/schema?obsFormat=application%2Fswe%2Bjson`).text).recordSchema;
-      this.types.set(ds, new Map(rec.fields.map((f: any) => [f.name, f.type])));
-    }
-    return this.types.get(ds)!;
-  }
-
-  /** Observations with t0 <= time <= t1 as columns. Numbers arrive as Float64Array (NaN where missing). */
-  read(key: string, t0: number, t1: number, fields: string[] | null = null): Cols {
-    return this.on(key, (ds) => {
-      const types = this.fieldTypes(ds);
-      const names = [...types.keys()].filter((n) => n !== 'time' && (fields === null || fields.includes(n)));
-      const lo = Math.ceil(Math.max(t0, -SIM_EPOCH_UNIX));
-      const hi = Math.floor(t1);
-      let rows: Record<string, any>[] = [];
-      let path: string | null = hi < lo ? null : `/datastreams/${ds}/observations?phenomenonTime=${iso(lo)}/${iso(hi)}&limit=${PAGE}`;
-      while (path) {
-        const r = this.request('GET', path);
-        rows = rows.length ? rows.concat(JSON.parse(r.text)) : JSON.parse(r.text);
-        const nxt: string = r.headers.get('link') ?? '';
-        path = nxt.includes('rel="next"') ? nxt.slice(nxt.indexOf('/datastreams/'), nxt.indexOf('>')) : null;
+  /** field -> SWE type of a datastream, as served. */
+  async schema(key: string): Promise<Map<string, string>> {
+    return this.on(key, async (ds) => {
+      if (!this.types.has(ds)) {
+        const rec = (await this.get(`/datastreams/${ds}/schema?obsFormat=${SWE}`)).recordSchema;
+        this.types.set(ds, new Map(rec.fields.map((f: any) => [f.name, f.type])));
       }
-      const cols: Cols = { t: Float64Array.from(rows, (r) => parseIso(r.time)) };
-      for (const n of names) {
-        const ty = types.get(n)!;
-        if (ty === 'Time') cols[n] = Float64Array.from(rows, (r) => (typeof r[n] === 'string' ? parseIso(r[n]) : NaN));
-        else if (NUMERIC.has(ty)) cols[n] = Float64Array.from(rows, (r) => (r[n] === null || r[n] === undefined ? NaN : Number(r[n])));
+      return this.types.get(ds)!;
+    });
+  }
+
+  // --- observations --------------------------------------------------------------------------------
+  /** Observations with t0 <= time <= t1 as columns; "NaN" becomes NaN. f=application/swe+json, paged by offset (§9.1). */
+  async read(key: string, t0: number, t1: number, fields: string[] | null = null): Promise<Cols> {
+    const lo = Math.ceil(t0);
+    const hi = Math.floor(t1);
+    return this.on(key, async (ds) => {
+      const types = await this.schema(key);
+      let rows: Record<string, any>[] = [];
+      if (hi >= lo) {
+        for (let offset = 0; ; offset += PAGE) {
+          const page = await this.get(`/datastreams/${ds}/observations?f=${SWE}&phenomenonTime=${this.iso(lo)}/${this.iso(hi)}&limit=${PAGE}&offset=${offset}`);
+          rows = rows.length ? rows.concat(page) : page;
+          if (page.length < PAGE) break;
+        }
+      }
+      const cols: Cols = { t: Float64Array.from(rows, (r) => this.time(r.time)) };
+      for (const [n, ty] of types) {
+        if (n === 'time' || (fields !== null && !fields.includes(n))) continue;
+        if (ty === 'Time') cols[n] = Float64Array.from(rows, (r) => (typeof r[n] === 'string' && r[n] !== 'NaN' ? this.time(r[n]) : NaN));
+        else if (NUMERIC.has(ty)) cols[n] = Float64Array.from(rows, (r) => (r[n] === null || r[n] === undefined || r[n] === 'NaN' ? NaN : Number(r[n])));
         else cols[n] = rows.map((r) => r[n] ?? null);
       }
       return cols;
     });
   }
 
-  /** Publish columns as observations. `replace`: in place of everything published before (plain HTTP PUT). */
-  publish(key: string, cols: Record<string, unknown>, replace = false): number {
+  /** The last observation inserted (resultTime=latest), as a record. */
+  async latest(key: string): Promise<Record<string, any> | null> {
+    return this.on(key, async (ds) => {
+      const rows = await this.get(`/datastreams/${ds}/observations?f=${SWE}&resultTime=latest`);
+      return rows.length ? rows[rows.length - 1] : null;
+    });
+  }
+
+  /** ONE observation per POST (§9.1). `row` has `t` (seconds) or `time` (ISO). */
+  async publish(key: string, row: Record<string, unknown>): Promise<void> {
+    return this.on(key, async (ds) => {
+      const types = this.types.get(ds) ?? (await this.schema(key));
+      const t = row.time ?? row.t;
+      const obs: Record<string, unknown> = { time: typeof t === 'string' ? t : this.iso(Number(t)) };
+      for (const [k, v] of Object.entries(row)) {
+        if (k === 't' || k === 'time' || !types.has(k)) continue;
+        obs[k] = jsonValue(types.get(k)!, v, (x) => this.iso(x));
+      }
+      await this.request('POST', `/datastreams/${ds}/observations`, obs, 'application/swe+json');
+    });
+  }
+
+  /** Columns as observations, one POST each, a few in flight at once. Returns how many. */
+  async publishMany(key: string, cols: Record<string, unknown>): Promise<number> {
     const t = cols.t as ArrayLike<number>;
     const names = Object.keys(cols).filter((k) => k !== 't');
-    const made = this.made.get(key);
-    const timesToo = new Set<string>(made ? ((made.body.schema as any).recordSchema.fields as any[]).filter((f) => f.type === 'Time').map((f) => f.name) : []);
-    const plain = (k: string, v: unknown) => {
-      if (timesToo.has(k)) return typeof v === 'number' && Number.isFinite(v) ? iso(v) : null;
-      return typeof v === 'number' && !Number.isFinite(v) ? null : v ?? null;
-    };
-    const rows: Record<string, unknown>[] = new Array(t.length);
+    const rows: Record<string, unknown>[] = [];
     for (let i = 0; i < t.length; i++) {
-      const r: Record<string, unknown> = { time: iso(t[i]) };
-      for (const k of names) r[k] = plain(k, (cols[k] as ArrayLike<unknown>)[i]);
-      rows[i] = r;
+      const r: Record<string, unknown> = { t: t[i] };
+      for (const k of names) r[k] = (cols[k] as ArrayLike<unknown>)[i];
+      rows.push(r);
     }
-    if (!rows.length && !replace) return 0;
-    return this.on(key, (ds) => JSON.parse(this.request(replace ? 'PUT' : 'POST', `/datastreams/${ds}/observations`, rows, 'application/swe+json').text).created ?? 0);
+    for (let i = 0; i < rows.length; i += IN_FLIGHT) await Promise.all(rows.slice(i, i + IN_FLIGHT).map((r) => this.publish(key, r)));
+    return rows.length;
   }
 
-  // --- commands (FR-27) -----------------------------------------------------------------------
-  commands(key: string): Command[] {
-    return this.on(key, (cs) => (JSON.parse(this.request('GET', `/controlstreams/${cs}/commands?statusCode=PENDING`).text).items as any[])
-      .map((c) => ({ id: c.id, issueTime: c.issueTime, parameters: c.parameters })));
+  // --- commands (FR-27): pushed, validated by the receiver ---------------------------------------------
+  /**
+   * Hold a push subscription on the internal endpoint (§9.2, D-223); resubscribe after any unreachability.
+   * `onOpen(false)` when it opens, `onOpen(true)` when it ends. Never returns.
+   */
+  async subscribe(csKey: string, onCommand: (cmd: Command) => Promise<void>, onOpen?: (closed: boolean) => void): Promise<void> {
+    for (;;) {
+      try {
+        const cs = await this.id(csKey);
+        const res = await this.raw('GET', `/controlstreams/${cs}/commands?subscribe=1`, undefined, 'application/json', true);
+        if (res.status !== 200 || !res.stream) throw res.status === 404 ? new NotFound(`subscribe: ${res.status}`) : new Refused(`subscribe: ${res.status}`);
+        onOpen?.(false);
+        const queue: Command[] = [];
+        let wake: (() => void) | null = null;
+        let ended = false;
+        const reader = new LineReader((line) => {
+          queue.push(JSON.parse(line));
+          wake?.();
+        });
+        res.stream.attach({ chunk: (b) => reader.push(b), end: () => { ended = true; wake?.(); } });
+        for (;;) {
+          while (queue.length) await onCommand(queue.shift()!);
+          if (ended) break;
+          await new Promise<void>((r) => (wake = r));
+          wake = null;
+        }
+      } catch (e) {
+        if (!(e instanceof Unavailable || e instanceof Refused)) throw e;
+      }
+      onOpen?.(true);
+      await new Promise((r) => setTimeout(r, this.retryS * 1000));
+    }
   }
 
-  commandStatus(cmdId: string, status: string, message = ''): void {
-    this.request('POST', `/commands/${cmdId}/status`, { statusCode: status, ...(message ? { message } : {}) });
+  async commandStatus(csKey: string, cmdId: string, status: string, message = ''): Promise<void> {
+    await this.on(csKey, (cs) => this.request('POST', `/controlstreams/${cs}/status`, { 'command@id': cmdId, statusCode: status, ...(message ? { message } : {}) }));
+  }
+
+  /** A command's outcome, as a sender reads it: its latest status report other than PENDING (D-199). */
+  async commandOutcome(csKey: string, cmdId: string): Promise<Record<string, any> | null> {
+    return this.on(csKey, async (cs) => commandOutcome((await this.get(`/controlstreams/${cs}/status?limit=100000`)).items ?? [], cmdId));
+  }
+
+  // --- the importer's catalogue (§7) -------------------------------------------------------------
+  /** The catalogue folded per file: the latest observation for each file is its current status (§7). Empty with no importer. */
+  async catalogue(): Promise<Record<string, any>[]> {
+    const key = URN + 'importer|catalogue';
+    if ((await this.find(URN + 'importer', 'catalogue')) === null) return [];
+    return this.on(key, async (ds) => {
+      const latest = new Map<string, Record<string, any>>();
+      for (let offset = 0; ; offset += PAGE) {
+        const page = await this.get(`/datastreams/${ds}/observations?f=${SWE}&limit=${PAGE}&offset=${offset}`);
+        for (const r of page) latest.set(r.file, r);
+        if (page.length < PAGE) break;
+      }
+      return [...latest.values()];
+    });
   }
 
   // --- the demonstrator's referee (scaffolding; FR-37) -------------------------------------------
-  score(kind: string, payload: Record<string, unknown>): Record<string, number | null> {
-    return JSON.parse(this.request('POST', `/demonstrator/referee/${kind}`, payload).text);
+  async score(kind: string, payload: Record<string, unknown>): Promise<Record<string, number | null>> {
+    return JSON.parse((await this.request('POST', `/demonstrator/referee/${kind}`, payload)).text);
   }
 }
 
-/** Subclass this. `interval` is in simulated seconds. */
+/** Subclass this. `interval` is in simulated seconds (Version 4.1, until plan Phase 6). */
 export abstract class Model {
   abstract readonly id: string;
   abstract readonly label: string;
   description = '';
   interval = 60;
-  /** Simulated seconds between looks at its control stream; null: at each step. */
-  commandInterval: number | null = null;
   /** How much history one step takes while catching up. The stand-in takes big steps: startup is fast. */
   catchUpChunk = 86400;
   /** Caught up once this close to now (never less than two intervals). */
   catchUpMargin = 120;
   startFrom: 'history' | 'now' = 'history';
+  /** How much history a model catches up at startup (D-251): one observation per POST makes the whole day too slow. */
+  backlog = 1800;
   system = '';
   controlKey: string | null = null;
 
-  systemBody(): Record<string, unknown> {
-    return {
-      uniqueId: `urn:x-barge:process:${this.id}`, label: this.label, description: this.description,
-      systemType: SOSA + 'System', assetType: 'Process',
-    };
+  get uid(): string {
+    return `${URN}process:${this.id}`;
   }
 
-  setup(api: ModelApi): void {
-    this.system = api.createSystem(this.systemBody());
+  systemBody(): Record<string, unknown> {
+    return { type: 'SimpleProcess', uniqueId: this.uid, label: this.label, description: this.description, definition: SOSA + 'System', assetType: 'Process' };
+  }
+
+  /** Register (FR-28): its process system under Models. */
+  async setup(api: ModelApi): Promise<void> {
+    this.system = await api.createSystem(this.systemBody(), URN + 'process:models');
   }
 
   /** Process data in (t0, t1]; return the time processed up to. */
-  step(_api: ModelApi, _t0: number, t1: number): number {
+  async step(_api: ModelApi, _t0: number, t1: number): Promise<number> {
     return t1;
   }
 
-  onCommand(_api: ModelApi, _cmd: Command): string {
+  /** Check every parameter against its control stream's bounds; throw Rejected naming the bound (FR-27). */
+  validate(api: ModelApi, cmd: Command): void {
+    const made = this.controlKey ? api.made.get(this.controlKey) : undefined;
+    const fields: Component[] = made ? made.body.schema.parametersSchema.fields : [];
+    const params = cmd.parameters ?? {};
+    for (const f of fields) {
+      const n = f.name;
+      if (!(n in params)) throw new Rejected(`${n} is missing: every parameter is sent on every command`);
+      const v = params[n];
+      const con = f.constraint ?? {};
+      if (f.type === 'Quantity' || f.type === 'Count') {
+        if (typeof v !== 'number') throw new Rejected(`${n} must be a number`);
+        if (f.type === 'Count' && !Number.isInteger(v)) throw new Rejected(`${n} must be a whole number`);
+        if (con.intervals?.length) {
+          const [lo, hi] = con.intervals[0];
+          if (!(lo <= v && v <= hi)) throw new Rejected(`${n}=${v} is outside the schema's AllowedValues interval [${lo}, ${hi}]`);
+        }
+      } else if (f.type === 'Category' || f.type === 'Text') {
+        if (typeof v !== 'string') throw new Rejected(`${n} must be text`);
+        const allowed: string[] | undefined = con.values;
+        const items = f.type === 'Text' ? v.split(',').map((x) => x.trim()) : [v];
+        if (allowed?.length) {
+          const bad = items.filter((x) => !allowed.includes(x));
+          if (bad.length || !items.length || (items.length === 1 && items[0] === '')) {
+            throw new Rejected(`${n}='${v}': ${bad.join(', ') || 'nothing'} not in the schema's AllowedTokens`);
+          }
+        }
+      }
+    }
+  }
+
+  async onCommand(_api: ModelApi, _cmd: Command): Promise<string> {
     return 'no settings to apply';
   }
 
   /** For a model that starts from now: a first run once its inputs exist. True when done. */
-  initial(_api: ModelApi): boolean {
+  async initial(_api: ModelApi): Promise<boolean> {
     return true;
   }
 }
 
-/** Steps a model on the simulation clock (csmodel.Runner). */
+/** Steps a 4.1 model on the simulation clock; its commands are pushed to it (§9.2; csmodel.Runner). */
 export class Runner {
   ready = false;
   last: number | null = null;
@@ -324,44 +489,74 @@ export class Runner {
   phase = 'starting';
   detail = '';
   errors = 0;
-  asked = -1; // when it last looked at its control stream
   initialDone = false;
+  subscribed = false;
+  private subscribing = false;
+  handling = 0;
 
   constructor(readonly model: Model, readonly api: ModelApi) {}
-
-  /**
-   * Commands waiting on the model's control stream. Connected Systems publish/subscribe (Part 3) is
-   * unpublished, so a model polls, on the simulation clock. `wake`: the demonstrator shell says a
-   * viewer's click is waiting while the clock stands still, and lets it through.
-   */
-  private commandsDue(playing: boolean, wake: boolean): Command[] {
-    const m = this.model;
-    const now = this.api.now();
-    if (!m.controlKey) return [];
-    const every = m.commandInterval ?? m.interval;
-    if (!(wake || (playing && (this.asked < 0 || now - this.asked >= every)))) return [];
-    this.asked = now;
-    return this.api.commands(m.controlKey);
-  }
 
   get caughtUp(): boolean {
     return this.last !== null && this.api.now() - this.last < Math.max(2 * this.model.interval, this.model.catchUpMargin);
   }
 
-  tick(playing: boolean, wake = false): void {
+  private onOpen = (closed: boolean): void => {
+    if (closed) { // the server went away: register again once it answers, and resubscribe (AT-38)
+      this.subscribed = false;
+      this.ready = false;
+    } else this.subscribed = true;
+  };
+
+  private onCommand = async (cmd: Command): Promise<void> => {
+    const { api, model: m } = this;
+    const key = m.controlKey!;
+    this.handling += 1;
+    try {
+      try {
+        m.validate(api, cmd);
+      } catch (e) {
+        if (e instanceof Rejected) return api.commandStatus(key, cmd.id, 'REJECTED', e.message);
+        throw e;
+      }
+      await api.commandStatus(key, cmd.id, 'ACCEPTED');
+      try {
+        const msg = await m.onCommand(api, cmd);
+        await api.commandStatus(key, cmd.id, 'COMPLETED', msg || '');
+      } catch (e) {
+        if (e instanceof Rejected) await api.commandStatus(key, cmd.id, 'REJECTED', e.message);
+        else if (e instanceof Unavailable || e instanceof Refused) throw e;
+        else await api.commandStatus(key, cmd.id, 'FAILED', `${errorName(e)}: ${(e as Error)?.message ?? e}`);
+      }
+    } catch (e) {
+      if (e instanceof Unavailable || e instanceof Refused) this.detail = `a command's status was not reported: ${e.message}`;
+      else throw e;
+    } finally {
+      this.handling -= 1;
+    }
+  };
+
+  async tick(playing: boolean): Promise<void> {
     const { api, model: m } = this;
     const now = api.now();
     try {
       if (!this.ready) {
         api.quiet = true;
-        m.setup(api);
+        await m.setup(api);
         this.ready = true;
-        this.last = m.startFrom === 'history' ? 0 : now;
+        if (this.last === null) this.last = m.startFrom === 'history' ? Math.max(0, now - m.backlog) : now;
         this.phase = 'catching up';
+        if (m.controlKey && !this.subscribing) {
+          this.subscribing = true;
+          void api.subscribe(m.controlKey, this.onCommand, this.onOpen);
+        }
+      }
+      if (m.controlKey && !this.subscribed) {
+        this.detail = 'subscribing to its commands';
+        return; // live only once its subscription is open (AT-38)
       }
       if (m.startFrom === 'now' && !this.initialDone) {
         api.quiet = true;
-        this.initialDone = m.initial(api);
+        this.initialDone = await m.initial(api);
         this.detail = this.initialDone ? '' : 'waiting for its inputs';
         this.phase = this.initialDone ? 'live' : 'catching up';
         return;
@@ -370,9 +565,9 @@ export class Runner {
         api.quiet = true;
         const last = this.last!;
         const upto = Math.min(now, last + m.catchUpChunk);
-        const done = m.step(api, last, upto);
+        const done = await m.step(api, last, upto);
         this.last = Math.max(last, done);
-        this.detail = `${Math.min(100, Math.round((100 * this.last) / Math.max(now, 1)))}% of history`;
+        this.detail = `${Math.min(100, Math.max(0, Math.round(100 * (1 - (now - this.last) / Math.max(m.backlog, 1)))))}% of its backlog`;
         if (this.caughtUp) {
           this.phase = 'live';
           this.detail = '';
@@ -382,25 +577,17 @@ export class Runner {
       api.quiet = false;
       this.phase = 'live';
       this.detail = '';
-      for (const cmd of this.commandsDue(playing, wake)) {
-        api.commandStatus(cmd.id, 'ACCEPTED');
-        try {
-          const msg = m.onCommand(api, cmd);
-          api.commandStatus(cmd.id, 'COMPLETED', msg || '');
-        } catch (e) {
-          if (e instanceof Unavailable || e instanceof Refused) throw e;
-          api.commandStatus(cmd.id, 'FAILED', `${errorName(e)}: ${(e as Error)?.message ?? e}`);
-        }
-      }
       if (playing && now - this.last! >= m.interval && now >= this.retryAt) {
-        const done = m.step(api, this.last!, now);
+        const done = await m.step(api, this.last!, now);
         // Its inputs are not there yet: try again a little later (as backend/models/csmodel.py).
         if (done <= this.last!) this.retryAt = now + Math.min(m.interval, 10);
         this.last = Math.max(this.last!, done);
       }
     } catch (e) {
-      if (e instanceof Unavailable) this.detail = `waiting: ${e.message}`;
-      else if (e instanceof Refused) {
+      if (e instanceof Unavailable) {
+        this.ready = false; // the server may have restarted: register again once it answers
+        this.detail = `waiting: ${e.message}`;
+      } else if (e instanceof Refused) {
         this.errors += 1;
         this.detail = `refused: ${e.message}`;
       } else throw e;

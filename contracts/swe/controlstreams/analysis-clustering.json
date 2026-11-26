@@ -1,0 +1,62 @@
+{
+ "type": "DataRecord",
+ "name": "record",
+ "label": "Clustering settings",
+ "description": "clustering, under urn:x-barge:process:analysis: one run on the dataset its doi names (interfaces §10.3).",
+ "fields": [
+  {
+   "type": "Category",
+   "name": "algorithm",
+   "label": "Algorithm",
+   "definition": "https://deepbluecltd.github.io/barge-monitor/def/algorithm",
+   "codeSpace": "https://deepbluecltd.github.io/barge-monitor/def/algorithm",
+   "constraint": {
+    "type": "AllowedTokens",
+    "values": [
+     "A",
+     "B",
+     "C"
+    ]
+   }
+  },
+  {
+   "type": "Text",
+   "name": "doi",
+   "label": "Data of interest, unsaved, as JSON (contracts/schemas/data-of-interest.json)",
+   "definition": "https://deepbluecltd.github.io/barge-monitor/def/doi"
+  },
+  {
+   "type": "Count",
+   "name": "clusters",
+   "label": "Number of clusters",
+   "definition": "https://deepbluecltd.github.io/barge-monitor/def/clusters",
+   "constraint": {
+    "type": "AllowedValues",
+    "intervals": [
+     [
+      2,
+      8
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Quantity",
+   "name": "sensitivity",
+   "label": "Change detector sensitivity",
+   "definition": "https://deepbluecltd.github.io/barge-monitor/def/sensitivity",
+   "uom": {
+    "code": "1"
+   },
+   "constraint": {
+    "type": "AllowedValues",
+    "intervals": [
+     [
+      1,
+      10
+     ]
+    ]
+   }
+  }
+ ]
+}

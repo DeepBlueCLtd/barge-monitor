@@ -1,0 +1,51 @@
+{
+ "type": "DataRecord",
+ "name": "record",
+ "label": "CO₂ record",
+ "description": "co2__{dataset}, under urn:x-barge:sensor:{bow,stern}:co2 (restricted, FR-93). Parts per million is [ppm] in UCUM (D-195).",
+ "fields": [
+  {
+   "type": "Time",
+   "name": "time",
+   "label": "Sampling time",
+   "definition": "http://www.opengis.net/def/property/OGC/0/SamplingTime",
+   "referenceFrame": "http://www.opengis.net/def/trs/BIPM/0/UTC",
+   "uom": {
+    "href": "http://www.opengis.net/def/uom/ISO-8601/0/Gregorian"
+   }
+  },
+  {
+   "type": "Quantity",
+   "name": "co2",
+   "label": "CO₂",
+   "definition": "https://deepbluecltd.github.io/barge-monitor/def/co2",
+   "uom": {
+    "code": "[ppm]"
+   },
+   "quality": [
+    {
+     "href": "#co2_qc"
+    }
+   ]
+  },
+  {
+   "type": "Category",
+   "name": "co2_qc",
+   "id": "co2_qc",
+   "label": "QC flag: CO₂",
+   "definition": "https://ioos.github.io/qartod/flag",
+   "codeSpace": "https://ioos.github.io/qartod/",
+   "constraint": {
+    "type": "AllowedTokens",
+    "values": [
+     "1",
+     "2",
+     "3",
+     "4",
+     "9"
+    ]
+   },
+   "description": "QARTOD: 1 pass, 2 not evaluated, 3 suspect, 4 fail, 9 missing"
+  }
+ ]
+}

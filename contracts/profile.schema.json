@@ -51,7 +51,8 @@
           },
           "datastream": {
             "type": "string",
-            "description": "the datastream's outputName under that system"
+            "description": "Output name. With scope 'dataset' it contains '{dataset}'.",
+            "pattern": "^[A-Za-z][A-Za-z0-9_\\-]*(\\{dataset\\})?$"
           },
           "field": {
             "type": "string",
@@ -82,7 +83,8 @@
               "enum": [
                 "graphs",
                 "changes",
-                "clusters"
+                "clusters",
+                "datasets"
               ]
             }
           },
@@ -91,9 +93,24 @@
               "raw",
               "PT1M",
               "PT1H",
-              "run"
+              "run",
+              "latest",
+              "command"
+            ]
+          },
+          "scope": {
+            "enum": [
+              "dataset",
+              "fixed"
             ],
-            "description": "raw records, 1-minute or hourly summaries, or the latest model run"
+            "description": "'dataset': a template, checked per dataset (FR-40a); 'fixed' (the default when absent): checked at the handshake"
+          },
+          "kind": {
+            "enum": [
+              "datastream",
+              "controlstream"
+            ],
+            "description": "what the essential names: a datastream (the default) or a control stream"
           }
         }
       }

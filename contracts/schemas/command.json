@@ -23,6 +23,10 @@
   "parameters": {
    "type": "object"
   },
+  "sender": {
+   "type": "string",
+   "description": "the sending user id, as OpenSensorHub puts it on a command (D-152)"
+  },
   "currentStatus": {
    "enum": [
     "PENDING",

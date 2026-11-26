@@ -1,7 +1,8 @@
 {
  "type": "DataRecord",
  "name": "record",
- "label": "Bow weather record",
+ "label": "Weather record",
+ "description": "weather__{dataset}: a sensor's seven quantities, each with its QARTOD flag (interfaces §6). A dataset whose file lacks a column has the record without that quantity and its flag (FR-21).",
  "fields": [
   {
    "type": "Time",
@@ -49,8 +50,9 @@
   {
    "type": "Quantity",
    "name": "apparent_wind_speed",
-   "label": "Apparent wind speed",
+   "label": "Wind speed",
    "definition": "https://deepbluecltd.github.io/barge-monitor/def/apparent_wind_speed",
+   "description": "Apparent wind speed, as felt aboard.",
    "uom": {
     "code": "m/s"
    },
@@ -64,7 +66,7 @@
    "type": "Category",
    "name": "apparent_wind_speed_qc",
    "id": "apparent_wind_speed_qc",
-   "label": "QC flag: Apparent wind speed",
+   "label": "QC flag: Wind speed",
    "definition": "https://ioos.github.io/qartod/flag",
    "codeSpace": "https://ioos.github.io/qartod/",
    "constraint": {
@@ -82,7 +84,7 @@
   {
    "type": "Quantity",
    "name": "relative_humidity",
-   "label": "Relative humidity",
+   "label": "Humidity",
    "definition": "https://deepbluecltd.github.io/barge-monitor/def/relative_humidity",
    "uom": {
     "code": "%"
@@ -97,7 +99,7 @@
    "type": "Category",
    "name": "relative_humidity_qc",
    "id": "relative_humidity_qc",
-   "label": "QC flag: Relative humidity",
+   "label": "QC flag: Humidity",
    "definition": "https://ioos.github.io/qartod/flag",
    "codeSpace": "https://ioos.github.io/qartod/",
    "constraint": {
@@ -115,8 +117,9 @@
   {
    "type": "Quantity",
    "name": "pressure",
-   "label": "Barometric pressure (station)",
+   "label": "Pressure",
    "definition": "https://deepbluecltd.github.io/barge-monitor/def/pressure",
+   "description": "Barometric pressure at the sensor.",
    "uom": {
     "code": "hPa"
    },
@@ -130,7 +133,7 @@
    "type": "Category",
    "name": "pressure_qc",
    "id": "pressure_qc",
-   "label": "QC flag: Barometric pressure (station)",
+   "label": "QC flag: Pressure",
    "definition": "https://ioos.github.io/qartod/flag",
    "codeSpace": "https://ioos.github.io/qartod/",
    "constraint": {
@@ -148,8 +151,9 @@
   {
    "type": "Quantity",
    "name": "apparent_wind_direction",
-   "label": "Apparent wind direction, relative to the bow",
+   "label": "Wind direction",
    "definition": "https://deepbluecltd.github.io/barge-monitor/def/apparent_wind_direction",
+   "description": "Apparent wind direction, degrees relative to the bow.",
    "uom": {
     "code": "deg"
    },
@@ -163,7 +167,7 @@
    "type": "Category",
    "name": "apparent_wind_direction_qc",
    "id": "apparent_wind_direction_qc",
-   "label": "QC flag: Apparent wind direction, relative to the bow",
+   "label": "QC flag: Wind direction",
    "definition": "https://ioos.github.io/qartod/flag",
    "codeSpace": "https://ioos.github.io/qartod/",
    "constraint": {
@@ -214,7 +218,7 @@
   {
    "type": "Quantity",
    "name": "water_temperature",
-   "label": "Water temperature",
+   "label": "Water temp",
    "definition": "https://deepbluecltd.github.io/barge-monitor/def/water_temperature",
    "uom": {
     "code": "Cel"
@@ -229,7 +233,7 @@
    "type": "Category",
    "name": "water_temperature_qc",
    "id": "water_temperature_qc",
-   "label": "QC flag: Water temperature",
+   "label": "QC flag: Water temp",
    "definition": "https://ioos.github.io/qartod/flag",
    "codeSpace": "https://ioos.github.io/qartod/",
    "constraint": {

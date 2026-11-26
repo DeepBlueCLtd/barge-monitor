@@ -1,10 +1,13 @@
 /// <reference lib="webworker" />
 // One model in its own worker (FR-33): its own Pyodide and the scientific
 // libraries it needs. It reaches the data server as any client does: HTTP
-// requests to the Connected Systems interface, carried by the relay
-// (docs/v4-interfaces.md §7). There is no other way in.
+// requests to the Connected Systems interface, carried by the relay, with its
+// service account's credentials (docs/v4-interfaces.md §9.3, §10.1). Its
+// commands are pushed to it on a subscription held on the server's internal
+// endpoint, a streaming response through the relay (§9.2). There is no other way in.
 // A model that raises errors, or never returns, stops only itself: the data
 // server, the other models and the display client carry on (AT-14).
+import { passwordOf } from '../standin/accounts';
 import { loadRuntime } from './common';
 
 declare const self: DedicatedWorkerGlobalScope;
@@ -14,7 +17,6 @@ let port: MessagePort | null = null;
 let modelId = '';
 let apiUrl = '';
 let clock = { t: 0, playing: false };
-let pending: Record<string, number> = {};
 let busy = false;
 let taps: any[] = [];
 let tapSeq = 0;
@@ -41,6 +43,31 @@ async function http(method: string, path: string, headers: any, body: any): Prom
   return [res.status, out, new Uint8Array(await res.arrayBuffer())];
 }
 
+/** A push subscription (§9.2): a streamed answer through the relay, read chunk by chunk. Null when there is no answer. */
+async function openStream(path: string, headers: any, internal: boolean): Promise<{ status: number; next: () => Promise<Uint8Array | null> } | null> {
+  const h = headers?.toJs ? headers.toJs({ dict_converter: Object.fromEntries }) : headers;
+  headers?.destroy?.();
+  let res: Response;
+  try {
+    res = await fetch((internal ? apiUrl + '-internal' : apiUrl) + path, { method: 'GET', headers: h, cache: 'no-store' });
+  } catch {
+    return null;
+  }
+  const reader = res.body?.getReader();
+  return {
+    status: res.status,
+    next: async () => {
+      if (!reader) return null;
+      try {
+        const { done, value } = await reader.read();
+        return done ? null : value ?? new Uint8Array();
+      } catch {
+        return null; // the server went away: the receiver resubscribes (FR-48)
+      }
+    },
+  };
+}
+
 /** Messages between the model and the scientific libraries: captured here, drawn by the page. */
 function postTap(src: string, dst: string, summary: string, content: string, quiet: boolean) {
   if (quiet) return; // catching up on history at startup: not drawn
@@ -60,30 +87,49 @@ async function start(pyodideUrl: string, pyZipUrl: string, model: string, code: 
     py.FS.writeFile(`/home/pyodide/models/${module}.py`, code);
   }
   py.globals.set('_http', http);
+  py.globals.set('_open_stream', openStream);
   py.globals.set('_post_tap', postTap);
+  py.globals.set('_user', `svc-${model}`);
+  py.globals.set('_password', passwordOf(`svc-${model}`)); // labelled demo credentials (PR-07)
   py.runPython(`
 import importlib, json, csmodel
 from js import Object
 from pyodide.ffi import to_js
 
+def _absent(x):  # JavaScript's null arrives as JsNull, not None
+    return x is None or type(x).__name__ == "JsNull"
+
 async def _transport(method, path, headers, body):
     r = await _http(method, path, to_js(headers, dict_converter=Object.fromEntries), to_js(body) if body else None)
-    if r is None:
+    if _absent(r):
         raise csmodel.Unavailable("the data server does not answer")
     return int(r[0]), r[1].to_py(), r[2].to_bytes()
 
+async def _stream(path, headers, internal=False):
+    s = await _open_stream(path, to_js(headers, dict_converter=Object.fromEntries), bool(internal))
+    if _absent(s):
+        raise csmodel.Unavailable("the data server does not answer")
+    async def chunks():
+        while True:
+            c = await s.next()
+            if _absent(c):
+                return
+            yield c.to_bytes()
+    return int(s.status), chunks()
+
 _mod = importlib.import_module(${JSON.stringify(module)})
 model = _mod.MODEL()
-api = csmodel.Api(model.id, _transport)
+api = csmodel.Api(model.id, _transport, _user, _password, stream=_stream, now=lambda: _clock["t"], epoch=csmodel.SIM_EPOCH_UNIX)
+_clock = {"t": 0.0}
 def _tap(dst, summary, content=None):
     src, to = ("models", "scilibs") if dst == "scilibs" else ("scilibs", "models")
     _post_tap(src, to, f"{model.id}: {summary}", json.dumps(content, default=str)[:4000], api.quiet)
 api.tap = _tap
 runner = csmodel.Runner(model, api)
 
-async def tick(t, playing, wake):
-    api.clock = {"t": t, "playing": playing}
-    await runner.tick(playing, wake=bool(wake.to_py().get(getattr(model, "system", None))) and not playing)
+async def tick(t, playing):
+    _clock["t"] = t
+    await runner.tick(playing)
     return [runner.phase, runner.detail, model.label]
 `);
   post({ type: 'progress', model, stage: 'ready', detail: 'model loaded', pct: 100 });
@@ -100,7 +146,7 @@ async function loop() {
   busy = true;
   let phase = 'live';
   try {
-    const r = await py.globals.get('tick')(clock.t, clock.playing, pending);
+    const r = await py.globals.get('tick')(clock.t, clock.playing);
     const [ph, detail, label] = r.toJs();
     r.destroy();
     phase = ph;
@@ -129,6 +175,5 @@ self.onmessage = (e: MessageEvent) => {
       post({ type: 'progress', model: d.model, stage: 'error', detail: String(err), pct: 0 }));
   } else if (d.type === 'clock') {
     clock = { t: d.state.t, playing: d.state.playing };
-    pending = d.pending ?? {};
   }
 };

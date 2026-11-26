@@ -31,7 +31,7 @@ function Screen({ session }: { session: ClientSession }) {
 
   const missing = config?.problems ?? [];
   const status = phase === 'unreachable' ? 'server unreachable · data stale'
-    : phase === 'waiting' ? 'server starting (503) · waiting'
+    : phase === 'waiting' ? 'server starting · waiting'
       : phase === 'rejected' ? 'server rejected'
         : !config ? (phase === 'handshake' ? (step ? `handshake · request ${step.n}` : 'handshake…') : 'not started')
           : missing.length ? `degraded · ${missing.length} essential source${missing.length > 1 ? 's' : ''} unavailable`

@@ -3,12 +3,19 @@
 // `x-tap-chain` header so the messages it causes inside the back end can be
 // found by chain (FR-70, docs/v4-interfaces.md §3). The client does not draw its
 // own messages: the back end captures both directions of the HTTP boundary.
+//
+// 4.7 (docs/v4-interfaces.md §9): every request carries Basic credentials; a body is
+// read as JSON whatever its Content-Type says (D-196); refusals are HTML, so nothing
+// is read from them but the status; there is no instance identifier and no 503.
+//
+// INTERIM (plan Phase 4): the Version 4.1 display client has no login yet, so it holds
+// the demo owner's credentials in memory (labelled demo credentials, PR-07). The login
+// of plan Phase 7 (FR-97) replaces this.
 import { bus, handshakeChains, userChains } from '../shell/messages';
 import { API_BASE } from '../config';
-import { simClock, simSleep } from '../shell/clock';
+import { simClock } from '../shell/clock';
 
 export class NetworkFailure extends Error {}
-export class InstanceChanged extends Error {}
 export class Closed extends Error {}
 
 export interface Reply<T = any> {
@@ -20,11 +27,27 @@ export interface Reply<T = any> {
 
 let sessions = 0;
 
+/** The demo owner's credentials, held in memory only (interim: plan Phase 7 brings the login). */
+export const DEMO_OWNER = 'Basic ' + btoa('owner:demo-owner');
+
+/** A body as JSON whenever it is JSON, whatever the Content-Type says (D-196); else the text. */
+export function readBody(text: string): any {
+  const s = text.trimStart();
+  if (s.startsWith('{') || s.startsWith('[')) {
+    try {
+      return JSON.parse(text);
+    } catch {
+      return text;
+    }
+  }
+  return text;
+}
+
 export class ClientHttp {
-  instance: string | null = null;
   closed = false;
   readonly prefix = `dc${++sessions}-`;
   private seq = 0;
+  authorization = DEMO_OWNER;
   /** Chains of observation requests, with the datastream read and whether it was raw (causing S). */
   onRequest: ((r: { chain: string; method: string; path: string; params: Record<string, string> }) => void) | null = null;
 
@@ -86,7 +109,7 @@ export class ClientHttp {
     try {
       r = await fetch(API_BASE + path + (q ? `?${q}` : ''), {
         method,
-        headers: { 'x-tap-chain': chain, accept: path.endsWith('/observations') ? 'application/swe+json' : 'application/json', ...(body ? { 'content-type': 'application/json' } : {}) },
+        headers: { 'x-tap-chain': chain, authorization: this.authorization, ...(body ? { 'content-type': 'application/json' } : {}) },
         body: body ? JSON.stringify(body) : undefined,
       });
     } catch {
@@ -94,40 +117,19 @@ export class ClientHttp {
     }
     if (this.closed) throw new Closed('client restarted');
     if (paced) await this.drawn(chain);
-    const text = await r.text();
-    const ctype = r.headers.get('content-type') ?? '';
-    // FR-48: a changed instance identifier means a new server start: clear state, handshake again.
-    const inst = r.headers.get('x-server-instance');
-    if (inst && this.instance && inst !== this.instance) throw new InstanceChanged(`server instance changed from ${this.instance} to ${inst}`);
-    let parsed: any = text;
-    if (text && ctype.includes('json')) {
-      try {
-        parsed = JSON.parse(text);
-      } catch {
-        parsed = text;
-      }
-    }
-    return { status: r.status, headers: r.headers, body: parsed, chain };
+    return { status: r.status, headers: r.headers, body: readBody(await r.text()), chain };
   }
 
-  /** GET, waiting through waiting mode: 503 with Retry-After, counted on the simulation clock (FR-48, FR-13). */
-  async get<T = any>(path: string, params?: Record<string, string>, onWait?: (s: number) => void): Promise<Reply<T>> {
-    for (;;) {
-      const r = await this.request<T>('GET', path, params);
-      if (r.status !== 503) return r;
-      const wait = Math.max(1, Number(r.headers.get('retry-after') ?? 2) || 2);
-      onWait?.(wait);
-      await simSleep(wait, () => this.closed);
-      if (this.closed) throw new Closed('client restarted');
-    }
+  async get<T = any>(path: string, params?: Record<string, string>): Promise<Reply<T>> {
+    return this.request<T>('GET', path, params);
   }
 
-  /** GET every page of a paged collection or observation set, following rel="next" (FR-23, FR-26). */
-  async all<T = any>(path: string, params: Record<string, string> = {}, onWait?: (s: number) => void, maxPages = 20): Promise<T[]> {
+  /** GET every page of a paged listing, following its rel="next" link (FR-23). */
+  async all<T = any>(path: string, params: Record<string, string> = {}, maxPages = 20): Promise<T[]> {
     const out: T[] = [];
     let p: Record<string, string> = { ...params };
     for (let page = 0; page < maxPages; page++) {
-      const r = await this.get<any>(path, p, onWait);
+      const r = await this.get<any>(path, p);
       if (r.status !== 200) throw new HttpError(path, r.status, r.body);
       const items: T[] = Array.isArray(r.body) ? r.body : r.body?.items ?? [];
       out.push(...items);
@@ -141,19 +143,13 @@ export class ClientHttp {
 
 export class HttpError extends Error {
   constructor(public path: string, public status: number, public body: any) {
-    super(`${path}: HTTP ${status}${body?.description ? `: ${body.description}` : ''}`);
+    super(`${path}: HTTP ${status}`);
   }
 }
 
-/** The query of a rel="next" link, from the Link header or the body's links. */
+/** The query of a rel="next" link in the body's links. */
 function nextLink(r: Reply<any>): Record<string, string> | null {
-  let href: string | null = null;
-  const header = r.headers.get('link');
-  if (header) {
-    const m = header.split(',').map((s) => s.match(/<([^>]+)>\s*;\s*rel="?next"?/)).find(Boolean);
-    if (m) href = m[1];
-  }
-  if (!href && !Array.isArray(r.body)) href = r.body?.links?.find((l: any) => l.rel === 'next')?.href ?? null;
+  const href: string | null = Array.isArray(r.body) ? null : r.body?.links?.find((l: any) => l.rel === 'next')?.href ?? null;
   if (!href) return null;
   const q = href.includes('?') ? href.slice(href.indexOf('?') + 1) : '';
   return Object.fromEntries(new URLSearchParams(q));

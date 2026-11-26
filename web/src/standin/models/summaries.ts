@@ -6,7 +6,7 @@
 //   * derived values at both resolutions: dew point, bow minus stern air
 //     temperature, pressure tendency.
 // A minute is published once it is complete; an hour once its sixty minutes are.
-import type { Cols } from '../registry';
+import type { Cols } from '../resources';
 import { M } from '../swe';
 import { Command, measurementFields, Model, ModelApi, PRECIP, QUANTITIES, roundArr } from './csmodel';
 
@@ -89,8 +89,8 @@ export class Summaries extends Model {
   private hourP: number[] = [];
   private hourDone = -1;
 
-  setup(api: ModelApi): void {
-    super.setup(api);
+  async setup(api: ModelApi): Promise<void> {
+    await super.setup(api);
     const summary = [M.time('time', 'Start of the interval'), ...measurementFields(),
       M.count('readings_removed', 'Readings removed'), M.category('precipitation_type', 'Precipitation', PRECIP)];
     const derived = [M.time('time', 'Start of the interval'), M.quantity('dew_point', 'Dew point', 'Cel'),
@@ -98,27 +98,27 @@ export class Summaries extends Model {
     for (const [res, label] of [['1min', '1-minute'], ['1h', 'hourly']]) {
       for (const s of SENSORS) {
         const cap = s.charAt(0).toUpperCase() + s.slice(1);
-        this.out[`summary-${res}-${s}`] = api.createDatastream(this.system, {
+        this.out[`summary-${res}-${s}`] = await api.createDatastream(this.system, {
           name: `${cap} ${label} means`, outputName: `summary-${res}-${s}`, schema: M.record(`${cap} ${label} means`, summary),
         });
       }
-      this.out[`derived-${res}`] = api.createDatastream(this.system, {
+      this.out[`derived-${res}`] = await api.createDatastream(this.system, {
         name: `Derived values, ${label}`, outputName: `derived-${res}`, schema: M.record(`Derived values, ${label}`, derived),
       });
     }
-    this.controlKey = api.createControlstream(this.system, {
+    this.controlKey = await api.createControlstream(this.system, {
       name: 'Summaries settings', inputName: 'settings',
       schema: M.record('Summaries settings', [M.quantity('tendency_hours', 'Pressure tendency span', 'h', 1, 6)]),
     });
   }
 
-  onCommand(_api: ModelApi, cmd: Command): string {
+  async onCommand(_api: ModelApi, cmd: Command): Promise<string> {
     Object.assign(this.settings, cmd.parameters);
     return `tendency over ${this.settings.tendency_hours} h`;
   }
 
-  private sources(api: ModelApi): boolean {
-    for (const s of SENSORS) if (!this.cleaned[s]) this.cleaned[s] = api.find('urn:x-barge:process:data-cleanse', `cleaned-${s}`);
+  private async sources(api: ModelApi): Promise<boolean> {
+    for (const s of SENSORS) if (!this.cleaned[s]) this.cleaned[s] = await api.find('urn:x-barge:process:data-cleanse', `cleaned-${s}`);
     return SENSORS.every((s) => this.cleaned[s]);
   }
 
@@ -143,11 +143,11 @@ export class Summaries extends Model {
     return out;
   }
 
-  step(api: ModelApi, t0: number, t1: number): number {
-    if (!this.sources(api)) return t0;
+  async step(api: ModelApi, t0: number, t1: number): Promise<number> {
+    if (!(await this.sources(api))) return t0;
     const start = Math.floor(t0 / 60) * 60;
     const data: Record<string, Cols> = {};
-    for (const s of SENSORS) data[s] = api.read(this.cleaned[s]!, start, t1);
+    for (const s of SENSORS) data[s] = await api.read(this.cleaned[s]!, start, t1);
     const avail = Math.min(...SENSORS.map((s) => (data[s].t.length ? data[s].t[data[s].t.length - 1] : start)));
     const end = Math.floor((avail + 1) / 60) * 60;
     const n = Math.floor((end - start) / 60);
@@ -158,18 +158,18 @@ export class Summaries extends Model {
     const span = Math.trunc(this.settings.tendency_hours * 60);
     const derived = this.derivedRows(rows, span, this.minuteP.slice(-span));
     api.tap('models', `stand-in: ${n} minutes summarised`, { rows: n });
-    for (const s of SENSORS) api.publish(this.out[`summary-1min-${s}`], rows[s]);
-    api.publish(this.out['derived-1min'], derived);
+    for (const s of SENSORS) await api.publishMany(this.out[`summary-1min-${s}`], rows[s]);
+    await api.publishMany(this.out['derived-1min'], derived);
     const bp = rows.bow.pressure as Float64Array | undefined;
     for (let i = 0; i < n; i++) this.minuteP.push(bp ? bp[i] : NaN);
     if (this.minuteP.length > 6 * 60) this.minuteP.splice(0, this.minuteP.length - 6 * 60);
     for (const s of SENSORS) this.minutes[s].push(rows[s]);
-    this.hours(api, end);
+    await this.hours(api, end);
     return end;
   }
 
   /** Hours: from the minute means, once all sixty minutes of an hour are in. */
-  private hours(api: ModelApi, end: number) {
+  private async hours(api: ModelApi, end: number): Promise<void> {
     const mins: Record<string, Rows> = {};
     for (const s of SENSORS) mins[s] = mergeRows(this.minutes[s]);
     if (!mins.bow.t.length) return;
@@ -198,8 +198,8 @@ export class Summaries extends Model {
     if (this.hourP.length > 12) this.hourP.splice(0, this.hourP.length - 12);
     api.tap('scilibs', `stand-in: ${hours.length} hourly means`, { calls: ['bin means'], hours: hours.length });
     api.tap('models', `stand-in: ${hours.length} hours summarised`, { rows: hours.length });
-    for (const s of SENSORS) api.publish(this.out[`summary-1h-${s}`], rows[s]);
-    api.publish(this.out['derived-1h'], derived);
+    for (const s of SENSORS) await api.publishMany(this.out[`summary-1h-${s}`], rows[s]);
+    await api.publishMany(this.out['derived-1h'], derived);
     this.hourDone = hours[hours.length - 1];
     // Minutes of summarised hours are no longer needed.
     const keepFrom = this.hourDone + 3600;
