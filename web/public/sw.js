@@ -4,16 +4,26 @@
  * worker answers. When the server is down the worker answers nothing, and the
  * relay returns a network failure, as an unreachable server would (FR-46a).
  * Everything else goes to the network.
+ *
+ * Startup (docs/v4-interfaces.md §13.7, NFR-10a): a new relay takes over at once
+ * (skipWaiting, then clients.claim). A page that loaded without a controller (a hard
+ * reload, or a relay that was already active and so never activates again) asks with
+ * a `claim` message, and the relay claims it.
  */
+const RELAY_VERSION = '4.7-startup-1';
 const TIMEOUT_MS = 120000;
 let port = null;
 let waiting = [];
 
-self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('install', (e) => e.waitUntil(self.skipWaiting()));
 self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
 
 self.addEventListener('message', (e) => {
-  if (e.data && e.data.type === 'port') {
+  if (e.data && e.data.type === 'claim') {
+    e.waitUntil(self.clients.claim());
+  } else if (e.data && e.data.type === 'version') {
+    if (e.source) e.source.postMessage({ type: 'relay-version', version: RELAY_VERSION });
+  } else if (e.data && e.data.type === 'port') {
     port = e.ports[0] || null;
     waiting.splice(0).forEach((resolve) => resolve(port));
   }

@@ -12,6 +12,7 @@ import { Flowchart } from './Flowchart';
 import { runtime } from './runtime';
 import { selectComponent, unrevealAll } from './selection';
 import { sketchEnabled } from './sketch';
+import type { StepState } from './startup';
 import { SPEED_LABELS } from './StatusBox';
 import { useStore } from './store';
 
@@ -32,17 +33,43 @@ export function App() {
   }, [progress]);
 
   // FR-15: the flowchart becomes available when the back end has loaded the history.
-  if (progress.stage !== 'ready') return <Loading pct={progress.pct} detail={progress.detail} failure={failure} />;
-  return <Shell />;
+  // Until then the top bar is shown with its controls disabled, each saying why (FR-125a).
+  const ready = progress.stage === 'ready';
+  return (
+    <div className="shell">
+      <TopBar ready={ready} />
+      {ready ? <Main /> : <Loading pct={progress.pct} detail={progress.detail} failure={failure} />}
+    </div>
+  );
 }
 
+const STEP_MARK: Record<StepState, string> = { pending: '○', active: '…', done: '✓', failed: '✗' };
+
 function Loading({ pct, detail, failure }: { pct: number; detail: string; failure: string | null }) {
+  const steps = useStore(runtime.startup.steps);
+  const stall = useStore(runtime.startup.stall);
   return (
     <main className="startup" role="status" aria-live="polite">
-      <h1>{TITLE}</h1>
       <p className="fiction">A fictional canal, fictional places and synthetic weather: a system and architecture demonstrator, not a weather or navigation product.</p>
-      {runtime.kind === 'standin' && <p className="standin-notice">{STANDIN_NOTICE}</p>}
-      {failure ? <p className="error">Could not start: {failure}</p> : (
+      {/* NFR-10a: the loading progress names each step in turn. */}
+      <ol className="steps" data-testid="startup-steps" aria-label="Startup steps">
+        {steps.map((s) => (
+          <li key={s.id} className={`step ${s.state}`} data-testid={`step-${s.id.replace(' ', '-')}`} data-state={s.state}
+            aria-current={s.state === 'active' ? 'step' : undefined}>
+            <span className="mark" aria-hidden="true">{STEP_MARK[s.state]}</span>
+            <b>{s.id}</b>: {s.what}
+          </li>
+        ))}
+      </ol>
+      {stall && (
+        <div className="stall" role="alert" data-testid="stall" data-step={stall.step}>
+          <p><b>{stall.message}</b></p>
+          <p>What you can do:</p>
+          <ul>{stall.advice.map((a) => <li key={a}>{a}</li>)}</ul>
+          <button className="btn" onClick={() => location.reload()} data-testid="stall-reload">Reload</button>
+        </div>
+      )}
+      {failure && !stall?.failed ? <p className="error">Could not start: {failure}</p> : !failure && (
         <>
           <progress max={100} value={pct} aria-label="Loading" />
           <p data-testid="progress">{detail}</p>
@@ -55,28 +82,50 @@ function Loading({ pct, detail, failure }: { pct: number; detail: string; failur
   );
 }
 
-function Shell() {
+/**
+ * Why a top-bar control cannot act yet (FR-125a, docs/v4-interfaces.md §13.7): in its
+ * `title`, and to assistive technology through `aria-describedby`. Null when it can act.
+ */
+function useReason(ready: boolean): string | null {
+  const steps = useStore(runtime.startup.steps);
+  const stall = useStore(runtime.startup.stall);
+  void steps;
+  void stall;
+  return ready ? null : runtime.startup.reason() ?? 'Starting';
+}
+
+const REASON_ID = 'control-reason';
+
+/** Props that disable a control and say why, or nothing when it can act. */
+function disabledBy(reason: string | null) {
+  return reason ? { disabled: true, title: reason, 'aria-describedby': REASON_ID } : {};
+}
+
+function TopBar({ ready }: { ready: boolean }) {
   const clock = useStore(simClock.state);
   const control = useStore(runtime.control);
   const [drawer, setDrawer] = useState(false);
+  const reason = useReason(ready);
+  const off = disabledBy(reason);
   const playing = clock?.playing ?? false;
   const rate = clock?.rate ?? 0.5;
   return (
-    <div className="shell">
+    <>
       <header className="topbar">
         <div className="brand">
           <h1>{TITLE}</h1>
           <p className="subtitle">Architecture view · click a component or a message to see it on the right</p>
           {runtime.kind === 'standin' && <p className="standin-notice" data-testid="standin-notice">{STANDIN_NOTICE}</p>}
         </div>
-        <nav className="controls" aria-label="Controls">
+        <nav className="controls" aria-label="Controls" data-testid="controls">
+          {reason && <span id={REASON_ID} className="sr-only" data-testid="control-reason">{reason}</span>}
           {/* FR-77: one play/pause button starts and stops the simulation clock. */}
-          <button className={`btn play${playing ? '' : ' primary'}`} onClick={() => runtime.send(playing ? 'pause' : 'play')} data-testid="play">
+          <button className={`btn play${playing ? '' : ' primary'}`} onClick={() => runtime.send(playing ? 'pause' : 'play')} data-testid="play" {...off}>
             {playing ? '❚❚ Pause' : '▶ Play'}
           </button>
           <div className="segmented" role="group" aria-label="Speed" data-testid="speed">
             {simClock.rates.map((r) => (
-              <button key={r} className={`btn${r === rate ? ' on' : ''}`} aria-pressed={r === rate} onClick={() => runtime.send('rate', r)}>{SPEED_LABELS[r] ?? `${r}×`}</button>
+              <button key={r} className={`btn${r === rate ? ' on' : ''}`} aria-pressed={r === rate} onClick={() => runtime.send('rate', r)} {...off}>{SPEED_LABELS[r] ?? `${r}×`}</button>
             ))}
           </div>
           {/* FR-46, FR-75: discard all client state, handshake again, un-reveal. */}
@@ -84,22 +133,27 @@ function Shell() {
             restartClient();
             unrevealAll();
             selectComponent(null);
-          }}>Restart client</button>
+          }} {...off}>Restart client</button>
           <button className={`btn${control?.pending ? ' attention' : ''}`} data-testid="restart-server" onClick={() => runtime.send('restart-server')}
-            title={control?.pending ? 'Field changes are pending until the next server start' : undefined}>Restart server</button>
-          <DemoMenu />
-          <button className="btn" onClick={() => setDrawer(!drawer)} aria-expanded={drawer} data-testid="control-panel-toggle">Control panel</button>
-          <button className="btn" onClick={() => selectComponent(null)} data-testid="overview-button" title="What is adopted, what is written, what is not here">Overview</button>
+            title={control?.pending ? 'Field changes are pending until the next server start' : undefined} {...off}>Restart server</button>
+          <DemoMenu reason={reason} />
+          <button className="btn" onClick={() => setDrawer(!drawer)} aria-expanded={drawer} data-testid="control-panel-toggle" {...off}>Control panel</button>
+          <button className="btn" onClick={() => selectComponent(null)} data-testid="overview-button" title="What is adopted, what is written, what is not here" {...off}>Overview</button>
         </nav>
-        <DemoBanner />
+        {ready && <DemoBanner />}
       </header>
-      {drawer && <ControlPanel onClose={() => setDrawer(false)} />}
-      <div className="main">
-        <section className="left" aria-label="Architecture">
-          <Flowchart />
-        </section>
-        <DetailPanel />
-      </div>
+      {ready && drawer && <ControlPanel onClose={() => setDrawer(false)} />}
+    </>
+  );
+}
+
+function Main() {
+  return (
+    <div className="main">
+      <section className="left" aria-label="Architecture">
+        <Flowchart />
+      </section>
+      <DetailPanel />
     </div>
   );
 }

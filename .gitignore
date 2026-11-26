@@ -160,6 +160,7 @@ site/
 # barge-monitor build outputs
 dist-site/
 web/public/py/
+web/public/data/folder/
 web/src/generated/
 web/test-results/
 web/playwright-report/
