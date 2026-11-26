@@ -149,6 +149,10 @@ class Runtime {
    * newer relay that takes over is given its own port). A page loaded without a
    * controller, such as after a hard reload, asks the active relay to claim it: it would
    * otherwise never see a `controllerchange`, because that relay never activates again.
+   * `register` with an unchanged URL does not look for a newer sw.js, and an uncontrolled
+   * page triggers no update either, so an older relay that cannot be asked to claim would
+   * stay for ever: the page asks for an update itself, and the newer relay claims the page
+   * when it activates.
    */
   private async startRelay(): Promise<void> {
     if (!('serviceWorker' in navigator)) throw new Error('this browser offers no Service Workers here (some turn them off in private windows)');
@@ -157,11 +161,13 @@ class Runtime {
     // A newer relay that takes over needs its own port to the back end.
     sws.addEventListener('controllerchange', () => this.connect());
     const url = resolve('sw.js');
+    const update = (reg: ServiceWorkerRegistration) => reg.update().catch((e) => console.warn('seam relay: update check failed', e));
     if (sws.controller) {
-      sws.register(url, { scope: './' }).catch((e) => console.warn('seam relay: update check failed', e));
+      sws.register(url, { scope: './' }).then(update, (e) => console.warn('seam relay: registration failed', e));
       return;
     }
     const reg = await sws.register(url, { scope: './' });
+    void update(reg);
     await new Promise<void>((done) => {
       let asked = -Infinity;
       const check = () => {
