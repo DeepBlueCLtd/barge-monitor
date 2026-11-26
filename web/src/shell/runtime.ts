@@ -335,3 +335,5 @@ class Runtime {
 }
 
 export const runtime = new Runtime();
+// Read-only, for the end-to-end tests (beside D-273's bargeCaptured; D-323): the back end's control state as the shell holds it.
+(globalThis as { bargeControlState?: () => ControlState | null }).bargeControlState = () => runtime.control.value;

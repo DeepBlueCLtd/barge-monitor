@@ -42,7 +42,7 @@ function FolderFiles() {
     <>
       <h3>Files</h3>
       {files.length ? (
-        <table className="letters-table" data-testid="folder-files">
+        <table className="letters-table" data-testid="folder-table">
           <thead><tr><th>File</th><th>Size</th><th>Modified</th><th>Status</th></tr></thead>
           <tbody>
             {files.map((f) => (
@@ -97,8 +97,8 @@ function ImporterDetail() {
         </tbody>
       </table>
       <p className="live" data-testid="import-rate">{rate
-        ? `Last import: ${rate.file}${rate.silent ? ' (silently, at load)' : ''}, ${rate.rows.toLocaleString('en-GB')} rows in ${rate.seconds.toFixed(2)} s: `
-          + `${Math.round(rate.rows_per_s).toLocaleString('en-GB')} rows a second, written in bulk inside the server.`
+        ? `Last import: ${rate.file}, ${rate.rows.toLocaleString('en-GB')} rows in ${rate.seconds.toFixed(2)} s, `
+          + `${Math.round(rate.rows_per_s).toLocaleString('en-GB')} rows/s${rate.silent ? ' (silently, at startup)' : ''}. Written in bulk, inside the server.`
         : 'No import measured yet.'}</p>
       <p className="hint" data-testid="silent-import">Mission A was imported silently at load, before the server took requests, and was not drawn (FR-15): nothing persists between visits. After Reset instance it is not imported again until the page is reloaded.</p>
       <h3>Column mapping</h3>

@@ -6,7 +6,8 @@ import { SUB_DEMO } from './site';
 // part, AT-68). Every test serves the site under a pull request's published sub-path, as the
 // preview is, and starts from a fresh browser context, so no relay is installed unless the
 // test installs one. The default back end (the JavaScript stand-in) starts in seconds.
-const STEPS = ['relay', 'back end', 'history', 'server', 'import', 'models'];
+// Interfaces §13.7: the 4.1 step "history" is retired with the logger's history (D-320).
+const STEPS = ['relay', 'back end', 'server', 'import', 'models'];
 const STARTED_MS = 30_000; // NFR-10's budget
 const STALL_SAYS_WITHIN_MS = 12_000; // NFR-10a: 10 s, plus a little for the page to load
 
@@ -81,10 +82,11 @@ test('(a) first load on the sub-path: the steps are named, startup completes, th
   const page = await context.newPage();
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  // Hold the back-end step for a moment, so the named steps and disabled controls can be read.
+  // Hold the back-end step for a moment, so the named steps and disabled controls can be read: the stand-in worker's
+  // script is held (the history it used to hold back is retired, D-320).
   let release!: () => void;
   const held = new Promise<void>((r) => (release = r));
-  await page.route('**/py/history.json', async (route) => {
+  await page.route(/standin\.worker-[^/]*\.js/, async (route) => {
     await held;
     await route.continue();
   });

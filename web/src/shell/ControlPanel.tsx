@@ -22,11 +22,11 @@ function ResetInstance({ st }: { st: ControlState }) {
           <div role="alertdialog" aria-labelledby="reset-title" aria-describedby="reset-what" data-testid="reset-confirm" className="confirm">
             <p id="reset-title"><b>Reset instance?</b></p>
             <div id="reset-what">
-              <p>This stops the data server, deletes its whole store and starts it again, empty. Lost:</p>
+              <p>This deletes the data server’s whole store: the server stops, and starts again empty. Lost:</p>
               <ul>
                 <li>{datasets.length ? `every imported dataset (${datasets.length}: ${datasets.map((d) => d.id).join(', ')})` : 'every imported dataset (none now)'};</li>
                 <li>every model result{models ? ` (from ${models} models)` : ''};</li>
-                <li>every analyst's Favourites (data of interest) in their workspace;</li>
+                <li>all data of interest saved in the analysts’ workspaces (their Favourites);</li>
                 <li>every command and its status.</li>
               </ul>
               <p>The data folder is untouched. Mission A is not imported again until the page is reloaded.</p>

@@ -102,6 +102,7 @@ const latest = (match: RegExp): CatalogueEntry | undefined => clientSession.cata
  * owner, as a user would reload (D-210), with Mission A open.
  */
 export async function putEverythingBack() {
+  selectComponent('client'); // the display client is where each demo shows, and where it is restored
   clientSession.idleMs = IDLE_LOCK_MS;
   await control('profile-lie', { on: false });
   for (const f of runtime.control.value?.fields ?? []) if (f.on_next_start === f.extra) await field(f.name, !f.extra);
