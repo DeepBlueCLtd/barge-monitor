@@ -177,8 +177,11 @@ try {
   check(ownerPost.status === 403, 'a user cannot append under a model\'s system (gateway)', String(ownerPost.status));
   for (const [m, p] of [['PUT', `/systems/${newSys}`], ['DELETE', `/systems/${newSys}`], ['DELETE', `/datastreams/${outId}`], ['PUT', `/datastreams/${outId}/observations`]]) {
     const r = await req(m, p, { user: NEW, body: m === 'PUT' ? {} : undefined });
-    check(r.status === 405, `${m} ${p.replace(/\/[0-9a-v]{4}(?=\/|$)/g, '/{id}')} answers 405`, String(r.status));
+    // D-200: refused with any 4xx (the gateway answers 405 for every account; OpenSensorHub itself deletes).
+    check(r.status >= 400 && r.status < 500, `${m} ${p.replace(/\/[0-9a-v]{4}(?=\/|$)/g, '/{id}')} is refused (4xx)`, String(r.status));
   }
+  check((await get(`/systems/${newSys}`, NEW)).status === 200 && (await get(`/datastreams/${outId}`, NEW)).status === 200,
+    'nothing was replaced or deleted (D-200)');
   {
     const r = await get('/systems/zzzz');
     check(r.status === 404 && (r.headers.get('content-type') ?? '').startsWith('text/html') && /<title>404 Not Found<\/title>/.test(r.text),

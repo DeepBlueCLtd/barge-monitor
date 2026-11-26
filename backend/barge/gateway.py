@@ -15,7 +15,10 @@ the replay controller are modules inside the server and do not.
   workspaces, are removed from every listing, with their datastreams, control streams and
   commands; every path under them answers ``404``.
 * **Writes.** Create and append only under one's own systems: a user under its workspace, a
-  service under its own systems (the importer also under the sensors).
+  service under its own systems (the importer also under the sensors). ``PUT``, ``PATCH`` and
+  ``DELETE`` are refused with ``405`` for every account, whatever the path: nothing is replaced or
+  deleted except by Reset instance (SRD §17), and a stock OpenSensorHub deletes a system or a
+  datastream on ``DELETE`` (D-200).
 * **Push subscriptions** are forwarded for service accounts only.
 
 The gateway learns which system a datastream, control stream or command belongs to by asking
@@ -35,6 +38,7 @@ CO2 = re.compile(r"^urn:x-barge:sensor:[^:]+:co2(:|$)")
 RESTRICTED = re.compile(r"^urn:x-barge:process:[^:]+:restricted(:|$)")
 WORKSPACE = re.compile(r"^urn:x-barge:workspace:([^:]+)")
 BIG = 1_000_000
+NO_REPLACE_OR_DELETE = ("PUT", "PATCH", "DELETE")
 
 
 class Refused(Exception):
@@ -137,7 +141,9 @@ class Gateway:
         return sid
 
     async def check(self, method: str, rel: str, query: str, acct, auth: str, body: bytes) -> None:
-        """Refuse what this account may not do, as an absent resource (404) or a refusal (403)."""
+        """Refuse what this account may not do, as an absent resource (404) or a refusal (403 or 405)."""
+        if method in NO_REPLACE_OR_DELETE:  # SRD §17: only Reset instance deletes (D-200)
+            raise Refused(405, f"{method} is not allowed: nothing is replaced or deleted except by Reset instance")
         parts = [p for p in rel.split("/") if p]
         if not parts or parts[0] in ("conformance", "collections", "profile.json", "demonstrator"):
             return

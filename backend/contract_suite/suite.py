@@ -133,6 +133,17 @@ class Ctx:
         assert rows, "the replay state has no observation"
         return rows[-1]
 
+    async def outcome(self, cs_id, cmd_id, user="owner"):
+        """A command's outcome: its latest status report other than ``PENDING`` (D-199), or None.
+
+        OpenSensorHub stores the sender's ``PENDING`` when the ``POST`` answers (after the hold), which can be
+        after the receiver's ``COMPLETED``; the latest report alone would then read ``PENDING``."""
+        st, _, body = await self.get(f"controlstreams/{cs_id}/status", {"limit": "100000"}, user=user)
+        assert st == 200, (st, body)
+        mine = [r for r in body["items"] if r.get("command@id") == cmd_id and r.get("statusCode") != "PENDING"]
+        mine.sort(key=lambda r: r.get("reportTime") or "")  # stable: equal times keep the server's order
+        return mine[-1] if mine else None
+
     def validate(self, instance, schema_file):
         import jsonschema
 
@@ -301,7 +312,8 @@ async def one_observation_with_a_missing_value(x: Ctx):
 
 @need
 async def commands_are_pushed_to_a_subscriber(x: Ctx):
-    """FR-27, §9.2: a receiver's subscription gets each command at once, with every parameter and its sender."""
+    """FR-27, §9.2: a receiver's subscription gets each command at once, with every parameter and its sender;
+    its outcome is the latest status report other than ``PENDING`` (D-199)."""
     r = await _model_resources(x)
     s = await x.c.open_stream(f"controlstreams/{r['cs']}/commands", {"subscribe": "1"}, x.auth(r["user"]))
     try:
@@ -316,6 +328,8 @@ async def commands_are_pushed_to_a_subscriber(x: Ctx):
         assert st in (200, 201), st
         st, _, _ = await send
         assert st in (200, 201), st
+        out = await x.outcome(r["cs"], cmd["id"])  # read after the sender's answer, as a client reads it (D-199)
+        assert out and out["statusCode"] == "COMPLETED", out
     finally:
         await s.close()
 
@@ -367,10 +381,18 @@ async def refusals_are_html_without_a_login_dialog(x: Ctx):
 
 @standin
 async def put_and_delete_are_not_allowed(x: Ctx):
+    """§9.1, D-200: ``PUT`` and ``DELETE`` are refused with a 4xx, and nothing is replaced or deleted. In front of
+    OpenSensorHub (which deletes on ``DELETE``) the gateway refuses them with 405 for every account."""
     sy = await x.systems()
-    for method, path in (("PUT", f"systems/{sy[URN + 'sensor:bow']}"), ("DELETE", f"systems/{sy[URN + 'sensor:bow']}")):
-        st, _, _ = await x.c.request(method, path, body={}, headers=x.auth())
-        assert st == 405, f"{method} {path}: {st}"
+    r = await _model_resources(x)
+    tries = (("PUT", f"systems/{sy[URN + 'sensor:bow']}", "owner"), ("DELETE", f"systems/{sy[URN + 'sensor:bow']}", "owner"),
+             ("DELETE", f"datastreams/{r['ds']}", r["user"]), ("DELETE", f"systems/{r['system']}", r["user"]))
+    for method, path, user in tries:
+        st, _, _ = await x.c.request(method, path, body={} if method == "PUT" else None, headers=x.auth(user))
+        assert 400 <= st < 500, f"{method} {path}: {st}"
+    for path in (f"systems/{sy[URN + 'sensor:bow']}", f"datastreams/{r['ds']}", f"systems/{r['system']}"):
+        st, _, _ = await x.get(path)
+        assert st == 200, f"{path} is gone ({st})"
 
 
 @standin

@@ -10,8 +10,10 @@
 // (CO₂ analysers, models' restricted subsystems) and other users' workspaces
 // from every listing, with their datastreams and control streams, and answers
 // 404 under them; it lets a user create and append only under their own
-// workspace and a service account only under its own systems; and it lets
-// only service accounts subscribe to control streams.
+// workspace and a service account only under its own systems; it refuses PUT,
+// PATCH and DELETE with 405 for every account (SRD §17: only Reset instance
+// deletes; a stock OpenSensorHub deletes on DELETE, D-200); and it lets only
+// service accounts subscribe to control streams.
 //
 // To know which system an identifier belongs to, it reads the server's system
 // tree (in a developed system it would learn it by discovery, and cache it).
@@ -39,7 +41,7 @@ function workspaceOf(uid: string): string | null {
   return m ? m[1] : null;
 }
 
-const STATUS_TEXT: Record<number, string> = { 401: 'Unauthorized', 403: 'Forbidden', 404: 'Not Found' };
+const STATUS_TEXT: Record<number, string> = { 401: 'Unauthorized', 403: 'Forbidden', 404: 'Not Found', 405: 'Method Not Allowed' };
 
 function refusal(status: number, message: string): HttpResponse {
   const line = `${status} ${STATUS_TEXT[status] ?? 'Error'}`;
@@ -105,6 +107,10 @@ export class Gateway {
 
   /** What the gateway decides before forwarding: null to forward, or its own refusal. */
   private authorize(a: Account, method: string, seg: string[], q: URLSearchParams): HttpResponse | null {
+    // SRD §17: nothing is replaced or deleted except by Reset instance (D-200).
+    if (method === 'PUT' || method === 'PATCH' || method === 'DELETE') {
+      return refusal(405, `${method} is not allowed: nothing is replaced or deleted except by Reset instance`);
+    }
     const sys = this.systemOf(seg);
     if (sys !== null && !this.canRead(a, sys)) return refusal(404, `no resource at /${seg.join('/')}`); // absent, not refused (FR-93)
     const last = seg[seg.length - 1];
