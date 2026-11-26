@@ -6,7 +6,7 @@ import { SUB_DEMO } from './site';
 // part, AT-68). Every test serves the site under a pull request's published sub-path, as the
 // preview is, and starts from a fresh browser context, so no relay is installed unless the
 // test installs one. The default back end (the JavaScript stand-in) starts in seconds.
-const STEPS = ['relay', 'back end', 'history', 'server', 'models'];
+const STEPS = ['relay', 'back end', 'history', 'server', 'import', 'models'];
 const STARTED_MS = 30_000; // NFR-10's budget
 const STALL_SAYS_WITHIN_MS = 12_000; // NFR-10a: 10 s, plus a little for the page to load
 

@@ -7,7 +7,7 @@
 // the relay), `control`; it posts `progress`, `tick` every 100 ms, `state`
 // once a second and after each control, and `relay-failed`.
 // The stand-in runs its own models: `model-connect` is not used (FR-06f).
-import { createStandin, HttpRequest, loadHistory, Progress, Runtime } from '../standin';
+import { createStandin, fetchFolder, HttpRequest, loadHistory, Progress, Runtime } from '../standin';
 
 declare const self: DedicatedWorkerGlobalScope;
 
@@ -23,7 +23,7 @@ async function gunzip(res: Response): Promise<Uint8Array> {
   return new Uint8Array(await new Response(res.body.pipeThrough(new DecompressionStream('gzip'))).arrayBuffer());
 }
 
-async function start(seed: number, historyUrl: string | null) {
+async function start(seed: number, historyUrl: string | null, folderUrl: string | null) {
   // FR-06d: the stand-in reads the same pre-calculated history as the Python back end.
   if (!historyUrl) throw new Error('no pre-calculated history: the stand-in cannot generate one (the world generator is Python)');
   const base = `${historyUrl}seed-${seed}/`;
@@ -37,7 +37,8 @@ async function start(seed: number, historyUrl: string | null) {
     if (!res.ok) throw new Error(`history file ${name}: HTTP ${res.status}`);
     return gunzip(res);
   }, post);
-  rt = await createStandin(seed, history, hostSeconds, post);
+  // The data folder (FR-15): read by the CSV importer only, through its listing and each file (FR-20, FR-17a).
+  rt = await createStandin(seed, history, hostSeconds, post, undefined, folderUrl ? fetchFolder(folderUrl) : undefined);
   const runtime = rt;
   self.postMessage({ type: 'state', state: runtime.controlState() });
   let n = 0;
@@ -88,7 +89,7 @@ async function serve(req: HttpRequest & { body: ArrayBuffer | Uint8Array | null 
 self.onmessage = (e: MessageEvent) => {
   const d = e.data;
   if (d.type === 'start') {
-    start(Number(d.seed), d.historyUrl ?? null).catch((err) => post({ stage: 'error', detail: String(err?.message ?? err), pct: 0 }));
+    start(Number(d.seed), d.historyUrl ?? null, d.folderUrl ?? null).catch((err) => post({ stage: 'error', detail: String(err?.message ?? err), pct: 0 }));
   } else if (d.type === 'connect') {
     const port: MessagePort = e.ports[0];
     port.onmessage = (m) => serve(m.data, m.ports[0]);

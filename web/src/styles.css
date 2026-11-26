@@ -344,3 +344,5 @@ h1, h2, h3, h4 { margin: 0; font-weight: 400; }
 .overview th:nth-child(2) { width: 37%; }
 .overview .written { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .overview .not-here { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.confirm { border: 1.5px solid #b45309; border-radius: 8px; padding: 8px 12px; background: #fffbeb; }
+.confirm ul { margin: 4px 0 8px 20px; }

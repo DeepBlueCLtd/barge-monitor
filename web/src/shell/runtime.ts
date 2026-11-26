@@ -40,7 +40,26 @@ export interface ModelState {
   datastreams?: number | string[];
 }
 
-/** Control state (docs/v4-interfaces.md §8). */
+/** A file of the data folder, as the importer's catalogue has it now (§13.4). */
+export interface FolderFile {
+  file: string;
+  size: number;
+  modified: string;
+  status: 'not-imported' | 'importing' | 'imported' | 'changed' | 'superseded';
+  dataset: string;
+  pct: number;
+}
+
+export interface DatasetState {
+  id: string;
+  file: string;
+  start: string;
+  end: string;
+  records: number;
+  superseded: boolean;
+}
+
+/** Control state (docs/v4-interfaces.md §13.4). */
 export interface ControlState {
   server: 'running' | 'waiting' | 'down';
   instance: string | null;
@@ -53,6 +72,22 @@ export interface ControlState {
   models?: ModelState[];
   capture_counts?: Record<string, number>;
   backend?: BackendKind;
+  folder?: FolderFile[];
+  datasets?: DatasetState[];
+  /** The last import's speed, for the importer's panel (FR-110). */
+  import_rate?: { file: string; rows: number; seconds: number; rows_per_s: number; silent: boolean } | null;
+  importer?: { subscribed: boolean; silent_done: boolean };
+  resets?: number;
+}
+
+/**
+ * Where the data folder is (FR-15): `data/folder/` in the site. A test may point the importer at another
+ * folder of the same site with `?folder=<relative path>` (decision D-272); nothing else is accepted.
+ */
+function folderPath(): string {
+  const asked = urlParam('folder');
+  if (asked && /^[A-Za-z0-9_\-./]+\/$/.test(asked) && !asked.startsWith('/') && !asked.includes('..')) return asked;
+  return 'data/folder/';
 }
 
 export interface ModelWorkerStatus {
@@ -139,7 +174,7 @@ class Runtime {
       this.progress.set({ stage: 'error', detail: why, pct: 0 });
       this.startup.fail(this.startup.current()?.id ?? 'back end', why);
     };
-    this.backend.postMessage({ type: 'start', pyodideUrl: resolve(PYODIDE_PATH), pyZipUrl: resolve(PY_ZIP), seed, historyUrl });
+    this.backend.postMessage({ type: 'start', pyodideUrl: resolve(PYODIDE_PATH), pyZipUrl: resolve(PY_ZIP), seed, historyUrl, folderUrl: resolve(folderPath()) });
     this.connect();
   }
 
@@ -196,7 +231,7 @@ class Runtime {
         if (d.stage === 'error') this.startup.fail(this.startup.current()?.id ?? 'back end', String(d.detail));
         else if (STAGE_STEP[d.stage]) this.startup.enter(STAGE_STEP[d.stage], d.detail);
         if (d.stage === 'ready' && this.readyMs == null) {
-          this.startup.finish('server');
+          this.startup.finish('import');
           this.readyMs = performance.now() - this.startedAt;
           // The model workers load once the back end can take their ports.
           if (this.kind === 'python') CORE_MODELS.forEach((m) => this.startModel(m));
@@ -231,7 +266,7 @@ class Runtime {
 
   /** The last step, models, is done once every core model is live (after the server is). */
   private checkModels() {
-    if (this.readyMs == null || this.startup.steps.value[4].state === 'done') return;
+    if (this.readyMs == null || this.startup.steps.value.find((s) => s.id === 'models')?.state === 'done') return;
     if (this.coreModelsLive()) this.startup.finish('models');
     else this.startup.enter('models', 'starting each core model');
   }
@@ -245,7 +280,7 @@ class Runtime {
     sw.postMessage({ type: 'port' }, [ch.port2]);
   }
 
-  /** A control action (docs/v4-interfaces.md §8): play, pause, rate, restart-server, down, up, field, profile-lie, capture, state. */
+  /** A control action (docs/v4-interfaces.md §13.3): play, pause, rate, restart-server, down, up, field, profile-lie, capture, reset-instance, set-role, state. */
   send(action: string, arg?: unknown) {
     this.backend?.postMessage({ type: 'control', action, arg });
   }
