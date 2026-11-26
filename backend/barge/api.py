@@ -155,6 +155,8 @@ class Gate:
         quiet = headers.get("x-tap-quiet") == "1"
         who = "gateway"  # nothing reaches the server but through the gateway (§9.5)
         origin = "models" if model else (acct.component if acct and acct.component in ("client", "models") else "client")
+        if origin != "models" and rt.holding_for_models():
+            raise ServerUnavailable()  # D-186: after a restart, the models first (the stand-in's do so within its start)
         hop = headers.get("x-tap-hop", "1")
         token = tap.begin_chain(headers.get("x-tap-chain"), int(hop) if hop.isdigit() else 1)
         ask = f"{method} {rel}{'?' + query if query else ''}"

@@ -66,6 +66,7 @@ class Runtime:
         self.phases: dict[str, dict] = {}  # model -> what it says of itself, for the shell
         self._world = None
         self._boot_task = None
+        self.hold_until: float | None = None
 
     # --- lifecycle (FR-47, FR-49, FR-50a) ---------------------------------------------------
     async def start(self) -> None:
@@ -73,6 +74,9 @@ class Runtime:
         self.status = "starting"
         self.boots += 1
         self.store.boot = self.boots
+        # D-186: after a restart the models declare their datastreams again before anyone else is answered,
+        # for at most as long as the replay controller waits for a model.
+        self.hold_until = self.real() + C.MODEL_READY_TIMEOUT_S + 1 if self.boots > 1 else None
         self.ready_at = self.real() + self.start_s
         self.live_offering = self.offering.copy()
         self.live_lie = self.lie_about_profile
@@ -112,6 +116,15 @@ class Runtime:
         self.importer.reset()
         self.replay.reset()
         return self.begin_start()
+
+    def holding_for_models(self) -> bool:
+        """Running, but answering only the models until they have declared the loaded dataset's datastreams again."""
+        if self.hold_until is None:
+            return False
+        if self.replay.dataset is None or self.replay.models_ready or self.real() >= self.hold_until:
+            self.hold_until = None
+            return False
+        return True
 
     @property
     def running(self) -> bool:
