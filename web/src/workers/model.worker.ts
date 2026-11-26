@@ -99,20 +99,23 @@ import importlib, json, csmodel
 from js import Object
 from pyodide.ffi import to_js
 
+def _absent(x):  # JavaScript's null arrives as JsNull, not None
+    return x is None or type(x).__name__ == "JsNull"
+
 async def _transport(method, path, headers, body):
     r = await _http(method, path, to_js(headers, dict_converter=Object.fromEntries), to_js(body) if body else None)
-    if r is None:
+    if _absent(r):
         raise csmodel.Unavailable("the data server does not answer")
     return int(r[0]), r[1].to_py(), r[2].to_bytes()
 
 async def _stream(path, headers):
     s = await _open_stream(path, to_js(headers, dict_converter=Object.fromEntries))
-    if s is None:
+    if _absent(s):
         raise csmodel.Unavailable("the data server does not answer")
     async def chunks():
         while True:
             c = await s.next()
-            if c is None:
+            if _absent(c):
                 return
             yield c.to_bytes()
     return int(s.status), chunks()

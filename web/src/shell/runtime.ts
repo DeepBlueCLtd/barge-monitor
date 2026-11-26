@@ -128,6 +128,8 @@ class Runtime {
   /** Python mode: the back end's own 'ready', held until the core models have registered (D-180). */
   private backendReady: Progress | null = null;
   private modelsWait: ReturnType<typeof setTimeout> | null = null;
+  /** Python mode: model workers that could not load (their worker errored or its start failed). */
+  private deadModels = new Set<string>();
   /** Control actions awaiting the worker's answer, by request id (§13.3). */
   private waiting = new Map<number, { resolve: (s: ControlState) => void; reject: (e: Error) => void }>();
   private nextId = 1;
@@ -165,7 +167,9 @@ class Runtime {
   private releaseWhenModelsReady() {
     const ready = this.backendReady;
     if (!ready || this.readyMs != null) return;
-    const settled = CORE_MODELS.every((m) => ['live', 'failed'].includes(this.modelWorkers.value[m]?.phase ?? ''));
+    // A step that fails (e.g. a request before the server answers) is retried a second later: only a
+    // worker that could not load is settled without being live.
+    const settled = CORE_MODELS.every((m) => this.modelWorkers.value[m]?.phase === 'live' || this.deadModels.has(m));
     if (!settled && this.modelsWait) {
       const waiting = CORE_MODELS.filter((m) => this.modelWorkers.value[m]?.phase !== 'live');
       this.progress.set({ stage: 'models', detail: `starting the models, each in its own worker: waiting for ${waiting.join(', ')}`, pct: 90 });
@@ -267,11 +271,12 @@ class Runtime {
   startModel(model: string, code?: string) {
     if (this.kind !== 'python' || !this.backend) return false;
     this.models.get(model)?.terminate();
+    this.deadModels.delete(model);
     const w = new Worker(new URL('../workers/model.worker.ts', import.meta.url), { type: 'module' });
     this.models.set(model, w);
     this.setModel(model, { phase: 'loading', detail: 'starting its worker' });
     w.onmessage = (e) => this.onModel(model, e.data);
-    w.onerror = (e) => { this.setModel(model, { phase: 'failed', detail: String(e.message ?? e) }); this.releaseWhenModelsReady(); };
+    w.onerror = (e) => { this.deadModels.add(model); this.setModel(model, { phase: 'failed', detail: String(e.message ?? e) }); this.releaseWhenModelsReady(); };
     const ch = new MessageChannel();
     this.backend.postMessage({ type: 'model-connect', model }, [ch.port1]);
     // Each model authenticates as its own service account (docs/v4-interfaces.md §9.3); these are demo credentials (PR-07).
@@ -291,6 +296,7 @@ class Runtime {
         bus.add((d.messages ?? []).map((m: Captured) => ({ ...m, model: m.model ?? model, src: m.src as ComponentId, dst: m.dst as ComponentId })));
         break;
       case 'progress':
+        if (d.stage === 'error') this.deadModels.add(model);
         this.setModel(model, { progress: d, detail: d.detail, ...(d.stage === 'error' ? { phase: 'failed' } : {}) });
         this.releaseWhenModelsReady();
         break;
