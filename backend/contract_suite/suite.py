@@ -263,6 +263,9 @@ async def every_fixed_essential_is_found(x: Ctx):
                 missing.append(e["id"])
             continue
         d = await x.ds(e["system"], e["datastream"])
+        if d is None:  # 4.7 model outputs are per dataset: the 4.1 profile's name, for any dataset (D-285)
+            d = next((y for y in reversed(await x.datastreams(e["system"]))
+                      if y["outputName"].startswith(e["datastream"] + "__")), None)
         if d is None:
             missing.append(e["id"])
             continue
