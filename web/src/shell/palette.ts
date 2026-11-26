@@ -19,8 +19,7 @@ export const LETTER_COLOURS: Record<string, string> = {
   I: '#4b5563', // grey
 };
 
-/** Four zones (VS-07, SRD 4.6 §3): the World zone is withdrawn with the collection platform. */
-export type ZoneId = 'front' | 'third' | 'back' | 'legacy';
+export type ZoneId = 'front' | 'third' | 'back' | 'legacy' | 'world';
 
 /** VS-07: each zone a pale fill with a stronger outline of one hue. */
 export const ZONES: Record<ZoneId, { label: string; hue: string; fill: string; text: string; dashed?: boolean }> = {
@@ -28,6 +27,7 @@ export const ZONES: Record<ZoneId, { label: string; hue: string; fill: string; t
   third: { label: 'Third-party libraries', hue: '#7e22ce', fill: '#f6effc', text: '#6b21a8' },
   back: { label: 'New build · back end', hue: '#1d4ed8', fill: '#edf3fe', text: '#1e40af' },
   legacy: { label: 'Legacy', hue: '#c2410c', fill: '#fff3e8', text: '#9a3412' },
+  world: { label: 'World', hue: '#78716c', fill: '#f2f1ee', text: '#57534e', dashed: true },
 };
 
 /** VS-09: value-add gold, used only for revealed value-add components and their parts. */

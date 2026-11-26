@@ -1,26 +1,81 @@
-// The running stand-in back end (FR-06a; docs/v4-interfaces.md §13): the data
-// folder, the CSV importer, the replay controller, the data server's stand-in,
-// the access gateway in front of it, and the core models. The store outlives
-// server restarts; Reset instance deletes it (FR-50a). Freeze holds every
-// request and push, and the replay clock (§4). Free of DOM, worker and Node
-// globals: it runs in the stand-in worker and in the Node harness (PR-04).
-import { Accounts, DEMO_ACCOUNTS, readsEmissions, serviceAccount } from './accounts';
+// The running stand-in back end (FR-06a; runtime.py, bridge.py): the
+// simulation clock, the logger store loaded with the pre-calculated history
+// and continued by the platform, the data server's lifecycle and the
+// core models. The store and platform run continuously; the data
+// server is started, restarted, taken down and brought up around them
+// (FR-18, FR-47, FR-49). Field toggles are pending until the next server
+// start (FR-51). Free of DOM, worker and Node globals: it runs in the
+// stand-in worker and, for the contract suite, in Node (PR-04).
 import { Api, HttpRequest, HttpResponse } from './api';
-import { START_S } from './constants';
+import { CLOCK_DEFAULT_RATE, CLOCK_RATES, SENSORS } from './constants';
 import { CATALOGUE, Offering } from './fields';
-import type { Folder } from './folder';
-import { Gateway } from './gateway';
-import { Importer } from './importer';
-import { Analysis } from './models/analysis';
-import { Api as ModelApi, Model } from './models/csmodel';
 import { DataCleanse } from './models/dataCleanse';
-import { Runner } from './models/runner';
+import { Model, ModelApi, Runner } from './models/csmodel';
 import { Summaries } from './models/summaries';
-import { ReplayController } from './replay';
+import { Analysis } from './models/analysis';
+import { Platform } from './platform';
+import { Registry } from './registry';
 import { Server } from './server';
-import { Store } from './store';
+import { LoggerStore } from './store';
 import { Tap } from './tap';
-import { sleep } from './time';
+
+/** The simulation clock (clock.py): starts off; the host's monotonic time only paces it (FR-13, FR-77). */
+export class SimClock {
+  private sim: number;
+  private rate = CLOCK_DEFAULT_RATE;
+  private isPlaying = false;
+  private last: number;
+
+  constructor(start: number, private readonly host: () => number) {
+    this.sim = start;
+    this.last = host();
+  }
+
+  now(): number {
+    const h = this.host();
+    if (this.isPlaying) this.sim += Math.max(0, h - this.last) * this.rate;
+    this.last = h;
+    return this.sim;
+  }
+
+  get playing(): boolean {
+    return this.isPlaying;
+  }
+
+  play() {
+    this.now();
+    this.isPlaying = true;
+  }
+
+  pause() {
+    this.now();
+    this.isPlaying = false;
+  }
+
+  setRate(rate: number) {
+    if (!CLOCK_RATES.includes(rate)) throw new Error(`rate must be one of ${JSON.stringify(CLOCK_RATES)}`);
+    this.now();
+    this.rate = rate;
+  }
+
+  state() {
+    return { t: this.now(), rate: this.rate, playing: this.isPlaying, rates: CLOCK_RATES, default_rate: CLOCK_DEFAULT_RATE };
+  }
+}
+
+export interface HistoryManifest {
+  seed: number;
+  code_hash?: string;
+  days: number;
+  end_t: number;
+  files: { name: string; bytes: number; gz: number }[];
+  capture_counts?: Record<string, number>;
+}
+
+export interface History {
+  manifest: HistoryManifest;
+  files: Map<string, Uint8Array>;
+}
 
 export interface Progress {
   stage: string;
@@ -28,209 +83,179 @@ export interface Progress {
   pct: number;
 }
 
-export type ServerStatus = 'running' | 'starting' | 'down';
+/** The core models, run in-process on the simulation clock (local_models.py). */
+class LocalModels {
+  readonly runners: Runner[] = [];
 
-function password(user: string): string {
-  return DEMO_ACCOUNTS.find(([u]) => u === user)![1];
+  constructor(private readonly rt: Runtime, models: Model[]) {
+    for (const m of models) {
+      // The same HTTP requests as a model in its own worker makes, handed straight to the HTTP layer.
+      this.runners.push(new Runner(m, new ModelApi(m.id, (req) => rt.handle(req), rt)));
+    }
+  }
+
+  tick(): void {
+    const waiting = this.rt.clock.playing ? {} : this.rt.pendingCommands();
+    for (const r of this.runners) {
+      try {
+        r.tick(this.rt.clock.playing, !!waiting[r.model.system]);
+      } catch (e) { // a broken model never stops the others (FR-33)
+        r.phase = 'failed';
+        r.detail = `${(e as Error)?.name ?? 'Error'}: ${(e as Error)?.message ?? e}`;
+      }
+      this.rt.phases.set(r.model.id, { label: r.model.label, phase: r.phase, detail: r.detail });
+    }
+  }
+
+  get live(): boolean {
+    return this.runners.every((r) => r.phase === 'live');
+  }
 }
 
 export class Runtime {
-  readonly tap = new Tap();
-  readonly accounts = new Accounts();
-  store = new Store();
-  offering = new Offering(); // what the next server start will publish
-  lieAboutProfile = false;
-  server: Server | null = null;
-  status: ServerStatus = 'down';
-  frozen = false;
+  readonly clock: SimClock;
+  readonly tap: Tap;
+  readonly logger = new LoggerStore();
+  readonly registry = new Registry();
+  readonly phases = new Map<string, { label: string; phase?: string; detail?: string }>(); // what each model says of itself
+  readonly platform: Platform;
   readonly api: Api;
-  readonly gateway: Gateway;
-  importer!: Importer;
-  replay!: ReplayController;
-  runners: Runner[] = [];
-  private thawWaiters: (() => void)[] = [];
-  private startSeq = 0;
+  readonly models: LocalModels;
+  offering = new Offering(); // what the next server start will publish
+  lieAboutProfile = false; // a misconfigured server, for AT-07/AT-08
+  server: Server | null = null;
+  serverStarts = 0;
+  down = false;
 
-  constructor(readonly folder: Folder) {
-    const rt = this;
-    this.api = new Api({ get server() { return rt.server!; }, tap: this.tap, accounts: this.accounts });
-    this.gateway = new Gateway({ server: () => rt.server!, api: () => rt.api, tap: this.tap, accounts: this.accounts });
-    this.tap.replayTime = () => (this.replay?.dataset ? this.replay.time : null);
-    this.makeComponents();
+  constructor(readonly seed: number, history: History, hostSeconds: () => number) {
+    const m = history.manifest;
+    if (m.seed !== seed) throw new Error(`the history is for seed ${m.seed}, not ${seed}`);
+    this.clock = new SimClock(m.end_t, hostSeconds);
+    this.tap = new Tap(() => this.now());
+    // FR-15, FR-06d: the pre-calculated files are the store's contents.
+    for (const name of [...history.files.keys()].sort()) this.logger.load(name, history.files.get(name)!);
+    for (const [k, v] of Object.entries(m.capture_counts ?? {})) this.tap.counts[k] = (this.tap.counts[k] ?? 0) + v;
+    this.platform = new Platform(this.logger, this.tap, seed, m.end_t);
+    this.api = new Api(this);
+    this.startServer();
+    this.models = new LocalModels(this, [new DataCleanse(), new Summaries(), new Analysis()]);
   }
 
-  private makeComponents(): void {
-    this.importer = new Importer({
-      tap: this.tap, folder: this.folder, account: () => this.accounts.byUser.get('svc-importer')!, thawed: () => this.thawed(),
-    });
-    this.replay = new ReplayController(new ModelApi({
-      user: 'svc-replay', password: password('svc-replay'), component: 'replay', tap: this.tap, send: (r) => this.handleInternal(r),
-    }), () => this.frozen);
-    const models: Model[] = [new DataCleanse(), new Summaries(), new Analysis()];
-    this.runners = models.map((m) => {
-      const user = serviceAccount(m.id);
-      m.senderReadsEmissions = (u) => {
-        const role = u ? this.accounts.role(u) : null; // D-152: the sender's role, from the delivered assignment
-        return role !== null && readsEmissions(role);
-      };
-      return new Runner(m, new ModelApi({ user, password: password(user), model: m.id, component: 'models', tap: this.tap, send: (r) => this.handle(r) }));
-    });
+  now(): number {
+    return this.clock.now();
   }
 
-  /** Startup: the server, the importer's listing, the silent import of Mission A, the replay at its start (FR-15, FR-77). */
-  async boot(progress?: (p: Progress) => void, silentImport = true): Promise<void> {
-    progress?.({ stage: 'server', detail: 'starting the data server (OpenSensorHub stand-in)', pct: 10 });
-    this.startServerNow();
-    await this.importer.attach(this.server!, true);
-    this.replay.start();
-    for (const r of this.runners) r.start();
-    if (silentImport) {
-      const a = [...this.importer.files.keys()].find((f) => /^MISSION_A_/i.test(f));
-      if (a) {
-        progress?.({ stage: 'import', detail: `importing ${a} (silently, FR-15)`, pct: 30 });
-        const id = await this.importer.importFile(a, true);
-        const d = this.importer.datasets.get(id)!;
-        progress?.({ stage: 'replay', detail: `loading ${id}, paused at its start`, pct: 80 });
-        while (!this.replay.ready) await sleep(0.02);
-        await this.replay.loadAtStartup({ id, start: d.start, end: d.end });
-      }
+  /**
+   * Startup: build the index and let the core models catch up on the history,
+   * in big steps, before the flowchart appears (FR-15). Their calls are
+   * counted, not drawn.
+   */
+  catchUp(progress?: (p: Progress) => void): void {
+    const srv = this.server!;
+    while (!srv.indexStep()) {
+      const p = srv.progress();
+      progress?.({ stage: 'index', detail: `store adapter: indexing ${p.indexed} of ${p.stored} records`, pct: 90 + Math.round((4 * p.indexed) / p.stored) });
     }
-    progress?.({ stage: 'ready', detail: 'running', pct: 100 });
+    for (let i = 0; i < 1000 && !this.models.live; i++) {
+      this.models.tick();
+      const r = this.models.runners.find((x) => x.phase !== 'live');
+      progress?.({ stage: 'models', detail: r ? `${r.model.label}: ${r.detail || r.phase}` : 'models live', pct: 95 });
+    }
+    this.tap.drain(); // nothing drawn from before the flowchart appears
   }
 
-  // --- the seam ------------------------------------------------------------------------------------
-  /** Resolves at once, or when Freeze is released, in the order asked (§4). */
-  thawed(): Promise<void> {
-    if (!this.frozen) return Promise.resolve();
-    return new Promise((r) => this.thawWaiters.push(r));
+  /** Bring the store up to the clock; let a starting server rebuild its index; step the models. */
+  tick(): void {
+    if (this.clock.playing) this.platform.sampleUntil(this.clock.now() + 1);
+    if (this.server && !this.down) {
+      if (!this.server.ready) this.server.indexStep();
+      else this.server.adapter.indexStep(); // the index follows the growing store (FR-21)
+    }
+    this.models.tick();
   }
 
-  private async gate(): Promise<boolean> {
-    await this.thawed();
-    return this.status === 'running' && this.server !== null;
+  serverStatus(): 'running' | 'waiting' | 'down' {
+    return this.down ? 'down' : this.server && this.server.ready ? 'running' : 'waiting';
   }
 
-  /** A request from the display client or a model: through the access gateway (§9.5). null: no answer (down, starting). */
-  async handle(req: HttpRequest): Promise<HttpResponse | null> {
-    if (!(await this.gate())) return null;
-    return this.gateway.handle(req);
-  }
-
-  /** A request from a module inside the server (the replay controller): not through the gateway. */
-  async handleInternal(req: HttpRequest): Promise<HttpResponse | null> {
-    if (!(await this.gate())) return null;
-    return this.api.handle(req);
-  }
-
-  /** The replay clock follows real time (§4). */
-  tick(dt: number): void {
-    this.replay.advance(dt);
-  }
-
+  /** What the page needs every 100 ms (docs/v4-interfaces.md §8). */
   tickMessage() {
-    return { messages: this.tap.drain(), server: this.status, replay: this.replay.view() };
+    return { messages: this.tap.drain(), clock: this.clock.state(), server: this.serverStatus(), pending_commands: this.pendingCommands() };
   }
 
-  // --- the server's lifecycle (FR-47, FR-49) -------------------------------------------------------------------
-  private startServerNow(): void {
-    this.server = new Server({ tap: this.tap, accounts: this.accounts, thawed: () => this.thawed() }, this.store, this.offering, this.lieAboutProfile);
-    this.status = 'running';
+  /** System id -> commands still PENDING: the shell lets a viewer's click through while paused. */
+  pendingCommands(): Record<string, number> {
+    const out: Record<string, number> = {};
+    for (const c of this.registry.commands.values()) {
+      if (c.status[c.status.length - 1].statusCode !== 'PENDING') continue;
+      const sid = c.cs_key.split(':')[0];
+      out[sid] = (out[sid] ?? 0) + 1;
+    }
+    return out;
   }
 
-  private stopServer(): void {
-    this.server?.stop();
-    this.server = null;
+  /** One request through the seam; null when the server is down (no answer: network failure). */
+  handle(req: HttpRequest): HttpResponse | null {
+    return this.api.handle(req, this.down);
   }
 
-  /** A start takes about a second, during which connections are refused (§9.1). */
-  private async startServer(): Promise<void> {
-    const seq = ++this.startSeq;
-    this.stopServer();
-    this.status = 'starting';
-    await sleep(START_S);
-    if (seq !== this.startSeq) return;
-    this.startServerNow();
-    await this.importer.attach(this.server!);
+  // --- server lifecycle (FR-47, FR-49) ------------------------------------------------------
+  startServer(): void {
+    this.serverStarts += 1;
+    this.down = false;
+    this.server = new Server(this, this.serverStarts, this.offering, this.tap);
   }
 
-  // --- control actions (§13.3) ---------------------------------------------------------------------------
-  async control(action: string, arg?: unknown) {
-    const a = (arg ?? {}) as Record<string, unknown>;
+  /** A control action (docs/v4-interfaces.md §8); returns the control state. */
+  control(action: string, arg?: unknown) {
     switch (action) {
+      case 'play': this.clock.play(); break;
+      case 'pause': this.clock.pause(); break;
+      case 'rate': this.clock.setRate(Number(arg)); break;
       case 'restart-server':
-      case 'up':
-        void this.startServer();
-        break;
+      case 'up': this.startServer(); break;
       case 'down':
-        this.startSeq++;
-        this.stopServer();
-        this.status = 'down';
+        this.down = true;
+        this.server = null;
         break;
       case 'field': {
-        if (!CATALOGUE.has(String(a.name))) throw new Error(`unknown field ${a.name}`);
-        this.offering.on[String(a.name)] = !!a.on;
+        const a = arg as { name: string; on: boolean };
+        if (!CATALOGUE.has(a?.name)) throw new Error(`unknown field ${a?.name}`);
+        this.offering.on[a.name] = !!a.on;
         break;
       }
-      case 'profile-lie':
-        this.lieAboutProfile = typeof arg === 'object' && arg !== null ? !!a.on : !!arg;
-        break;
-      case 'capture':
-        this.tap.enabled = typeof arg === 'object' && arg !== null ? !!a.on : !!arg;
-        break;
-      case 'freeze': {
-        const on = typeof arg === 'object' && arg !== null ? !!a.on : !!arg;
-        this.frozen = on;
-        if (!on) for (const w of this.thawWaiters.splice(0)) w();
-        break;
-      }
-      case 'reset-instance': {
-        // FR-50a: stop, delete the whole store, start empty. The data folder is untouched; no silent import until reload.
-        this.replay.stop();
-        for (const r of this.runners) r.stop();
-        this.store = new Store();
-        this.makeComponents();
-        await this.startServer();
-        this.replay.start();
-        for (const r of this.runners) r.start();
-        break;
-      }
-      case 'set-role':
-        this.accounts.setRole(String(a.user), String(a.role));
-        break;
-      case 'state':
-        break;
-      default:
-        throw new Error(`unknown control action ${action}`);
+      case 'profile-lie': this.lieAboutProfile = !!arg; break;
+      case 'capture': this.tap.enabled = !!arg; break;
+      case 'state': break;
+      default: throw new Error(`unknown control action ${action}`);
     }
     return this.controlState();
   }
 
-  /** What the control panel and status show (§13.4). */
+  /** What the control panel and status show (FR-49..FR-52; runtime.control_state). */
   controlState() {
     const live = this.server ? this.server.offering : null;
     const fields = [...CATALOGUE.values()].map((f) => ({
       name: f.name, label: f.label, kind: f.kind, inputs: [...f.inputs], extra: f.extra, essential: f.essential, type: f.swe_type,
-      on_next_start: this.offering.on[f.name], published_next_start: this.offering.published(f.name), published_now: !!(live && live.published(f.name)),
+      on_next_start: this.offering.on[f.name], published_next_start: this.offering.published(f.name),
+      published_now: !!(live && live.published(f.name)),
     }));
     const pending = fields.some((r) => r.published_now !== r.published_next_start)
       || (this.server !== null && this.server.lieAboutProfile !== this.lieAboutProfile);
-    const models = this.runners.map((r) => {
-      const sys = this.store.systemByUid(r.model.uid);
-      const rsys = this.store.systemByUid(r.model.restrictedUid);
-      return {
-        id: r.model.id, label: r.model.label, phase: r.phase, detail: r.detail, max_rate: r.model.maxRate,
-        datastreams: [...this.store.datastreams.values()].filter((d) => d.system === sys?.id || d.system === rsys?.id)
-          .map((d) => (d.system === rsys?.id ? `restricted/${d.outputName}` : d.outputName)),
-      };
-    });
+    const models = [...this.registry.systems.entries()].map(([sid, s]) => ({
+      id: sid, label: s.label, ...(this.phases.get(sid) ?? {}),
+      datastreams: [...this.registry.datastreams.values()].filter((d) => d.system === sid).map((d) => d.outputName),
+    }));
     return {
-      server: this.status, fields, pending, lie_about_profile: this.lieAboutProfile,
-      folder: [...this.importer.files.values()].map((f) => ({ file: f.file, size: f.size, modified: f.modified, status: f.status, dataset: f.dataset, pct: f.pct })),
-      datasets: [...this.importer.datasets.values()].map((d) => ({ id: d.id, file: d.file, start: d.start, end: d.end, superseded: d.superseded })),
-      replay: this.replay.view(), models,
-      accounts: this.accounts.list(),
+      server: this.serverStatus(),
+      instance: this.server ? this.server.instance : null,
+      progress: this.server ? this.server.progress() : null,
+      fields, pending, lie_about_profile: this.lieAboutProfile,
+      clock: this.clock.state(),
+      store: { bytes: this.logger.totalBytes(), files: this.logger.listFiles().length, records: this.platform.nextT * SENSORS.length },
       capture_counts: { ...this.tap.counts },
-      backend: 'standin' as const, frozen: this.frozen, import_rate: this.importer.importRate,
+      models,
+      backend: 'standin' as const,
     };
   }
 }

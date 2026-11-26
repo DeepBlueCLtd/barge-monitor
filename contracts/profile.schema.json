@@ -34,8 +34,7 @@
           "type",
           "uom",
           "resolution",
-          "views",
-          "scope"
+          "views"
         ],
         "additionalProperties": false,
         "properties": {
@@ -52,8 +51,7 @@
           },
           "datastream": {
             "type": "string",
-            "description": "Output name. With scope 'dataset' it contains '{dataset}'.",
-            "pattern": "^[A-Za-z][A-Za-z0-9_\\-]*(\\{dataset\\})?$"
+            "description": "the datastream's outputName under that system"
           },
           "field": {
             "type": "string",
@@ -75,7 +73,8 @@
             "type": [
               "string",
               "null"
-            ]
+            ],
+            "description": "UCUM code, or null for types without a unit"
           },
           "views": {
             "type": "array",
@@ -83,9 +82,7 @@
               "enum": [
                 "graphs",
                 "changes",
-                "clusters",
-                "datasets",
-                "replay"
+                "clusters"
               ]
             }
           },
@@ -94,22 +91,9 @@
               "raw",
               "PT1M",
               "PT1H",
-              "run",
-              "latest",
-              "command"
-            ]
-          },
-          "scope": {
-            "enum": [
-              "dataset",
-              "fixed"
-            ]
-          },
-          "kind": {
-            "enum": [
-              "datastream",
-              "controlstream"
-            ]
+              "run"
+            ],
+            "description": "raw records, 1-minute or hourly summaries, or the latest model run"
           }
         }
       }

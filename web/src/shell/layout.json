@@ -1,355 +1,297 @@
 {
- "comment": "Fixed flowchart layout (FR-64), designed for the 1920x1080 target at zoom 1. Bands top to bottom: front end, third-party libraries, back end, legacy (SRD 4.6 9.1; four zones, VS-07). Every flow of SRD 3.1 is one arrow per direction; a two-way exchange is two arrows (FR-65). The display client and the models reach the data server only through the access gateway (docs/v4-interfaces.md 2, 9.5); the importer and the replay controller reach it directly. Segments are horizontal or vertical and never cross a card (VS-13). The back-end cards share one size with the adoption opening (layout-opening.json, FR-120). status and key are the boxes below the flowchart. Checked by web/e2e/opening.spec.ts.",
- "size": [
-  840,
-  968
- ],
- "zones": [
-  {
-   "id": "front",
-   "rect": [
-    0,
-    0,
+  "comment": "Fixed flowchart layout (FR-64), designed for the 1920x1080 target at zoom 1. Bands top to bottom: front end, third-party libraries, back end, legacy, world (SRD 9.1). Every flow of SRD 3.1 is one arrow per direction; a two-way exchange is two arrows on the thirds of the facing edges (FR-65). Segments are horizontal or vertical and never cross a card (VS-13). status and key are the boxes below the flowchart.",
+  "size": [
     840,
-    126
-   ],
-   "labelAt": "left"
+    968
+  ],
+  "zones": [
+    {
+      "id": "front",
+      "rect": [
+        0,
+        0,
+        840,
+        126
+      ],
+      "labelAt": "left"
+    },
+    {
+      "id": "third",
+      "rect": [
+        0,
+        172,
+        840,
+        130
+      ],
+      "labelAt": "left"
+    },
+    {
+      "id": "back",
+      "rect": [
+        0,
+        348,
+        840,
+        170
+      ],
+      "labelAt": "left"
+    },
+    {
+      "id": "legacy",
+      "rect": [
+        322,
+        694,
+        278,
+        118
+      ],
+      "labelAt": "right"
+    },
+    {
+      "id": "world",
+      "rect": [
+        322,
+        830,
+        278,
+        138
+      ],
+      "labelAt": "left"
+    }
+  ],
+  "cards": {
+    "client": [
+      352,
+      34,
+      440,
+      78
+    ],
+    "scilibs": [
+      28,
+      206,
+      240,
+      78
+    ],
+    "models": [
+      28,
+      384,
+      240,
+      104
+    ],
+    "server": [
+      352,
+      206,
+      440,
+      78
+    ],
+    "adapter": [
+      352,
+      396,
+      240,
+      82
+    ],
+    "store": [
+      352,
+      724,
+      240,
+      74
+    ],
+    "platform": [
+      352,
+      872,
+      240,
+      78
+    ]
   },
-  {
-   "id": "third",
-   "rect": [
+  "arrows": [
+    {
+      "src": "client",
+      "dst": "server",
+      "path": [
+        [
+          499,
+          112
+        ],
+        [
+          499,
+          206
+        ]
+      ]
+    },
+    {
+      "src": "server",
+      "dst": "client",
+      "path": [
+        [
+          645,
+          206
+        ],
+        [
+          645,
+          112
+        ]
+      ],
+      "label": "HTTP",
+      "labelAt": [
+        674,
+        166
+      ]
+    },
+    {
+      "src": "models",
+      "dst": "scilibs",
+      "path": [
+        [
+          108,
+          384
+        ],
+        [
+          108,
+          284
+        ]
+      ]
+    },
+    {
+      "src": "scilibs",
+      "dst": "models",
+      "path": [
+        [
+          188,
+          284
+        ],
+        [
+          188,
+          384
+        ]
+      ]
+    },
+    {
+      "src": "models",
+      "dst": "server",
+      "path": [
+        [
+          268,
+          412
+        ],
+        [
+          298,
+          412
+        ],
+        [
+          298,
+          232
+        ],
+        [
+          352,
+          232
+        ]
+      ],
+      "label": "HTTP",
+      "labelAt": [
+        232,
+        326
+      ]
+    },
+    {
+      "src": "server",
+      "dst": "models",
+      "path": [
+        [
+          352,
+          258
+        ],
+        [
+          322,
+          258
+        ],
+        [
+          322,
+          446
+        ],
+        [
+          268,
+          446
+        ]
+      ]
+    },
+    {
+      "src": "server",
+      "dst": "adapter",
+      "path": [
+        [
+          432,
+          284
+        ],
+        [
+          432,
+          396
+        ]
+      ]
+    },
+    {
+      "src": "adapter",
+      "dst": "server",
+      "path": [
+        [
+          512,
+          396
+        ],
+        [
+          512,
+          284
+        ]
+      ]
+    },
+    {
+      "src": "adapter",
+      "dst": "store",
+      "path": [
+        [
+          432,
+          478
+        ],
+        [
+          432,
+          724
+        ]
+      ]
+    },
+    {
+      "src": "store",
+      "dst": "adapter",
+      "path": [
+        [
+          512,
+          724
+        ],
+        [
+          512,
+          478
+        ]
+      ]
+    },
+    {
+      "src": "platform",
+      "dst": "store",
+      "path": [
+        [
+          472,
+          872
+        ],
+        [
+          472,
+          798
+        ]
+      ]
+    }
+  ],
+  "status": [
     0,
-    172,
-    840,
-    130
-   ],
-   "labelAt": "left"
-  },
-  {
-   "id": "back",
-   "rect": [
-    0,
-    348,
-    840,
-    170
-   ],
-   "labelAt": "left"
-  },
-  {
-   "id": "legacy",
-   "rect": [
-    322,
-    694,
-    278,
-    118
-   ],
-   "labelAt": "right"
-  }
- ],
- "cards": {
-  "client": [
-   352,
-   34,
-   440,
-   78
+    670,
+    306,
+    298
   ],
-  "scilibs": [
-   28,
-   206,
-   220,
-   78
-  ],
-  "server": [
-   330,
-   206,
-   450,
-   78
-  ],
-  "models": [
-   60,
-   390,
-   108,
-   96
-  ],
-  "gateway": [
-   214,
-   390,
-   108,
-   96
-  ],
-  "importer": [
-   440,
-   390,
-   108,
-   96
-  ],
-  "replay": [
-   660,
-   390,
-   108,
-   96
-  ],
-  "folder": [
-   352,
-   724,
-   240,
-   74
+  "key": [
+    616,
+    670,
+    224,
+    298
   ]
- },
- "arrows": [
-  {
-   "src": "client",
-   "dst": "gateway",
-   "path": [
-    [
-     352,
-     62
-    ],
-    [
-     290,
-     62
-    ],
-    [
-     290,
-     390
-    ]
-   ]
-  },
-  {
-   "src": "gateway",
-   "dst": "client",
-   "path": [
-    [
-     312,
-     390
-    ],
-    [
-     312,
-     92
-    ],
-    [
-     352,
-     92
-    ]
-   ],
-   "label": "HTTP",
-   "labelAt": [
-    250,
-    154
-   ]
-  },
-  {
-   "src": "models",
-   "dst": "gateway",
-   "path": [
-    [
-     168,
-     418
-    ],
-    [
-     214,
-     418
-    ]
-   ]
-  },
-  {
-   "src": "gateway",
-   "dst": "models",
-   "path": [
-    [
-     214,
-     456
-    ],
-    [
-     168,
-     456
-    ]
-   ],
-   "label": "HTTP \u00b7 push",
-   "labelAt": [
-    148,
-    511
-   ]
-  },
-  {
-   "src": "gateway",
-   "dst": "server",
-   "path": [
-    [
-     322,
-     412
-    ],
-    [
-     350,
-     412
-    ],
-    [
-     350,
-     284
-    ]
-   ]
-  },
-  {
-   "src": "server",
-   "dst": "gateway",
-   "path": [
-    [
-     372,
-     284
-    ],
-    [
-     372,
-     452
-    ],
-    [
-     322,
-     452
-    ]
-   ],
-   "label": "HTTP \u00b7 push",
-   "labelAt": [
-    380,
-    372
-   ]
-  },
-  {
-   "src": "models",
-   "dst": "scilibs",
-   "path": [
-    [
-     136,
-     390
-    ],
-    [
-     136,
-     284
-    ]
-   ]
-  },
-  {
-   "src": "scilibs",
-   "dst": "models",
-   "path": [
-    [
-     158,
-     284
-    ],
-    [
-     158,
-     390
-    ]
-   ]
-  },
-  {
-   "src": "server",
-   "dst": "importer",
-   "path": [
-    [
-     516,
-     284
-    ],
-    [
-     516,
-     390
-    ]
-   ],
-   "label": "push",
-   "labelAt": [
-    478,
-    330
-   ]
-  },
-  {
-   "src": "importer",
-   "dst": "server",
-   "path": [
-    [
-     538,
-     390
-    ],
-    [
-     538,
-     284
-    ]
-   ],
-   "label": "inside the server",
-   "labelAt": [
-    546,
-    330
-   ]
-  },
-  {
-   "src": "server",
-   "dst": "replay",
-   "path": [
-    [
-     736,
-     284
-    ],
-    [
-     736,
-     390
-    ]
-   ],
-   "label": "push",
-   "labelAt": [
-    698,
-    330
-   ]
-  },
-  {
-   "src": "replay",
-   "dst": "server",
-   "path": [
-    [
-     758,
-     390
-    ],
-    [
-     758,
-     284
-    ]
-   ]
-  },
-  {
-   "src": "importer",
-   "dst": "folder",
-   "path": [
-    [
-     476,
-     486
-    ],
-    [
-     476,
-     724
-    ]
-   ]
-  },
-  {
-   "src": "folder",
-   "dst": "importer",
-   "path": [
-    [
-     512,
-     724
-    ],
-    [
-     512,
-     486
-    ]
-   ]
-  }
- ],
- "status": [
-  0,
-  670,
-  306,
-  298
- ],
- "key": [
-  616,
-  670,
-  224,
-  298
- ]
 }

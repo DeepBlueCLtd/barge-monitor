@@ -1,316 +1,185 @@
-// The display client's screen (SRD §8.1), inside the monitor frame. Before login,
-// the login screen only (FR-97). After login, from top to bottom: a status strip
-// with the analyst's name and Lock; the dataset picker; the replay bar; the field
-// chips, period presets and clustering; the views; the data of interest list.
-// It is deliberately small and generic. It draws what discovery finds and
-// nothing else: which sources a user sees is decided by the server.
-//
-// The demonstrator's demo credentials are passed in by the shell (FR-102): a
-// developed system never pre-populates credentials, and this file knows no account.
-import { FormEvent, useEffect, useState } from 'react';
-import { RATES } from '../config';
+// The display client's screen (§8): status strip, field chips, period presets
+// and clustering, three graph components, the cluster view (mockup 1). It is
+// the delivered system, drawn in a plain sans-serif (VS-03). Everything it
+// knows about the server it learned at the handshake (C2).
+import { runtime } from '../shell/runtime';
 import { useStore } from '../shell/store';
-import { essentialLabel } from './discovery';
-import { problemText, RESOLUTIONS } from './fields';
-import { iso, PERIODS } from './plan';
-import { CatalogueEntry, clientSession, DisplayClientSession, DoiItem } from './session';
+import { essentialLabel } from './handshake';
+import { PERIODS, Property } from './plan';
+import { ClientSession, clientSession } from './session';
 import { PanelGrid } from './views/PanelGrid';
-import { ClusterView, ErrorBarView, HeatmapView, LineView, OpenedView } from './views/views';
+import { ClusterBand, Empty, ErrorBars, HeatMap, LinePlot, ViewFrame } from './views/views';
 
-export interface DemoAccount {
-  user: string;
-  password: string;
-  /** What the account is for, in a few words. */
-  note: string;
+const PERIOD_SUB: Record<string, string> = { PT1M: 'last minute', PT1H: 'last hour', PT6H: 'last 6 hours', P1D: 'last day', P7D: 'last week', P28D: 'last 4 weeks' };
+
+export function DisplayClient() {
+  const session = useStore(clientSession);
+  return <Screen key={session.http.prefix} session={session} />;
 }
 
-export function DisplayClient({ demoAccounts = [] }: { demoAccounts?: DemoAccount[] }) {
-  const session = clientSession;
+function Screen({ session }: { session: ClientSession }) {
   const phase = useStore(session.phase);
-  if (phase === 'login' || phase === 'locked') return <Login session={session} demoAccounts={demoAccounts} locked={phase === 'locked'} />;
-  return <Main session={session} />;
-}
-
-// --- login and lock (FR-97 to FR-102, VS-24) ------------------------------------------------------------------
-function Login({ session, demoAccounts, locked }: { session: DisplayClientSession; demoAccounts: DemoAccount[]; locked: boolean }) {
-  const error = useStore(session.loginError);
-  const [user, setUser] = useState(locked ? session.user.value ?? '' : '');
-  const [password, setPassword] = useState('');
-  const [busy, setBusy] = useState(false);
-  const go = async (u: string, p: string) => {
-    setBusy(true);
-    await session.login(u, p);
-    setBusy(false);
-    setPassword('');
-  };
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    void go(user, password);
-  };
-  return (
-    <div className="dc dc-login" data-testid={locked ? 'dc-locked' : 'dc-login'}>
-      <h3>{locked ? 'Locked' : 'Weather display'}</h3>
-      <p className="dc-login-lede">{locked ? 'The screen was locked and everything on it was cleared. Log in again to continue where you were.' : 'Log in to see the recordings.'}</p>
-      <form onSubmit={submit} className="dc-login-form">
-        <label>Name <input value={user} onChange={(e) => setUser(e.target.value)} autoComplete="off" data-testid="login-user" /></label>
-        <label>Password <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="off" data-testid="login-password" /></label>
-        <button className="dc-btn primary" type="submit" disabled={busy || !user} data-testid="login-submit">{busy ? 'Logging in…' : 'Log in'}</button>
-      </form>
-      {error && <p className="dc-login-error" aria-live="assertive" data-testid="login-error">{error}</p>}
-      {demoAccounts.length > 0 && (
-        <div className="dc-demo-creds" data-testid="demo-credentials">
-          <p className="dc-demo-label">Demo credentials</p>
-          {demoAccounts.map((a) => (
-            <div key={a.user} className="dc-demo-row">
-              <code>{a.user}</code> <code>{a.password}</code> <span>{a.note}</span>
-              <button className="dc-btn small" disabled={busy} onClick={() => {
-                setUser(a.user);
-                void go(a.user, a.password);
-              }} data-testid={`demo-login-${a.user}`}>Log in</button>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// --- after login ---------------------------------------------------------------------------------------------
-function Main({ session }: { session: DisplayClientSession }) {
-  const phase = useStore(session.phase);
-  const user = useStore(session.user);
-  const discovery = useStore(session.discovery);
+  const config = useStore(session.config);
+  const props = useStore(session.props);
+  const sel = useStore(session.selection);
+  const banner = useStore(session.banner);
   const stale = useStore(session.stale);
-  const notices = useStore(session.notices);
-  const view = useStore(session.view);
-  const loading = useStore(session.loading);
-  const opened = useStore(session.opened);
+  useStore(session.version);
+  useStore(session.run);
+  const commandNote = useStore(session.commandNote);
+  const step = useStore(session.handshakeStep);
+
+  const missing = config?.problems ?? [];
+  const status = phase === 'unreachable' ? 'server unreachable · data stale'
+    : phase === 'waiting' ? 'server starting (503) · waiting'
+      : phase === 'rejected' ? 'server rejected'
+        : !config ? (phase === 'handshake' ? (step ? `handshake · request ${step.n}` : 'handshake…') : 'not started')
+          : missing.length ? `degraded · ${missing.length} essential source${missing.length > 1 ? 's' : ''} unavailable`
+            : config.claimed ? 'all essential sources present' : 'the server does not claim the declared profile';
+
   return (
-    <div className={`dc${stale ? ' is-stale' : ''}`} data-testid="dc" data-phase={phase} data-view={view?.id ?? ''}>
+    <div className={`dc${stale ? ' is-stale' : ''}`} data-testid="display-client">
       <div className="dc-status">
-        <span data-testid="dc-user">Logged in as <b>{user}</b></span>
-        <span className="dc-phase" data-testid="dc-phase">{phase === 'handshake' ? 'Discovering what the server offers…' : phase === 'unreachable' ? 'Server not answering' : ''}</span>
-        <button className="dc-btn small" onClick={() => session.lock()} data-testid="dc-lock">Lock</button>
+        <b>Barge weather · live</b>
+        <span data-testid="dc-status">{status}</span>
       </div>
-      {phase === 'unreachable' && (
-        <div className="dc-banner bad" data-testid="dc-unreachable" aria-live="polite">The server is not answering. What is shown is stale; the client will discover the server again as soon as it answers.</div>
-      )}
-      {discovery?.rejected && <div className="dc-rejected" data-testid="dc-rejected">{discovery.rejected} Nothing is shown from a server whose description cannot be trusted.</div>}
-      {notices.map((n) => (
-        <div key={n.id} className={n.bad ? 'dc-banner bad' : 'dc-banner'} data-testid="dc-notice" aria-live="polite">
-          {n.text} <button className="close small" aria-label="Dismiss" onClick={() => session.dismiss(n.id)}>×</button>
-        </div>
-      ))}
-      {!discovery ? <div className="dc-waiting" data-testid="dc-handshake">Discovering what the server offers…</div> : discovery.rejected ? null : (
+      {banner && <div className={`dc-banner${phase === 'unreachable' ? ' bad' : ''}`} role="alert" data-testid="dc-banner">{banner}</div>}
+      {!config ? <NotConfigured phase={phase} step={step} /> : config.rejected ? (
+        // FR-41, AT-08: a contradicted profile claim is an error; the server is not used.
+        <div className="dc-rejected" role="alert" data-testid="dc-rejected"><b>This server cannot be used.</b> {config.rejected}</div>
+      ) : (
         <>
-          <DatasetPicker session={session} />
-          <ReplayBar session={session} />
-          {discovery.problems.length > 0 && (
-            <div className="dc-warning" data-testid="dc-fixed-missing">Missing from the server: {discovery.problems.map((p) => essentialLabel(p.essential)).join(', ')}.</div>
+          {missing.length > 0 && (
+            // FR-45: one warning after the handshake listing every unavailable essential source and why.
+            <div className="dc-warning" role="alert" data-testid="dc-degraded">
+              <b>Degraded mode.</b> Unavailable essential sources: {missing.map((p) => `${essentialLabel(p.essential)} (${p.reason}: ${p.detail})`).join('; ')}.
+            </div>
           )}
-          {loading && !view ? <div className="dc-waiting short" data-testid="dc-loading">Opening {loading}: waiting for the models to set it up…</div> : view ? (
-            <>
-              {view.problems.length > 0 && (
-                <div className="dc-warning" data-testid="dc-degraded">
-                  <b>Degraded:</b> this dataset is missing {problemText(view.problems)}. Views that need {view.problems.length === 1 ? 'it' : 'them'} cannot show {view.problems.length === 1 ? 'it' : 'them'}; other datasets are not affected.
-                </div>
-              )}
-              <Selectors session={session} />
-              {opened && <OpenedView opened={opened} onClose={() => session.closeOpened()} />}
-              <PanelGrid panels={[
-                { id: 'line', x: 0, y: 0, w: 6, h: 9, minW: 3, minH: 5, node: <LineView session={session} /> },
-                { id: 'errorbars', x: 6, y: 0, w: 6, h: 9, minW: 3, minH: 5, node: <ErrorBarView session={session} /> },
-                { id: 'heatmap', x: 0, y: 9, w: 6, h: 8, minW: 3, minH: 5, node: <HeatmapView session={session} /> },
-                { id: 'clusters', x: 6, y: 9, w: 6, h: 8, minW: 3, minH: 5, node: <ClusterView session={session} /> },
-              ]} />
-            </>
-          ) : <div className="dc-waiting short" data-testid="dc-no-dataset">No dataset is open. Choose one above.</div>}
-          <DoiPanel session={session} />
+          <Controls session={session} props={props} />
+          {commandNote && <div className="dc-banner bad">{commandNote}</div>}
+          <Views session={session} props={props} sel={sel.props} />
         </>
       )}
     </div>
   );
 }
 
-const mb = (n: number) => `${(n / 1e6).toFixed(1)} MB`;
-const STATUS_WORDS: Record<string, string> = {
-  'not-imported': 'not imported', importing: 'importing', imported: 'imported', changed: 'changed since import', superseded: 'superseded',
-};
-
-/** FR-103: every file in the data folder, from the importer's catalogue. */
-function DatasetPicker({ session }: { session: DisplayClientSession }) {
-  const cat = useStore(session.catalogue);
-  const replay = useStore(session.replay);
-  const importing = useStore(session.importing);
-  const loading = useStore(session.loading);
+function NotConfigured({ phase, step }: { phase: string; step: { n: number; path: string } | null }) {
   return (
-    <section className="dc-picker" data-testid="dataset-picker">
-      <div className="dc-row-head">
-        <span className="dc-label">Datasets</span>
-        <button className="dc-btn small" onClick={() => session.rescan()} data-testid="rescan">Rescan</button>
-      </div>
-      <table>
-        <thead><tr><th>File</th><th>Size</th><th>Modified</th><th>Status</th><th>Span</th><th /></tr></thead>
-        <tbody>
-          {cat.map((e) => {
-            const current = !!e.dataset && replay?.dataset === e.dataset;
-            const busy = importing?.file === e.file || e.status === 'importing';
-            return (
-              <tr key={`${e.file}|${e.sha256}`} className={`${current ? 'current' : ''} ${e.status}`} data-testid="dataset-row" data-file={e.file} data-status={e.status} data-dataset={e.dataset}>
-                <td className="mono">{e.file}{current && <span className="dc-tag" data-testid="current-tag">open</span>}</td>
-                <td className="num">{mb(e.size)}</td>
-                <td>{e.modified.slice(0, 16).replace('T', ' ')}</td>
-                <td data-testid="dataset-status">
-                  {e.status === 'superseded' || e.status === 'changed' ? <b className="dc-mark">{STATUS_WORDS[e.status]}</b> : STATUS_WORDS[e.status] ?? e.status}
-                  {busy && (importing?.file === e.file ? ` ${Math.round(importing.pct)}%` : e.pct != null ? ` ${e.pct}%` : '')}
-                  {busy && <progress max={100} value={importing?.file === e.file ? importing.pct : e.pct ?? 0} data-testid="import-progress" />}
-                </td>
-                <td>{e.start != null && e.end != null ? `${iso(e.start).slice(5, 16).replace('T', ' ')} to ${iso(e.end).slice(5, 16).replace('T', ' ')}` : '–'}</td>
-                <td>
-                  <button className="dc-btn small" disabled={busy || current || loading === e.dataset && !!e.dataset} onClick={() => session.open(e)} data-testid={`open-${e.file}`}>
-                    {e.status === 'imported' || e.status === 'superseded' ? 'Open' : 'Import and open'}
-                  </button>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </section>
-  );
-}
-
-/** FR-90: play/pause, rate, and a timeline of the current dataset. The bar shows what the state datastream says. */
-function ReplayBar({ session }: { session: DisplayClientSession }) {
-  const s = useStore(session.replay);
-  const sent = useStore(session.sent);
-  const [drag, setDrag] = useState<number | null>(null);
-  if (!s || !s.dataset) return <div className="dc-replay" data-testid="replay-bar" data-playing="false">No dataset is loaded.</div>;
-  const pos = drag ?? s.time;
-  return (
-    <div className="dc-replay" data-testid="replay-bar" data-playing={String(s.playing)} data-rate={String(s.rate)} data-dataset={s.dataset} data-time={iso(s.time)}>
-      <button className={`dc-btn${s.playing ? '' : ' primary'}`} onClick={() => (s.playing ? session.pause() : session.play())} data-testid="dc-play">
-        {s.playing ? '❚❚ Pause' : '▶ Play'}
-      </button>
-      <span className="dc-rates" aria-label="Rate">
-        {RATES.map((r) => (
-          <button key={r} className={`dc-btn small${s.rate === r ? ' on' : ''}`} aria-pressed={s.rate === r} onClick={() => session.setRate(r)} data-testid={`dc-rate-${r}`}>{r}×</button>
-        ))}
-      </span>
-      <input type="range" className="dc-timeline" min={s.start} max={s.end} step={1} value={pos} data-testid="dc-timeline" aria-label="Replay position"
-        onChange={(e) => setDrag(Number(e.target.value))}
-        onPointerUp={() => {
-          if (drag != null) session.seek(drag);
-          setDrag(null);
-        }}
-        onKeyUp={() => {
-          if (drag != null) session.seek(drag);
-          setDrag(null);
-        }} />
-      <span className="dc-time mono" data-testid="dc-time">{iso(pos).replace('T', ' ').replace('Z', '')}</span>
-      <span className="dc-sent" data-testid="dc-sent">{sent ? `${sent.split(' ')[0]} sent…` : s.at_end ? 'at the end' : ''}</span>
-      <span className="dc-dataset" title={s.dataset}>{s.dataset.replace(/-[0-9a-f]{8}$/, '')}</span>
+    <div className="dc-waiting" data-testid="dc-waiting">
+      <div className="dc-waiting-text">{phase === 'waiting-models' ? <ModelsCatchingUp />
+        : phase === 'waiting-play' ? <>Waiting for the simulation clock. Press <b>▶ Play</b>: the display client starts with the rest of the system and makes its handshake.</>
+        : phase === 'unreachable' ? <>The server does not answer. Retrying on the simulation clock.</>
+          : <>Handshake: discovering what the server offers (landing page, conformance, profile, systems, datastreams, schemas). Each request is sent when the reply to the one before has arrived.
+            {step && <span className="dc-handshake-step" data-testid="handshake-step"><br />Request {step.n}: <code>GET /{step.path}</code></span>}</>}</div>
     </div>
   );
 }
 
-/** FR-53 to FR-55: the field chips of this dataset, the period presets and clustering. */
-function Selectors({ session }: { session: DisplayClientSession }) {
-  const view = useStore(session.view);
+/** The models catch up on history before they publish; their progress, shown honestly. */
+function ModelsCatchingUp() {
+  const control = useStore(runtime.control);
+  const workers = useStore(runtime.modelWorkers);
+  const models = control?.models ?? [];
+  return (
+    <div>
+      <p>Waiting for the core models to register their datastreams with the data server before the handshake.</p>
+      <ul className="dc-models">
+        {models.map((m) => <li key={m.id}><b>{m.label}</b>: {m.phase}{m.detail ? ` · ${m.detail}` : ''}</li>)}
+        {!models.length && Object.entries(workers).map(([id, w]) => <li key={id}><b>{id}</b>: {w.phase}{w.detail ? ` · ${w.detail}` : ''}</li>)}
+      </ul>
+    </div>
+  );
+}
+
+function Controls({ session, props }: { session: ClientSession; props: Property[] }) {
   const sel = useStore(session.selection);
-  if (!view) return null;
+  const config = session.config.value;
+  const algos = algorithms(config?.clustering?.fields);
+  const clustersOff = session.unavailableViews().get('clusters');
   return (
     <>
       <div className="dc-row">
         <span className="dc-label">Fields</span>
-        <div className="chips" data-testid="chips">
-          {view.props.map((p) => (
-            <button key={p.key} className={`chip${sel.fields.includes(p.key) ? ' on' : ''}${p.declared ? '' : ' optional'}`} aria-pressed={sel.fields.includes(p.key)}
-              title={`${p.type}${p.uom ? `, ${p.uom}` : ''}${p.declared ? '' : ', not in the declared profile: drawn by its type'}`}
-              onClick={() => session.toggleField(p.key)} data-testid="chip" data-key={p.key} data-type={p.type}>{p.label}</button>
-          ))}
+        <div className="chips" role="group" aria-label="Fields">
+          {props.map((p) => {
+            const on = sel.props.includes(p.key);
+            return (
+              <button key={p.key} className={`chip${on ? ' on' : ''}${p.essential ? '' : ' optional'}`} aria-pressed={on} data-testid="chip"
+                disabled={!!p.unavailable} title={p.unavailable ? `Unavailable: ${p.unavailable}` : `${p.label}${p.uom ? ` (${p.uom})` : ''} · ${p.type}`}
+                onClick={() => session.toggleProp(p.key)}>
+                {p.label}{p.essential ? '' : ' · optional'}
+              </button>
+            );
+          })}
         </div>
       </div>
       <div className="dc-row">
         <span className="dc-label">Period</span>
-        <div className="presets">
+        <div className="presets" role="group" aria-label="Period">
           {PERIODS.map((p) => (
-            <button key={p.id} className={`preset${sel.period === p.id ? ' on' : ''}`} aria-pressed={sel.period === p.id} onClick={() => session.setPeriod(p.id)} data-testid={`preset-${p.id}`}>{p.label}</button>
+            <button key={p.id} className={`preset${sel.period === p.id ? ' on' : ''}`} aria-pressed={sel.period === p.id} onClick={() => session.select({ period: p.id })}>{p.label}</button>
           ))}
         </div>
-        <span className="dc-label">Clustering</span>
-        <div className="presets">
-          {['A', 'B', 'C'].map((a) => (
-            <button key={a} className="preset" onClick={() => void session.cluster(a)} data-testid={`cluster-${a}`}>{a}</button>
-          ))}
-        </div>
+        <span className="spacer" />
+        <label className="dc-label" htmlFor="dc-algo">Clustering</label>
+        <select id="dc-algo" value={sel.algorithm} disabled={!!clustersOff} title={clustersOff ? `Unavailable: ${clustersOff.join(', ')}` : undefined}
+          onChange={(e) => session.select({ algorithm: e.target.value })} data-testid="algorithm">
+          {algos.map((a) => <option key={a} value={a}>Algorithm {a}</option>)}
+        </select>
       </div>
     </>
   );
 }
 
-// --- data of interest (FR-104 to FR-108) ---------------------------------------------------------------------
-function DoiPanel({ session }: { session: DisplayClientSession }) {
-  const items = useStore(session.dois);
-  const view = useStore(session.view);
-  useStore(session.catalogue);
-  const [label, setLabel] = useState('');
-  const [note, setNote] = useState('');
-  const [res, setRes] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [picked, setPicked] = useState<string[]>([]);
-  const sel = useStore(session.selection);
-  useEffect(() => setRes(session.currentRes()), [sel, view, session]);
-  const save = async (e: FormEvent) => {
-    e.preventDefault();
-    const err = await session.saveDoi(label, note, res);
-    setError(err);
-    if (!err) {
-      setLabel('');
-      setNote('');
-    }
-  };
-  const pick = (id: string) => setPicked(picked.includes(id) ? picked.filter((x) => x !== id) : [...picked, id].slice(-2));
-  const byId = (id: string) => items.find((x) => x.id === id);
-  return (
-    <section className="dc-doi" data-testid="doi-panel">
-      <div className="dc-row-head"><span className="dc-label">Data of interest</span></div>
-      {view && (
-        <form className="dc-doi-save" onSubmit={save}>
-          <input placeholder="Name" value={label} onChange={(e) => setLabel(e.target.value)} data-testid="doi-label" />
-          <input placeholder="Why it was kept (optional)" value={note} onChange={(e) => setNote(e.target.value)} data-testid="doi-note" />
-          <input className="mono" value={res} onChange={(e) => setRes(e.target.value)} title={`Resolution, as an ISO 8601 duration: ${RESOLUTIONS.join(', ')}`} data-testid="doi-resolution" size={6} />
-          <button className="dc-btn small" type="submit" data-testid="doi-save">Save as data of interest</button>
-        </form>
-      )}
-      {error && <p className="dc-doi-error" data-testid="doi-error">{error}</p>}
-      {!items.length ? <p className="dc-note-plain" data-testid="doi-empty">None saved yet.</p> : (
-        <ul className="dc-doi-list">
-          {items.map((it) => <DoiRow key={it.id} item={it} picked={picked.includes(it.id)} onPick={() => pick(it.id)} session={session} />)}
-        </ul>
-      )}
-      {picked.length === 2 && byId(picked[0]) && byId(picked[1]) && (
-        <button className="dc-btn small" onClick={() => void session.compare(byId(picked[0])!, byId(picked[1])!)} data-testid="doi-compare-button">Compare the two on elapsed time</button>
-      )}
-    </section>
-  );
+/** The algorithms offered, from the control stream's schema (its allowed values), else A, B, C. */
+function algorithms(fields: { name: string; constraint?: unknown }[] | undefined): string[] {
+  const f = fields?.find((x) => x.name === 'algorithm');
+  const c = f?.constraint as { values?: string[]; tokens?: string[] } | undefined;
+  return c?.values ?? c?.tokens ?? ['A', 'B', 'C'];
 }
 
-function DoiRow({ item, picked, onPick, session }: { item: DoiItem; picked: boolean; onPick: () => void; session: DisplayClientSession }) {
-  const r = item.record;
-  const greyed = item.greyed;
+function Views({ session, props, sel }: { session: ClientSession; props: Property[]; sel: string[] }) {
+  const chosen = sel.map((k) => props.find((p) => p.key === k)).filter((p): p is Property => !!p && !p.unavailable);
+  const off = session.unavailableViews();
+  const graphsOff = off.get('graphs');
+  const changesOff = off.get('changes');
+  const clustersOff = off.get('clusters');
+  const period = PERIOD_SUB[session.selection.value.period];
+  const first = chosen.find((p) => p.kind !== 'band');
+  const noField = <Empty>No field selected. Choose one or more fields above to plot them.</Empty>;
+  const unavailable = (why: string[]) => <Empty>Unavailable: this view depends on {why.join(', ')}.</Empty>;
+  const loading = chosen.length > 0 && !session.plan.length;
+  const labelOf = (name: string) => props.find((p) => p.name === name)?.label ?? name;
+  // The views sit on a grid the user can rearrange: drag a header, resize from a corner.
   return (
-    <li className={greyed ? 'greyed' : ''} data-testid="doi-item" data-label={r.label} data-greyed={greyed ? 'true' : 'false'}>
-      <input type="checkbox" checked={picked} disabled={!!greyed} onChange={onPick} aria-label={`Pick ${r.label} to compare`} data-testid="doi-pick" />
-      <b>{r.label}</b> <span>{r.dataset.file} · {r.start.slice(5, 16).replace('T', ' ')} to {r.end.slice(5, 16).replace('T', ' ')} · {r.resolution}</span>
-      {r.note && <i> · {r.note}</i>}
-      {greyed && <span className="dc-greyed" data-testid="doi-greyed">{greyed}</span>}
-      <span className="dc-doi-actions">
-        <button className="dc-btn small" disabled={!!greyed} onClick={() => void session.openDoi(item)} data-testid="doi-open">Open</button>
-        <button className="dc-btn small" onClick={() => void session.removeDoi(item)} data-testid="doi-remove">Remove</button>
-      </span>
-    </li>
+    <PanelGrid panels={[
+      { id: 'line', x: 0, y: 0, w: 4, h: 7, minW: 2, minH: 4, node: (
+        <ViewFrame title="Line plot" sub={`normalised · ${period}`} testid="view-line">
+          {graphsOff ? unavailable(graphsOff) : !chosen.length ? noField : loading ? <Empty>Reading…</Empty> : (
+            <>
+              <LinePlot session={session} props={chosen} changesNote={changesOff ? changesOff.join(', ') : null} />
+              {changesOff && <p className="dc-note">Change marks unavailable: {changesOff.join(', ')}.</p>}
+            </>
+          )}
+        </ViewFrame>
+      ) },
+      { id: 'errorbars', x: 4, y: 0, w: 4, h: 7, minW: 2, minH: 4, node: (
+        <ViewFrame title="Line plot with error bars" sub={first ? `${first.label.toLowerCase()} · mean ± 1σ` : 'mean ± 1σ'} testid="view-errorbars">
+          {graphsOff ? unavailable(graphsOff) : !chosen.length ? noField : !first ? <Empty>Error bars need a numeric field; the selected fields are categories.</Empty>
+            : loading ? <Empty>Reading…</Empty> : <ErrorBars session={session} p={first} />}
+        </ViewFrame>
+      ) },
+      { id: 'heatmap', x: 8, y: 0, w: 4, h: 7, minW: 2, minH: 4, node: (
+        <ViewFrame title="Heat map" sub={`fields × time · ${session.plan.some((r) => r.raw) ? 'raw records' : 'summaries'}`} testid="view-heatmap">
+          {graphsOff ? unavailable(graphsOff) : !chosen.length ? noField : loading ? <Empty>Reading…</Empty> : <HeatMap session={session} props={chosen} />}
+        </ViewFrame>
+      ) },
+      { id: 'clusters', x: 0, y: 7, w: 12, h: 4, minW: 4, minH: 4, node: (
+        <ViewFrame title="Clusters" sub="cluster assignments along time" testid="view-clusters" className="dc-clusters">
+          {clustersOff ? unavailable(clustersOff) : !chosen.length ? noField : <ClusterBand session={session} labelOf={labelOf} />}
+        </ViewFrame>
+      ) },
+    ]} />
   );
 }
-
-export type { CatalogueEntry };

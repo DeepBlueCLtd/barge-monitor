@@ -30,7 +30,7 @@ const SLOTS: Slot[] = [
 const PHASE_WORDS: Record<string, string> = { loading: 'loading its worker', starting: 'starting its worker', failed: 'failed', waiting: 'waiting for the server' };
 
 export function ModelsDetail() {
-  const control = useStore(runtime.controlState);
+  const control = useStore(runtime.control);
   const workers = useStore(runtime.modelWorkers);
   const slot = useStore(openSlot);
   const standin = runtime.kind === 'standin';
@@ -80,7 +80,6 @@ export function ModelsDetail() {
             : <a href="?backend=python">Reload with the Python back end to write one here.</a>}
         </div>
       ) : <ModelEditor slot={slot} />)}
-      <PerDataset />
       <div className="adding">
         <h4 className="small-caps">Adding a model</h4>
         <ol>
@@ -91,33 +90,5 @@ export function ModelsDetail() {
       </div>
       <p className="footline">Each model runs in its own worker and reaches the data server only through its HTTP interface, as the display client does, so a failing model never stops the data server.</p>
     </div>
-  );
-}
-
-/** FR-71: each model's outputs, per dataset (the restricted ones apart), and its declared highest rate (FR-37a). */
-function PerDataset() {
-  const st = useStore(runtime.controlState);
-  const datasets = st?.datasets ?? [];
-  const models = st?.models ?? [];
-  if (!models.length) return null;
-  return (
-    <table className="letters-table" data-testid="models-per-dataset">
-      <thead><tr><th>Model</th><th>Highest rate</th>{datasets.map((d) => <th key={d.id} className="mono">{d.id.replace(/-[0-9a-f]{8}$/, '')}</th>)}</tr></thead>
-      <tbody>
-        {models.map((m) => {
-          const ds = Array.isArray(m.datastreams) ? m.datastreams : [];
-          return (
-            <tr key={m.id}>
-              <td>{m.label}</td><td className="num">{m.max_rate != null ? `${m.max_rate}×` : '–'}</td>
-              {datasets.map((d) => {
-                const mine = ds.filter((x) => x.endsWith(`__${d.id}`));
-                const restricted = mine.filter((x) => x.startsWith('restricted/')).length;
-                return <td key={d.id} title={mine.join(', ')}>{mine.length ? `${mine.length - restricted} outputs${restricted ? `, ${restricted} restricted` : ''}` : 'not yet'}</td>;
-              })}
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
   );
 }

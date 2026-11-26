@@ -1,48 +1,44 @@
 # New model 1: an example new model (FR-36). Edit it, then press Run.
 #
-# 1. Write it: Python, using the scientific libraries, reading observations from the
-#    data server. Read Data cleanse's or Summaries' output, never the sensors' datastreams.
-# 2. Register it: setup() creates a process system under Models (ordinary resource
-#    creation); datasets() creates its datastream for each dataset. Nothing else changes.
-# 3. See it: restart the display client. The new field appears as a chip, drawn by its
-#    schema type alone.
-#
-# It runs under its own service account, svc-new-model-1, which cannot read CO2 (FR-113).
+# 1. Write it: Python, using the scientific libraries, reading observations
+#    from the data server. Read Data cleanse's or Summaries' output, never the
+#    raw datastreams.
+# 2. Register it: setup() creates a process system and a datastream, using
+#    ordinary resource creation. Nothing else changes.
+# 3. See it: restart the display client. The new field appears as a chip,
+#    drawn by its schema type alone.
 import numpy as np
 
-from csmodel import Model, NotReady, quantity, record, run_field, time_field
-
-SUMMARIES = "urn:x-barge:process:summaries"
+from csmodel import Model, quantity, record, time_field
 
 
 class WindChill(Model):
     id = "new-model-1"
     label = "New model 1"
     description = "Example: wind chill at the bow, every minute."
-    max_rate = 100.0  # the highest replay rate it sustains
-    window = 60.0  # replay seconds per window, aligned to the dataset's start
+    interval = 60.0  # simulated seconds between steps
+    catch_up_chunk = 86400.0
+    start_from = "history"
 
-    async def datasets(self, api, ds):
-        self.source = await api.find(SUMMARIES, f"summary-1min-bow__{ds['id']}")
-        if self.source is None:
-            return False  # Summaries has not created it yet
+    async def setup(self, api):
+        await super().setup(api)  # creates the process system under Models
+        self.source = await api.find("urn:x-barge:process:summaries", "summary-1min-bow")
         self.out = await api.create_datastream(self.system, {
-            "name": f"Wind chill · {ds['id']}", "outputName": f"wind-chill__{ds['id']}",
-            "schema": record("Wind chill", [time_field("time", "Start of the minute"),
-                                            quantity("wind_chill", "Wind chill", "Cel"), run_field()])})
-        return True
+            "name": "Wind chill", "outputName": "wind-chill",
+            "schema": record("Wind chill", [
+                time_field("time", "Start of the minute"),
+                quantity("wind_chill", "Wind chill", "Cel")])})
 
-    async def process(self, api, ds, t0, t1, run):
-        cols = await api.read(self.source, t0, t1 - 0.001, ["air_temperature", "apparent_wind_speed", "run"])
-        mine = np.array([r == run for r in cols["run"]], dtype=bool)
-        if not mine.any():
-            raise NotReady("Summaries has not published this minute yet")  # the same window is tried again
-        T = np.asarray(cols["air_temperature"], dtype=float)[mine]
-        v = np.asarray(cols["apparent_wind_speed"], dtype=float)[mine] * 3.6  # km/h
+    async def step(self, api, t0, t1):
+        cols = await api.read(self.source, t0, t1, ["air_temperature", "apparent_wind_speed"])
+        if not len(cols["t"]):
+            return t0
+        T = np.asarray(cols["air_temperature"], dtype=float)
+        v = np.asarray(cols["apparent_wind_speed"], dtype=float) * 3.6  # km/h
         api.tap("scilibs", "numpy: wind chill", {"rows": int(len(T))})
         wc = 13.12 + 0.6215 * T - 11.37 * v ** 0.16 + 0.3965 * T * v ** 0.16
-        for t, w in zip(cols["t"][mine], np.round(wc, 2)):
-            await api.publish(self.out, {"t": float(t), "wind_chill": float(w), "run": run})
+        await api.publish(self.out, {"t": cols["t"], "wind_chill": np.round(wc, 2)})
+        return float(cols["t"][-1]) + 60.0
 
 
 MODEL = WindChill

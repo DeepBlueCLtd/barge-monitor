@@ -41,9 +41,9 @@ export function DemoBanner() {
   const next = demo.steps[done];
   return (
     <div className="demo-banner" role="status" data-testid="demo-banner">
-      <p><b>{demo.title}.</b> <span data-testid="demo-watch">{demo.steps[done - 1]?.watch}</span>{a.found && <> <b data-testid="demo-found">{a.found}</b></>}</p>
+      <p><b>{demo.title}.</b> <span data-testid="demo-watch">{demo.steps[done - 1]?.watch}</span></p>
       <div className="demo-actions">
-        {next && <button className="btn primary" data-testid="demo-next" onClick={() => void takeStep()}>{next.label}</button>}
+        {next && <button className="btn primary" data-testid="demo-next" onClick={takeStep}>{next.label}</button>}
         <button className="btn" data-testid="demo-reset" onClick={() => endDemo(true)}>Put everything back</button>
         <button className="btn" aria-label="Close this banner and leave things as they are" onClick={() => endDemo(false)}>×</button>
       </div>

@@ -11,29 +11,27 @@ const ADOPTED: [string, string, string][] = [
   ['Records, units and encodings', 'SWE Common 3.0, as JSON', 'every schema and observation'],
   ['Quality flags', 'QARTOD vocabulary', 'a flag beside each measurement'],
   ['Defining the interface', 'OpenAPI 3.1 and JSON Schema', 'committed masters, checked by tests'],
-  ['Credentials, restarts, errors', 'HTTP itself (RFC 9110)', 'Basic authentication, 401, a refused connection while starting'],
+  ['Waiting, restarts, errors', 'HTTP itself (RFC 9110)', '503 with Retry-After, ETag'],
   ['The data server', 'OpenSensorHub, off the shelf', 'a stand-in takes its place in the browser'],
-  ['Authentication', "OpenSensorHub's own accounts and roles", 'login, screen lock; the gateway decides who may see CO₂'],
   ['Numerical work', 'numpy and scikit-learn', 'cleaning, means, clustering'],
   ['The screen', 'React, ECharts, React Flow, CodeMirror', 'display, charts, flowchart, editor'],
 ];
 
 const WRITTEN: [string, string][] = [
-  ['CSV importer', 'the only code that knows the CSV files; a module of the data server'],
-  ['Replay controller', 'the current dataset and the replay clock, driven by commands'],
-  ['Access gateway', 'in front of the data server: hides what a user may not see'],
-  ['Display client', 'login, handshake, self-configuration, generic views'],
+  ['Store adapter', "the only code that knows the logger's format"],
+  ['Display client', 'handshake, self-configuration, generic views'],
   ['Models', 'a small library for models, and the models'],
 ];
 
 /** In a developed system, deliberately not in this demonstrator. Names only. */
 const NOT_HERE: [string, string][] = [
-  ['Hiding restricted systems in OpenSensorHub itself', 'OpenSensorHub cannot hide a system from a user; the gateway does it (S-AUTH finding)'],
   ['OpenSensorHub itself', 'a stand-in serves the same interface here; to be confirmed against the real server'],
-  ["The client's real CSV files", 'shown over awkward synthetic ones; to be confirmed against the real ones'],
-  ['Persistence', 'everything imported or published lives in memory here, and goes at reload'],
+  ['The real logger store', 'shown over an awkward stand-in; to be confirmed against the real one'],
+  ['Authentication and access control', 'who may read, publish or command'],
+  ['Persistence', 'what models register and publish lives in memory here'],
   ['Deployment and operations', 'hosting, monitoring, backup, upgrades'],
-  ['Real data volumes', 'performance beyond the four files in the data folder here'],
+  ['Real data volumes', 'performance beyond the history loaded here'],
+  ['Push delivery', 'display and models poll; publish/subscribe is not yet a published standard'],
   ['Replacing and deleting resources', 'models create resources; nothing is updated or removed'],
   ['Position', 'and every model that needs it'],
   ["The real display's screens", 'the client here is small and generic on purpose'],

@@ -1,7 +1,5 @@
 // Routed flows (FR-65, VS-13): one polyline per direction from the layout
-// file, and positions along them for travelling messages. The adoption opening
-// has a second fixed layout (layout-opening.json, docs/v4-interfaces.md §12).
-import openingLayout from './layout-opening.json';
+// file, and positions along them for travelling messages.
 import layout from './layout.json';
 
 export type Pt = [number, number];
@@ -30,13 +28,6 @@ for (const a of layout.arrows) {
 
 export const LAYOUT_SIZE = layout.size as [number, number];
 export const cardRect = (id: string): Rect => (layout.cards as unknown as Record<string, Rect>)[id];
-/** A card's place in the adoption opening, or undefined if it has none there (the data server). */
-export const openingRect = (id: string): Rect | undefined => (openingLayout.cards as unknown as Record<string, Rect>)[id];
-export const OPENING_CARD_IDS = Object.keys(openingLayout.cards);
-
-export interface ZoneRect { id: string; rect: Rect; labelAt: string }
-export const ZONE_RECTS = layout.zones as unknown as ZoneRect[];
-export const OPENING_ZONE_RECTS = openingLayout.zones as unknown as ZoneRect[];
 
 export function laneFor(src: string, dst: string): Lane | undefined {
   return lanes.get(`${src}>${dst}`);
@@ -56,10 +47,9 @@ export function pointAt(l: Lane, f: number): Pt {
   return [a[0] + (b[0] - a[0]) * g, a[1] + (b[1] - a[1]) * g];
 }
 
-/** A filled arrowhead at the end of a polyline (VS-13); `atStart` puts it at the first point. */
-export function arrowhead(points: Pt[], size = 10, atStart = false): string {
-  const ps = atStart ? [...points].reverse() : points;
-  const [ax, ay] = ps[ps.length - 2], [bx, by] = ps[ps.length - 1];
+/** A filled arrowhead at the end of a polyline (VS-13). */
+export function arrowhead(points: Pt[], size = 10): string {
+  const [ax, ay] = points[points.length - 2], [bx, by] = points[points.length - 1];
   const len = Math.hypot(bx - ax, by - ay) || 1;
   const ux = (bx - ax) / len, uy = (by - ay) / len;
   const l: Pt = [bx - ux * size - uy * size * 0.5, by - uy * size + ux * size * 0.5];

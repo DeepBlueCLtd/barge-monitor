@@ -2,8 +2,8 @@
 // Every message is drawn: none is sampled or merged (FR-67). Each directed
 // line has its own queue, so icons on one line travel one behind another,
 // and a message's next hop sets off when its previous hop arrives.
-import { HANDSHAKE_HOP_MS, HOP_MS } from '../config';
-import { drawClock } from './drawclock';
+import { HANDSHAKE_HOP_S, HOP_S } from '../config';
+import { simClock } from './clock';
 import type { ComponentId } from './components';
 import { LETTER_COLOURS } from './palette';
 import { Store } from './store';
@@ -13,9 +13,7 @@ export type Letter = 'Q' | 'D' | 'O' | 'K' | 'P' | 'H' | 'S' | 'L' | 'I';
 /** A captured message (docs/v4-interfaces.md §3), as the back end and the model workers post it. */
 export interface Captured {
   id?: number | string;
-  t: number; // real seconds (Date.now()/1000) when captured (docs/v4-interfaces.md §3)
-  replay_t?: number; // the replay time then, for the strip only
-  push?: boolean; // a command delivered on a push subscription
+  t: number; // simulated seconds since the simulation epoch
   src: ComponentId;
   dst: ComponentId;
   letter: Letter;
@@ -30,8 +28,8 @@ export interface Captured {
 /** A message as the page holds it: a page-wide key and when it sets off on the flowchart. */
 export interface Message extends Captured {
   key: string;
-  start: number; // on the drawing clock, in seconds (drawclock.ts)
-  dur: number; // seconds on its line
+  start: number; // simulated seconds
+  dur: number; // simulated seconds on its line
 }
 
 /** SRD §5: the nine letters, what each is and the standard it meets (FR-16: internal ones say so). */
@@ -41,16 +39,14 @@ export const LETTERS: Record<Letter, { name: string; key: string; standard: stri
   O: { name: 'Observations', key: 'Observations, SWE JSON', standard: 'SWE Common JSON (application/swe+json)', isPublic: true, colour: LETTER_COLOURS.O },
   K: { name: 'Command', key: 'Command', standard: 'OGC API – Connected Systems Part 2', isPublic: true, colour: LETTER_COLOURS.K },
   P: { name: 'Declared profile', key: 'Declared profile', standard: 'JSON Schema', isPublic: true, colour: LETTER_COLOURS.P },
-  H: { name: 'HTTP status', key: 'HTTP status ≥ 400, 401', standard: 'RFC 9110', isPublic: true, colour: LETTER_COLOURS.H },
-  S: { name: 'File request', key: 'File request, internal', standard: 'internal, no public standard', isPublic: false, colour: LETTER_COLOURS.S },
-  L: { name: 'Legacy CSV', key: 'Legacy CSV', standard: "the files' own format, no public standard", isPublic: false, colour: LETTER_COLOURS.L },
+  H: { name: 'HTTP status', key: 'HTTP status, 503', standard: 'RFC 9110', isPublic: true, colour: LETTER_COLOURS.H },
+  S: { name: 'Store query', key: 'Store query, internal', standard: 'internal, no public standard', isPublic: false, colour: LETTER_COLOURS.S },
+  L: { name: 'Legacy record', key: 'Legacy record', standard: "the logger's own format, no public standard", isPublic: false, colour: LETTER_COLOURS.L },
   I: { name: 'Internal object', key: 'Internal object', standard: 'internal typed object, no public standard', isPublic: false, colour: LETTER_COLOURS.I },
 };
 export const LETTER_ORDER: Letter[] = ['Q', 'D', 'O', 'K', 'P', 'H', 'S', 'L', 'I'];
 
-const HOP_S = HOP_MS / 1000;
-const HANDSHAKE_HOP_S = HANDSHAKE_HOP_MS / 1000;
-// Scheduling on the flowchart, in real seconds (FR-78). If a line falls far
+// Scheduling on the flowchart, in simulated seconds. If a line falls far
 // behind, spacing is relaxed rather than letting the drawing lag ever
 // further behind the system: every message is still drawn.
 const GAP_S = HOP_S * 0.34;
@@ -81,10 +77,9 @@ class MessageBus {
     return this.replyEnd.get(chain) ?? null;
   }
 
-  /** A message sets off when it reaches the page: the drawing runs in real time, whatever the replay rate (FR-78). */
-  private schedule(m: Captured, now: number): number {
+  private schedule(m: Captured): number {
     const lane = `${m.src}>${m.dst}`;
-    let start = now;
+    let start = m.t;
     if (m.chain && this.chainEnd.has(m.chain)) start = Math.max(start, this.chainEnd.get(m.chain)!);
     // The handshake is drawn one hop after another, never queued behind other traffic: the
     // client itself waits for each reply to be drawn before it sends the next request.
@@ -105,7 +100,7 @@ class MessageBus {
       return own;
     }
     const queued = Math.max(start, free);
-    start = queued - now > MAX_LAG_S ? now + MAX_LAG_S : queued;
+    start = queued - m.t > MAX_LAG_S ? Math.max(start, m.t + MAX_LAG_S) : queued;
     this.laneFree.set(lane, Math.max(free, start + GAP_S));
     if (m.chain) this.chainEnd.set(m.chain, start + HOP_S);
     if (this.chainEnd.size > 5000) this.chainEnd.clear();
@@ -116,8 +111,7 @@ class MessageBus {
     if (!list?.length) return;
     // Within a chain, hops play in order; otherwise in order of capture.
     const ordered = [...list].sort((a, b) => a.t - b.t || (a.chain ?? '').localeCompare(b.chain ?? '') || (a.hop ?? 0) - (b.hop ?? 0));
-    const now = drawClock.now();
-    const added: Message[] = ordered.map((m) => ({ ...m, key: `m${++seq}`, start: this.schedule(m, now), dur: isHandshakeMessage(m) ? HANDSHAKE_HOP_S : HOP_S }));
+    const added: Message[] = ordered.map((m) => ({ ...m, key: `m${++seq}`, start: this.schedule(m), dur: isHandshakeMessage(m) ? HANDSHAKE_HOP_S : HOP_S }));
     const counts = { ...this.counts.value };
     for (const m of added) counts[`${m.src}>${m.dst}:${m.letter}`] = (counts[`${m.src}>${m.dst}:${m.letter}`] ?? 0) + 1;
     this.total += added.length;
@@ -128,9 +122,9 @@ class MessageBus {
     this.version.set(this.version.value + 1);
   }
 
-  /** Drop messages that have arrived. While frozen nothing arrives: icons stay where they are, clickable (FR-92). */
+  /** Drop messages that have arrived. While paused nothing arrives: icons stay where they are, clickable (FR-77). */
   private prune(list = this.live.value): Message[] {
-    const now = drawClock.now();
+    const now = simClock.displayNow();
     return list.filter((m) => m.start + m.dur > now);
   }
 

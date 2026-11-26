@@ -81,26 +81,24 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: .cache
-          key: shared-${{ hashFiles('web/scripts/fetch-pyodide.mjs') }}
+          key: shared-${{ hashFiles('web/scripts/fetch-pyodide.mjs', 'backend/barge/*.py') }}
 
-      - name: Build the demonstrator into site/demo, with its data folder
+      - name: Build the demonstrator into site/demo, with its pre-built history
         working-directory: web
         env:
-          # Pyodide is published once at the site root and shared by every preview (same origin,
-          # NFR-08); the path is relative. The data folder ships with each demo at demo/data/folder/.
+          # Pyodide and the pre-built history are published once at the site
+          # root and shared by every preview (same origin, NFR-08); the path is relative.
           VITE_SHARED_PATH: ${{ env.IS_PR == 'true' && '../../../' || '../' }}
         run: |
           pip install -r ../backend/requirements-dev.txt
-          python ../scripts/build_data_folder.py
-          python ../scripts/build_data_folder.py --check
+          python ../scripts/build_history.py --days 1 ../.cache/history 1 2 3
           npm ci
           npm run pyodide
           npm run build
           cp -r dist ../site/demo
-          mkdir -p ../site/demo/data/folder
-          cp public/data/folder/* ../site/demo/data/folder/
-          mkdir -p ../shared/pyodide
+          mkdir -p ../shared/pyodide ../shared/history
           cp -r ../.cache/pyodide/0.29.5 ../shared/pyodide/
+          cp -r ../.cache/history/$(python -c "import json;print(json.load(open('public/py/history.json'))['code_hash'])") ../shared/history/
 
       - name: Upload rendered site (always, so fork PRs can still be inspected)
         uses: actions/upload-artifact@v4
@@ -120,7 +118,7 @@ jobs:
           keep_files: true
           commit_message: "deploy ${{ steps.paths.outputs.dest || 'root' }} from ${{ env.SOURCE_SHA }}"
 
-      - name: Deploy the shared Pyodide to the site root
+      - name: Deploy the shared Pyodide and pre-built history to the site root
         if: env.CAN_DEPLOY == 'true'
         uses: peaceiris/actions-gh-pages@v4
         with:
@@ -128,7 +126,7 @@ jobs:
           publish_branch: gh-pages
           publish_dir: ./shared
           keep_files: true
-          commit_message: "deploy shared pyodide from ${{ env.SOURCE_SHA }}"
+          commit_message: "deploy shared pyodide and history from ${{ env.SOURCE_SHA }}"
 
       - name: Comment preview link on the PR
         if: env.IS_PR == 'true' && env.CAN_DEPLOY == 'true'
