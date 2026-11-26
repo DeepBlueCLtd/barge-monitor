@@ -55,7 +55,8 @@ function Login({ session, demoAccounts, locked }: { session: DisplayClientSessio
       <form onSubmit={submit} className="dc-login-form">
         <label>Name <input value={user} onChange={(e) => setUser(e.target.value)} autoComplete="off" data-testid="login-user" /></label>
         <label>Password <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="off" data-testid="login-password" /></label>
-        <button className="dc-btn primary" type="submit" disabled={busy || !user} data-testid="login-submit">{busy ? 'Logging in…' : 'Log in'}</button>
+        <button className="dc-btn primary" type="submit" disabled={busy || !user} data-testid="login-submit"
+          title={busy ? 'Logging in: wait for the answer' : !user ? 'Enter a name first' : undefined}>{busy ? 'Logging in…' : 'Log in'}</button>
       </form>
       {error && <p className="dc-login-error" aria-live="assertive" data-testid="login-error">{error}</p>}
       {demoAccounts.length > 0 && (
@@ -64,7 +65,7 @@ function Login({ session, demoAccounts, locked }: { session: DisplayClientSessio
           {demoAccounts.map((a) => (
             <div key={a.user} className="dc-demo-row">
               <code>{a.user}</code> <code>{a.password}</code> <span>{a.note}</span>
-              <button className="dc-btn small" disabled={busy} onClick={() => {
+              <button className="dc-btn small" disabled={busy} title={busy ? 'Logging in: wait for the answer' : undefined} onClick={() => {
                 setUser(a.user);
                 void go(a.user, a.password);
               }} data-testid={`demo-login-${a.user}`}>Log in</button>
@@ -233,7 +234,9 @@ function DatasetSelector({ session }: { session: DisplayClientSession }) {
                   </td>
                   <td>{e.start != null && e.end != null ? span(e.start, e.end) : '–'}</td>
                   <td>
-                    <button className="dc-btn small" disabled={busy || isCurrent || (!!importing && !openable)} onClick={() => {
+                    <button className="dc-btn small" disabled={busy || isCurrent || (!!importing && !openable)}
+                      title={busy ? 'Being imported: wait until it is done' : isCurrent ? 'This dataset is open already'
+                        : importing && !openable ? 'Another file is being imported: one import at a time' : undefined} onClick={() => {
                       session.open(e);
                       close();
                       anchor.current?.focus();
@@ -398,12 +401,12 @@ function DoiRow({ item, picked, onPick, session, onOpened }: { item: DoiItem; pi
   const greyed = item.greyed;
   return (
     <li className={greyed ? 'greyed' : ''} data-testid="doi-item" data-label={r.label} data-greyed={greyed ? 'true' : 'false'}>
-      <input type="checkbox" checked={picked} disabled={!!greyed} onChange={onPick} aria-label={`Pick ${r.label} to compare`} data-testid="doi-pick" />
+      <input type="checkbox" checked={picked} disabled={!!greyed} title={greyed ? `Cannot be compared: ${greyed}` : undefined} onChange={onPick} aria-label={`Pick ${r.label} to compare`} data-testid="doi-pick" />
       <b>{r.label}</b> <span>{r.dataset.file} · {r.start.slice(5, 16).replace('T', ' ')} to {r.end.slice(5, 16).replace('T', ' ')} · {r.resolution}</span>
       {r.note && <i> · {r.note}</i>}
       {greyed && <span className="dc-greyed" data-testid="doi-greyed">{greyed}</span>}
       <span className="dc-doi-actions">
-        <button className="dc-btn small" disabled={!!greyed} onClick={() => {
+        <button className="dc-btn small" disabled={!!greyed} title={greyed ? `Cannot be opened: ${greyed}` : undefined} onClick={() => {
           void session.openDoi(item);
           onOpened();
         }} data-testid="doi-open">Open</button>

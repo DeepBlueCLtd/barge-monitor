@@ -64,8 +64,10 @@ captured where §2 says, even though no HTTP is involved (FR-65: "inside the ser
 
 **Who sends a request** is told to the capture by request headers:
 - `x-tap-model: <model id>` for a model;
-- `x-tap-quiet: 1` for work the shell counts but does not draw: models registering and
-  catching up at startup, and the silent import of Mission A;
+- `x-tap-quiet: 1` for work the shell counts but does not draw: models registering, the
+  models' reads and per-row writes while they process a dataset (D-283), and the silent import
+  of Mission A. A model's runs-log entries and its calls into the scientific libraries are drawn
+  (D-321); the god's-eye note says how many were counted but not drawn;
 - `x-tap-chain: <chain>` from the display client.
 
 None of these headers decides anything in the server.
@@ -661,8 +663,11 @@ Freeze is withdrawn.
   folder: [{file, size, modified, status, dataset, pct}],
   datasets: [{id, file, start, end, superseded}],
   models: [{id, label, phase, detail, datastreams, runs: [{dataset, run_id, status, pct}]}],
-  accounts: [{user, role}], capture_counts, backend, import_rate }
+  accounts: [{user, role}], capture_counts, capture, backend, import_rate, instance }
 ```
+
+`capture` says whether capture is on (AT-18); `instance` is the shell's own count of server
+starts (D-260), shown as "Ready · start n".
 
 ### 13.5 Admin stub (FR-115)
 
