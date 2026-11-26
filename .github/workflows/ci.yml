@@ -37,6 +37,8 @@ jobs:
         with:
           python-version: '3.13'
       - run: pip install numpy==2.2.5 scipy==1.14.1 scikit-learn==1.7.0 fastapi==0.116.1 uvicorn==0.32.1 "oshconnect==0.5.5a1"
+      - name: The data folder, so that an imported dataset is browsed too (FR-15)
+        run: python scripts/build_data_folder.py
       - run: python backend/independent/oshconnect_browse.py
 
   web:
@@ -59,7 +61,7 @@ jobs:
           path: .cache
           key: shared-${{ hashFiles('web/scripts/fetch-pyodide.mjs', 'backend/barge/*.py') }}
       - run: python scripts/build_history.py --days 1 .cache/history 1 2 3  # 24 hours, as published (FR-15)
-      - name: The data folder, shipped in the site build (FR-15; read from Phase 5 on)
+      - name: The data folder, shipped in the site build and read by the importer (FR-15)
         run: |
           python scripts/build_data_folder.py
           python scripts/build_data_folder.py --check

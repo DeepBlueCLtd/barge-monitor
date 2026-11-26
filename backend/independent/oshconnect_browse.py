@@ -23,6 +23,7 @@ from starlette.applications import Starlette  # noqa: E402
 from starlette.routing import Mount  # noqa: E402
 
 from barge.api import create_app  # noqa: E402
+from barge.importer import default_folder  # noqa: E402
 from barge.runtime import Runtime  # noqa: E402
 
 USER, PASSWORD = "owner", "demo-owner"  # labelled demo credentials (PR-07)
@@ -33,9 +34,12 @@ def serve() -> int:
     s.bind(("127.0.0.1", 0))
     port = s.getsockname()[1]
     s.close()
-    rt = Runtime(seed=3, pregen_days=0.2, local_models=True)
-    while not (rt.server.ready and rt.local.live):
+    # The data folder, when built (scripts/build_data_folder.py): Mission A is imported at startup, so its
+    # datastreams (weather and CO₂, per dataset) and the importer's catalogue are browsed too.
+    rt = Runtime(seed=3, pregen_days=0.2, local_models=True, folder=default_folder())
+    while not (rt.server.ready and rt.local.live and rt.importer.subscribed):
         rt.tick()
+    print(f"data folder: {'Mission A imported' if rt.importer.datasets else 'none built'}")
     app = Starlette(routes=[Mount("/sensorhub/api", app=create_app(rt))])
     srv = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning"))
     threading.Thread(target=srv.run, daemon=True).start()
