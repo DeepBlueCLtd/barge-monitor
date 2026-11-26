@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="site.css">
 </head>
 <body>
-<div class="banner">Preview of pull request #15 (59e1be1). Not the published document.</div>
+<div class="banner">Preview of pull request #15 (7c9f373). Not the published document.</div>
 <main>
 <p class="demo-link"><a href="demo/"><strong>Open the working demonstrator →</strong></a> It runs whole in your browser. · <a href="demo/?hand-made"><strong>Start from “before”</strong></a>: the data server as subsystems we would build ourselves, then adopting OpenSensorHub (SRD §9.8). · <a href="index.html">Requirements</a> · <a href="interfaces.html">Version 4 interfaces</a> · Mockups: <a href="mockups/mockup-1-display-client.png">1</a>, <a href="mockups/mockup-2-models.png">2</a>, <a href="mockups/mockup-3-data-server.png">3</a></p>
 <nav id="TOC" aria-label="Contents">
@@ -451,7 +451,7 @@ and the dataset, because SWE Common names cannot contain spaces or
 <td><code>urn:x-barge:sensor:bow:co2</code>,
 <code>…:stern:co2</code></td>
 <td><code>co2__{ds}</code></td>
-<td><code>co2</code> (ppm) and <code>co2_qc</code>
+<td><code>co2</code> (<code>[ppm]</code>) and <code>co2_qc</code>
 (<strong>restricted</strong>)</td>
 </tr>
 <tr>
@@ -520,7 +520,10 @@ A summary or cleaned value has the definition of its raw quantity
 <code>apparent_wind_speed</code> m/s (converted from knots on import),
 <code>relative_humidity</code> %, <code>pressure</code> hPa,
 <code>apparent_wind_direction</code> deg, <code>solar_irradiance</code>
-W/m2, <code>water_temperature</code> Cel, <code>co2</code> ppm.</p>
+W/m2, <code>water_temperature</code> Cel, <code>co2</code>
+<code>[ppm]</code>. Every <code>uom.code</code> is a UCUM code: parts
+per million is <code>[ppm]</code> in UCUM, and <code>ppm</code> is
+refused (D-195).</p>
 <p><strong>Systems</strong> (top level, with subsystems under them):</p>
 <table>
 <thead>
@@ -799,6 +802,38 @@ PR-06)</h2>
 OpenSensorHub</h3>
 <ul>
 <li>Identifiers are opaque (§6).</li>
+<li><strong>Discovery of every system</strong> is
+<code>GET /systems?searchMembers=true</code> (D-193): every system,
+subsystems included, in either encoding
+(<code>f=application/sml+json</code> gives <code>uniqueId</code>;
+GeoJSON gives <code>properties.uid</code>). <code>GET /systems</code>
+alone lists the top level; <code>/systems/{id}/subsystems</code> lists a
+system's children. <strong>A listing carries no <code>parent</code>
+link</strong>; only a single system (<code>GET /systems/{id}</code>)
+links its parent. No client relies on parent links: the system tree,
+where one is needed, is learnt from <code>/subsystems</code> (the
+gateway's discovery, D-192).
+<code>GET /collections/all_systems/items</code> answers
+<code>400</code>, as OpenSensorHub does; <code>/collections</code> lists
+<code>all_systems</code> with its <code>items</code> link to
+<code>/systems</code>.</li>
+<li><strong>SensorML is sent as
+<code>application/sml+json</code></strong> (D-194), to
+<code>POST /systems</code> and
+<code>POST /systems/{id}/subsystems</code>. A body sent as
+<code>application/json</code> (or without a <code>Content-Type</code>)
+is read as GeoJSON: anything but a <code>Feature</code> is refused with
+<code>400</code>, as OpenSensorHub refuses it.</li>
+<li><strong>Units are UCUM codes</strong> (D-195). A datastream or
+control stream whose schema carries a <code>uom.code</code> that is not
+UCUM is refused with <code>400</code> (OpenSensorHub: "Invalid UCUM
+code").</li>
+<li><strong>Clients read a body as JSON whatever its
+<code>Content-Type</code> says</strong> (D-196). OpenSensorHub labels
+the landing page, <code>/conformance</code> and
+<code>/datastreams/{id}/schema</code> asked without <code>f</code> as
+<code>Content-Type: auto</code>; the bodies are JSON. The stand-ins
+label them <code>application/json</code>.</li>
 <li><code>POST</code> creating something that already exists (same
 uniqueId, or same outputName under the same system) answers
 <code>201</code> with the <strong>existing</strong>
@@ -949,6 +984,7 @@ systems.</li>
 </ul></li>
 <li>A system the account may not read is <strong>absent</strong>
 (FR-93): it is left out of every listing (<code>/systems</code>,
+<code>/systems?searchMembers=true</code>,
 <code>/systems/{id}/subsystems</code>, <code>/datastreams</code>,
 <code>/systems/{id}/datastreams</code>, <code>/controlstreams</code>,
 <code>/collections/*/items</code>), and answers <strong>404</strong> to
@@ -1019,19 +1055,20 @@ What a model is written against (<code>csmodel.py</code>,
 <code>csmodel.ts</code>)</h3>
 <div class="sourceCode" id="cb2"><pre
 class="sourceCode python"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> Api:  <span class="co"># every method is async; each is one or more HTTP requests with the model&#39;s credentials</span></span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> find_system(<span class="va">self</span>, uid) <span class="op">-&gt;</span> <span class="bu">str</span> <span class="op">|</span> <span class="va">None</span>            <span class="co"># by uniqueId, through discovery</span></span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> create_system(<span class="va">self</span>, body, parent_uid<span class="op">=</span><span class="va">None</span>) <span class="op">-&gt;</span> <span class="bu">str</span>  <span class="co"># POST /systems or /systems/{parent}/subsystems; 201 = success</span></span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> create_datastream(<span class="va">self</span>, system_id, body) <span class="op">-&gt;</span> <span class="bu">str</span>  <span class="co"># returns a key &quot;system_uid|outputName&quot;</span></span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> create_controlstream(<span class="va">self</span>, system_id, body) <span class="op">-&gt;</span> <span class="bu">str</span></span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> find(<span class="va">self</span>, system_uid, output_name) <span class="op">-&gt;</span> <span class="bu">str</span> <span class="op">|</span> <span class="va">None</span></span>
-<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> read(<span class="va">self</span>, key, t0, t1, fields<span class="op">=</span><span class="va">None</span>) <span class="op">-&gt;</span> <span class="bu">dict</span>    <span class="co"># f=application/swe+json, paged by offset; &quot;NaN&quot; → nan</span></span>
-<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> latest(<span class="va">self</span>, key) <span class="op">-&gt;</span> <span class="bu">dict</span> <span class="op">|</span> <span class="va">None</span>                <span class="co"># resultTime=latest</span></span>
-<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> publish(<span class="va">self</span>, key, row: <span class="bu">dict</span>) <span class="op">-&gt;</span> <span class="va">None</span>           <span class="co"># ONE observation per POST; nan → &quot;NaN&quot;</span></span>
-<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> publish_many(<span class="va">self</span>, key, cols: <span class="bu">dict</span>) <span class="op">-&gt;</span> <span class="bu">int</span>      <span class="co"># loops publish(); counts</span></span>
-<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> subscribe(<span class="va">self</span>, cs_key, on_command) <span class="op">-&gt;</span> <span class="va">None</span>     <span class="co"># push stream (§9.2); resubscribes after unreachability</span></span>
-<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> command_status(<span class="va">self</span>, cs_key, cmd_id, status, message<span class="op">=</span><span class="st">&quot;&quot;</span>) <span class="op">-&gt;</span> <span class="va">None</span></span>
-<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> replay_state(<span class="va">self</span>) <span class="op">-&gt;</span> <span class="bu">dict</span>                      <span class="co"># latest of urn:x-barge:replay|state</span></span>
-<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> score(<span class="va">self</span>, kind, payload) <span class="op">-&gt;</span> <span class="bu">dict</span>              <span class="co"># the referee (scaffolding)</span></span></code></pre></div>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> find_system(<span class="va">self</span>, uid) <span class="op">-&gt;</span> <span class="bu">str</span> <span class="op">|</span> <span class="va">None</span>            <span class="co"># by uniqueId: GET /systems?searchMembers=true (D-193)</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> create_system(<span class="va">self</span>, body, parent_uid<span class="op">=</span><span class="va">None</span>) <span class="op">-&gt;</span> <span class="bu">str</span>  <span class="co"># POST /systems or /systems/{parent}/subsystems as</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>                                                                 <span class="co"># application/sml+json (D-194); 201 = success</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> create_datastream(<span class="va">self</span>, system_id, body) <span class="op">-&gt;</span> <span class="bu">str</span>  <span class="co"># returns a key &quot;system_uid|outputName&quot;</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> create_controlstream(<span class="va">self</span>, system_id, body) <span class="op">-&gt;</span> <span class="bu">str</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> find(<span class="va">self</span>, system_uid, output_name) <span class="op">-&gt;</span> <span class="bu">str</span> <span class="op">|</span> <span class="va">None</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> read(<span class="va">self</span>, key, t0, t1, fields<span class="op">=</span><span class="va">None</span>) <span class="op">-&gt;</span> <span class="bu">dict</span>    <span class="co"># f=application/swe+json, paged by offset; &quot;NaN&quot; → nan</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> latest(<span class="va">self</span>, key) <span class="op">-&gt;</span> <span class="bu">dict</span> <span class="op">|</span> <span class="va">None</span>                <span class="co"># resultTime=latest</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> publish(<span class="va">self</span>, key, row: <span class="bu">dict</span>) <span class="op">-&gt;</span> <span class="va">None</span>           <span class="co"># ONE observation per POST; nan → &quot;NaN&quot;</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> publish_many(<span class="va">self</span>, key, cols: <span class="bu">dict</span>) <span class="op">-&gt;</span> <span class="bu">int</span>      <span class="co"># loops publish(); counts</span></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> subscribe(<span class="va">self</span>, cs_key, on_command) <span class="op">-&gt;</span> <span class="va">None</span>     <span class="co"># push stream (§9.2); resubscribes after unreachability</span></span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> command_status(<span class="va">self</span>, cs_key, cmd_id, status, message<span class="op">=</span><span class="st">&quot;&quot;</span>) <span class="op">-&gt;</span> <span class="va">None</span></span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> replay_state(<span class="va">self</span>) <span class="op">-&gt;</span> <span class="bu">dict</span>                      <span class="co"># latest of urn:x-barge:replay|state</span></span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> score(<span class="va">self</span>, kind, payload) <span class="op">-&gt;</span> <span class="bu">dict</span>              <span class="co"># the referee (scaffolding)</span></span></code></pre></div>
 <div class="sourceCode" id="cb3"><pre
 class="sourceCode python"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> Model:</span>
 <span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>    <span class="bu">id</span>, label, description</span>
