@@ -104,7 +104,7 @@ class DataCleanse(Model):
             keep = ((t > t0) if t0 > 0 else (t >= 0)) & (t <= last)
             out = {k: np.asarray(v)[keep] for k, v in out.items()}
             api.tap("models", f"numpy: {int(keep.sum())} cleaned, {removed} removed", {"rows": int(keep.sum()), "removed": removed})
-            await api.publish(self.out[s], out)
+            await api.publish_many(self.out[s], out)
             done = min(done, last)
         return done
 

@@ -2,9 +2,15 @@
 
 The relay hands each request to the backend worker over a MessagePort; the
 worker calls ``handle`` here, which builds an ordinary ASGI scope and awaits
-the FastAPI application exactly as uvicorn would. While the server is down
-the bridge answers nothing, so the relay can report a network failure
-(FR-49). No routing or application logic lives here.
+the FastAPI application exactly as uvicorn would. While the server is starting
+or down the bridge answers nothing (``None``), so the relay reports a network
+failure (§9.1). No routing or application logic lives here.
+
+A push subscription (§9.2) is a **streamed** answer: ``handle`` calls
+``on_stream("start", status, headers)``, then ``on_stream("chunk", bytes)`` per
+command, then ``on_stream("end")``, and returns ``"stream"``. The worker turns
+these into the port messages ``{status, headers, stream: true}``, ``{chunk}``
+and ``{end: true}``.
 
 Model workers reach the data server the same way, through the relay: there
 is no other interface. Each model only tells the shell its phase.
@@ -16,6 +22,23 @@ import json
 from . import asgi
 from .api import create_app
 from .runtime import Runtime
+
+
+def _js(x):
+    try:
+        from pyodide.ffi import to_js
+    except ImportError:  # CPython (tests): nothing to convert
+        return x
+    return to_js(x)
+
+
+def _py(x):
+    return x.to_py() if hasattr(x, "to_py") else x
+
+
+def _none(x):
+    """JavaScript's null arrives in Pyodide as ``JsNull``, not None."""
+    return None if x is None or type(x).__name__ == "JsNull" else x
 
 
 class Bridge:
@@ -55,6 +78,9 @@ class Bridge:
             rt.set_profile_lie(arg)
         elif action == "capture":
             rt.tap.enabled = bool(arg)
+        elif action == "set-role":
+            a = _py(arg)
+            rt.set_role(a["user"], a["role"])
         elif action != "state":
             raise ValueError(action)
         return json.dumps(rt.control_state(), default=str)
@@ -63,7 +89,23 @@ class Bridge:
         """Messages seen by the page or the relay are captured through the same tap."""
         self.rt.tap.emit(src, dst, letter, summary, content, failed)
 
-    async def handle(self, method, path, query, body, root_path, headers=None, origin="https://localhost"):
-        if self.rt.down:
-            return None  # no answer at all: the relay reports a network failure
-        return await asgi.call(self.app, method, path, query, body, root_path, headers, origin)
+    async def handle(self, method, path, query, body, root_path, headers=None, origin="https://localhost",
+                     on_stream=None):
+        if not self.rt.running:
+            return None  # starting or down: no answer at all; the relay reports a network failure (§9.1)
+        hs = [tuple(h) for h in _py(headers or [])]
+        body = _none(body)
+        raw = bytes(_py(body)) if body is not None else None
+        cb = None
+        if _none(on_stream) is not None:
+            def cb(kind, *a):
+                if kind == "start":
+                    on_stream("start", a[0], _js([list(h) for h in a[1]]))
+                elif kind == "chunk":
+                    on_stream("chunk", _js(a[0]))
+                else:
+                    on_stream("end")
+        r = await asgi.call(self.app, method, path, query, raw, root_path, hs, origin, on_stream=cb)
+        if r is None or r == "stream":
+            return r
+        return r

@@ -37,7 +37,7 @@ class WindChill(Model):
         v = np.asarray(cols["apparent_wind_speed"], dtype=float) * 3.6  # km/h
         api.tap("scilibs", "numpy: wind chill", {"rows": int(len(T))})
         wc = 13.12 + 0.6215 * T - 11.37 * v ** 0.16 + 0.3965 * T * v ** 0.16
-        await api.publish(self.out, {"t": cols["t"], "wind_chill": np.round(wc, 2)})
+        await api.publish_many(self.out, {"t": cols["t"], "wind_chill": np.round(wc, 2)})
         return float(cols["t"][-1]) + 60.0
 
 

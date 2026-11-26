@@ -14,10 +14,13 @@ Data cleanse's output and Summaries' summaries of it (AT-15):
 Three clustering algorithms, unnamed on screen (FR-55): A is k-means (numpy),
 B a Gaussian mixture and C agglomerative Ward clustering (scikit-learn). Each
 run is scored by the demonstrator's referee against the manifest (FR-37) and
-published with its settings and data range. Each run replaces the previous
-run's changes, clusters and correlation; the runs datastream keeps them all.
+published with its settings and data range. Nothing is replaced (FR-28a): each
+run's changes, clusters and correlation are appended, keyed by ``run_id``, and a
+reader takes those of the latest run.
 """
 from __future__ import annotations
+
+import json
 
 import numpy as np
 
@@ -81,11 +84,9 @@ class Analysis(Model):
                         quantity("strength", "Strength of the change", "1")],
             "clusters": [time_field(), text("run_id", "Run"),
                          category("cluster", "Cluster", [f"c{i}" for i in range(1, MAX_CLUSTERS + 1)])],
+            # The matrix is Text (JSON): OpenSensorHub refused an array of implicit size (§6).
             "correlation": [time_field(), text("run_id", "Run"), text("fields", "Fields, in matrix order"),
-                            {"type": "Matrix", "name": "matrix", "label": "Pearson correlation", "definition":
-                             "https://deepbluecltd.github.io/barge-monitor/def/matrix", "elementCount": {"type": "Count"},
-                             "elementType": {"type": "DataArray", "name": "row", "elementCount": {"type": "Count"},
-                                             "elementType": {"type": "Quantity", "name": "r", "uom": {"code": "1"}}}}],
+                            text("matrix", "Pearson correlation, as JSON rows")],
             "runs": [time_field("time", "Time the run completed"), text("run_id", "Run"), text("command_id", "Command"),
                      text("algorithm", "Algorithm"), text("fields", "Fields"), text("period", "Period"),
                      time_field("window_start", "Data range: start"), time_field("window_end", "Data range: end"),
@@ -194,21 +195,19 @@ class Analysis(Model):
         self.runs += 1
         run_id = f"run-{self.runs}"
         n = len(det["t"])
-        await api.publish(self.out["changes"], {"t": np.asarray(det["t"], dtype=float), "run_id": [run_id] * n,
+        await api.publish_many(self.out["changes"], {"t": np.asarray(det["t"], dtype=float), "run_id": [run_id] * n,
                                                 "scale": ["minutes" if x == 0 else "hours" for x in det["scale"]],
-                                                "strength": np.round(np.asarray(det["strength"], dtype=float), 2)},
-                          replace=True)
-        await api.publish(self.out["clusters"], {"t": t, "run_id": [run_id] * len(t), "cluster": relabel(labels)},
-                          replace=True)
-        await api.publish(self.out["correlation"], {"t": np.array([t1]), "run_id": [run_id], "fields": [",".join(names)],
-                                                    "matrix": [[[None if not np.isfinite(x) else round(float(x), 3) for x in row] for row in np.atleast_2d(R)]]}, replace=True)
+                                                "strength": np.round(np.asarray(det["strength"], dtype=float), 2)})
+        await api.publish_many(self.out["clusters"], {"t": t, "run_id": [run_id] * len(t), "cluster": relabel(labels)})
+        await api.publish_many(self.out["correlation"], {"t": np.array([t1]), "run_id": [run_id], "fields": [",".join(names)],
+                                                    "matrix": [json.dumps([[None if not np.isfinite(x) else round(float(x), 3) for x in row] for row in np.atleast_2d(R)])]})
         rec = {"t": np.array([t1]), "run_id": [run_id], "command_id": [self.last_command], "algorithm": [s["algorithm"]],
                "fields": [",".join(names)], "period": [s["period"]], "window_start": np.array([t[0]]),
                "window_end": np.array([t[-1]]), "records": np.array([len(t)]), "clusters": np.array([k]),
                "score_changes": np.array([np.nan if score_changes is None else round(score_changes, 3)]),
                "score_clusters": np.array([np.nan if score_clusters is None else round(score_clusters, 3)]),
                "scored_against": [against], "illustrative": np.array([0.0])}
-        await api.publish(self.out["runs"], rec)
+        await api.publish_many(self.out["runs"], rec)
         return {"run_id": run_id, "records": len(t)}
 
 

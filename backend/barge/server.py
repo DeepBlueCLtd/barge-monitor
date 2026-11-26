@@ -1,10 +1,10 @@
-"""The data server (C-04): one running instance of the Connected Systems server.
+"""The data server (C-04): one start of the stand-in for OpenSensorHub.
 
 An instance is created at each server start. It freezes the field offering
-(FR-51), drops the store adapter's index so the adapter rebuilds it while the
-server waits (FR-47), and carries a fresh instance identifier. The store and
-the registry of created resources (the models' systems, datastreams and
-observations) outlive it.
+(FR-51) and drops the store adapter's index so the adapter rebuilds it; while it
+does, the server answers nothing (4.7, §9.1: no 503 and no instance identifier).
+The store of created resources (``store.py``: systems, datastreams, control
+streams, commands and observations) outlives it, as OpenSensorHub's database does.
 
 The server holds no client sessions (FR-06). It serves:
 
@@ -23,13 +23,15 @@ import numpy as np
 from . import config as C
 from . import swe
 from .adapter import StoreAdapter
-from .fields import RAW, Offering, schema_id
-from .registry import Registry
+from .accounts import USERS
+from .fields import RAW, Offering
+from .store import URN, Store
 from .tap import Tap
 
 SOSA = "http://www.w3.org/ns/sosa/"
-URN = "urn:x-barge:"
-PROFILE_URI = "https://deepbluecltd.github.io/barge-monitor/profile/v4"
+# The profile the 4.1 display client is built against. The 4.7 template (contracts/profile.json) is served
+# from plan Phase 7, with the client that reads it (decision D-252).
+INTERIM_PROFILE = "interim/profile-v4.1.json"
 SENSORS = ("bow", "stern")
 QC_RANGE = {
     "air_temperature": (-30.0, 50.0), "relative_humidity": (0.0, 100.0), "pressure": (900.0, 1100.0),
@@ -56,6 +58,11 @@ def iso(t) -> str:
 def iso_many(t) -> list[str]:
     secs = (C.SIM_EPOCH_UNIX + np.round(np.asarray(t, dtype=float))).astype("int64").astype("datetime64[s]")
     return [s + "Z" for s in secs.astype(str).tolist()]
+
+
+def iso_real(u: float) -> str:
+    """Real time (Unix seconds) as ISO 8601 UTC, to the millisecond: command and status report times."""
+    return str(np.datetime64(int(round(float(u) * 1000)), "ms")) + "Z"
 
 
 def parse_iso(s: str) -> float:
@@ -89,12 +96,12 @@ class Server:
         self.rt = runtime
         self.offering = offering.copy()
         self.tap = tap
-        self.instance = f"{runtime.seed}-{number}"
+        self.number = number  # internal only: the server serves no instance identifier (4.7, §9.1)
         self.adapter = (getattr(runtime, "adapter_class", None) or StoreAdapter)(runtime.logger, tap)
         self.ready = False
-        self.registry: Registry = runtime.registry
+        self.store: Store = runtime.store
         self.lie_about_profile = runtime.lie_about_profile
-        self.profile = json.loads((contracts_dir() / "profile.json").read_text())
+        self.profile = json.loads((contracts_dir() / INTERIM_PROFILE).read_text())
         raw = self.offering.raw()
         fields = [swe.time_field()]
         for f in raw:
@@ -102,15 +109,39 @@ class Server:
             if f.swe_type == "Quantity":
                 fields.append(swe.qc_field(f))
         self.sensor_schema = {s: swe.record(fields, f"{s.capitalize()} sensor record") for s in SENSORS}
-        self.systems = {
-            "barge": self._system("barge", "Platform", "Collection platform", "PhysicalSystem",
-                                  "The uncrewed electric cargo barge. It records no position."),
-            "bow": self._system("bow", "Sensor", "Bow sensor", "PhysicalSystem", "Seven parameters at 1 Hz.", parent="barge"),
-            "stern": self._system("stern", "Sensor", "Stern sensor", "PhysicalSystem", "Seven parameters at 1 Hz.", parent="barge"),
-            "models": self._system("models", "System", "Models", "AggregateProcess",
-                                   "A home for models that turn sensor data into insight. Each model is a process "
-                                   "system of its own, created by the model itself.", asset="Process"),
-        }
+        self.ids = self._configure()
+
+    # --- the server's configuration: its systems, and the sensors' datastreams for this offering ---------
+    def _configure(self) -> dict:
+        """What OpenSensorHub's configuration creates at start (docs/v4-interfaces.md §6): the platform, its
+        sensors and their CO₂ analysers (restricted), Models, and a workspace per user. Each sensor's
+        ``weather`` datastream is read from the logger store through the adapter until the CSV importer
+        (plan Phase 5); its schema is this start's offering, so a new offering is a new datastream (FR-51)."""
+        st = self.store
+        add = st.add_system
+        barge, _ = add(URN + "platform:barge", "Collection platform", "The uncrewed electric cargo barge. It records no position.",
+                       SOSA + "Platform", "Platform")
+        ids = {"barge": barge["id"]}
+        for s in SENSORS:
+            sensor, _ = add(f"{URN}sensor:{s}", f"{s.capitalize()} sensor", "Seven parameters at 1 Hz.", SOSA + "Sensor",
+                            "Equipment", parent=barge["id"])
+            ids[s] = sensor["id"]
+            co2, _ = add(f"{URN}sensor:{s}:co2", f"{s.capitalize()} CO₂ analyser",
+                         "Carbon dioxide at the sensor, in parts per million. Restricted (FR-93).", SOSA + "Sensor",
+                         "Equipment", parent=sensor["id"])
+            ids[f"{s}:co2"] = co2["id"]
+            d, _ = st.add_datastream(sensor["id"], "weather", f"{s.capitalize()} sensor record", self.sensor_schema[s],
+                                     kind="sensor", sensor=s)
+            ids[f"{s}:weather"] = d["id"]
+        models, _ = add(URN + "process:models", "Models",
+                        "A home for models that turn sensor data into insight. Each model is a process system of its own, "
+                        "created by the model itself.", SOSA + "System", "Process")
+        ids["models"] = models["id"]
+        for u in USERS:
+            w, _ = add(f"{URN}workspace:{u}", f"Workspace of {u}", "Data of interest saved by this user (FR-94).",
+                       SOSA + "System", "Other", owner=u)
+            ids[f"workspace:{u}"] = w["id"]
+        return ids
 
     # --- start-up: waiting mode while the index is rebuilt (FR-47) ----------------
     def index_step(self) -> bool:
@@ -122,71 +153,28 @@ class Server:
     def progress(self) -> dict:
         return {"indexed": self.adapter.indexed_records(), "stored": self.adapter.store_records()}
 
-    # --- systems ------------------------------------------------------------------
-    @staticmethod
-    def _system(sid, stype, label, sml_type, desc, parent=None, asset=None):
-        s = {"type": sml_type, "id": sid, "uniqueId": f"{URN}{'process' if asset else stype.lower()}:{sid}",
-             "label": label, "description": desc, "definition": SOSA + stype, "systemType": SOSA + stype,
-             "assetType": asset or "Equipment"}
-        if parent:
-            s["parent"] = parent
-        return s
-
-    def all_systems(self) -> dict:
-        return {**self.systems, **self.registry.systems}
-
     # --- datastreams: the offering applied to every schema (FR-50..52) ------------
-    def _visible(self, rec: dict) -> dict:
+    def visible(self, rec: dict) -> dict:
         return dict(rec, fields=[f for f in rec["fields"] if f["name"] == "time" or self.offering.keep(f["name"])])
 
-    def datastreams(self, hidden: bool = False) -> dict:
-        """Public id -> datastream, for this instance's offering. ``hidden`` adds those with every output switched
-        off: they are not served, but their model goes on publishing to them (FR-52, AT-12)."""
-        out = {}
-        for s in SENSORS:
-            rec = self._visible(self.sensor_schema[s])
-            ds_id = schema_id(f"{s}-weather", [f["name"] for f in rec["fields"]])
-            out[ds_id] = {"id": ds_id, "key": f"{s}:weather", "name": f"{s.capitalize()} sensor record",
-                          "outputName": "weather", "system": s, "kind": "sensor", "sensor": s, "schema": rec}
-        for key, d in self.registry.datastreams.items():
-            if d["system"] not in self.registry.systems:
-                continue
-            rec = self._visible(d["schema"])
-            if len(rec["fields"]) < 2 and not hidden:
-                continue  # every output switched off: nothing to publish (FR-52)
-            ds_id = schema_id(f"{d['system']}-{d['outputName']}", [f["name"] for f in rec["fields"]])
-            out[ds_id] = {"id": ds_id, "key": key, "name": d["name"], "outputName": d["outputName"],
-                          "system": d["system"], "kind": "model", "schema": rec, "series": d["series"]}
-        return out
-
-    def ds_by_key(self, key: str) -> dict | None:
-        return next((d for d in self.datastreams().values() if d["key"] == key), None)
-
-    def controlstreams(self) -> dict:
-        out = {}
-        for key, c in self.registry.controlstreams.items():
-            if c["system"] not in self.registry.systems:
-                continue
-            cs_id = schema_id(f"{c['system']}-{c['inputName']}", [f["name"] for f in c["schema"]["fields"]])
-            out[cs_id] = dict(c, id=cs_id)
-        return out
+    def served(self, d: dict) -> bool:
+        """Listed and served: not replaced by a newer schema, and with at least one output published (FR-52).
+        A datastream with every output switched off still takes its model's observations (AT-12)."""
+        return not d["replaced"] and len(self.visible(d["schema"])["fields"]) > 1
 
     def time_range(self, d: dict):
         if d["kind"] == "sensor":
             return self.adapter.time_range(d["sensor"])
-        s = d["series"]
-        return (float(s.t[0]), float(s.t[-1])) if len(s) else None
+        return d["series"].span()
 
     # --- profile (FR-40, FR-41) ------------------------------------------------------
     def satisfies_profile(self) -> list[dict]:
         """Essential sources this offering does not satisfy (empty when it does)."""
         problems = []
-        systems = self.all_systems()
-        dss = list(self.datastreams().values())
         for e in self.profile["essentials"]:
-            sysm = next((s for s in systems.values() if s["uniqueId"] == e["system"]), None)
-            ds = sysm and next((d for d in dss if d["system"] == sysm["id"] and d["outputName"] == e["datastream"]), None)
-            fld = ds and next((f for f in ds["schema"]["fields"] if f["name"] == e["field"]), None)
+            ds = self.store.datastream(e["system"], e["datastream"])
+            rec = self.visible(ds["schema"]) if ds and self.served(ds) else None
+            fld = rec and next((f for f in rec["fields"] if f["name"] == e["field"]), None)
             if not fld:
                 problems.append({"id": e["id"], "reason": "missing"})
             elif fld["type"] != e["type"]:
@@ -223,36 +211,3 @@ class Server:
         self.tap.emit("adapter", "server", "I", f"{n} {sensor} records as columns",
                       {"columns": list(out), "records": int(n)}, quiet=quiet)
         return out
-
-    # --- commands (FR-27) --------------------------------------------------------------
-    def validate_command(self, cs: dict, params: dict) -> None:
-        """Check a command against its control stream's schema. Raise ValueError('name|message')."""
-        fields = {f["name"]: f for f in cs["schema"]["fields"]}
-        for k, v in params.items():
-            if k not in fields:
-                raise ValueError(f"{k}|unknown parameter {k}; the control stream's schema accepts {', '.join(fields)}")
-            f = fields[k]
-            con = f.get("constraint") or {}
-            t = f["type"]
-            if t == "Boolean":
-                if not isinstance(v, bool):
-                    raise ValueError(f"{k}|{k} must be true or false")
-            elif t in ("Quantity", "Count"):
-                if isinstance(v, bool) or not isinstance(v, (int, float)):
-                    raise ValueError(f"{k}|{k} must be a number")
-                if t == "Count" and int(v) != v:
-                    raise ValueError(f"{k}|{k} must be a whole number")
-                if con.get("intervals"):
-                    lo, hi = con["intervals"][0]
-                    if not lo <= v <= hi:
-                        raise ValueError(f"{k}|{k}={v} is outside the schema's AllowedValues interval [{lo}, {hi}]")
-            elif t in ("Category", "Text"):
-                if not isinstance(v, str):
-                    raise ValueError(f"{k}|{k} must be text")
-                allowed = con.get("values")
-                items = [x.strip() for x in v.split(",")] if t == "Text" else [v]
-                if allowed:
-                    bad = [x for x in items if x not in allowed]
-                    if bad or not items or items == [""]:
-                        raise ValueError(f"{k}|{k}={v!r}: {', '.join(bad) or 'nothing'} not in the schema's "
-                                         f"AllowedTokens {allowed}")
