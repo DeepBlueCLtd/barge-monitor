@@ -7,6 +7,19 @@
 > `standin` checks (a new one, SensorML as `application/json` and `ppm` refused, passes against
 > OpenSensorHub too; `PUT` on a system still answers 400, D-200). `at32-osh-results.json` is now the
 > record of that run. The rest of this finding describes the first run, before the changes.
+>
+> **Update 2, 2026-11-26.** The contract owner decided D-197 to D-200, now made everywhere
+> (`docs/decisions-log.md`): the catalogue's `records` is 0 until imported (divergence 5); the replay
+> log's `time` is the real time, its `position` the replay time (6); a command's outcome is its
+> latest status report other than `PENDING`, the stand-ins storing `PENDING` as OpenSensorHub does,
+> and §9.1 notes OpenSensorHub's 29.5 s against the stand-ins' 5 s (7); `PUT` and `DELETE` are
+> refused with any 4xx (8). **`DELETE` was tried** on a system and a datastream that exist, through
+> the gateway and directly (`at32_delete_probe.py`, `at32-delete-results.json`): OpenSensorHub
+> **deletes** them (204, then 404), for the owner, for a user on its own workspace through the gateway,
+> and for any account on `/api-internal`; only an account without OpenSensorHub's `delete` permission
+> is refused (403), and a system with children (400). So the access gateway now refuses `PUT`, `PATCH`
+> and `DELETE` with 405 for every account (SRD §17). AT-32 run again with all of this: see
+> `at32-osh-results.json`.
 
 **Date:** 2026-11-26 · **Server:** OpenSensorHub `osh-core` 2.0.4, built from source at commit
 `75bb094`, unmodified; configured with the delivered demo accounts, HTTP Basic authentication,

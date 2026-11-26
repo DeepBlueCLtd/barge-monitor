@@ -224,6 +224,12 @@ importer's service account.
 status. Readers ask with `resultTime=latest` per file, or read the whole datastream and
 fold it.
 
+**`records` is `0` until the file is imported** (D-197): a Count has no missing value in
+OpenSensorHub, which refuses both `"NaN"` and `null` there. The status says whether it
+counts: it is the dataset's number of rows for `imported`, `changed` and `superseded` (the
+statuses that name a dataset), and `0` for `not-imported` and `importing`. A reader never
+shows that `0` as a count; the display client reads it as no count at all.
+
 **`import` control stream.** Parameters, all present on every command (FR-27):
 - `action`: Category, `import` or `rescan`;
 - `file`: Text; empty for `rescan`.
@@ -295,8 +301,12 @@ every change. Fields:
 `phenomenonTime` is the replay time too, which makes the state of a dataset readable by
 time.
 
-**`log` datastream.** Every command applied: `time` (the replay time it took effect),
-`command_id`, `action`, `dataset`, `rate`, `position`, `run`, `sender`.
+**`log` datastream.** Every command applied: `time` (the **real time** it took effect),
+`command_id`, `action`, `dataset`, `rate`, `position` (the **replay time** it took effect),
+`run`, `sender`, `note` (D-198). `time` is real time, not the replay time, because
+OpenSensorHub keeps one observation per phenomenon time per datastream and replaces the
+first: keyed by replay time, a `load` and a `pause` at one position would leave one entry.
+Readers order the log by `time` and show `position` as where the replay was.
 
 **Replay runs.** A run id is `r-<dataset id>-<n>`. A new run starts on `load` of a
 dataset, and on every `seek` (FR-87). Models tag their results with it (§10).
@@ -342,7 +352,13 @@ its start (FR-77). This load is quiet.
   schema under an existing outputName makes a new datastream, with a new id (FR-51).
 - **One observation per `POST`.** An array body is refused with `400`.
 - A missing value is the string `"NaN"`. JSON `null` in a Quantity is refused with `400`.
-- `PUT` and `DELETE` on observations, systems and datastreams answer `405`.
+- `PUT` and `DELETE` on observations, systems and datastreams are **refused with a `4xx`**
+  (D-200): the stand-ins answer `405`; OpenSensorHub answers `400` to `PUT` with an empty
+  body. Clients rely only on a 4xx. A stock OpenSensorHub **deletes** a system or a
+  datastream on `DELETE` (`204`) for an account its permissions allow, and for any account
+  on its internal endpoint (tried on 2026-11-26), so the access gateway refuses `PUT`,
+  `PATCH` and `DELETE` with `405` for every account (§9.5): nothing is replaced or deleted
+  except by Reset instance (SRD §17).
 - The format is chosen with `f=application/swe+json`. The `Accept` header is
   **ignored**: the default is `application/json` observation resources. Paging is by
   `limit` and `offset`, with no `next` link in SWE JSON. A `limit` over the maximum is
@@ -357,13 +373,21 @@ its start (FR-77). This load is quiet.
   `ACCEPTED`, `EXECUTING`, `COMPLETED`, `FAILED`, `REJECTED`. Listed, each report also
   carries its own `id` and its `reportTime` (real time); readers tell reports apart by `id`
   (D-181).
+- **A command's outcome is its latest status report other than `PENDING`** (D-199,
+  revising D-164), by `reportTime`, among the reports since the command was sent. When
+  the sender's `POST` answers, the server stores a `PENDING` report for the command: in
+  OpenSensorHub that is often **after** the receiver's `COMPLETED`, so the latest report
+  alone would read `PENDING`. Both stand-ins store it too. The display client, both
+  `csmodel`s (`outcome`, `commandOutcome`), the shell and the suite read it this way.
 - **Sending a command:** `POST /controlstreams/{csId}/commands` with
   `{"parameters": {...}}`.
-  - **With no subscriber**, the command is dropped. The answer is `202` after 5 s, and the
-    command is not listed afterwards.
+  - **With no subscriber**, the command is dropped and not listed afterwards. The answer
+    is `202` after the hold: **5 s in the stand-ins**, about **29.5 s in OpenSensorHub**
+    2.0.4 (AT-32 run of 2026-11-26). The stand-ins keep 5 s; no client waits on either.
   - **With a subscriber**, the command is pushed at once. The answer is `200` after
-    **about 5 s**, with `currentStatus: PENDING` (FR-27). The sender never waits for
-    this answer: it does not await the response before updating its display (AT-39).
+    **about 5 s**, with `currentStatus: PENDING` (FR-27), and the `PENDING` report is
+    stored then. The sender never waits for this answer: it does not await the response
+    before updating its display (AT-39).
 - The profile is at `GET /profile.json`, beside the API (FR-41). It is **not** linked from
   the landing page.
 
@@ -448,7 +472,10 @@ the stand-in.
 
   It also removes their datastreams and control streams, and answers `404` to every path
   under them.
-- **Writes.** It enforces "create and append only under your own systems".
+- **Writes.** It enforces "create and append only under your own systems". It refuses
+  `PUT`, `PATCH` and `DELETE` with `405` for **every account**, whatever the path: a stock
+  OpenSensorHub deletes on `DELETE`, and nothing is replaced or deleted except by Reset
+  instance (SRD §17; D-200).
 - **Push subscriptions.** It forwards them to the server's internal receiver endpoint,
   for service accounts only. That endpoint has access control off and is not reachable
   from outside.
