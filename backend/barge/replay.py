@@ -222,6 +222,12 @@ class Replay:
                 "max_rate_model": model, "playing": self.playing, "at_end": self.at_end, "run": self.run,
                 "models_ready": self.models_ready}
 
+    def view(self) -> dict | None:
+        """The state for the shell's status (interfaces §13.2): times as Unix seconds, as the stand-in posts them."""
+        if self.dataset is None:
+            return None
+        return dict(self.state(), time=self.time, start=self.dataset["start"], end=self.dataset["end"], position=self.time)
+
     def publish(self, quiet: bool = False) -> None:
         if self.dataset is None or self.state_ds is None:
             return

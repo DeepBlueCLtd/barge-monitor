@@ -168,3 +168,4 @@ __pycache__/
 .pytest_cache/
 web/public/data/
 .claude/worktrees/
+web/e2e-results-python.json

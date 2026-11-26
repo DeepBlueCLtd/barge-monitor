@@ -46,7 +46,8 @@ def test_bridge_answers_streams_and_controls():
                                              svc, on_stream=lambda kind, *a: got.append((kind, a))))
         await asyncio.sleep(0.01)
         assert got and got[0][0] == "start" and got[0][1][0] == 200
-        st = json.loads(b.tick())["replay"]
+        assert isinstance(json.loads(b.tick())["replay"]["time"], (int, float))  # Unix seconds for the shell (§13.2)
+        st = b.rt.replay.state()
         params = {"action": "play", "dataset": st["dataset"], "rate": 1, "position": st["position"]}
         r = await b.handle("POST", f"/controlstreams/{cs['id']}/commands", "", json.dumps({"parameters": params}).encode(),
                            "/api", owner + [["content-type", "application/json"]])

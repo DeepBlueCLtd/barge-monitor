@@ -1,5 +1,6 @@
 import { expect, Page, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
+import { withBackend } from './backend';
 
 const readJson = (rel: string) => JSON.parse(readFileSync(new URL(rel, import.meta.url), 'utf8'));
 const layout = readJson('../src/shell/layout.json') as {
@@ -40,7 +41,7 @@ const workers = (page: Page) => page.evaluate(() => (window as unknown as { __wo
 
 async function openOpening(page: Page) {
   await countWorkers(page);
-  await page.goto(FLAG);
+  await page.goto(withBackend(FLAG));
   await expect(page.getByTestId('opening-panel')).toBeVisible();
   await expect(page.getByTestId('flowchart')).toHaveAttribute('data-mode', 'opening');
 }
@@ -98,20 +99,20 @@ test('the fixed layouts: no line crosses a card, no cards overlap (VS-13, FR-120
 
 test('AT-62: without the flag the normal startup; with it the opening; a reload repeats it', async ({ page }) => {
   await countWorkers(page);
-  await page.goto(BASE);
+  await page.goto(withBackend(BASE));
   // FR-77: the back end starts at once (its worker is created) and no opening is shown.
   await expect.poll(() => workers(page), { timeout: 30_000 }).toBeGreaterThan(0);
   await expect(page.getByTestId('opening-panel')).toHaveCount(0);
   await expect(page.getByTestId('card-sub-webapi')).toHaveCount(0);
 
-  await page.goto(FLAG);
+  await page.goto(withBackend(FLAG));
   await expect(page.getByTestId('opening-panel')).toBeVisible();
   await expect(page.getByTestId('switch-build')).toHaveAttribute('aria-checked', 'true');
   await page.reload();
   await expect(page.getByTestId('opening-panel')).toBeVisible();
   await expect(page.getByTestId('flowchart')).toHaveAttribute('data-mode', 'opening');
   // Any value, or none, is the flag (FR-119).
-  await page.goto(`${BASE}?hand-made=yes`);
+  await page.goto(withBackend(`${BASE}?hand-made=yes`));
   await expect(page.getByTestId('opening-panel')).toBeVisible();
 });
 

@@ -51,16 +51,24 @@ await bridge.start()
   bridge = py.globals.get('bridge');
   self.postMessage({ type: 'state', state: JSON.parse(bridge.control('state')) });
   let n = 0;
+  let announced = false;
   setInterval(() => {
     try {
-      self.postMessage({ type: 'tick', ...JSON.parse(bridge.tick()) });
+      const tick = JSON.parse(bridge.tick());
+      self.postMessage({ type: 'tick', ...tick });
+      // Ready once the server answers, as the stand-in is (its first start is immediate): a login
+      // sent as the flowchart appears must not meet a server still starting (§9.1).
+      if (!announced && tick.server === 'running') {
+        announced = true;
+        post({ stage: 'ready', detail: 'running', pct: 100 });
+      }
       // The control state, including each model's phase, once a second (§13.2).
       if (++n % 10 === 0) self.postMessage({ type: 'state', state: JSON.parse(bridge.control('state')) });
     } catch (e) {
       console.error(e);
+      if (!announced) { announced = true; post({ stage: 'error', detail: String(e), pct: 0 }); } // the first start failed
     }
   }, 100);
-  post({ stage: 'ready', detail: 'running', pct: 100 });
   queue.splice(0).forEach((f) => f());
 }
 
@@ -85,7 +93,7 @@ async function serve(req: any, reply: MessagePort) {
     }
   };
   try {
-    const res = await bridge.handle(req.method, req.path, req.query, req.body ? new Uint8Array(req.body) : null,
+    const res = await bridge.handle(req.method, req.path, req.query, req.body ? new Uint8Array(req.body) : undefined, // undefined is None in Python; null would be JsNull
       req.rootPath, req.headers, req.origin, onStream);
     if (res === undefined || res === null) {
       if (header('x-tap-quiet') !== '1') {

@@ -270,6 +270,6 @@ class Importer:
         return [{k: v for k, v in e.items() if k != "sha256"} for e in self.current.values()]
 
     def datasets_state(self) -> list[dict]:
-        return [{"id": d["id"], "file": d["file"], "start": iso(d["start"]), "end": iso(d["end"]),
+        return [{"id": d["id"], "file": d["file"], "start": d["start"], "end": d["end"],
                  "superseded": d["superseded"]} for d in self.datasets.values()]
 

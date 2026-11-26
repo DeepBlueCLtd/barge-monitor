@@ -11,10 +11,13 @@ import '@fontsource/inter/400.css';
 import '@fontsource/inter/600.css';
 import './styles.css';
 import { bus } from './shell/messages';
+import { runtime } from './shell/runtime';
 
 // For the end-to-end tests: the captured messages, as the flowchart holds them (AT-18, AT-53). Demonstrator shell only.
 (window as unknown as { __messages: () => unknown[] }).__messages = () => bus.find(() => true);
 (window as unknown as { __messageTotal: () => number }).__messageTotal = () => bus.total;
+// Start-up milestones (NFR-10) and the model workers' phases, for the start-up budget test.
+(window as unknown as { __startup: () => unknown }).__startup = () => ({ kind: runtime.kind, milestones: runtime.milestones, models: runtime.modelWorkers.value, progress: runtime.progress.value });
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

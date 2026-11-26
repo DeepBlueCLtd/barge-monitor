@@ -280,7 +280,7 @@ class Runtime:
         return {
             "server": self.status, "fields": rows, "pending": pending, "lie_about_profile": self.lie_about_profile,
             "folder": self.importer.folder_state(), "datasets": self.importer.datasets_state(),
-            "replay": self.replay.state(), "models": models, "accounts": self.accounts.state(),
+            "replay": self.replay.view(), "models": models, "accounts": self.accounts.state(),
             "capture_counts": self.tap.counts, "backend": "python", "frozen": self.frozen,
             "import_rate": self.importer.rate,
         }

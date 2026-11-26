@@ -75,6 +75,49 @@ def test_at16_analysis_runs_on_a_data_of_interest_with_scores(played):
         assert c["scale"] in ("minutes", "hours") and c["strength"] > 0
     windowed = [x for x in runs if not x["command_id"]]
     assert len(windowed) == 6 and windowed[-1]["time"] == "2031-04-07T01:00:00Z"  # one per ten replay minutes
+    # The scores are correct: the referee (scoring.py, against the manifest) gives the same from the run's own outputs.
+    from barge import scoring
+    from barge.times import parse_iso, world_seconds
+
+    w = r.run(r.rt.world())
+    tc = world_seconds(np.array([parse_iso(c["time"]) for c in clusters]))
+    expect = scoring.score_clusters(w, tc, np.array([c["cluster"] for c in clusters]))["ari_reach_kind"]
+    assert run["score_clusters"] == pytest.approx(expect, abs=1e-3)
+    det = {"t": world_seconds(np.array([parse_iso(c["time"]) for c in changes], dtype=float)),
+           "scale": np.array([0 if c["scale"] == "minutes" else 1 for c in changes], dtype=int)}
+    sc = scoring.score_changes(w, det, float(world_seconds(parse_iso(run["window_start"]))), float(world_seconds(parse_iso(run["window_end"]))))
+    if sc["boundary_recall"] is None:
+        assert np.isnan(run["score_changes"]) or run["score_changes"] == "NaN"
+    else:
+        assert run["score_changes"] == pytest.approx(sc["boundary_recall"], abs=1e-3)
+
+
+def test_at04_declared_queries_meet_their_budget(played):
+    """FR-31: the last hour at replay time from both sensors; one field over a whole dataset from a summary.
+    Measured on Mission A alone (the only dataset imported here), against the budgets config.py declares."""
+    from barge.config import QUERY_BUDGET_MS
+
+    r = played
+    assert [d["file"] for d in r.rt.importer.datasets.values()] == ["MISSION_A_20310407.csv"]
+    ds = r.dataset("MISSION_A")
+    t = time.perf_counter()
+    for s in ("bow", "stern"):
+        d = r.ds(URN + f"sensor:{s}", f"weather__{ds}")
+        rows = r.obs(d["id"], {"phenomenonTime": "2031-04-07T00:00:00Z/2031-04-07T00:59:59Z"})
+        assert len(rows) == 3600
+    took = (time.perf_counter() - t) * 1000
+    print(f"AT-04 last hour, both sensors: {took:.0f} ms (budget {QUERY_BUDGET_MS['last-hour-each-sensor']})")
+    assert took < QUERY_BUDGET_MS["last-hour-each-sensor"]
+    d = r.ds(URN + "sensor:bow", f"weather__{ds}")
+    t = time.perf_counter()
+    rows = r.obs(d["id"])  # the whole day of raw readings, every field: well beyond the declared query
+    assert len(rows) == 86400 and (time.perf_counter() - t) < 10
+    d = r.ds(SUM, f"summary-1h-bow__{ds}")
+    t = time.perf_counter()
+    rows = r.obs(d["id"])
+    took = (time.perf_counter() - t) * 1000
+    print(f"AT-04 one field, whole dataset, from a summary: {took:.0f} ms (budget {QUERY_BUDGET_MS['one-field-whole-dataset-summary']})")
+    assert rows and took < QUERY_BUDGET_MS["one-field-whole-dataset-summary"]
 
 
 def test_at45_a_saved_data_of_interest_regenerates_the_same_values_after_switching(played):
@@ -109,26 +152,6 @@ def test_at45_a_saved_data_of_interest_regenerates_the_same_values_after_switchi
     assert r.ds(SUM, f"summary-1min-bow__{r.dataset('MISSION_C')}")  # the models work on the new dataset
     assert r.ds(URN + "sensor:stern", f"weather__{r.dataset('MISSION_C')}")
     assert regenerate() == first
-
-
-def test_at04_declared_queries_meet_their_budget(played):
-    """FR-31: the last hour at replay time from both sensors; one field over a whole dataset from a summary."""
-    r = played
-    ds = r.dataset("MISSION_A")
-    t = time.perf_counter()
-    for s in ("bow", "stern"):
-        d = r.ds(URN + f"sensor:{s}", f"weather__{ds}")
-        rows = r.obs(d["id"], {"phenomenonTime": "2031-04-07T00:00:00Z/2031-04-07T00:59:59Z"})
-        assert len(rows) == 3600
-    assert (time.perf_counter() - t) * 1000 < 1500
-    d = r.ds(URN + "sensor:bow", f"weather__{ds}")
-    t = time.perf_counter()
-    rows = r.obs(d["id"])  # the whole day of raw readings, every field: well beyond the declared query
-    assert len(rows) == 86400 and (time.perf_counter() - t) < 10
-    d = r.ds(SUM, f"summary-1h-bow__{ds}")
-    t = time.perf_counter()
-    r.obs(d["id"])
-    assert (time.perf_counter() - t) * 1000 < 1000
 
 
 class Broken(Model):

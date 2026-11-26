@@ -96,6 +96,8 @@ export interface ModelWorkerStatus {
 const PYTHON_BY_DEFAULT = false;
 /** The models' service accounts share one demo password (labelled demo credentials, PR-07). */
 const SERVICE_PASSWORD = 'svc-demo';
+/** D-180: the longest the page waits for the core models after the server runs (Python mode). */
+const MODELS_WAIT_MS = 45_000;
 
 function chooseBackend(): BackendKind {
   const asked = urlParam('backend');
@@ -117,10 +119,15 @@ class Runtime {
   modelOutput = new Store<{ model: string; stream: 'stdout' | 'stderr'; text: string }[]>([]);
   startedAt = performance.now();
   readyMs: number | null = null;
+  /** Start-up milestones (NFR-10), in ms since navigation: the server running, Mission A loaded, the models ready (the replay state's models_ready), the page ready (the flowchart). */
+  milestones: Record<string, number> = {};
 
   private backend: Worker | null = null;
   private models = new Map<string, Worker>();
   private started = false;
+  /** Python mode: the back end's own 'ready', held until the core models have registered (D-180). */
+  private backendReady: Progress | null = null;
+  private modelsWait: ReturnType<typeof setTimeout> | null = null;
   /** Control actions awaiting the worker's answer, by request id (§13.3). */
   private waiting = new Map<number, { resolve: (s: ControlState) => void; reject: (e: Error) => void }>();
   private nextId = 1;
@@ -144,21 +151,56 @@ class Runtime {
     // §13.2: the worker reads the data folder the build ships (FR-15), at an absolute URL (D-148).
     this.backend.postMessage({ type: 'start', folderUrl: resolve(DATA_FOLDER), pyodideUrl: resolve(PYODIDE_PATH), pyZipUrl: resolve(PY_ZIP) });
     this.connect();
+    // D-180: each model's Pyodide loads alongside the back end's; a model's requests get no answer
+    // until the server is running, and it tries again a second later, as after any restart (FR-48).
+    if (this.kind === 'python') CORE_MODELS.forEach((m) => this.startModel(m));
+  }
+
+  /**
+   * D-180, NFR-05: in Python mode the start-up includes each model's worker. The page is ready
+   * once the server runs and every core model has registered and made its datastreams for
+   * Mission A (or failed), as the stand-in's models have before it is ready; a display client
+   * that logs in earlier would hold a discovery without a late model's datastreams.
+   */
+  private releaseWhenModelsReady() {
+    const ready = this.backendReady;
+    if (!ready || this.readyMs != null) return;
+    const settled = CORE_MODELS.every((m) => ['live', 'failed'].includes(this.modelWorkers.value[m]?.phase ?? ''));
+    if (!settled && this.modelsWait) {
+      const waiting = CORE_MODELS.filter((m) => this.modelWorkers.value[m]?.phase !== 'live');
+      this.progress.set({ stage: 'models', detail: `starting the models, each in its own worker: waiting for ${waiting.join(', ')}`, pct: 90 });
+      return;
+    }
+    if (this.modelsWait) clearTimeout(this.modelsWait);
+    this.modelsWait = null;
+    this.readyMs = performance.now() - this.startedAt;
+    this.mark('ready');
+    this.progress.set(ready);
   }
 
   private onBackend(d: any) {
     switch (d?.type) {
       case 'progress':
-        this.progress.set(d);
         if (d.stage === 'ready' && this.readyMs == null) {
+          this.mark('server');
+          if (this.kind === 'python' && !this.backendReady) {
+            this.backendReady = d;
+            // A model that never settles holds the page no longer than this (AT-14: it stops only itself).
+            this.modelsWait = setTimeout(() => { this.modelsWait = null; this.releaseWhenModelsReady(); }, MODELS_WAIT_MS);
+            this.releaseWhenModelsReady();
+            break;
+          }
           this.readyMs = performance.now() - this.startedAt;
-          if (this.kind === 'python') CORE_MODELS.forEach((m) => this.startModel(m));
+          this.mark('ready');
         }
+        this.progress.set(d);
         break;
       case 'tick': {
         const server = d.server === 'waiting' ? 'starting' : d.server;
         if (server && server !== this.server.value) this.server.set(server);
         const r: ReplayView | null = d.replay ?? null;
+        if (r?.dataset) this.mark('dataset');
+        if (r?.models_ready) this.mark('models');
         const old = this.replay.value;
         if (!old || !r || old.playing !== r.playing || old.rate !== r.rate || old.dataset !== r.dataset || Math.floor(old.time) !== Math.floor(r.time)
           || old.models_ready !== r.models_ready) this.replay.set(r);
@@ -183,6 +225,10 @@ class Runtime {
         break;
       }
     }
+  }
+
+  private mark(name: string) {
+    this.milestones[name] ??= Math.round(performance.now());
   }
 
   /** Give the relay a port to the back-end worker (FR-02). */
@@ -225,7 +271,7 @@ class Runtime {
     this.models.set(model, w);
     this.setModel(model, { phase: 'loading', detail: 'starting its worker' });
     w.onmessage = (e) => this.onModel(model, e.data);
-    w.onerror = (e) => this.setModel(model, { phase: 'failed', detail: String(e.message ?? e) });
+    w.onerror = (e) => { this.setModel(model, { phase: 'failed', detail: String(e.message ?? e) }); this.releaseWhenModelsReady(); };
     const ch = new MessageChannel();
     this.backend.postMessage({ type: 'model-connect', model }, [ch.port1]);
     // Each model authenticates as its own service account (docs/v4-interfaces.md §9.3); these are demo credentials (PR-07).
@@ -245,10 +291,12 @@ class Runtime {
         bus.add((d.messages ?? []).map((m: Captured) => ({ ...m, model: m.model ?? model, src: m.src as ComponentId, dst: m.dst as ComponentId })));
         break;
       case 'progress':
-        this.setModel(model, { progress: d, detail: d.detail });
+        this.setModel(model, { progress: d, detail: d.detail, ...(d.stage === 'error' ? { phase: 'failed' } : {}) });
+        this.releaseWhenModelsReady();
         break;
       case 'status':
         this.setModel(d.model ?? model, { phase: d.phase, detail: d.detail ?? '' });
+        this.releaseWhenModelsReady();
         break;
       case 'stdout':
       case 'stderr':

@@ -34,6 +34,11 @@ def _py(x):
     return x.to_py() if hasattr(x, "to_py") else x
 
 
+def _none(x):
+    """JavaScript's null arrives in Pyodide as ``JsNull``, not None."""
+    return None if x is None or type(x).__name__ == "JsNull" else x
+
+
 class Bridge:
     def __init__(self, fetch_index, fetch_file, fetch_manifest=None, real=None):
         kw = {"real": real} if real is not None else {}
@@ -53,7 +58,7 @@ class Bridge:
     def tick(self) -> str:
         """Every 100 ms: the replay clock and the server's start; captured messages and state for the page."""
         self.rt.tick()
-        return json.dumps({"messages": self.rt.tap.drain(), "server": self.rt.status, "replay": self.rt.replay.state()},
+        return json.dumps({"messages": self.rt.tap.drain(), "server": self.rt.status, "replay": self.rt.replay.view()},
                           default=str)
 
     def control(self, action: str, arg=None) -> str:
@@ -66,6 +71,7 @@ class Bridge:
     async def handle(self, method, path, query, body, root_path, headers=None, origin="https://localhost",
                      on_stream=None):
         hs = [tuple(h) for h in _py(headers or [])]
+        body = _none(body)
         raw = bytes(_py(body)) if body is not None else None
         cb = None
         if on_stream is not None:

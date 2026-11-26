@@ -2,21 +2,25 @@ import { expect, Page, test } from '@playwright/test';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { BACKEND, withBackend } from './backend';
 
 // End-to-end tests of SRD 4.6 against the assembled static site, in stand-in mode
 // (the default back end, FR-06b). Each test loads the page afresh, so each starts
 // from a new back end: Mission A imported silently, paused at its start (FR-77).
 const STARTUP_BUDGET_MS = 30_000; // NFR-10, as declared in src/config.ts
 const SLOW = 90_000;
-const BASE = 'demo/';
+const BASE = withBackend('demo/');
 const PASSWORDS = ['demo-owner', 'demo-friend', 'demo-analyst', 'svc-demo'];
 
 
-/** Requests the page sends to the server, through the relay (the display client's; the stand-in's models run in its worker). */
+/**
+ * Requests the display client sends to the server, through the relay. The stand-in's models run in its
+ * worker; the Python back end's model workers also go through the relay, and say so (x-tap-model): left out.
+ */
 function apiLog(page: Page) {
   const log: { at: number; url: string; method: string }[] = [];
   page.on('request', (r) => {
-    if (/\/demo\/api(\/|$)/.test(r.url())) log.push({ at: Date.now(), url: r.url(), method: r.method() });
+    if (/\/demo\/api(\/|$)/.test(r.url()) && !r.headers()['x-tap-model']) log.push({ at: Date.now(), url: r.url(), method: r.method() });
   });
   return log;
 }
@@ -74,6 +78,13 @@ test('start-up within budget; before login nothing is shown and nothing is sent 
   await page.goto(BASE);
   await expect(page.getByTestId('flowchart')).toBeVisible({ timeout: STARTUP_BUDGET_MS });
   console.log(`flowchart after ${Date.now() - t0} ms`);
+  // NFR-05, NFR-10: the start-up budget includes the silent import of Mission A and each model's worker.
+  type Startup = { milestones: Record<string, number> };
+  const startup = () => page.evaluate(() => (window as unknown as { __startup: () => Startup }).__startup());
+  await expect.poll(async () => (await startup()).milestones.models ?? null, { timeout: STARTUP_BUDGET_MS }).not.toBeNull();
+  const { milestones } = await startup();
+  console.log(`start-up (${BACKEND}), ms from navigation: server running ${milestones.server}, Mission A loaded ${milestones.dataset}, models ready ${milestones.models}`);
+  for (const k of ['server', 'dataset', 'models']) expect(milestones[k], k).toBeLessThan(STARTUP_BUDGET_MS);
   await page.getByTestId('card-client').click();
   await expect(page.getByTestId('dc-login')).toBeVisible();
   // VS-24, FR-102: the two demo accounts, labelled.

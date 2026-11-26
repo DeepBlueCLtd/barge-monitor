@@ -11,7 +11,8 @@
     "build": "tsc --noEmit && vite build",
     "site": "node scripts/assemble-site.mjs",
     "serve": "node scripts/serve.mjs",
-    "e2e": "playwright test --trace off"
+    "e2e": "playwright test --trace off",
+    "e2e:python": "E2E_BACKEND=python playwright test --trace off"
   },
   "dependencies": {
     "@codemirror/lang-python": "6.2.1",
