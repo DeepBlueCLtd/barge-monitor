@@ -151,7 +151,7 @@ test('login, handshake, the owner sees CO₂; nothing sensitive in the browser; 
   const text = JSON.stringify(msgs);
   for (const p of PASSWORDS) expect(text).not.toContain(p);
   expect(text).not.toContain(Buffer.from('owner:demo-owner').toString('base64'));
-  expect(msgs.some((m) => /authorization: \*\*\*\*/.test(m.content))).toBe(true);
+  expect(msgs.some((m) => /authorization: \*\*\*\*/i.test(m.content))).toBe(true);
 });
 
 test('replay by commands: play, rates, seek and the log; never waited on; polls per second; nothing while paused (AT-33, AT-35, AT-37, AT-39, AT-19)', async ({ page }) => {
@@ -347,7 +347,7 @@ test('clustering carries the selection as an unsaved data of interest; the clust
   await expect.poll(() => posts.find((p) => p.includes('"algorithm":"B"')) ?? '').toContain('doi');
   const sent = JSON.parse(posts.find((p) => p.includes('"algorithm":"B"'))!);
   const doi = JSON.parse(sent.parameters.doi);
-  expect(doi.dataset).toMatch(/^mission-a-/);
+  expect(doi.dataset).toMatchObject({ file: 'MISSION_A_20310407.csv', sha256: expect.stringMatching(/^[0-9a-f]{64}$/) }); // §11, D-182
   expect(doi.sources.length).toBeGreaterThan(0);
   expect(Object.keys(sent.parameters).sort()).toEqual(['algorithm', 'clusters', 'doi', 'sensitivity']);
   await expect(page.getByTestId('chart-clusters')).toBeVisible({ timeout: 40_000 });

@@ -336,7 +336,9 @@ its start (FR-77). This load is quiet.
   failure. A start takes about one real second, during which connections are refused.
 - Command status is posted to `/controlstreams/{csId}/status` with
   `{"command@id": "...", "statusCode": "...", "message": "..."}`. Status codes:
-  `ACCEPTED`, `EXECUTING`, `COMPLETED`, `FAILED`, `REJECTED`.
+  `ACCEPTED`, `EXECUTING`, `COMPLETED`, `FAILED`, `REJECTED`. Listed, each report also
+  carries its own `id` and its `reportTime` (real time); readers tell reports apart by `id`
+  (D-181).
 - **Sending a command:** `POST /controlstreams/{csId}/commands` with
   `{"parameters": {...}}`.
   - **With no subscriber**, the command is dropped. The answer is `202` after 5 s, and the

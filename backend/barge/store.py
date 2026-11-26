@@ -38,7 +38,7 @@ class Ids:
     def next(self, kind: str) -> str:
         k = self.n.get(kind, 0) + 1
         self.n[kind] = k
-        off = {"system": 4, "datastream": 9001, "controlstream": 17011, "command": 23023}.get(kind, 0)
+        off = {"system": 4, "datastream": 9001, "controlstream": 17011, "command": 23023, "status": 29021}.get(kind, 0)
         return _b32((k * 7919 + off) % (32 ** 4))
 
 

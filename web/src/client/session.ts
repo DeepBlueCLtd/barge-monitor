@@ -804,7 +804,12 @@ export class DisplayClientSession {
       const params: Record<string, unknown> = {};
       for (const f of fields) {
         if (f.name === 'algorithm') params.algorithm = algorithm;
-        else if (f.name === 'doi') params.doi = JSON.stringify({ dataset: s.dataset, start: iso(w[0]), end: iso(w[1]), resolution: this.currentRes(), sources });
+        else if (f.name === 'doi') {
+          // §11: an unsaved data of interest names its dataset by file and sha256, from the catalogue (D-182).
+          const e = this.catalogue.value.find((x) => x.dataset === s.dataset);
+          const dataset = e ? { file: e.file, size: e.size, modified: e.modified, sha256: e.sha256 } : s.dataset;
+          params.doi = JSON.stringify({ dataset, start: iso(w[0]), end: iso(w[1]), resolution: this.currentRes(), sources });
+        }
         else {
           // Every other parameter at the middle of its bounds, from the control stream's schema (FR-27).
           const iv = f.constraint?.intervals?.[0];

@@ -4,7 +4,7 @@
 // server) and for what a person at the screen does (a wrong password, walking away,
 // a crafted request). Replay is driven through the display client, as a viewer would.
 import { clientSession, DisplayClientSession } from '../client/session';
-import { API_BASE, IDLE_LOCK_MS } from '../config';
+import { API_BASE, DATA_FOLDER, IDLE_LOCK_MS } from '../config';
 import { DEMO_LOGINS } from './demoAccounts';
 import { runtime } from './runtime';
 import { selectComponent } from './selection';
@@ -102,7 +102,12 @@ async function craftedRequest(): Promise<string> {
   const r1 = ds ? await fetch(API_BASE + `datastreams/${ds.id}/observations?limit=5`, { headers: friend, cache: 'no-store' }) : null;
   // A clustering command naming a CO₂ field, as the friend.
   const cs = (await j('controlstreams?limit=1000', quiet)).items.find((c: { inputName: string }) => c.inputName === 'clustering');
-  const dataset = runtime.replay.value?.dataset ?? '';
+  // The data of interest names its dataset by file and sha256 (docs/v4-interfaces.md §11; D-182), as the client's records do.
+  const id = runtime.replay.value?.dataset ?? '';
+  const file = runtime.controlState.value?.datasets?.find((d) => d.id === id)?.file ?? '';
+  const listing = await fetch(DATA_FOLDER + 'index.json', { cache: 'no-store' }).then((r) => r.json()).catch(() => ({ files: [] }));
+  const entry = (listing.files as { file: string; size: number; modified: string; sha256: string }[]).find((f) => f.file === file);
+  const dataset = entry ? { file: entry.file, size: entry.size, modified: entry.modified, sha256: entry.sha256 } : id;
   const doi = { dataset, start: new Date((runtime.replay.value?.start ?? 0) * 1000).toISOString().replace('.000Z', 'Z'),
     end: new Date(((runtime.replay.value?.start ?? 0) + 600) * 1000).toISOString().replace('.000Z', 'Z'), resolution: 'PT1S',
     sources: [{ system: co2?.properties.uid ?? 'urn:x-barge:sensor:bow:co2', output: 'co2', fields: ['co2'] }] };

@@ -219,7 +219,7 @@ class Runtime:
         cmd = self.store.commands.get(cmd_id)
         if cmd is None:
             return
-        rep = {"command@id": cmd_id, "statusCode": code, "reportTime": _iso_now(self)}
+        rep = {"id": self.store.ids.next("status"), "command@id": cmd_id, "statusCode": code, "reportTime": _iso_now(self)}
         if message:
             rep["message"] = message
         cmd["status"].append(rep)

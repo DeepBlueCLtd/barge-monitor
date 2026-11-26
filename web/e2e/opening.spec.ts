@@ -1,6 +1,6 @@
 import { expect, Page, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
-import { withBackend } from './backend';
+import { BACKEND, withBackend } from './backend';
 
 const readJson = (rel: string) => JSON.parse(readFileSync(new URL(rel, import.meta.url), 'utf8'));
 const layout = readJson('../src/shell/layout.json') as {
@@ -240,7 +240,9 @@ test('AT-65: Adopt merges the eight into one Data server card and hands over', a
   await expect(page.getByTestId('opening-switch')).toHaveCount(0);
   // The top-bar controls and the banner appear, and the back end starts (FR-125).
   for (const id of CONTROLS) await expect(page.getByTestId(id)).toBeVisible();
-  await expect(page.getByTestId('standin-notice')).toBeVisible(); // the stand-in is the default back end (FR-06b)
+  // The stand-in is the default back end (FR-06b) and says so; the Python back end shows no such banner.
+  if (BACKEND === 'standin') await expect(page.getByTestId('standin-notice')).toBeVisible();
+  else await expect(page.getByTestId('standin-notice')).toHaveCount(0);
   await expect.poll(() => workers(page), { timeout: 30_000 }).toBeGreaterThan(0);
   // The flowchart is exactly the normal layout: every card where layout.json puts it.
   const origin = await page.locator('[data-zone="front"]').boundingBox();
