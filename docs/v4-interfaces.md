@@ -674,7 +674,8 @@ user-to-role assignment, which the server reads on the next request (§9.3).
 
 `?backend=python|standin`, `?sketch=off` and `?hand-made`. `?seed` is withdrawn: the data
 folder is fixed. For tests only, `?folder=<relative path>/` points the importer at another
-folder of the same site (D-272).
+folder of the same site (D-272), and `?idle=<seconds>` shortens the display client's
+5-minute idle lock (D-305).
 
 ### 13.7 Startup and readiness (FR-125a, NFR-10a)
 
