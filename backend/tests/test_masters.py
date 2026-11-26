@@ -81,7 +81,8 @@ def test_essentials_agree_with_the_swe_masters():
 
 
 def test_the_servers_weather_record_is_the_master():
-    """Until the importer (plan Phase 5), the sensors' records come from the 4.1 logger: the same fields."""
+    """The 4.1 logger's records (still read by the 4.1 app, D-271) have the master's fields; the importer declares
+    the master itself (``importer.weather_schema``)."""
     from barge.clock import ManualClock
     from barge.runtime import Runtime
 

@@ -119,8 +119,9 @@ class Server:
     def _configure(self) -> dict:
         """What OpenSensorHub's configuration creates at start (docs/v4-interfaces.md §6): the platform, its
         sensors and their CO₂ analysers (restricted), Models, and a workspace per user. Each sensor's
-        ``weather`` datastream is read from the logger store through the adapter until the CSV importer
-        (plan Phase 5); its schema is this start's offering, so a new offering is a new datastream (FR-51)."""
+        ``weather`` datastream is read from the 4.1 logger store through the adapter, for the 4.1 display client
+        and models (D-271); its schema is this start's offering, so a new offering is a new datastream (FR-51).
+        The CSV importer registers itself, at each start, once the index is rebuilt (``importer.py``)."""
         st = self.store
         add = st.add_system
         barge, _ = add(URN + "platform:barge", "Collection platform", "The uncrewed electric cargo barge. It records no position.",

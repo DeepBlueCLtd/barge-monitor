@@ -472,7 +472,7 @@ class Api:
     # --- the importer's catalogue (§7) --------------------------------------------------------------
     async def catalogue(self) -> list[dict]:
         """The catalogue folded per file: the latest observation for each file is its current status (§7).
-        Empty while there is no importer (it arrives in plan Phase 5)."""
+        Empty while there is no importer."""
         key = URN + "importer|catalogue"
         if key not in self._ids and await self.find(URN + "importer", "catalogue") is None:
             return []

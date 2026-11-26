@@ -98,7 +98,7 @@ export class Server {
   /**
    * What OpenSensorHub's configuration creates at start (server._configure; interfaces §6): the platform,
    * its sensors and their CO₂ analysers (restricted), Models, and a workspace per user. Each sensor's
-   * `weather` datastream is read from the logger store until the CSV importer (plan Phase 5); its schema
+   * `weather` datastream is read from the 4.1 logger store, for the 4.1 display client and models (D-271); its schema
    * is this start's offering, so a new offering is a new datastream (FR-51).
    */
   private configure(): void {

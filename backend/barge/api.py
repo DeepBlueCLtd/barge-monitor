@@ -25,8 +25,10 @@ and refused with 403** (FR-93 as relaxed in 4.7). Creating and appending is allo
 one's own systems. Roles are read on every request (FR-116). Receivers subscribe on the internal
 endpoint ``/api-internal``, for service accounts only (D-223).
 
-Until the CSV importer (plan Phase 5), each sensor's ``weather`` datastream is read from the 4.1
-logger store through the store adapter (letter ``S``), and the profile served is the 4.1 one.
+The CSV importer (``importer.py``) is a module of this server: its datasets are stored datastreams
+under the sensors and the CO₂ analysers. Beside them, until the 4.1 display client and models are
+replaced (plan Phases 6 and 7), each sensor's ``weather`` datastream is read from the 4.1 logger store
+through the store adapter (letter ``S``), and the profile served is the 4.1 one (D-252, D-271).
 
 One thing here is not OpenSensorHub and says so: ``/demonstrator/referee`` (scaffolding: the only
 code that reads the manifest, FR-37).
