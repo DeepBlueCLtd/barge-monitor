@@ -182,6 +182,8 @@ export class DisplayClientSession {
   /** A dataset asked for but not yet current (load sent, or the models still preparing it). */
   loading = new Store<string | null>(null);
   dois = new Store<DoiItem[]>([]);
+  /** The dataset whose models were not yet ready when the last handshake was made (D-186). */
+  private discoveredEarly: string | null = null;
   opened = new Store<Opened | null>(null);
   /** The data shown may be out of date: the server stopped answering (AT-11). */
   stale = new Store(false);
@@ -385,6 +387,10 @@ export class DisplayClientSession {
     }
     try {
       await this.readState(http);
+      // A handshake made while the models were still declaring the dataset's datastreams may have seen
+      // only some of them: it is repeated once they are ready (FR-44, D-186).
+      const st = this.replay.value;
+      this.discoveredEarly = st && !st.models_ready ? st.dataset : null;
       await this.readCatalogue(http);
       await this.readDois(http);
       await this.applyDataset(http, this.replay.value?.dataset ?? null);
@@ -491,6 +497,12 @@ export class DisplayClientSession {
     if (s && s.dataset === dataset && !s.models_ready) {
       this.loading.set(dataset);
       this.view.set(null);
+      return;
+    }
+    if (s?.models_ready && s.dataset === dataset && this.discoveredEarly === dataset) {
+      this.discoveredEarly = null;
+      this.wantHandshake = true;
+      this.loading.set(dataset);
       return;
     }
     if (!modelOutputs && s?.models_ready) {

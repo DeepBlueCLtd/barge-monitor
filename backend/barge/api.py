@@ -38,7 +38,7 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 from . import config as C
 from . import scoring
 from . import swe
-from .store import Subscription
+from .store import URN, Subscription
 from .times import iso, iso_many, parse_iso, world_seconds
 
 SOSA = "http://www.w3.org/ns/sosa/"
@@ -310,8 +310,17 @@ def create_server(rt) -> Gate:
         rec = d["schema"]
         return dict(rec, fields=[f for f in rec["fields"] if f["name"] == "time" or off.keep(f["name"])])
 
+    def declared_now(d) -> bool:
+        # D-186: a model's datastream is listed only once the model has declared it again since this server
+        # start (its schema may have changed with the fields offered); the stand-in's models do so at start.
+        st = store()
+        if d.get("declared_at_boot", st.boot) == st.boot:
+            return True
+        models = st.system_by_uid(URN + "process:models")
+        return not (models and any(a["id"] == models["id"] for a in st.ancestors(d["system"])[1:]))
+
     def served(d) -> bool:
-        return not d["replaced"] and len(served_schema(d)["fields"]) > 1  # every output off: not served (FR-52)
+        return not d["replaced"] and declared_now(d) and len(served_schema(d)["fields"]) > 1  # every output off: not served (FR-52)
 
     def get_ds(request, dsid, hidden=False) -> dict:
         d = store().datastreams.get(dsid)

@@ -622,6 +622,9 @@ class Runner:
             self.phase = "live"
             self.detail = f"{ds['id']}: up to {iso(min(self.next[key], ds['end'] + 1))}"
         except Unavailable as e:
+            # The server did not answer: it may have restarted. Register again, and so declare this model's
+            # datastreams again, once it answers (D-186), with or without a subscription to tell it so.
+            self.registered = False
             self.phase, self.detail = "waiting", str(e)
         except Refused as e:
             self.errors += 1
