@@ -167,10 +167,12 @@ The savings frames predate 4.6. In them the eight subsystems sit inside
 a "built by us" box and the importer and Models are gold, and 4.6
 forbids both. Where a mockup and this document disagree, this document
 wins.</p>
-<p><strong>Companion documents to update (4.7):</strong>
-<code>docs/v4-interfaces.md</code>, <code>docs/plan-v4.6.md</code>, ADR
-0006 (replay controller) and ADR 0008 (access gateway) describe 4.6.
-They need revising to 4.7 before building (§15).</p>
+<p><strong>Companion documents (4.7):</strong> the contract is
+<code>docs/v4-interfaces.md</code>, the plan
+<code>docs/plan-v4.7.md</code>, and the decisions
+<code>docs/decisions-log.md</code> (D-220 to D-232). ADR 0009 (replay in
+the display client) and ADR 0010 (access control by OpenSensorHub)
+supersede ADRs 0006 and 0008.</p>
 <h3 id="changes-from-version-43">Changes from Version 4.3</h3>
 <ul>
 <li><strong>CSV files in a data folder (4.4).</strong> The legacy
@@ -2010,10 +2012,12 @@ overlap or are re-exported.</p></li>
 placeholder; confirm with the barge owner.</p></li>
 <li><p><strong>Decision log numbering.</strong> Resolved: the duplicates
 are now D-107 to D-114.</p></li>
-<li><p><strong>Interfaces document (4.7).</strong>
-<code>docs/v4-interfaces.md</code>, the plan and ADRs 0006 and 0008
-describe 4.6 (the replay controller and the access gateway); revise them
-to 4.7.</p></li>
+<li><p><strong>What OpenSensorHub must be configured to do
+(4.7).</strong> Interfaces §14 lists what the stand-ins assume of a
+configured OpenSensorHub without a gateway: an allow-list for restricted
+reads, refusing delete, private workspaces, an internal endpoint for
+receivers, and no browser login dialog. Each is to be confirmed with the
+OpenSensorHub team.</p></li>
 <li><p><strong>Handshakes after imports (4.6).</strong> A full handshake
 after every import (FR-44) is drawn one request at a time (FR-42a), and
 it grows with every dataset imported. If it gets in the way of a
