@@ -122,9 +122,9 @@ export class ReplayController {
     });
     await api.createDatastream(UID.replay, {
       name: 'Replay log', outputName: 'log', schema: M.record('Replay log', [
-        M.time('time', 'Replay time it took effect'), M.text('command_id', 'Command'), M.category('action', 'Action', ['load', 'play', 'pause', 'seek']),
-        M.text('dataset', 'Dataset'), M.quantity('rate', 'Rate', '1'), M.time('position', 'Position'), M.text('run', 'Replay run'),
-        M.text('sender', 'Sender')]),
+        M.time('time', 'Real time it took effect'), M.text('command_id', 'Command'), M.category('action', 'Action', ['load', 'play', 'pause', 'seek']),
+        M.text('dataset', 'Dataset'), M.quantity('rate', 'Rate', '1'), M.time('position', 'Replay time it took effect'),
+        M.text('run', 'Replay run'), M.text('sender', 'Sender')]),
     });
     this.csKey = await api.createControlstream(UID.replay, {
       name: 'Replay', inputName: 'replay', schema: M.record('Replay', [
@@ -182,7 +182,7 @@ export class ReplayController {
       if (missing.length) {
         this.detail = `models_ready: skipped ${missing.join(', ')} after ${MODELS_READY_SKIP_S} s`;
         await this.api.publish(`${UID.replay}|log`, {
-          time: this.time, command_id: '', action: 'load', dataset: d.id, rate: this.rate, position: this.time, run: this.run,
+          time: realNow(), command_id: '', action: 'load', dataset: d.id, rate: this.rate, position: this.time, run: this.run,
           sender: `models_ready: skipped ${missing.join(', ')}`,
         });
       }
@@ -266,8 +266,9 @@ export class ReplayController {
       if (!this.atEnd) this.playing = true;
     } else this.playing = false;
     this.dirty = true;
+    // The log's time is the real time the command took effect; its position, the replay time (D-198).
     await api.publish(`${UID.replay}|log`, {
-      time: this.time, command_id: cmd.id, action, dataset: this.dataset!.id, rate: this.rate, position: this.time, run: this.run,
+      time: realNow(), command_id: cmd.id, action, dataset: this.dataset!.id, rate: this.rate, position: this.time, run: this.run,
       sender: cmd.sender ?? '',
     });
     await this.publishState();

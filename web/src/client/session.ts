@@ -39,6 +39,9 @@ export interface ReplayState {
   models_ready: boolean;
 }
 
+/** Catalogue statuses whose `records` is a real count (D-197): `not-imported` and `importing` carry 0. */
+const COUNTED = new Set(['imported', 'changed', 'superseded']);
+
 export interface CatalogueEntry {
   file: string;
   size: number;
@@ -476,7 +479,8 @@ export class DisplayClientSession {
       const e: CatalogueEntry = {
         file: o.file, size: Number(o.size), modified: o.modified, sha256: o.sha256, dataset: o.dataset ?? '',
         start: o.start && o.start !== 'NaN' ? parseIso(o.start) : null, end: o.end && o.end !== 'NaN' ? parseIso(o.end) : null,
-        records: numberOrNull(o.records), status: o.status, pct: numberOrNull(o.pct),
+        // records is 0 until the file is imported: a count only for a status that names a dataset (D-197).
+        records: COUNTED.has(o.status) ? numberOrNull(o.records) : null, status: o.status, pct: numberOrNull(o.pct),
       };
       byKey.set(`${e.file}|${e.sha256}`, e);
     }

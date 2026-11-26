@@ -78,7 +78,7 @@ export function ReplayDetail() {
       <h3>Log: the latest commands pushed to it</h3>
       {pushes.length ? (
         <ul className="plain" data-testid="replay-log">{pushes.map((m) => <li key={m.key}><code>{pretty(m.content).slice(0, 200)}</code></li>)}</ul>
-      ) : <p className="hint">No command yet. Its <code>log</code> datastream records every command applied, with its sender.</p>}
+      ) : <p className="hint">No command yet. Its <code>log</code> datastream records every command applied, with its sender: <code>time</code> is the real time it took effect, <code>position</code> the replay time.</p>}
     </div>
   );
 }

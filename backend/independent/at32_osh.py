@@ -204,15 +204,16 @@ class ImporterClient:
         now = time.time()
         row = {"time": iso(round(now, 3)), "file": f["file"], "size": f["size"], "modified": f["modified"],
                "sha256": f["sha256"], "dataset": ds["id"] if ds else "", "start": ds["start"] if ds else None,
-               "end": ds["end"] if ds else None, "records": ds["records"] if ds else None, "status": status,
+               "end": ds["end"] if ds else None, "records": ds["records"] if ds else 0, "status": status,
                "pct": pct if pct is not None else (100 if status == "imported" else 0)}
-        # A Time or Count with no value yet is "NaN", as the stand-ins write it. OpenSensorHub refuses a Count
-        # without an integer ("NaN" and null alike): the fallback writes 0 for it and null for a Time (D-197).
+        # A Time with no value yet is "NaN", as the stand-ins write it; records is 0 until imported (D-197), since
+        # OpenSensorHub refuses a Count without an integer ("NaN" and null alike). The fallback writes null for a
+        # Time, should OpenSensorHub refuse "NaN" there.
         out = {k: ("NaN" if v is None else _value(self.cat_types[k], v)) for k, v in row.items()}
         st = await self.d.obs(self.catalogue, out)
         if st not in (200, 201):
             self.catalogue_refusals += 1
-            out = {k: (v if v != "NaN" else 0 if self.cat_types[k] == "Count" else None) for k, v in out.items()}
+            out = {k: (None if v == "NaN" and self.cat_types[k] == "Time" else v) for k, v in out.items()}
             st = await self.d.obs(self.catalogue, out)
             assert st in (200, 201), f"catalogue observation refused even with the fallback: {st}"
 
@@ -327,7 +328,9 @@ class ReplayClient:
         await self.d.obs(self.state_ds, {k: _value(self.state_types[k], v) for k, v in row.items()})
 
     async def _log(self, cid, action, sender, note=""):
-        row = {"time": self.time, "command_id": cid, "action": action, "dataset": self.ds["id"] if self.ds else "",
+        # The real time it took effect, the replay time as position (D-198): OpenSensorHub keeps one observation
+        # per phenomenon time, so a log keyed by replay time would lose a load and a pause at one position.
+        row = {"time": time.time(), "command_id": cid, "action": action, "dataset": self.ds["id"] if self.ds else "",
                "rate": self.rate, "position": self.time, "run": self.run, "sender": sender, "note": note}
         await self.d.obs(self.log_ds, {k: _value(self.log_types[k], v) for k, v in row.items()})
 

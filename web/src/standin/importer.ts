@@ -132,12 +132,13 @@ export class Importer {
     }
   }
 
-  /** One catalogue observation (§7): the latest per file is its current status. */
+  /** One catalogue observation (§7): the latest per file is its current status. `records` is 0 until the file
+   * is imported (a Count has no missing value in OpenSensorHub); the status says whether it counts (D-197). */
   private publish(st: FileState, quiet: boolean): void {
     if (!this.catalogue) return;
     const row = {
       file: st.file, size: st.size, modified: parseIso(st.modified), sha256: st.sha256, dataset: st.dataset,
-      start: st.start ?? NaN, end: st.end ?? NaN, records: st.records ?? NaN, status: st.status, pct: st.pct,
+      start: st.start ?? NaN, end: st.end ?? NaN, records: st.status === 'not-imported' || st.status === 'importing' ? 0 : st.records ?? 0, status: st.status, pct: st.pct,
     };
     this.catalogue.series.appendRow(realNow(), row);
     this.tap.emit('importer', 'server', 'I', `catalogue: ${st.file} ${st.status}${st.status === 'importing' ? ` ${st.pct}%` : ''}`,

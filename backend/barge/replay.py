@@ -6,7 +6,8 @@ it declares itself ready, and validates every command itself, answering ``REJECT
 the bound it breaks (a rate above the slowest model's, AT-35; a dataset not imported).
 
 Its ``state`` datastream gets one observation per real second while playing and one on every
-change; its ``log`` records every command applied. A ``load`` and every ``seek`` start a new
+change; its ``log`` records every command applied, at the real time it took effect, with the replay time
+as ``position`` (D-198). A ``load`` and every ``seek`` start a new
 replay run ``r-<dataset>-<n>``, which the models tag their results with (FR-87). At the end of
 the dataset it pauses and says so (FR-88).
 
@@ -38,10 +39,10 @@ def state_schema() -> dict:
 
 def log_schema() -> dict:
     return swe.record([
-        swe.time_field("time", "Replay time it took effect"), swe.text("command_id", "Command"),
+        swe.time_field("time", "Real time it took effect"), swe.text("command_id", "Command"),
         swe.category("action", "Action", list(ACTIONS) + ["models-ready"]), swe.text("dataset", "Dataset"),
-        swe.quantity("rate", "Rate", "1"), swe.time_value("position", "Position"), swe.text("run", "Replay run"),
-        swe.text("sender", "Sent by"), swe.text("note", "Note")], "Replay log")
+        swe.quantity("rate", "Rate", "1"), swe.time_value("position", "Replay time it took effect"),
+        swe.text("run", "Replay run"), swe.text("sender", "Sent by"), swe.text("note", "Note")], "Replay log")
 
 
 def control_schema() -> dict:
@@ -212,11 +213,15 @@ class Replay:
         self._new_run()
 
     def _log(self, cid: str, action: str, sender: str, note: str = "", quiet: bool = False) -> None:
+        """One log entry: ``time`` is the real time it took effect, ``position`` the replay time (D-198). Keyed by
+        the replay time, two entries at one position would be one in OpenSensorHub, which keeps one observation
+        per phenomenon time."""
+        now = round(self.rt.real(), 3)
         row = {"command_id": cid, "action": action, "dataset": self.dataset["id"] if self.dataset else "",
                "rate": self.rate, "position": self.time, "run": self.run, "sender": sender, "note": note}
-        self.rt.store.append_row(self.log_ds, self.time, round(self.rt.real(), 3), row)
+        self.rt.store.append_row(self.log_ds, now, now, row)
         self.rt.tap.emit("replay", "server", "O", f"log: {action} {row['dataset']}" + (f" ({note})" if note else ""),
-                         dict(row, time=iso(self.time), position=iso(self.time)), quiet=quiet)
+                         dict(row, time=iso(now), position=iso(self.time)), quiet=quiet)
 
     # --- state (§8) --------------------------------------------------------------------------------
     def state(self) -> dict | None:

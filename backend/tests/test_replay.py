@@ -4,6 +4,7 @@ import asyncio
 import pytest
 
 from tests.helpers import Rig
+from barge.times import iso
 
 REPLAY = "urn:x-barge:replay"
 DC = "urn:x-barge:process:data-cleanse"
@@ -40,6 +41,10 @@ def test_at33_replay_is_driven_by_pushed_commands_and_logged(r):
     entries = log(r)[n:]
     assert [e["action"] for e in entries] == ["play", "pause", "seek"]
     assert all(e["sender"] == "owner" and e["command_id"] for e in entries)
+    # D-198: the log's time is the real time each took effect; the replay time is its position
+    assert [e["position"] for e in entries] == ["2031-04-07T00:00:00Z", "2031-04-07T00:00:10Z", "2031-04-07T00:05:00Z"]
+    times = [e["time"] for e in entries]
+    assert times == sorted(times) and times[-1] == iso(r.clock.t) and all(t < "2031" for t in times), times
     assert r.rt.tap.counts.get("server>replay:K", 0) == before + 3
     pushes = [m for m in r.rt.tap.buffer if m["dst"] == "replay" and m["letter"] == "K"]
     assert pushes and all(m.get("push") for m in pushes)
@@ -48,6 +53,17 @@ def test_at33_replay_is_driven_by_pushed_commands_and_logged(r):
     latest = r.obs(r.ds(REPLAY, "state")["id"], {"resultTime": "latest"})
     assert latest[-1]["position"] == "2031-04-07T00:05:00Z"  # the latest is the current state, even after a seek back
     r.replay("seek", position="2031-04-07T00:00:00Z")
+
+
+def test_two_log_entries_at_one_replay_time_are_both_kept(r):
+    """D-198: a load and a pause at one position are two entries, told apart by the real time they took effect."""
+    n = len(log(r))
+    r.replay("pause")
+    r.step(1.0)
+    r.replay("pause")
+    entries = log(r)[n:]
+    assert [e["action"] for e in entries] == ["pause", "pause"]
+    assert entries[0]["position"] == entries[1]["position"] and entries[0]["time"] < entries[1]["time"]
 
 
 def test_state_once_per_real_second_while_playing(r):

@@ -129,9 +129,11 @@ class Importer:
         if not force and self.published.get(key) == status:
             return
         self.published[key] = status
+        # A Count has no missing value in OpenSensorHub ("NaN" and null are refused): records is 0 until the
+        # file is imported, and the status says whether it counts (D-197).
         row = {"file": f["file"], "size": f["size"], "modified": parse_iso(f["modified"]), "sha256": f["sha256"],
                "dataset": ds["id"] if ds else "", "start": ds["start"] if ds else np.nan,
-               "end": ds["end"] if ds else np.nan, "records": ds["records"] if ds else np.nan, "status": status,
+               "end": ds["end"] if ds else np.nan, "records": ds["records"] if ds else 0, "status": status,
                "pct": pct if pct is not None else (100 if status in ("imported", "superseded") else 0)}
         now = round(self.rt.real(), 3)
         self.rt.store.append_row(self.catalogue, now, now, row)
