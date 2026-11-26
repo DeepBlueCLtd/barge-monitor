@@ -19,6 +19,10 @@ jobs:
       - run: pip install -r backend/requirements-dev.txt
       - run: python -m pytest -q
         working-directory: backend
+      - name: The data folder reproduces exactly from its seeds (FR-15a, AT-28)
+        run: |
+          python scripts/build_data_folder.py .cache/data
+          python scripts/build_data_folder.py --check .cache/data
       - name: Vocabulary gate (PR-01)
         env:
           VOCABULARY_TERMS: ${{ secrets.VOCABULARY_TERMS }}
@@ -55,6 +59,10 @@ jobs:
           path: .cache
           key: shared-${{ hashFiles('web/scripts/fetch-pyodide.mjs', 'backend/barge/*.py') }}
       - run: python scripts/build_history.py --days 1 .cache/history 1 2 3  # 24 hours, as published (FR-15)
+      - name: The data folder, shipped in the site build (FR-15; read from Phase 5 on)
+        run: |
+          python scripts/build_data_folder.py
+          python scripts/build_data_folder.py --check
       - run: npm run pyodide && npm run build && npm run site
         working-directory: web
       - run: npx playwright install --with-deps chromium
