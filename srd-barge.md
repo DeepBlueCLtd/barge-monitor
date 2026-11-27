@@ -823,34 +823,42 @@ reveal, so nothing is marked as ours in it.
 - **FR-122** **Nothing runs.** The top bar's controls are **hidden, not disabled**: replay
   mirror, restart client, restart server, failure demos, control panel and
   overview. No message is sent or drawn. The display client does not handshake. **The back
-  end does not start (4.6)**: no worker runs and no model registers until hand-over
-  (FR-125). The status panel shows only "Opening". The **stand-in banner is hidden** until
+  end does not start (4.6)**: no worker runs, no model registers and nothing is fetched until
+  the viewer chooses Adopt (FR-124, FR-125). The status panel shows only "Opening". The **stand-in banner is hidden** until
   hand-over, because it names OpenSensorHub before there is a data server on screen.
-- **FR-123** **The opening panel.** The detail panel opens on **Data server** with:
+- **FR-123** **The opening panel (4.7, D-359).** The detail panel opens on **The
+  components** with:
   - a two-way switch, **Build it ourselves | Adopt OpenSensorHub**, with *Build it
     ourselves* selected;
-  - the table of FR-120;
-  - a row, **"Written by us either way"**: CSV importer, Models, display client, in plain
-    style.
-  - the lead, before adoption: written ourselves, the data server is a range of subsystem
-    components to develop, among them these (4.7).
+  - one table of **every component** in the opening, in the flowchart's order: the display
+    client, Models, the CSV importer, the subsystems of FR-120, the scientific libraries and
+    the data folder. Each row says what the component does and where it keeps its data;
+  - the lead, before adoption: written ourselves, the system is a range of components to
+    develop; which of them could be adopted rather than written is not yet decided.
 
-  Clicking a subsystem card highlights its row in the table. Clicking any other card does
-  nothing in the opening.
-- **FR-124** **Adopt.** Choosing *Adopt OpenSensorHub*:
-  1. moves the subsystem cards into the third-party zone, where they merge into the single
-     **Data server** card (OpenSensorHub, OGC Connected Systems);
-  2. spreads the CSV importer and Models across the back end that the subsystems have
-     left;
-  3. changes the table to "OpenSensorHub covers all of these", with each subsystem
-     ticked. No number is shown (§16).
+  Before Adopt nothing in the panel says which components could be adopted or which are
+  written by us. Clicking any card highlights its row; nothing is revealed (FR-121).
+- **FR-124 (D-360)** **Adopt.** Choosing *Adopt OpenSensorHub*:
+  1. fades the opening's lines and shows the single **Data server** card (OpenSensorHub, OGC
+     Connected Systems) in the third-party zone;
+  2. moves the subsystem cards into it **one at a time**, in the table's order, each card
+     travelling and shrinking smoothly as it goes;
+  3. adds a column, "With OpenSensorHub", ticking each subsystem as its card lands; once all
+     have landed, the display client, Models and the CSV importer "Written by us", the
+     scientific libraries adopted, the data folder unchanged. No number is shown (§16);
+  4. spreads the CSV importer and Models across the back end that the subsystems have
+     left, moves the zones and the data folder to their normal places, and fades in the
+     normal flowchart's arrows, with their labels.
 
-  This takes about 1.5 seconds. With reduced motion it is immediate.
-- **FR-125** **Hand-over.** When the merge ends, the flowchart is **exactly** FR-77's
-  startup layout, and FR-74 applies from that moment: every component looks the same, and
-  the display client shows its login screen. The top bar's controls and the stand-in banner
-  **appear**. The **back end starts now (4.6)**, with the usual loading progress (NFR-10),
-  as on a load without the flag. The detail panel keeps the adopted savings until the
+  This takes about six seconds. With reduced motion it is immediate.
+- **FR-125 (D-360)** **Hand-over.** When the merge ends, the flowchart is **exactly** FR-77's
+  startup layout, with its arrows, and FR-74 applies from that moment: every component looks
+  the same, and the display client shows its login screen. The top bar's controls and the
+  stand-in banner **appear**. The **back end starts at the Adopt click**, while the cards
+  merge, with the usual named loading steps (NFR-10, NFR-10a). **The flowchart never
+  disappears**: until the back end has started, its steps, and any stall, are shown in the
+  flowchart's status box, and the controls are disabled, each saying why ("Starting:
+  <step>"). A load without the flag keeps its startup page. The detail panel keeps the adopted savings until the
   viewer clicks a component or closes it. **That panel is the only difference** from a load
   without the flag.
 - **FR-125a (4.7)** **Ready means usable.** After hand-over, and after any load, nothing
@@ -972,7 +980,7 @@ pace), and in 4.4 and 4.6:
 | **AT-62** | Without the `hand-made` flag the demonstrator opens as FR-77 describes; with it, in the adoption opening; reloading with it repeats the opening | Architecture view |
 | **AT-63** | In the opening: no top-bar control and no stand-in banner is in the page; no back-end or model worker has started; no message is captured or drawn; the third-party zone has no data server; nothing gold, no ★ and no diamond anywhere, and clicking the display client or Models reveals nothing | Architecture view |
 | **AT-64** | The subsystem cards match the CSV importer and Models cards in size, outline style, fill and font; no element encloses or labels them as a group; no count of them is shown | Architecture view |
-| **AT-65** | After Adopt: one Data server card in the third-party zone; the table shows every subsystem ticked, with no number; the top-bar controls and banner appear and the back end starts; once it has started, everything but the detail panel matches a load without the flag, and the state passes AT-19 and AT-20 | Architecture view |
+| **AT-65** | After Adopt: the subsystem cards merge one at a time, shrinking as they go, into one Data server card in the third-party zone, and the normal arrows are drawn; the table shows every subsystem ticked, with no number; the back end starts at the Adopt click, the top-bar controls and banner appear, and the flowchart stays on screen throughout; once it has started, everything but the detail panel matches a load without the flag, and the state passes AT-19 and AT-20 | Architecture view |
 | **AT-66** | With reduced motion, Adopt changes the layout immediately, without animation | Visual style |
 | **AT-67** | After Adopt, nothing plays before login, an open dataset and Play; every disabled top-bar control says why | Architecture view |
 | **AT-68** | With Service Workers blocked, or an older one in control, the page names the stalled step and what to do within 10 seconds | Delivery |

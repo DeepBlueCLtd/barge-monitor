@@ -1,6 +1,10 @@
 // The demonstrator shell (§9.1): top bar with title, subtitle and controls;
 // the stacked flowchart on the left with status and key below it; the detail
 // panel on the right. The shell frames the system and is not a component.
+// With `?hand-made` it opens on the adoption opening (SRD §9.8): only the title in the
+// top bar, and nothing started until the viewer adopts (FR-122). The back end starts at the
+// Adopt click, while the cards merge; the flowchart stays on screen, and the named startup
+// steps show in its status box until the server answers (FR-125, NFR-10a, D-360).
 import { useEffect, useState } from 'react';
 import { clientSession } from '../client/session';
 import { RATES, STARTUP_BUDGET_MS } from '../config';
@@ -8,6 +12,7 @@ import { DetailPanel } from '../detail/DetailPanel';
 import { ControlPanel } from './ControlPanel';
 import { DemoBanner, DemoMenu } from './Demos';
 import { Flowchart } from './Flowchart';
+import { opening } from './opening';
 import { runtime } from './runtime';
 import { selectComponent, unrevealAll } from './selection';
 import { sketchEnabled } from './sketch';
@@ -20,24 +25,61 @@ export const STANDIN_NOTICE = 'Running the JavaScript stand-in: the architecture
 
 export function App() {
   const progress = useStore(runtime.progress);
-  const [failure, setFailure] = useState<string | null>(null);
+  const phase = useStore(opening.phase);
+  const failure = useStore(runtime.failure);
 
   useEffect(() => {
     document.documentElement.classList.toggle('sketch-off', !sketchEnabled);
-    runtime.start().catch((e) => setFailure(String(e?.message ?? e)));
+    const start = () => {
+      runtime.start().catch((e) => runtime.failure.set(String(e?.message ?? e)));
+    };
+    // FR-122: in the adoption opening the back end does not start (no worker, no relay) until
+    // the viewer adopts; it then starts at once, while the cards merge (D-360). Without the flag
+    // it starts at load (FR-77).
+    if (opening.phase.value === 'off') start();
+    else opening.onAdopt(start);
   }, []);
   useEffect(() => {
-    if (progress.stage === 'error') setFailure(progress.detail);
+    if (progress.stage === 'error') runtime.failure.set(progress.detail);
   }, [progress]);
 
   // FR-15: the flowchart becomes available when the server answers, Mission A imported silently.
   // Until then the top bar is shown with its controls disabled, each saying why (FR-125a).
   const ready = progress.stage === 'ready';
+  // FR-122: before hand-over, the opening: the title alone in the top bar, the flowchart and its panel.
+  // D-360: in a session that began on the opening the flowchart is never replaced by the startup page: the
+  // same <Main> stays mounted from the opening through the merge to a started back end, and the startup's
+  // named steps show in its status box. Only a load without the flag shows the startup page.
+  if (phase !== 'off') {
+    return (
+      <div className="shell" data-opening={phase}>
+        {opening.active ? <OpeningTopBar /> : <TopBar ready={ready} />}
+        <Main key="main" />
+      </div>
+    );
+  }
   return (
-    <div className="shell">
+    <div className="shell" data-opening={phase}>
       <TopBar ready={ready} />
       {ready ? <Main /> : <Loading pct={progress.pct} detail={progress.detail} failure={failure} />}
     </div>
+  );
+}
+
+/**
+ * FR-122: in the opening the top bar holds the title only: no control and no stand-in notice in the page. The lines
+ * below the title are kept empty, not removed, so the top bar keeps its height and the flowchart does not rescale
+ * when the controls and the notice appear at hand-over.
+ */
+function OpeningTopBar() {
+  return (
+    <header className="topbar">
+      <div className="brand">
+        <h1>{TITLE}</h1>
+        <p className="subtitle placeholder" aria-hidden="true">&nbsp;</p>
+        {runtime.kind === 'standin' && <p className="standin-notice placeholder" aria-hidden="true">&nbsp;</p>}
+      </div>
+    </header>
   );
 }
 
@@ -148,7 +190,13 @@ function TopBar({ ready }: { ready: boolean }) {
             title={control?.pending ? 'Field changes are pending until the next server start' : undefined} {...off}>Restart server</button>
           <DemoMenu reason={reason} />
           <button className="btn" onClick={() => setDrawer(!drawer)} aria-expanded={drawer} data-testid="control-panel-toggle" {...off}>Control panel</button>
-          <button className="btn" onClick={() => selectComponent(null)} data-testid="overview-button" title="What is adopted, what is written, what is not here" {...off}>Overview</button>
+          <button className="btn" onClick={() => {
+            opening.dismissPanel(); // FR-125: the overview closes the opening's savings
+            selectComponent(null);
+          }} data-testid="overview-button" title="What is adopted, what is written, what is not here" {...off}>Overview</button>
+          {/* A quick way back to the pre-OSH stage: reload this page with the adoption opening's flag (§9.8). */}
+          <a className="btn" href={customBackendHref()} data-testid="custom-backend-link"
+            title="Reload on the opening: the data server written ourselves, before adopting OpenSensorHub">Custom backend</a>
           {/* FR-125a: why controls are disabled, in sight. A browser shows no tooltip on a disabled button, so a title alone is not enough. */}
           {reason && <p id={REASON_ID} className="control-reason" data-testid="control-reason">{reason}</p>}
           {replayReason && replayReason !== reason && <p id="replay-reason" className="control-reason" data-testid="replay-reason">Play and speed: {replayReason}</p>}
@@ -158,6 +206,13 @@ function TopBar({ ready }: { ready: boolean }) {
       {ready && drawer && <ControlPanel onClose={() => setDrawer(false)} />}
     </>
   );
+}
+
+/** This page with `?hand-made` added, keeping its other parameters (e.g. ?backend=). */
+function customBackendHref(): string {
+  const params = new URLSearchParams(location.search);
+  params.set('hand-made', '');
+  return `${location.pathname}?${params.toString().replace('hand-made=', 'hand-made')}${location.hash}`;
 }
 
 function Main() {

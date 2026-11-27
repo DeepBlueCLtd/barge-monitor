@@ -601,24 +601,49 @@ The master is `contracts/schemas/data-of-interest.json`:
 ## 12. The adoption opening (SRD §9.8)
 
 - **The flag.** `?hand-made` is read once, by `web/src/shell/opening.ts`.
-- **Layout.** `layout-opening.json` holds two rows of five for the back-end band:
-  - row 1: `importer`, `models`, `sub-webapi`, `sub-registry`, `sub-obsstore`;
-  - row 2: `sub-query`, `sub-commands`, `sub-accounts`, `sub-permissions`, `sub-admin`.
+- **Layout.** `layout-opening.json` holds two rows of five for the back-end band, every
+  card the size of `importer` and `models` in `layout.json` (D-330):
+  - row 1: `models`, `importer`, `sub-obsstore`, `sub-registry`, `sub-webapi`;
+  - row 2: `sub-commands`, `sub-accounts`, `sub-query`, `sub-permissions`, `sub-admin`.
 
-  The third-party zone holds `scilibs` only. The other zones are shifted down by one card
-  row.
-- **Lines** (FR-120a) are drawn from `OPENING_FLOWS` in `opening.ts`, without letters.
-- **Wording.** The lead reads: written ourselves, the data server is a range of subsystem
-  components to develop, among them these. No count appears (FR-120, FR-124).
+  The order within each row is the layout's (D-331): `models` and `importer` lead row 1, in
+  the order they have in `layout.json`, so the merge moves neither across the other. The
+  third-party zone holds `scilibs` only. The zones below the back end are shifted down by
+  one card row, and the back end's label sits at its bottom left.
+- **Lines** (FR-120a) are drawn from `OPENING_LINES` (the layout's `lines`) in `opening.ts`,
+  without letters or labels; a two-way flow has a head at each end. Besides FR-120a's
+  table, `models ↔ scilibs` and `importer ↔ folder` are drawn, as in §3.1.
+- **Wording.** The lead reads: written ourselves, the system is a range of components to
+  develop; which of them could be adopted rather than written is not yet decided. No count
+  appears (FR-120, FR-124).
+- **The table** (FR-123, D-359) has a row for every card of the opening, in the flowchart's
+  order (`ROWS` in `opening.ts`); clicking any card highlights its row. After Adopt a column,
+  "With OpenSensorHub", ticks the subsystems and says what became of the rest.
 - **Before Adopt:**
-  - `runtime.start()` is **not called**: no worker starts and the relay is not
-    registered (FR-122);
+  - `runtime.start()` is **not called**: no worker starts, the relay is not
+    registered and nothing is fetched (FR-122);
   - the top bar renders only the title;
   - the status reads "Opening";
   - the banner is not rendered.
-- **Adopt** animates the subsystem cards to the `server` card's position over 1.5 s, with
-  `prefers-reduced-motion` honoured. It then swaps to the normal layout, calls
-  `runtime.start()`, and shows the controls. Nothing plays (FR-125a, §13.7).
+- **Adopt** (D-360) calls `runtime.start()` at once, so the relay, the worker script and, in
+  Python, Pyodide and its packages load while the cards merge. The merge is drawn frame by
+  frame from one clock (`MERGE_SCHEDULE` in `opening.ts`; `OPENING_MERGE` in `config.ts`)
+  over the same React Flow nodes, kept in one order: the opening's lines fade and the
+  `server` card appears (0.7 s); each subsystem card in the table's order then travels into
+  it, starting 0.42 s after the one before and taking 0.9 s, shrinking about its centre and
+  fading as it lands, and `opening.landed` ticks its row; then, over 1.5 s, the other cards
+  and the zones move to `layout.json`'s places and the normal arrows, the god's-eye note,
+  the key and the status fade in. In all about 6.1 s (`OPENING_MERGE_MS`); with
+  `prefers-reduced-motion` the merge is skipped. At its end the phase is `adopted`: the top
+  bar shows its controls and the flowchart rescales to the shorter column over 0.5 s.
+- **The flowchart stays mounted** from the opening to a started back end (D-360, superseding
+  D-332): until the server answers, the status box shows the named startup steps of §13.7,
+  the active one's detail, and any stall or failure with what to do; the controls are
+  disabled with "Starting: <step>", and the cards open their panels once the server has
+  answered. Nothing plays (FR-125a, §13.7).
+- **After hand-over** the detail panel keeps the opening panel, with every subsystem ticked
+  and no switch, until a component is clicked, the panel is closed or Overview is pressed
+  (FR-125).
 
 ## 13. Workers, the page and controls
 
@@ -684,6 +709,9 @@ folder of the same site (D-272), and `?idle=<seconds>` shortens the display clie
 
 ### 13.7 Startup and readiness (FR-125a, NFR-10a)
 
+- **Where.** On a load without the flag, the startup page (the top bar and the steps) is
+  shown until the server answers, then the flowchart. After the opening's Adopt the
+  flowchart stays, and the steps and any stall are shown in its status box (D-360).
 - **Steps.** The loading progress names each step in turn: `relay` (registering the
   Service Worker and waiting until it controls the page), `back end` (the worker and, in
   Python mode, Pyodide), `server` (started and answering), `import` (the silent import of

@@ -40,7 +40,12 @@ Phase 8): the six components in four zones with every flow of §3.1 drawn and la
 folder, the CSV importer, the data server, Models with outputs and runs per dataset), the
 control panel and every failure demo of FR-79a. The top bar mirrors the client's clock. The 4.1
 world run, history, logger, store adapter and simulation clock are retired (D-320): the data
-folder is the only data.
+folder is the only data. And the **adoption opening** (SRD §9.8, plan Phase 9): with `?hand-made`
+the demonstrator opens on the data server as we would write it ourselves, a range of subsystem
+components to develop drawn as the equals of the CSV importer and Models, in two rows of five;
+nothing runs until *Adopt OpenSensorHub*, which starts the back end and merges them, one at a time,
+into the one Data server card, then hands over to the normal layout; the flowchart stays on screen
+while the back end finishes starting (D-360).
 
 ## Layout
 
@@ -78,8 +83,9 @@ npm run e2e              # Playwright tests (E2E_PORT, default 8080, and the nex
 ```
 
 `?backend=python` runs the Python back end and models in Pyodide; `?backend=standin` the
-JavaScript stand-in; `?sketch=off` draws plain outlines; `?folder=<relative path>/` points the
-importer at another folder of the same site (for tests, D-272).
+JavaScript stand-in; `?sketch=off` draws plain outlines; `?hand-made` opens on the adoption
+opening (SRD §9.8); `?folder=<relative path>/` points the importer at another folder of the same
+site (for tests, D-272).
 
 ## Current state
 

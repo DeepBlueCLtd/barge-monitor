@@ -6,7 +6,10 @@ import { iso } from '../client/plan';
 import { Glyph } from './Glyph';
 import { bus, LETTER_ORDER, LETTERS } from './messages';
 import { runtime } from './runtime';
+import { StepState } from './startup';
 import { useStore } from './store';
+
+const STEP_MARK: Record<StepState, string> = { pending: '○', active: '…', done: '✓', failed: '✗' };
 
 const CLIENT_PHASE: Record<string, string> = {
   login: 'Not logged in', locked: 'Locked', handshake: 'Handshake', ready: 'Configured', unreachable: 'Server unreachable', rejected: 'Server rejected',
@@ -15,6 +18,47 @@ const CLIENT_PHASE: Record<string, string> = {
 type Box = [number, number, number, number];
 
 export function StatusBox({ rect }: { rect: Box }) {
+  // D-360: after Adopt the flowchart is on screen while the back end starts; until the server answers the status
+  // box shows the startup's named steps, and a stall, in place of its rows (NFR-10a, §13.7).
+  const starting = useStore(runtime.progress).stage !== 'ready';
+  return starting ? <StartupStatus rect={rect} /> : <StatusRows rect={rect} />;
+}
+
+/**
+ * NFR-10a, D-360: the named startup steps, in the status box. Each step is one line, the active one with what it is
+ * doing; a step that stalls (or fails) says so, with what the viewer can do. The flowchart stays mounted.
+ */
+function StartupStatus({ rect }: { rect: Box }) {
+  const steps = useStore(runtime.startup.steps);
+  const stall = useStore(runtime.startup.stall);
+  const failure = useStore(runtime.failure);
+  return (
+    <section className="status-box panel-box startup-strip" style={{ left: rect[0], top: rect[1], width: rect[2], height: rect[3] }} aria-label="Status"
+      data-testid="status-box" role="status" aria-live="polite">
+      <h2 className="box-title">Status</h2>
+      <p className="starting" data-testid="startup-strip">Starting the {runtime.kind === 'python' ? 'Python back end' : 'JavaScript stand-in'}</p>
+      <ol className="steps" data-testid="startup-steps" aria-label="Startup steps">
+        {steps.map((s) => (
+          <li key={s.id} className={`step ${s.state}`} data-testid={`step-${s.id.replace(' ', '-')}`} data-state={s.state} aria-current={s.state === 'active' ? 'step' : undefined}>
+            <span className="mark" aria-hidden="true">{STEP_MARK[s.state]}</span>
+            <b>{s.id}</b>
+            {s.state === 'active' && <span className="step-detail">{s.detail || s.what}</span>}
+          </li>
+        ))}
+      </ol>
+      {stall && (
+        <div className="stall" role="alert" data-testid="stall" data-step={stall.step}>
+          <p><b>{stall.message}</b></p>
+          <ul>{stall.advice.map((a) => <li key={a}>{a}</li>)}</ul>
+          <button className="btn" onClick={() => location.reload()} data-testid="stall-reload">Reload</button>
+        </div>
+      )}
+      {failure && !stall?.failed && <p className="error">Could not start: {failure}</p>}
+    </section>
+  );
+}
+
+function StatusRows({ rect }: { rect: Box }) {
   const server = useStore(runtime.server);
   const control = useStore(runtime.control);
   const phase = useStore(clientSession.phase);
@@ -37,13 +81,23 @@ export function StatusBox({ rect }: { rect: Box }) {
     ['Back end', runtime.kind === 'python' ? 'Python' : 'JavaScript stand-in', 'backend-state'],
   ];
   return (
-    <section className="status-box panel-box" style={{ left: rect[0], top: rect[1], width: rect[2], height: rect[3] }} aria-label="Status">
+    <section className="status-box panel-box" style={{ left: rect[0], top: rect[1], width: rect[2], height: rect[3] }} aria-label="Status" data-testid="status-box">
       <h2 className="box-title">Status</h2>
       <dl>
         {rows.map(([k, v, id]) => (
           <div key={k} className="status-row"><dt>{k}</dt><dd data-testid={id}>{v}</dd></div>
         ))}
       </dl>
+    </section>
+  );
+}
+
+/** FR-122: in the adoption opening the status shows only "Opening": nothing runs yet. */
+export function OpeningStatus({ rect }: { rect: Box }) {
+  return (
+    <section className="status-box panel-box" style={{ left: rect[0], top: rect[1], width: rect[2], height: rect[3] }} aria-label="Status" data-testid="status-box">
+      <h2 className="box-title">Status</h2>
+      <p className="status-opening" data-testid="status-opening">Opening</p>
     </section>
   );
 }

@@ -1,0 +1,43 @@
+{
+  "comment": "The adoption opening (SRD 9.8, docs/v4-interfaces.md 12): the back-end band in two rows of five, every card the size of the CSV importer and Models in layout.json, on one grid (FR-120, AT-64, VS-25). Row 1: Models, the CSV importer, Observation store, Registry, Web API; row 2: Commands, Accounts, Query engine, Permissions, Admin (D-331). The third-party zone holds the scientific libraries only; the zones below move down by one card row, and the back end's label sits bottom left, clear of the lines. Lines are the flows of FR-120a and SRD 3.1, plain, without letters; \"both\" draws a head at each end. Segments are horizontal or vertical and never cross a card (VS-13). Checked by web/e2e/opening.spec.ts.",
+  "size": [840, 968],
+  "zones": [
+    { "id": "front", "rect": [0, 0, 840, 126], "labelAt": "left" },
+    { "id": "third", "rect": [0, 172, 840, 130], "labelAt": "left" },
+    { "id": "back", "rect": [0, 348, 840, 320], "labelAt": "bottom-left" },
+    { "id": "legacy", "rect": [322, 844, 278, 118], "labelAt": "right" }
+  ],
+  "cards": {
+    "client": [352, 34, 440, 78],
+    "scilibs": [28, 206, 220, 78],
+    "models": [18, 384, 140, 96],
+    "importer": [184, 384, 140, 96],
+    "sub-obsstore": [350, 384, 140, 96],
+    "sub-registry": [516, 384, 140, 96],
+    "sub-webapi": [682, 384, 140, 96],
+    "sub-commands": [18, 528, 140, 96],
+    "sub-accounts": [184, 528, 140, 96],
+    "sub-query": [350, 528, 140, 96],
+    "sub-permissions": [516, 528, 140, 96],
+    "sub-admin": [682, 528, 140, 96],
+    "folder": [341, 874, 240, 74]
+  },
+  "lines": [
+    { "a": "client", "b": "sub-webapi", "both": true, "path": [[780, 112], [780, 384]] },
+    { "a": "models", "b": "sub-webapi", "both": true, "path": [[100, 384], [100, 340], [720, 340], [720, 384]] },
+    { "a": "sub-commands", "b": "importer", "path": [[130, 528], [130, 512], [240, 512], [240, 480]] },
+    { "a": "sub-commands", "b": "models", "path": [[60, 528], [60, 480]] },
+    { "a": "importer", "b": "sub-obsstore", "path": [[324, 432], [350, 432]] },
+    { "a": "importer", "b": "sub-registry", "path": [[300, 384], [300, 372], [580, 372], [580, 384]] },
+    { "a": "sub-webapi", "b": "sub-query", "path": [[700, 480], [700, 496], [460, 496], [460, 528]] },
+    { "a": "sub-webapi", "b": "sub-registry", "path": [[682, 432], [656, 432]] },
+    { "a": "sub-webapi", "b": "sub-commands", "path": [[700, 384], [700, 360], [171, 360], [171, 496], [100, 496], [100, 528]] },
+    { "a": "sub-webapi", "b": "sub-permissions", "path": [[740, 480], [740, 512], [600, 512], [600, 528]] },
+    { "a": "sub-query", "b": "sub-obsstore", "path": [[420, 528], [420, 480]] },
+    { "a": "sub-accounts", "b": "sub-permissions", "both": true, "path": [[250, 624], [250, 646], [590, 646], [590, 624]] },
+    { "a": "sub-admin", "b": "sub-webapi", "path": [[790, 528], [790, 480]] },
+    { "a": "models", "b": "scilibs", "both": true, "path": [[40, 384], [40, 284]] },
+    { "a": "importer", "b": "folder", "both": true, "path": [[324, 460], [337, 460], [337, 660], [420, 660], [420, 874]] }
+  ],
+  "status": [0, 670, 306, 298]
+}
