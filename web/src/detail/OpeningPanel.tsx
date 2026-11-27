@@ -3,13 +3,17 @@
 // says which could be adopted; after it, a column says what became of each. Crisp, not sketched (VS-18). Nothing in
 // it is gold and nothing is marked as ours (FR-121); no count or number is shown (FR-120,
 // FR-124, §16).
-import { LEAD_ADOPTED, LEAD_BUILD, opening, ROWS } from '../shell/opening';
+import { LEAD_ADOPTED, LEAD_BUILD, opening, ROWS, SUBSYSTEM_IDS } from '../shell/opening';
 import { useStore } from '../shell/store';
 
 export function OpeningPanel() {
   const phase = useStore(opening.phase);
   const adopted = useStore(opening.adopted);
   const highlighted = useStore(opening.highlighted);
+  // D-360: each subsystem's row is ticked as its card lands in the Data server card, in the table's order; the other
+  // rows say what became of them once every subsystem has landed.
+  const landed = useStore(opening.landed);
+  const all = landed >= SUBSYSTEM_IDS.length;
   return (
     <div className="opening-panel" data-testid="opening-panel" data-adopted={adopted ? 'true' : 'false'}>
       <header className="detail-head">
@@ -40,8 +44,10 @@ export function OpeningPanel() {
               <td>{r.does}</td>
               <td>{r.keeps}</td>
               {adopted && (r.after === null
-                ? <td className="tick" data-testid="tick" aria-label="covered by OpenSensorHub">✓</td>
-                : <td className="after" data-testid="after">{r.after}</td>)}
+                ? (SUBSYSTEM_IDS.indexOf(r.id as never) < landed
+                  ? <td className="tick" data-testid="tick" aria-label="covered by OpenSensorHub">✓</td>
+                  : <td className="tick-waiting" />)
+                : all ? <td className="after" data-testid="after">{r.after}</td> : <td className="after-waiting" />)}
             </tr>
           ))}
         </tbody>

@@ -2,8 +2,9 @@
 // the stacked flowchart on the left with status and key below it; the detail
 // panel on the right. The shell frames the system and is not a component.
 // With `?hand-made` it opens on the adoption opening (SRD §9.8): only the title in the
-// top bar, and nothing started until the viewer adopts (FR-122). At hand-over the back
-// end starts with the usual named loading steps (FR-125, NFR-10a, D-332).
+// top bar, and nothing started until the viewer adopts (FR-122). The back end starts at the
+// Adopt click, while the cards merge; the flowchart stays on screen, and the named startup
+// steps show in its status box until the server answers (FR-125, NFR-10a, D-360).
 import { useEffect, useState } from 'react';
 import { clientSession } from '../client/session';
 import { RATES, STARTUP_BUDGET_MS } from '../config';
@@ -25,35 +26,38 @@ export const STANDIN_NOTICE = 'Running the JavaScript stand-in: the architecture
 export function App() {
   const progress = useStore(runtime.progress);
   const phase = useStore(opening.phase);
-  const [failure, setFailure] = useState<string | null>(null);
+  const failure = useStore(runtime.failure);
 
   useEffect(() => {
     document.documentElement.classList.toggle('sketch-off', !sketchEnabled);
     const start = () => {
-      runtime.start().catch((e) => setFailure(String(e?.message ?? e)));
+      runtime.start().catch((e) => runtime.failure.set(String(e?.message ?? e)));
     };
     // FR-122: in the adoption opening the back end does not start (no worker, no relay) until
-    // hand-over (FR-125); without the flag it starts at once (FR-77).
+    // the viewer adopts; it then starts at once, while the cards merge (D-360). Without the flag
+    // it starts at load (FR-77).
     if (opening.phase.value === 'off') start();
-    else opening.onHandOver(start);
+    else opening.onAdopt(start);
   }, []);
   useEffect(() => {
-    if (progress.stage === 'error') setFailure(progress.detail);
+    if (progress.stage === 'error') runtime.failure.set(progress.detail);
   }, [progress]);
 
+  // FR-15: the flowchart becomes available when the server answers, Mission A imported silently.
+  // Until then the top bar is shown with its controls disabled, each saying why (FR-125a).
+  const ready = progress.stage === 'ready';
   // FR-122: before hand-over, the opening: the title alone in the top bar, the flowchart and its panel.
-  if (opening.active) {
+  // D-360: in a session that began on the opening the flowchart is never replaced by the startup page: the
+  // same <Main> stays mounted from the opening through the merge to a started back end, and the startup's
+  // named steps show in its status box. Only a load without the flag shows the startup page.
+  if (phase !== 'off') {
     return (
       <div className="shell" data-opening={phase}>
-        <OpeningTopBar />
-        <Main />
+        {opening.active ? <OpeningTopBar /> : <TopBar ready={ready} />}
+        <Main key="main" />
       </div>
     );
   }
-  // FR-15: the flowchart becomes available when the server answers, Mission A imported silently.
-  // Until then the top bar is shown with its controls disabled, each saying why (FR-125a). After
-  // the opening's hand-over this is the same startup as a load without the flag (FR-125, D-332).
-  const ready = progress.stage === 'ready';
   return (
     <div className="shell" data-opening={phase}>
       <TopBar ready={ready} />
