@@ -88,7 +88,10 @@ OpenSensorHub directly. Restricted resources are <strong>listed in
 discovery and refused with 403</strong>, as stock OpenSensorHub does,
 instead of being hidden (FR-93, FR-06c). C6 is restated. Hiding them is
 an open question the owner is taking up with the OpenSensorHub team
-(§15).</li>
+(§15). <strong>A stream's title may be known, not its contents</strong>
+(the owner, 2026-11-27, D-351): a restricted datastream is listed and
+described, its schema included; its observations, and a restricted
+control stream's commands and status, are refused.</li>
 <li><strong>Replay moves into the display client (4.7).</strong> There
 is no replay controller on the server. <strong>Models process each
 dataset as soon as it is imported</strong>; each display client keeps
@@ -243,9 +246,10 @@ Nothing is served or shown without logging in, an unattended screen
 locks, and the browser keeps nothing sensitive.</li>
 <li><strong>C6. Sensitive data is restricted per user (4.7).</strong>
 CO₂ and everything derived from it can be read only by users the owner
-permits. Anyone else is refused (403): for now they can see in discovery
-that such sources exist, but never their data (§15). The display client
-has no restriction-specific code: it offers only what it can read.</li>
+permits. Anyone else is refused (403) the data: they can see that such
+sources exist, their titles and schemas included, but never their
+contents (§15; D-351). The display client has no restriction-specific
+code: it offers only what it can read.</li>
 </ol>
 <p>The claims are supported by acceptance tests (§14), never asserted by
 the display.</p>
@@ -779,11 +783,13 @@ answer is <strong>401</strong> and nothing is served;</li>
 <strong>inherited by its datastreams and control streams</strong>.
 Nothing in this system needs permission per field;</li>
 <li>a user <strong>without permission</strong> for a system is
-<strong>refused (403)</strong> when reading it, its datastreams, their
-schemas or their observations. <strong>For now it is still
-listed</strong> in discovery, as stock OpenSensorHub does: its existence
-and name are visible, its data never. Hiding it from discovery is
-wanted, and is an open question (§15);</li>
+<strong>refused (403)</strong> its <strong>contents</strong>: its
+datastreams' observations, and its control streams' commands and their
+status. <strong>Its description is not restricted (4.7, D-351)</strong>:
+it is listed in discovery, as stock OpenSensorHub does, and the system,
+its datastreams with their titles and schemas, and its control streams
+can be read. A stream's title may be known, never its contents. Hiding
+it from discovery is wanted, and is an open question (§15);</li>
 <li><strong>users</strong> may read what their role permits, send
 commands to the importer and the models, and create and append only
 under <strong>their own workspace</strong>;</li>
@@ -1710,7 +1716,8 @@ exactly</td>
 <tr>
 <td>AT-32</td>
 <td>The server-neutral contract suite passes against a stock
-OpenSensorHub, with credentials</td>
+OpenSensorHub, with credentials, configured only as interfaces §14
+allows (no component of ours in front of it)</td>
 <td>C1</td>
 </tr>
 <tr>
@@ -1847,9 +1854,10 @@ byte-identical</td>
 </tr>
 <tr>
 <td><strong>AT-55</strong></td>
-<td>Logged in as weather only: reading any CO₂ datastream, schema or
-observation, or any restricted model output, gives 403; no CO₂ value
-reaches the client; the client offers no CO₂ source</td>
+<td>Logged in as weather only: reading the observations of any CO₂
+datastream or restricted model output gives 403 (its title and schema
+may be read, D-351); no CO₂ value reaches the client; the client offers
+no CO₂ source</td>
 <td>C6</td>
 </tr>
 <tr>
@@ -1966,8 +1974,9 @@ server's outputs do not change</td>
 open).</strong> FR-93 is relaxed: restricted resources are listed and
 refused with 403, as stock OpenSensorHub does. The owner is working with
 the OpenSensorHub team so that a user is not shown resources they may
-not read. Until then C6 is the weaker claim of §1, and the friend can
-see that CO₂ sources exist.</p></li>
+not read. Until then C6 is the weaker claim of §1: the friend can see
+that CO₂ sources exist, their titles and schemas included, never their
+contents (D-351).</p></li>
 <li><p><strong>Refusing replace and delete in OpenSensorHub (4.7,
 open).</strong> The delete probe of 2026-11-26 found that stock
 OpenSensorHub lets the owner, and a user on their own workspace, delete.
