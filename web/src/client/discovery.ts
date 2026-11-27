@@ -5,9 +5,11 @@
 // here; its per-dataset essentials when a dataset is opened (fields.ts). Discovery
 // happens only here (FR-44): after an import completes the client repeats it whole.
 //
-// FR-118, D-225: a datastream whose schema answers 403 is left out, like one the client
-// cannot use. It is never reported missing and never makes a dataset degraded. The
-// client keeps no list of such sources: it learns them from the server's answers.
+// FR-118, D-225: a datastream whose schema or observations answer 403 is left out, like one
+// the client cannot use. It is never reported missing and never makes a dataset degraded. The
+// client keeps no list of such sources: it learns them from the server's answers. A restricted
+// datastream's description and schema are readable by everyone, its observations are not
+// (D-351), so the client asks for one observation of each before offering it.
 import { ClientHttp, HttpError } from './http';
 
 export interface SweField {
@@ -179,14 +181,22 @@ export async function handshake(http: ClientHttp): Promise<Discovery> {
 
 /**
  * The schema of each datastream given, fetched once and kept (FR-43: a dataset's field list, without a full
- * handshake). One that answers 403 is left out (FR-118, D-225); so is one gone since the handshake (404).
+ * handshake). One whose schema or observations answer 403 is left out (FR-118, D-225, D-351); so is one gone since
+ * the handshake (404).
  */
 export async function fetchSchemas(http: ClientHttp, d: Discovery, list: DatastreamInfo[], parallel = true): Promise<void> {
   const one = async (x: DatastreamInfo) => {
-    const r = await http.request('GET', `datastreams/${x.id}/schema`, { obsFormat: 'application/swe+json' });
-    if (r.status === 200) d.schemas.set(x.id, fieldsOf(r.body));
-    else if (r.status === 403 || r.status === 404) d.refused.add(x.id);
-    else throw new HttpError(`datastreams/${x.id}/schema`, r.status);
+    // Its schema, and its contents too, at once: a stream's title and schema may be known to a user who may not read
+    // its observations (D-351).
+    const [r, o] = await Promise.all([
+      http.request('GET', `datastreams/${x.id}/schema`, { obsFormat: 'application/swe+json' }),
+      http.request('GET', `datastreams/${x.id}/observations`, { f: 'application/swe+json', resultTime: 'latest' }),
+    ]);
+    if (r.status === 403 || r.status === 404) return void d.refused.add(x.id);
+    if (r.status !== 200) throw new HttpError(`datastreams/${x.id}/schema`, r.status);
+    if (o.status === 403 || o.status === 404) return void d.refused.add(x.id);
+    if (o.status !== 200) throw new HttpError(`datastreams/${x.id}/observations`, o.status);
+    d.schemas.set(x.id, fieldsOf(r.body));
   };
   const todo = [...new Map(list.map((x) => [x.id, x])).values()].filter((x) => !d.schemas.has(x.id) && !d.refused.has(x.id));
   if (parallel) await Promise.all(todo.map(one));

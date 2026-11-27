@@ -145,9 +145,14 @@ function shown(b: Uint8Array | string): string {
 }
 
 // --- permissions (§9.3; api.restricted_for, api.owns) -----------------------------------------
-export function restrictedFor(chain: SystemRec[], acct: Account): boolean {
+/**
+ * True when this account may not read a system (with its ancestors): listed, refused with 403. With `contents` false
+ * only its description is read, and a restricted one is described to everyone: a stream's title may be known, not its
+ * contents (D-351). Another user's workspace is refused whole.
+ */
+export function restrictedFor(chain: SystemRec[], acct: Account, contents = true): boolean {
   for (const s of chain) {
-    if ((CO2.test(s.uid) || RESTRICTED.test(s.uid)) && !mayReadCo2(acct.role)) return true;
+    if (contents && (CO2.test(s.uid) || RESTRICTED.test(s.uid)) && !mayReadCo2(acct.role)) return true;
     const m = WORKSPACE.exec(s.uid);
     if (m && m[1] !== acct.user) return true;
   }
@@ -371,11 +376,11 @@ export class Api {
       if (m !== 'GET' && m !== 'POST') nope();
       const ds = this.getDs(b, m === 'POST');
       if (seg.length === 2 && get) {
-        this.readable(c, ds.system);
+        this.readable(c, ds.system, false);
         return json(this.dsJson(c, ds));
       }
       if (seg.length === 3 && d === 'schema' && get) {
-        this.readable(c, ds.system);
+        this.readable(c, ds.system, false);
         return json(schemaResponse(this.srv().visible(ds), this.fmt(c.q.get('obsFormat') ?? c.q.get('f'), JSON_TYPE, OBS_FORMATS)));
       }
       if (seg.length === 3 && d === 'observations') return get ? this.observations(c, ds) : this.postObservation(c, ds);
@@ -386,11 +391,11 @@ export class Api {
       if (m !== 'GET' && m !== 'POST') nope();
       const cs = this.getCs(b);
       if (seg.length === 2 && get) {
-        this.readable(c, cs.system);
+        this.readable(c, cs.system, false);
         return json(this.csJson(c, cs));
       }
       if (seg.length === 3 && d === 'schema' && get) {
-        this.readable(c, cs.system);
+        this.readable(c, cs.system, false);
         return json({ commandFormat: JSON_TYPE, parametersSchema: cs.schema });
       }
       if (seg.length === 3 && d === 'commands') return get ? this.commands(c, cs) : this.postCommand(c, cs);
@@ -429,10 +434,10 @@ export class Api {
     return norm;
   }
 
-  /** 403 when the account may not read the system (listed, refused: §9.3). */
-  private readable(c: Ctx, sid: string): SystemRec[] {
+  /** 403 when the account may not read the system (listed, refused: §9.3); `contents` false: its description only (D-351). */
+  private readable(c: Ctx, sid: string, contents = true): SystemRec[] {
     const chain = this.store.chain(sid);
-    if (restrictedFor(chain, c.account)) throw new Refusal(403, 'this account may not read this resource');
+    if (restrictedFor(chain, c.account, contents)) throw new Refusal(403, 'this account may not read this resource');
     return chain;
   }
 
@@ -524,13 +529,13 @@ export class Api {
 
   private system(c: Ctx, s: SystemRec): Reply {
     const form = this.fmt(c.q.get('f'), GEO_JSON, [GEO_JSON, SML_JSON, JSON_TYPE]);
-    this.readable(c, s.id);
+    this.readable(c, s.id, false);
     return json(this.systemJson(c, s, form, false));
   }
 
   private subsystems(c: Ctx, s: SystemRec): Reply {
     const form = this.fmt(c.q.get('f'), GEO_JSON, [GEO_JSON, SML_JSON, JSON_TYPE]);
-    this.readable(c, s.id);
+    this.readable(c, s.id, false);
     const items = [...this.store.systems.values()].filter((x) => x.parent === s.id).map((x) => this.systemJson(c, x, form));
     return json(this.page(c, items, `/systems/${s.id}/subsystems`));
   }

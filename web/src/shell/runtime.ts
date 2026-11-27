@@ -135,11 +135,15 @@ class Runtime {
 
   private started = false;
 
-  /** True once every core model reports itself live (the display client waits for this before its handshake). */
-  coreModelsLive(): boolean {
+  /**
+   * True once every core model is ready: registered and subscribed, so processing or live (D-350). Startup ends here;
+   * a model then processes each dataset, Mission A first, and the display client says "results being prepared" until
+   * its runs are complete (FR-35b). Processing is not part of startup.
+   */
+  coreModelsReady(): boolean {
     const models = this.control.value?.models;
     if (!models) return this.control.value != null; // a back end that does not report its models
-    return CORE_MODELS.every((id) => models.find((m) => m.id === id)?.phase === 'live');
+    return CORE_MODELS.every((id) => ['processing', 'live'].includes(models.find((m) => m.id === id)?.phase ?? ''));
   }
 
   async start() {
@@ -291,10 +295,10 @@ class Runtime {
     }
   }
 
-  /** The last step, models, is done once every core model is live (after the server is). */
+  /** The last step, models, is done once every core model is ready (after the server is; D-350). */
   private checkModels() {
     if (this.readyMs == null || this.startup.steps.value.find((s) => s.id === 'models')?.state === 'done') return;
-    if (this.coreModelsLive()) this.startup.finish('models');
+    if (this.coreModelsReady()) this.startup.finish('models');
     else this.startup.enter('models', 'starting each core model');
   }
 
@@ -305,6 +309,18 @@ class Runtime {
     const ch = new MessageChannel();
     this.backend.postMessage({ type: 'connect' }, [ch.port1]);
     sw.postMessage({ type: 'port' }, [ch.port2]);
+  }
+
+  /**
+   * A second port to the back-end worker, speaking the relay's protocol (FR-02): for the end-to-end tests only, where
+   * the contract suite runs in Pyodide against the back end in the page (AT-02, D-341). The application is reached as
+   * the relay reaches it, without the relay's own work (it drops WWW-Authenticate, D-226).
+   */
+  seamPort(): MessagePort | null {
+    if (!this.backend) return null;
+    const ch = new MessageChannel();
+    this.backend.postMessage({ type: 'connect' }, [ch.port1]);
+    return ch.port2;
   }
 
   /**
@@ -370,3 +386,5 @@ class Runtime {
 export const runtime = new Runtime();
 // Read-only, for the end-to-end tests (beside D-273's bargeCaptured; D-323): the back end's control state as the shell holds it.
 (globalThis as { bargeControlState?: () => ControlState | null }).bargeControlState = () => runtime.control.value;
+// For the end-to-end tests only (AT-02's Pyodide half, D-341): a port to the back end, as the relay is given one.
+(globalThis as { bargeSeamPort?: () => MessagePort | null }).bargeSeamPort = () => runtime.seamPort();

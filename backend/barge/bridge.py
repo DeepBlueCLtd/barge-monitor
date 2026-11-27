@@ -17,6 +17,7 @@ is no other interface. Each model only tells the shell its phase.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import sys
 
@@ -52,6 +53,7 @@ class Bridge:
         # CPython (tests) the runtime keeps a loop of its own, run at each tick.
         self.rt = Runtime(folder=folder, own_loop=sys.platform != "emscripten")
         self.app = create_app(self.rt)
+        self._tasks: dict = {}  # request id -> the task answering it (start, cancel)
 
     def startup_phase(self) -> str:
         """``import`` (the importer starting, and the silent import of Mission A) or ``ready``."""
@@ -115,3 +117,18 @@ class Bridge:
         if r is None or r == "stream":
             return r
         return r
+
+    def start(self, rid, *args, **kw):
+        """``handle`` as a task, known by the worker's request id ``rid``, so that ``cancel(rid)`` can end it when
+        the page drops a push subscription (§9.2): cancelling it disconnects the client, and the subscription ends
+        (D-343). A coroutine or task handed to JavaScript gives it no ``cancel`` it can use, so a dropped
+        subscription used to stay open, and its control stream kept a subscriber."""
+        task = asyncio.ensure_future(self.handle(*args, **kw))
+        self._tasks[rid] = task
+        task.add_done_callback(lambda _t: self._tasks.pop(rid, None))
+        return task
+
+    def cancel(self, rid) -> None:
+        task = self._tasks.get(rid)
+        if task is not None:
+            task.cancel()

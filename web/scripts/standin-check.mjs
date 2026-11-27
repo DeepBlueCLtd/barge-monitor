@@ -158,9 +158,13 @@ try {
   await post(`/datastreams/${co2}/observations`, { time: '2031-04-07T00:00:00Z', co2: 430 }, 'svc-importer', SWE);
   check((await systems('friend')).has(URN + 'sensor:bow:co2'), 'the friend finds the CO₂ analyser listed');
   check((await get('/datastreams?limit=1000', 'friend')).json.items.some((d) => d.id === co2), 'and its datastream listed');
-  for (const p of [`/systems/${analyser}`, `/datastreams/${co2}`, `/datastreams/${co2}/schema?obsFormat=${encodeURIComponent(SWE)}`, `/datastreams/${co2}/observations`]) {
-    check((await get(p, 'friend')).status === 403, `the friend reading ${p.split('?')[0]}: 403`);
-    check((await get(p, 'owner')).status === 200 && (await get(p, 'analyst')).status === 200, `the owner and the analyst read ${p.split('?')[0]}`);
+  // D-351: a stream's title and schema may be known; its contents are refused.
+  for (const p of [`/systems/${analyser}`, `/datastreams/${co2}`, `/datastreams/${co2}/schema?obsFormat=${encodeURIComponent(SWE)}`]) {
+    check((await get(p, 'friend')).status === 200, `the friend reading ${p.split('?')[0]}: described (D-351)`);
+  }
+  for (const p of [`/datastreams/${co2}/observations`, `/datastreams/${co2}/observations?resultTime=latest`]) {
+    check((await get(p, 'friend')).status === 403, `the friend reading ${p}: 403`);
+    check((await get(p, 'owner')).status === 200 && (await get(p, 'analyst')).status === 200, `the owner and the analyst read ${p}`);
   }
   check((await get(`/systems/${sy.get(URN + 'workspace:owner')}`, 'friend')).status === 403, 'another user\'s workspace: 403 (AT-52)');
   check((await post(`/systems/${bow}/datastreams`, dsBody('x', '1'), 'friend')).status === 403, 'a user creates nothing under a sensor');
@@ -168,9 +172,9 @@ try {
   check((await post(`/systems/${sy.get(URN + 'workspace:friend')}/datastreams`, dsBody('mine', '1'), 'friend')).status === 201, 'a user creates under its own workspace');
   check((await post(`/datastreams/${ds}/observations`, { time: '2031-04-07T00:00:09Z', x: 1 }, 'owner', SWE)).status === 403, 'the owner appends nothing to a model\'s datastream');
   await control('set-role', { user: 'friend', role: 'viewer-emissions' });
-  check((await get(`/systems/${analyser}`, 'friend')).status === 200, 'a role change takes effect on the next request (FR-116)');
+  check((await get(`/datastreams/${co2}/observations`, 'friend')).status === 200, 'a role change takes effect on the next request (FR-116)');
   await control('set-role', { user: 'friend', role: 'viewer' });
-  check((await get(`/systems/${analyser}`, 'friend')).status === 403, 'and back');
+  check((await get(`/datastreams/${co2}/observations`, 'friend')).status === 403, 'and back');
 
   // --- commands: pushed on the internal endpoint (§9.1, §9.2) ------------------------------------------
   const csBody = { name: 'Check', inputName: 'check', schema: { commandFormat: 'application/json', parametersSchema: { type: 'DataRecord', name: 'record', label: 'Check',
