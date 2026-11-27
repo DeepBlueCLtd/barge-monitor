@@ -36,7 +36,7 @@ def serve() -> int:
     s.close()
     # The data folder, when built (scripts/build_data_folder.py): Mission A is imported at startup, so its
     # datastreams (weather and CO₂, per dataset) and the importer's catalogue are browsed too.
-    rt = Runtime(seed=3, pregen_days=0.2, local_models=True, folder=default_folder())
+    rt = Runtime(local_models=True, folder=default_folder())
     while not (rt.server.ready and rt.local.live and rt.importer.subscribed):
         rt.tick()
     print(f"data folder: {'Mission A imported' if rt.importer.datasets else 'none built'}")

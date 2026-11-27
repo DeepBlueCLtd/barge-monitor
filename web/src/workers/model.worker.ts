@@ -10,7 +10,7 @@
 //
 // 4.7 (§10.2): a model follows no clock. Its runner finds datasets in the
 // importer's catalogue and processes each whole dataset, a few windows a step,
-// back to back while there is work; the shell's clock only stamps what it draws.
+// back to back while there is work.
 import { passwordOf } from '../standin/accounts';
 import { loadRuntime } from './common';
 
@@ -20,7 +20,7 @@ let py: any = null;
 let port: MessagePort | null = null;
 let modelId = '';
 let apiUrl = '';
-let clock = { t: 0 }; // the shell's simulation time: it stamps the messages drawn, nothing else
+
 let busy = false;
 let taps: any[] = [];
 let tapSeq = 0;
@@ -74,8 +74,8 @@ async function openStream(path: string, headers: any, internal: boolean): Promis
 
 /** Messages between the model and the scientific libraries: captured here, drawn by the page. */
 function postTap(src: string, dst: string, summary: string, content: string, quiet: boolean) {
-  if (quiet) return; // catching up on history at startup: not drawn
-  taps.push({ id: `${modelId}-${++tapSeq}`, t: clock.t, src, dst, letter: 'I', summary, content, model: modelId, chain: null, hop: 0 });
+  if (quiet) return; // counted, not drawn
+  taps.push({ id: `${modelId}-${++tapSeq}`, t: Date.now() / 1000, src, dst, letter: 'I', summary, content, model: modelId, chain: null, hop: 0 });
 }
 
 async function start(pyodideUrl: string, pyZipUrl: string, model: string, code: string | null, api: string) {
@@ -126,7 +126,7 @@ model = _mod.MODEL()
 api = csmodel.Api(model.id, _transport, _user, _password, stream=_stream)
 def _tap(dst, summary, content=None):
     src, to = ("models", "scilibs") if dst == "scilibs" else ("scilibs", "models")
-    _post_tap(src, to, f"{model.id}: {summary}", json.dumps(content, default=str)[:4000], api.quiet)
+    _post_tap(src, to, f"{model.id}: {summary}", json.dumps(content, default=str)[:4000], False)  # drawn, processing included (D-321)
 api.tap = _tap
 runner = csmodel.Runner(model, api)
 
@@ -175,7 +175,5 @@ self.onmessage = (e: MessageEvent) => {
     port = e.ports[0]; // to the back-end worker, for the shell only: the model says which phase it is in
     start(d.pyodideUrl, d.pyZipUrl, d.model, d.code ?? null, d.apiUrl).catch((err) =>
       post({ type: 'progress', model: d.model, stage: 'error', detail: String(err), pct: 0 }));
-  } else if (d.type === 'clock') {
-    clock = { t: d.state.t };
   }
 };

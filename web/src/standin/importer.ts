@@ -272,7 +272,7 @@ export class Importer {
       const dsid = datasetId(file, entry.sha256);
       const t = Float64Array.from(parsed.t, (x) => x - SIM_EPOCH_UNIX);
       const outs = this.datastreams(dsid, parsed);
-      if (outs.some(([d]) => d.series!.length)) throw new Error(`${dsid} already holds observations`);
+      if (outs.some(([d]) => d.series.length)) throw new Error(`${dsid} already holds observations`);
       let written = 0;
       for (let k = 0; k < 10; k++) {
         const a = Math.floor((k * n) / 10);

@@ -2,14 +2,11 @@
 // The JavaScript stand-in back end in Node, behind a tiny HTTP server, so the
 // one contract suite can run against it as it runs against the Python back
 // end under uvicorn (PR-04, AT-24). It bundles web/src/standin with esbuild
-// (in memory), loads the pre-calculated history from a local directory, and
+// (in memory), reads the data folder from a local directory, and
 // serves the stand-in's HTTP interface at the root of the given port; the
 // server's internal endpoint (§9.2, D-223) is /api-internal beside it.
 //
-// Usage: node web/scripts/standin-server.mjs [--port N] [--seed N] [--history DIR] [--folder DIR] [--play] [--hold S]
-//   DIR holds seed-<n>/manifest.json and the gzipped logger files, as
-//   scripts/build_history.py writes them; by default
-//   .cache/history/<code hash>/days-<d>/ from web/public/py/history.json.
+// Usage: node web/scripts/standin-server.mjs [--port N] [--folder DIR] [--hold S]
 //   --hold S: how long a command's POST is held, in seconds (§9.1; 5 by default).
 //   --folder DIR: the data folder the CSV importer reads (index.json and <file>.gz, as
 //   scripts/build_data_folder.py writes it); by default web/public/data/folder, when built.
@@ -38,14 +35,7 @@ function arg(name, dflt) {
 }
 
 const port = Number(arg('port', '8765'));
-const seed = Number(arg('seed', '1'));
 const hold = arg('hold', null);
-let historyDir = arg('history', null);
-if (!historyDir) {
-  const h = JSON.parse(readFileSync(join(root, 'web', 'public', 'py', 'history.json'), 'utf8'));
-  historyDir = join(root, '.cache', 'history', h.code_hash, `days-${h.days}`);
-}
-const seedDir = join(resolve(historyDir), `seed-${seed}`);
 const folderDir = resolve(arg('folder', join(root, 'web', 'public', 'data', 'folder')));
 // The folder as a directory: its listing, and each CSV, gzipped or plain (FR-17a: nothing here writes).
 const folder = existsSync(join(folderDir, 'index.json')) ? {
@@ -66,12 +56,8 @@ const bundle = await build({
 const mod = await import('data:text/javascript;base64,' + Buffer.from(bundle.outputFiles[0].text).toString('base64'));
 const tBundle = performance.now();
 
-const manifest = JSON.parse(readFileSync(join(seedDir, 'manifest.json'), 'utf8'));
-const history = await mod.loadHistory(manifest, async (name) => new Uint8Array(gunzipSync(readFileSync(join(seedDir, `${name}.gz`)))));
-const tLoad = performance.now();
-const rt = await mod.createStandin(seed, history, () => performance.now() / 1000, undefined, hold === null ? undefined : Number(hold), folder);
+const rt = await mod.createStandin(folder, undefined, hold === null ? undefined : Number(hold));
 const tReady = performance.now();
-if (process.argv.includes('--play')) rt.control('play');
 
 setInterval(() => {
   try {
@@ -115,8 +101,7 @@ const server = createServer((req, res) => {
 });
 
 server.listen(port, '127.0.0.1', () => {
-  console.error(`stand-in: bundle ${(tBundle - t0).toFixed(0)} ms, history ${(tLoad - tBundle).toFixed(0)} ms, `
-    + `index and model catch-up ${(tReady - tLoad).toFixed(0)} ms (${manifest.days} days, seed ${seed})`);
+  console.error(`stand-in: bundle ${(tBundle - t0).toFixed(0)} ms, import and models ${(tReady - tBundle).toFixed(0)} ms`);
   console.log(`READY ${port} ${(tReady - t0).toFixed(0)}`);
 });
 

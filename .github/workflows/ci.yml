@@ -59,8 +59,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: .cache
-          key: shared-${{ hashFiles('web/scripts/fetch-pyodide.mjs', 'backend/barge/*.py') }}
-      - run: python scripts/build_history.py --days 1 .cache/history 1 2 3  # 24 hours, as published (FR-15)
+          key: pyodide-${{ hashFiles('web/scripts/fetch-pyodide.mjs') }}
       - name: The data folder, shipped in the site build and read by the importer (FR-15)
         run: |
           python scripts/build_data_folder.py
@@ -68,7 +67,7 @@ jobs:
       - name: The contract against the JavaScript stand-in, in Node (PR-04; interfaces §9)
         run: node scripts/standin-check.mjs
         working-directory: web
-      - name: The contract suite against both back ends (the stand-in's half needs Node and the history)
+      - name: The contract suite against both back ends (the stand-in's half needs Node)
         run: python -m pytest -q tests/test_contract_standin.py tests/test_contract_uvicorn.py
         working-directory: backend
       - run: npm run pyodide && npm run build && npm run site

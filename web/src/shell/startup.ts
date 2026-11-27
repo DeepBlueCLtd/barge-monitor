@@ -1,11 +1,12 @@
 // Startup and readiness (FR-125a, NFR-10a, docs/v4-interfaces.md §13.7).
 //
-// The loading progress names each step in turn. A step that has not finished within
+// The loading progress names each step in turn: relay, back end, server, import, models
+// (the 4.1 step `history` is retired with the logger's pre-calculated history, D-320). A step that has not finished within
 // STALL_MS says so, naming the step and what the viewer can do, rather than waiting
 // silently with the controls disabled. A disabled control says why: "Starting: <step>".
 import { Store } from './store';
 
-export type StepId = 'relay' | 'back end' | 'history' | 'server' | 'import' | 'models';
+export type StepId = 'relay' | 'back end' | 'server' | 'import' | 'models';
 export type StepState = 'pending' | 'active' | 'done' | 'failed';
 
 export interface Step {
@@ -34,10 +35,7 @@ export const STAGE_STEP: Record<string, StepId> = {
   seam: 'relay',
   runtime: 'back end',
   packages: 'back end',
-  history: 'history',
-  pregen: 'history',
-  store: 'history',
-  index: 'server',
+  server: 'server',
   import: 'import',
   models: 'models',
 };
@@ -57,8 +55,7 @@ export class Startup {
     const what: Record<StepId, string> = {
       relay: 'registering the seam relay (Service Worker) and waiting until it controls this page',
       'back end': python ? 'loading the Python back end (Pyodide) in its worker' : 'starting the JavaScript stand-in in its worker',
-      history: 'loading the logger store’s pre-calculated history',
-      server: 'starting the data server and indexing the store',
+      server: 'starting the data server',
       import: 'the CSV importer: listing the data folder and importing Mission A, silently (FR-15)',
       models: 'starting each core model',
     };

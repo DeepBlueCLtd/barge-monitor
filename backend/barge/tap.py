@@ -2,8 +2,8 @@
 
 Each boundary in SRD §3.1 calls ``tap.emit`` with a copy of what crosses it and
 the letter of the standard it meets (SRD §5). The tap never alters a message
-and never changes either side's behaviour: it only records. During
-pre-generation it counts without recording (FR-16).
+and never changes either side's behaviour: it only records. Work marked quiet
+(registering, the silent import) is counted without being recorded.
 
 Messages that belong to one HTTP request share a ``chain`` and are numbered
 by ``hop`` so the flowchart can play them in order.
@@ -22,14 +22,13 @@ LETTERS = {
     "K": "Command on a Connected Systems control stream",
     "P": "Declared profile, validated by JSON Schema",
     "H": "Plain HTTP status (RFC 9110)",
-    "S": "Store query: internal, no public standard",
-    "L": "Legacy fixed-width record (the logger's own format)",
+    "S": "File request: list the data folder, or read a file (internal, no public standard)",
+    "L": "Legacy CSV: the folder listing or the file's rows (the files' own format)",
     "I": "Internal typed object, no public standard",
 }
 MAX_CONTENT = 4000
-# The components of SRD §3 (docs/v4-interfaces.md §1): the 4.7 data folder and CSV importer, and, until the
-# 4.1 display client and models are replaced (plan Phases 6 and 7), the 4.1 platform, logger store and adapter.
-COMPONENTS = ("platform", "store", "adapter", "folder", "importer", "server", "models", "scilibs", "client")
+# The components of SRD §3 (docs/v4-interfaces.md §1). The 4.1 platform, logger store and adapter are retired (D-320).
+COMPONENTS = ("folder", "importer", "server", "models", "scilibs", "client")
 
 _chain: contextvars.ContextVar = contextvars.ContextVar("tap_chain", default=None)
 _ids = itertools.count(1)

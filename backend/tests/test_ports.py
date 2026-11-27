@@ -20,9 +20,8 @@ def test_openapi_master_matches_fastapi():
     import json
 
     from barge.api import create_app
-    from barge.clock import ManualClock
     from barge.runtime import Runtime
 
-    app = create_app(Runtime(seed=1, clock=ManualClock(0), pregen_days=0))
+    app = create_app(Runtime())
     master = json.loads((SRC.parent.parent / "contracts" / "openapi.json").read_text())
     assert app.openapi() == master, "run scripts/export_openapi.py and review the diff"

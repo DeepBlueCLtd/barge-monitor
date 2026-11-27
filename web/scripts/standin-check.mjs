@@ -6,7 +6,7 @@
 // push subscription held with `PushChannel` (web/src/push.ts) on the internal
 // endpoint. There is no replay controller and no gateway (4.7).
 //
-// Usage: node web/scripts/standin-check.mjs [--port N] [--history DIR]
+// Usage: node web/scripts/standin-check.mjs [--port N] [--folder DIR]
 // Exits non-zero if any check fails.
 import { spawn } from 'node:child_process';
 import { dirname, join } from 'node:path';
@@ -20,7 +20,7 @@ const port = Number(opt('port', String(20000 + Math.floor(Math.random() * 20000)
 const B = `http://127.0.0.1:${port}`;
 const HOLD_S = 1;
 
-const extra = argv.includes('--history') ? ['--history', opt('history')] : [];
+const extra = argv.includes('--folder') ? ['--folder', opt('folder')] : [];
 const child = spawn(process.execPath, [join(here, 'standin-server.mjs'), '--port', String(port), '--hold', String(HOLD_S), ...extra],
   { stdio: ['pipe', 'pipe', 'inherit'] });
 await new Promise((res, rej) => {
@@ -108,7 +108,7 @@ try {
 
   // --- observations (§9.1) -------------------------------------------------------------------------
   const bow = sy.get(URN + 'sensor:bow');
-  const weather = (await get(`/systems/${bow}/datastreams`)).json.items.find((d) => d.outputName === 'weather');
+  const weather = (await get(`/systems/${bow}/datastreams`)).json.items.find((d) => d.outputName.startsWith('weather__'));
   const start = weather.phenomenonTime[0];
   const a = (await get(`/datastreams/${weather.id}/observations?f=${encodeURIComponent(SWE)}&phenomenonTime=${start}/..&limit=20`)).json;
   const b = await get(`/datastreams/${weather.id}/observations?f=${encodeURIComponent(SWE)}&phenomenonTime=${start}/..&limit=10&offset=10`);

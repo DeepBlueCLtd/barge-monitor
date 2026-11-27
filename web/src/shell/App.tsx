@@ -30,7 +30,7 @@ export function App() {
     if (progress.stage === 'error') setFailure(progress.detail);
   }, [progress]);
 
-  // FR-15: the flowchart becomes available when the back end has loaded the history.
+  // FR-15: the flowchart becomes available when the server answers, Mission A imported silently.
   // Until then the top bar is shown with its controls disabled, each saying why (FR-125a).
   const ready = progress.stage === 'ready';
   return (
@@ -72,8 +72,8 @@ function Loading({ pct, detail, failure }: { pct: number; detail: string; failur
           <progress max={100} value={pct} aria-label="Loading" />
           <p data-testid="progress">{detail}</p>
           <p className="hint">Everything runs in this tab. The {runtime.kind === 'python' ? 'Python back end (Pyodide)' : 'JavaScript stand-in'} is
-            loading the logger store's pre-calculated history, in the store's own format. The flowchart opens when it has finished
-            (budget {STARTUP_BUDGET_MS / 1000} s).</p>
+            starting the data server, whose CSV importer imports Mission A from the data folder before the server answers. The flowchart
+            opens when it has (budget {STARTUP_BUDGET_MS / 1000} s).</p>
         </>
       )}
     </main>
@@ -139,7 +139,7 @@ function TopBar({ ready }: { ready: boolean }) {
               <button key={r} className={`btn${r === rate ? ' on' : ''}`} aria-pressed={r === rate} onClick={() => clientSession.setRate(r)} data-testid={`speed-${r}`} {...replayOff}>{r}×</button>
             ))}
           </div>
-          {/* FR-46, FR-75: discard all client state, credentials included; un-reveal. */}
+          {/* FR-46, FR-75: discard all client state, credentials included; un-reveal. §9.1: Restart client and Restart server are here, in the top bar. */}
           <button className="btn" data-testid="restart-client" onClick={() => {
             clientSession.restart();
             unrevealAll();

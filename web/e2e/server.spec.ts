@@ -138,7 +138,7 @@ for (const backend of ['standin', 'python'] as const) {
     test('PUT and DELETE answer 405, and nothing is removed (§9.1, D-224)', async () => {
       const sy = await systems(page);
       const bow = sy.get('urn:x-barge:sensor:bow')!;
-      const weather = json(await call(page, 'GET', `api/systems/${bow}/datastreams`, 'owner')).items.find((d: any) => d.outputName === 'weather').id;
+      const weather = json(await call(page, 'GET', `api/systems/${bow}/datastreams`, 'owner')).items.find((d: any) => d.outputName.startsWith('weather__')).id; // Mission A's (the 4.1 logger's weather is retired, D-320)
       for (const [method, path] of [['PUT', `api/systems/${bow}`], ['DELETE', `api/systems/${bow}`], ['DELETE', `api/datastreams/${weather}`],
         ['PUT', `api/datastreams/${weather}/observations`], ['PATCH', `api/systems/${bow}`]]) {
         const a = await call(page, method, path, 'owner', method === 'DELETE' ? undefined : {});

@@ -63,7 +63,7 @@ def cells(text_lines, head, i, col):
 @pytest.fixture(scope="module")
 def bare(data_folder):
     """The back end alone (no models), over the data folder: Mission A imported silently at startup."""
-    return Rig(seed=5, days=0.05, models=False, folder=data_folder)
+    return Rig(models=False, folder=data_folder)
 
 
 def test_dialect_units_and_missing_values():
@@ -174,8 +174,8 @@ def test_at03_a_second_dialect_changes_the_importer_only(data_folder, tmp_path):
     (one / (A_FILE + ".gz")).write_bytes((data_folder / (A_FILE + ".gz")).read_bytes())
     (two / A_FILE).write_bytes(second_dialect.write(raw(data_folder, A_FILE)))
     assert (two / A_FILE).read_bytes().startswith(b"time,bow.air_temperature (C)")
-    first = Rig(seed=5, days=0.05, models=False, folder=one)
-    second = Rig(seed=5, days=0.05, models=False, folder=two, parser=second_dialect.parse)
+    first = Rig(models=False, folder=one)
+    second = Rig(models=False, folder=two, parser=second_dialect.parse)
     da, db = first.dataset("MISSION_A"), second.dataset("MISSION_A")
     assert da != db  # the id carries the file's own hash (§6)
     for uid, out in ((BOW, "weather"), (STERN, "weather"), (STERN + ":co2", "co2")):
@@ -197,7 +197,7 @@ def test_at03_a_second_dialect_changes_the_importer_only(data_folder, tmp_path):
 
 def test_at40_the_catalogue_lists_every_file_and_a_new_one_after_rescan(folder_copy):
     path = folder_copy
-    r = Rig(seed=5, days=0.05, models=False, folder=path)
+    r = Rig(models=False, folder=path)
     index = json.loads((path / "index.json").read_text())["files"]
     cat = catalogue(r)
     for f in index:
@@ -220,7 +220,7 @@ def test_at40_the_catalogue_lists_every_file_and_a_new_one_after_rescan(folder_c
 def test_at41_import_shows_progress_and_mission_c_opens_degraded(data_folder):
     """AT-41: import over HTTP as a user: REJECTED, or ACCEPTED, EXECUTING every 10 %, COMPLETED; the folder
     never changes. Mission C has no stern wind speed column, so its stern record has no such field (FR-21)."""
-    r = Rig(seed=5, days=0.05, models=False, folder=data_folder)
+    r = Rig(models=False, folder=data_folder)
     before = hashes(data_folder)
     st = r.wait(r.command(IMPORTER, "import", {"action": "import", "file": "NO_SUCH.csv"}).json()["id"])
     assert st[-1]["statusCode"] == "REJECTED" and "NO_SUCH.csv" in st[-1]["message"]
@@ -250,7 +250,7 @@ def test_at41_import_shows_progress_and_mission_c_opens_degraded(data_folder):
 
 
 def test_at42_overlapping_files_are_kept_apart(data_folder):
-    r = Rig(seed=5, days=0.05, models=False, folder=data_folder)
+    r = Rig(models=False, folder=data_folder)
     for f in (B_FILE, BX_FILE):
         assert r.wait(r.command(IMPORTER, "import", {"action": "import", "file": f}).json()["id"])[-1]["statusCode"] == "COMPLETED"
     b, bx = r.dataset(B_FILE), r.dataset(BX_FILE)
@@ -273,7 +273,7 @@ def test_at42_overlapping_files_are_kept_apart(data_folder):
 
 def test_at43_a_changed_file_is_a_new_dataset_and_the_old_one_is_superseded(folder_copy):
     path = folder_copy
-    r = Rig(seed=5, days=0.05, models=False, folder=path)
+    r = Rig(models=False, folder=path)
     assert r.wait(r.command(IMPORTER, "import", {"action": "import", "file": C_FILE}).json()["id"])[-1]["statusCode"] == "COMPLETED"
     old = r.dataset(C_FILE)
     lines = raw(path, C_FILE).decode().split("\r\n")
@@ -304,7 +304,7 @@ def test_at54_reset_instance_empties_the_store_and_leaves_the_folder(folder_copy
     """AT-54, FR-50a: the whole store goes; the folder is byte-identical; Mission A is not imported again until
     the page is reloaded; identifiers a client held are not found; models register again."""
     path = folder_copy
-    r = Rig(seed=5, days=0.1, folder=path)
+    r = Rig(folder=path)
     before = hashes(path)
     a = r.dataset("MISSION_A")
     old = ds(r, BOW, f"weather__{a}")["id"]

@@ -3,9 +3,11 @@
 // (Data cleanse, Summaries, Analysis registered; New model 1, New model 2 empty slots),
 // each with a diamond (FR-76); three steps for adding a model; and the line
 // stating that each model runs in its own worker. Selecting an empty slot opens
-// the Python editor (FR-36), which needs the Python back end (FR-06f).
+// the Python editor (FR-36), which needs the Python back end (FR-06f). Beneath, each
+// model's outputs and runs per dataset (FR-71, FR-35, FR-35b): god's-eye, from the
+// back end's control state (interfaces §13.4).
 import { Diamond } from '../shell/Diamond';
-import { runtime } from '../shell/runtime';
+import { ControlState, runtime } from '../shell/runtime';
 import { openSlot } from '../shell/selection';
 import { useStore } from '../shell/store';
 import { ModelActivity } from './ModelActivity';
@@ -80,6 +82,7 @@ export function ModelsDetail() {
             : <a href="?backend=python">Reload with the Python back end to write one here.</a>}
         </div>
       ) : <ModelEditor slot={slot} />)}
+      {control && <PerDataset control={control} />}
       <div className="adding">
         <h4 className="small-caps">Adding a model</h4>
         <ol>
@@ -90,5 +93,42 @@ export function ModelsDetail() {
       </div>
       <p className="footline">Each model runs in its own worker and reaches the data server only through its HTTP interface, as the display client does, so a failing model never stops the data server.</p>
     </div>
+  );
+}
+
+/** FR-71: each model's outputs per dataset, and its runs (FR-35b): processing with how far, or complete. */
+function PerDataset({ control }: { control: ControlState }) {
+  const datasets = control.datasets ?? [];
+  const models = control.models ?? [];
+  if (!datasets.length) return <p className="hint" data-testid="model-outputs-empty">No dataset is imported: the models have nothing to process.</p>;
+  return (
+    <section className="per-dataset">
+      <h4 className="small-caps">Outputs and runs, per dataset</h4>
+      <p className="hint">Each model processes each dataset as soon as it is imported, the whole dataset, and publishes per dataset; earlier runs are kept under their own run id.</p>
+      <table className="letters-table" data-testid="model-outputs">
+        <thead><tr><th>Dataset</th>{models.map((m) => <th key={m.id}>{m.label}</th>)}</tr></thead>
+        <tbody>
+          {datasets.map((d) => (
+            <tr key={d.id} data-dataset={d.id}>
+              <td className="mono">{d.id}</td>
+              {models.map((m) => {
+                const outs = Array.isArray(m.datastreams) ? m.datastreams.filter((x) => x.endsWith(`__${d.id}`) && !x.startsWith('runs__')) : [];
+                const runs = (m.runs ?? []).filter((r) => r.dataset === d.id);
+                return (
+                  <td key={m.id} data-model={m.id}>
+                    <span data-testid={`outputs-${m.id}-${d.id}`}>{outs.length} outputs</span>
+                    {runs.map((r) => (
+                      <span key={r.run_id} className="run" data-testid="model-run" data-run={r.run_id} data-status={r.status}>
+                        <br />{r.run_id.replace(`-${d.id}`, '')}: {r.status === 'complete' ? 'complete' : `processing ${Math.round(r.pct ?? 0)}%`}
+                      </span>
+                    ))}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
   );
 }

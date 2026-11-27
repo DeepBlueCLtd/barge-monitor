@@ -135,7 +135,8 @@ export class ModelApi {
   /** Capture a call into, or a result out of, the scientific libraries (models ↔ scilibs). */
   tap(dst: 'scilibs' | 'models', summary: string, content?: unknown): void {
     const [src, to] = dst === 'scilibs' ? (['models', 'scilibs'] as const) : (['scilibs', 'models'] as const);
-    this.rt.tap.emit(src, to, 'I', `${this.model}: ${summary}`, content, { model: this.model, quiet: this.quiet });
+    // Drawn, processing included (D-321): one call per window, so the flowchart shows the models at work.
+    this.rt.tap.emit(src, to, 'I', `${this.model}: ${summary}`, content, { model: this.model });
   }
 
   private headers(quiet = this.quiet): [string, string][] {
@@ -825,7 +826,14 @@ export class Runner {
     const rec: Record<string, unknown> = { ...m.entry(run), t: this.api.real(), run_id: run.id, status, done_until: run.doneUntil,
       pct: status === 'complete' ? 100 : run.pct };
     if (status === 'complete') Object.assign(rec, run.result);
-    await this.api.publish(m.runsKey(run.ds.id, run.restricted), rec);
+    // A runs-log entry is drawn, though processing is not (D-321): the model's progress, a dozen per run.
+    const quiet = this.api.quiet;
+    this.api.quiet = false;
+    try {
+      await this.api.publish(m.runsKey(run.ds.id, run.restricted), rec);
+    } finally {
+      this.api.quiet = quiet;
+    }
   }
 
   private async entries(ds: string): Promise<Record<string, any>[]> {
@@ -953,7 +961,7 @@ export class Runner {
         this.detail = 'subscribing to its commands';
         return; // ready only once its subscription is open (AT-38)
       }
-      api.quiet = true; // processing a dataset is counted, not drawn (D-283)
+      api.quiet = true; // processing a dataset is counted, not drawn (D-283), but for its runs entries and calls (D-321)
       const now = api.realNow();
       if (now - this.scanned >= this.scanS) {
         this.scanned = now;

@@ -1,9 +1,10 @@
-// Below the flowchart (§9.1): the status box and the message key (VS-08, VS-10).
-// The status mirrors the display client's own replay clock, read in the page (interfaces §8).
+// Below the flowchart (§9.1): the god's-eye note (FR-68a), the status box and the message key
+// (VS-08, VS-10). The status mirrors the display client's own replay clock, read in the page
+// (interfaces §8).
 import { clientSession } from '../client/session';
 import { iso } from '../client/plan';
 import { Glyph } from './Glyph';
-import { LETTER_ORDER, LETTERS } from './messages';
+import { bus, LETTER_ORDER, LETTERS } from './messages';
 import { runtime } from './runtime';
 import { useStore } from './store';
 
@@ -30,7 +31,7 @@ export function StatusBox({ rect }: { rect: Box }) {
     ['Replay', !replay ? 'Paused' : replay.atEnd ? 'At the end' : replay.playing ? 'Playing' : 'Paused', 'sim-state'],
     ['Replay time', replay ? iso(replay.time).slice(5, 19).replace('T', ' ') : '–', 'replay-state'],
     ['Rate', replay ? `${replay.rate}×` : '–', 'speed-state'],
-    ['Server', server === 'running' ? `Ready${instance ? ` · ${instance.slice(0, 6)}` : ''}` : server === 'waiting' ? 'Starting' : 'Down', 'server-state'],
+    ['Server', server === 'running' ? `Ready${instance ? ` · start ${instance}` : ''}` : server === 'waiting' ? 'Starting' : 'Down', 'server-state'],
     ['Client', degraded && phase === 'ready' ? 'Degraded' : CLIENT_PHASE[phase] ?? phase, 'client-state'],
     ['Essentials', phase === 'ready' ? (clientSession.essentialsText() === 'All present' ? <span className="good">All present</span> : <span className="bad">{clientSession.essentialsText()}</span>) : '–', 'essentials-state'],
     ['Back end', runtime.kind === 'python' ? 'Python' : 'JavaScript stand-in', 'backend-state'],
@@ -43,6 +44,25 @@ export function StatusBox({ rect }: { rect: Box }) {
           <div key={k} className="status-row"><dt>{k}</dt><dd data-testid={id}>{v}</dd></div>
         ))}
       </dl>
+    </section>
+  );
+}
+
+/**
+ * FR-68a: the architecture view is a god's-eye view, said in one line so it is not mistaken for a permission leak. Beneath
+ * it, what is counted but not drawn (D-283, D-321): registering, the silent import, and the models' reads and writes
+ * while they process a dataset. Their runs-log entries and their calls into the scientific libraries are drawn.
+ */
+export function GodsEyeNote({ rect }: { rect: Box }) {
+  const control = useStore(runtime.control);
+  const drawn = useStore(bus.counts);
+  const captured = control?.capture_counts ?? {};
+  let quiet = 0;
+  for (const [k, n] of Object.entries(captured)) quiet += Math.max(0, n - (drawn[k] ?? 0));
+  return (
+    <section className="gods-eye panel-box" style={{ left: rect[0], top: rect[1], width: rect[2], height: rect[3] }} aria-label="God's-eye view">
+      <p data-testid="gods-eye"><b>God’s-eye view:</b> every message is drawn, the models’ CO₂ traffic included, whoever is logged in. The display client’s own messages carry only what its user may read.</p>
+      <p className="counted" data-testid="counted-not-drawn" data-count={quiet}>Counted, not drawn: {quiet.toLocaleString('en-GB')} (registering, the silent import, the models’ reads and writes while processing).</p>
     </section>
   );
 }

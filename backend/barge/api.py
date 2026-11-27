@@ -26,9 +26,7 @@ one's own systems. Roles are read on every request (FR-116). Receivers subscribe
 endpoint ``/api-internal``, for service accounts only (D-223).
 
 The CSV importer (``importer.py``) is a module of this server: its datasets are stored datastreams
-under the sensors and the CO₂ analysers. Beside them, until the 4.1 display client and models are
-replaced (plan Phases 6 and 7), each sensor's ``weather`` datastream is read from the 4.1 logger store
-through the store adapter (letter ``S``), and the profile served is the 4.1 one (D-252, D-271).
+under the sensors and the CO₂ analysers. The profile served is the 4.7 template (D-301).
 
 One thing here is not OpenSensorHub and says so: ``/demonstrator/referee`` (scaffolding: the only
 code that reads the manifest, FR-37).
@@ -377,18 +375,18 @@ def create_app(rt) -> Gate:
                 "links": links}
 
     def ds_json(request, d):
-        rec = srv().visible(d["schema"])
+        rec = srv().visible(d)
         props = [{"definition": f.get("definition", ""), "label": f.get("label", f["name"]), "name": f["name"]}
                  for f in rec["fields"] if not (f["type"] == "Time" and f["name"] == "time")]
         did = d["id"]
         span = srv().time_range(d)
         span_iso = [iso(span[0]), iso(span[1])] if span else None
-        now = iso(rt.now())
+        now = iso_real(rt.real())[:19] + "Z"
         times = ({"validTime": span_iso, "phenomenonTime": span_iso, "resultTime": span_iso} if span
                  else {"validTime": [now, now]})  # validTime is required by clients (OSHConnect)
         return {"id": did, "name": d["name"], "outputName": d["outputName"], "system@id": d["system"],
                 "system@link": {"href": base(request) + f"/systems/{d['system']}"}, **times,
-                "resultType": "record", "live": d["kind"] == "sensor", "formats": list(swe.OBS_FORMATS),
+                "resultType": "record", "live": False, "formats": list(swe.OBS_FORMATS),
                 "observedProperties": props,
                 "links": [link(request, f"/datastreams/{did}", "self"),
                           link(request, f"/datastreams/{did}/schema?obsFormat=application%2Fswe%2Bjson", "schema"),
@@ -559,7 +557,7 @@ def create_app(rt) -> Gate:
                         f: str | None = Query(None)):
         d = get_ds(dsId)
         readable(request, d["system"])
-        return swe.schema_response(srv().visible(d["schema"]), fmt(obsFormat or f, swe.JSON, swe.OBS_FORMATS))
+        return swe.schema_response(srv().visible(d), fmt(obsFormat or f, swe.JSON, swe.OBS_FORMATS))
 
     @app.post("/systems/{systemId}/datastreams", status_code=201, summary="Create a datastream")
     async def post_datastream(request: Request, systemId: str = Path(...)):
@@ -600,27 +598,16 @@ def create_app(rt) -> Gate:
         if resultTime and not latest:
             r0, r1 = _interval(resultTime)
             t0, t1 = max(t0, r0), min(t1, r1)
-        rec = srv().visible(d["schema"])
+        rec = srv().visible(d)
         names = [x["name"] for x in rec["fields"] if x["name"] != "time"]
-        st = request.state
-        if d["kind"] == "sensor":
-            if latest:
-                tr = srv().adapter.time_range(d["sensor"])
-                if not tr:
-                    return _obs_response(request, d, rec, {"t": np.empty(0)}, of, lim, offset, 0)
-                t0 = t1 = tr[1]
-            raw = [n for n in names if not n.endswith("_qc")]
-            cols = srv().sensor_records(d["sensor"], t0, min(t1, rt.now()), lim, offset, fields=raw,
-                                        why=f"{st.model} read" if st.model else "observation request", quiet=st.quiet)
+        ser = d["series"]
+        if latest:
+            i = ser.latest()
+            idx = np.array([] if i is None else [i], dtype=int)
         else:
-            ser = d["series"]
-            if latest:
-                i = ser.latest()
-                idx = np.array([] if i is None else [i], dtype=int)
-            else:
-                i0, i1 = ser.range(t0, t1)
-                idx = np.arange(i0 + offset, min(i1, i0 + offset + lim))
-            cols = ser.take(idx, names)
+            i0, i1 = ser.range(t0, t1)
+            idx = np.arange(i0 + offset, min(i1, i0 + offset + lim))
+        cols = ser.take(idx, names)
         return _obs_response(request, d, rec, cols, of, lim, offset, len(cols["t"]))
 
     @app.post("/datastreams/{dsId}/observations", status_code=201, summary="Publish one observation")
@@ -628,8 +615,6 @@ def create_app(rt) -> Gate:
         d = get_ds(dsId, hidden=True)  # a datastream not served still takes its model's observations (FR-52)
         readable(request, d["system"])
         writable(request, d["system"])
-        if d["kind"] == "sensor":
-            raise Refusal(405, "a sensor's observations come from the logger store, not from clients")
         body = await json_body(request)
         if not isinstance(body, dict):
             raise Refusal(400, "one observation per request: the body must be one JSON object")
@@ -880,7 +865,7 @@ def _decode(name: str, ty: str, v):
     return v
 
 
-def _column(fd: dict, v, sensor: bool) -> list:
+def _column(fd: dict, v) -> list:
     ty = fd["type"]
     v = np.asarray(v)
     if ty == "Quantity":
@@ -898,11 +883,6 @@ def _column(fd: dict, v, sensor: bool) -> list:
         for i, s in zip(np.flatnonzero(ok).tolist(), iso_many(f[ok])):
             out[i] = s
         return out
-    if sensor and ty == "Category" and v.dtype != object:  # the adapter's coded columns
-        if fd["name"].endswith("_qc"):
-            return [None if x != x else str(int(x)) for x in v.astype(float).tolist()]
-        tokens = (fd.get("constraint") or {}).get("values") or []
-        return [None if x != x else tokens[int(x)] for x in v.astype(float).tolist()]
     return [None if (isinstance(x, float) and x != x) else x for x in v.tolist()]
 
 
@@ -910,8 +890,7 @@ def _obs_response(request, d, rec, cols, of, limit, offset, n):
     fields = [x for x in rec["fields"] if x["name"] != "time" and x["name"] in cols]
     times = iso_many(cols["t"]) if len(cols["t"]) else []
     names = [x["name"] for x in fields]
-    sensor = d["kind"] == "sensor"
-    columns = [_column(x, cols[x["name"]], sensor) for x in fields]
+    columns = [_column(x, cols[x["name"]]) for x in fields]
     if of == swe.SWE_JSON:  # an array of records, time first; no next link (§9.1)
         rows = [dict(zip(["time"] + names, vals)) for vals in zip(times, *columns)]
         return Response(json.dumps(rows, separators=(",", ":"), allow_nan=False), media_type=swe.SWE_JSON)

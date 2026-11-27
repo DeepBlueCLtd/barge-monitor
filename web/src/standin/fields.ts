@@ -1,7 +1,8 @@
 // What the server can publish, and what it publishes now (FR-50..FR-52;
 // fields.py). The catalogue lists every field the control panel can switch:
 // the raw parameters (both sensors together), the model outputs the server
-// knows, and three extra fields, off by default. A field is published only
+// knows, and two extra fields, off by default (the 4.1 logger's Category, `precipitation_type`,
+// is retired with it, D-320). A field is published only
 // when it is on *and* all its inputs are published. The offering is frozen
 // into the server at each start: a toggle is pending until then (FR-51).
 import { DEF } from './constants';
@@ -39,10 +40,6 @@ export const RAW: Field[] = [
   field('apparent_wind_direction', 'Wind direction', 'Quantity', 'deg', { description: 'Apparent wind direction, degrees relative to the bow.' }),
   field('solar_irradiance', 'Solar irradiance', 'Quantity', 'W/m2'),
   field('water_temperature', 'Water temp', 'Quantity', 'Cel'),
-  field('precipitation_type', 'Precipitation', 'Category', null, {
-    default_on: false, tokens: ['none', 'drizzle', 'rain', 'showers'], extra: true,
-    description: 'Measured by both sensors; published only when switched on.',
-  }),
 ];
 export const QUANTITIES = RAW.filter((f) => f.swe_type === 'Quantity').map((f) => f.name);
 

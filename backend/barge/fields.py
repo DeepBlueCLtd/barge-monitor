@@ -2,8 +2,9 @@
 
 The catalogue lists every field the control panel can switch: the raw
 parameters (both sensors together), the model outputs the server knows about,
-and three extra fields, off by default, that the display client has never
-seen: a Category, a Quantity and a Count (FR-50). A field is published only
+and two extra fields, off by default, that the display client has never
+seen: a Quantity and a Count (FR-50). (The 4.1 logger's Category,
+``precipitation_type``, is retired with it: the data folder records none.) A field is published only
 when it is switched on *and* all its inputs are published (FR-52). The
 offering is read once, at server start: a toggle is pending until then (FR-51).
 
@@ -33,7 +34,7 @@ class Field:
     essential: bool = False
     tokens: tuple = ()
     description: str = ""
-    extra: bool = False  # one of the three fields the display has never seen
+    extra: bool = False  # one of the fields the display has never seen
 
     @property
     def definition(self) -> str:
@@ -50,9 +51,6 @@ RAW = [
           description="Apparent wind direction, degrees relative to the bow."),
     Field("solar_irradiance", "Solar irradiance", "Quantity", "W/m2"),
     Field("water_temperature", "Water temp", "Quantity", "Cel"),
-    Field("precipitation_type", "Precipitation", "Category", None, default_on=False,
-          tokens=("none", "drizzle", "rain", "showers"), extra=True,
-          description="Measured by both sensors; published only when switched on."),
 ]
 QUANTITIES = [f.name for f in RAW if f.swe_type == "Quantity"]
 
