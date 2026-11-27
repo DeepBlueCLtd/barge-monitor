@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="site.css">
 </head>
 <body>
-<div class="banner">Preview of pull request #20 (2a3c976). Not the published document.</div>
+<div class="banner">Preview of pull request #20 (01d0c11). Not the published document.</div>
 <main>
 <p class="demo-link"><a href="demo/"><strong>Open the working demonstrator →</strong></a> It runs whole in your browser. · <a href="index.html">Requirements</a> · <a href="interfaces.html">Version 4 interfaces</a> · Mockups: <a href="mockups/mockup-1-display-client.png">1</a>, <a href="mockups/mockup-2-models.png">2</a>, <a href="mockups/mockup-3-data-server.png">3</a></p>
 <nav id="TOC" aria-label="Contents">
@@ -1316,10 +1316,15 @@ until it controls the page), <code>back end</code> (the worker and, in
 Python mode, Pyodide), <code>server</code> (started and answering),
 <code>import</code> (the silent import of Mission A),
 <code>models</code> (each core model ready).</li>
-<li><strong>The relay.</strong> If a Service Worker already controls the
-page, it is used at once; the page does not wait for
-<code>controllerchange</code>. A new <code>sw.js</code> calls
-<code>skipWaiting()</code> and <code>clients.claim()</code>. If no
+<li><strong>The relay.</strong> The page goes on as soon as <strong>this
+build's</strong> relay controls it: it asks the controller for its
+version, so an older relay left from an earlier deploy (which may not
+forward <code>api-internal/</code>) is waited out; the page does not
+depend on <code>controllerchange</code> alone. A new <code>sw.js</code>
+calls <code>skipWaiting()</code> and <code>clients.claim()</code>;
+because a <code>skipWaiting()</code> at install is lost if the older
+relay is still activating, the page also asks a waiting relay to
+<code>skip-waiting</code>, every second for a minute (D-354). If no
 Service Worker controls the page within <strong>10 s</strong>, or
 registration fails (for example, the browser blocks Service Workers),
 the page says which step stalled and what to do (reload; allow the
