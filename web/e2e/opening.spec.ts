@@ -17,7 +17,7 @@ const openingLayout = readJson('../src/shell/layout-opening.json') as { zones: {
 const SUBS = ['sub-webapi', 'sub-registry', 'sub-obsstore', 'sub-query', 'sub-commands', 'sub-accounts', 'sub-permissions', 'sub-admin'];
 /** Written by us either way, beside the subsystems in the back end (FR-120, 4.7: no replay controller, no gateway). */
 const BACK = ['importer', 'models'];
-const CONTROLS = ['play', 'speed', 'restart-client', 'restart-server', 'demo-menu', 'control-panel-toggle', 'overview-button'];
+const CONTROLS = ['play', 'speed', 'restart-client', 'restart-server', 'demo-menu', 'control-panel-toggle', 'overview-button', 'custom-backend-link'];
 /** FR-120a: every flow of the opening, as "from>to". */
 const LINES = ['client>sub-webapi', 'models>sub-webapi', 'sub-commands>importer', 'sub-commands>models', 'importer>sub-obsstore', 'importer>sub-registry',
   'sub-webapi>sub-query', 'sub-webapi>sub-registry', 'sub-webapi>sub-commands', 'sub-webapi>sub-permissions', 'sub-query>sub-obsstore',
@@ -154,6 +154,20 @@ for (const backend of ['standin', 'python'] as const) {
       await expect(page.getByTestId('switch-build')).toHaveAttribute('aria-checked', 'true');
       // Any value, or none, is the flag (FR-119).
       await openOpening(page, `demo/?backend=${backend}&hand-made=yes`);
+    });
+
+    test(`the top bar's "Custom backend" link reloads this page on the opening, keeping its other parameters (D-353), ${backend}`, async ({ page }) => {
+      await page.goto(`demo/?backend=${backend}`);
+      const link = page.getByTestId('custom-backend-link');
+      await expect(link).toBeVisible();
+      await expect(link).toBeEnabled();
+      const href = new URL((await link.getAttribute('href'))!, page.url());
+      expect(href.searchParams.get('backend')).toBe(backend);
+      expect(href.searchParams.has('hand-made')).toBe(true);
+      await link.click();
+      await expect(page.getByTestId('opening-panel')).toBeVisible();
+      await expect(page.getByTestId('flowchart')).toHaveAttribute('data-mode', 'opening');
+      expect(new URL(page.url()).searchParams.get('backend')).toBe(backend);
     });
 
     test(`AT-63: in the opening nothing runs, nothing is gold, and clicks reveal nothing, ${backend}`, async ({ page }) => {

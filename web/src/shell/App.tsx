@@ -190,6 +190,9 @@ function TopBar({ ready }: { ready: boolean }) {
             opening.dismissPanel(); // FR-125: the overview closes the opening's savings
             selectComponent(null);
           }} data-testid="overview-button" title="What is adopted, what is written, what is not here" {...off}>Overview</button>
+          {/* A quick way back to the pre-OSH stage: reload this page with the adoption opening's flag (§9.8). */}
+          <a className="btn" href={customBackendHref()} data-testid="custom-backend-link"
+            title="Reload on the opening: the data server written ourselves, before adopting OpenSensorHub">Custom backend</a>
           {/* FR-125a: why controls are disabled, in sight. A browser shows no tooltip on a disabled button, so a title alone is not enough. */}
           {reason && <p id={REASON_ID} className="control-reason" data-testid="control-reason">{reason}</p>}
           {replayReason && replayReason !== reason && <p id="replay-reason" className="control-reason" data-testid="replay-reason">Play and speed: {replayReason}</p>}
@@ -199,6 +202,13 @@ function TopBar({ ready }: { ready: boolean }) {
       {ready && drawer && <ControlPanel onClose={() => setDrawer(false)} />}
     </>
   );
+}
+
+/** This page with `?hand-made` added, keeping its other parameters (e.g. ?backend=). */
+function customBackendHref(): string {
+  const params = new URLSearchParams(location.search);
+  params.set('hand-made', '');
+  return `${location.pathname}?${params.toString().replace('hand-made=', 'hand-made')}${location.hash}`;
 }
 
 function Main() {
