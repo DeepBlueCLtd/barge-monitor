@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="site.css">
 </head>
 <body>
-<div class="banner">Preview of pull request #22 (020dca7). Not the published document.</div>
+<div class="banner">Preview of pull request #22 (d8904d9). Not the published document.</div>
 <main>
 <p class="demo-link"><a href="demo/"><strong>Open the working demonstrator →</strong></a> It runs whole in your browser. · <a href="index.html">Requirements</a> · <a href="interfaces.html">Version 4 interfaces</a> · Mockups: <a href="mockups/mockup-1-display-client.png">1</a>, <a href="mockups/mockup-2-models.png">2</a>, <a href="mockups/mockup-3-data-server.png">3</a></p>
 <nav id="TOC" aria-label="Contents">
@@ -1457,19 +1457,23 @@ runs and no model registers until hand-over (FR-125). The status panel
 shows only "Opening". The <strong>stand-in banner is hidden</strong>
 until hand-over, because it names OpenSensorHub before there is a data
 server on screen.</p></li>
-<li><p><strong>FR-123</strong> <strong>The opening panel.</strong> The
-detail panel opens on <strong>Data server</strong> with:</p>
+<li><p><strong>FR-123</strong> <strong>The opening panel (4.7,
+D-359).</strong> The detail panel opens on <strong>The
+components</strong> with:</p>
 <ul>
 <li>a two-way switch, <strong>Build it ourselves | Adopt
 OpenSensorHub</strong>, with <em>Build it ourselves</em> selected;</li>
-<li>the table of FR-120;</li>
-<li>a row, <strong>"Written by us either way"</strong>: CSV importer,
-Models, display client, in plain style.</li>
-<li>the lead, before adoption: written ourselves, the data server is a
-range of subsystem components to develop, among them these (4.7).</li>
+<li>one table of <strong>every component</strong> in the opening, in the
+flowchart's order: the display client, Models, the CSV importer, the
+subsystems of FR-120, the scientific libraries and the data folder. Each
+row says what the component does and where it keeps its data;</li>
+<li>the lead, before adoption: written ourselves, the system is a range
+of components to develop; which of them could be adopted rather than
+written is not yet decided.</li>
 </ul>
-<p>Clicking a subsystem card highlights its row in the table. Clicking
-any other card does nothing in the opening.</p></li>
+<p>Before Adopt nothing in the panel says which components could be
+adopted or which are written by us. Clicking any card highlights its
+row; nothing is revealed (FR-121).</p></li>
 <li><p><strong>FR-124</strong> <strong>Adopt.</strong> Choosing
 <em>Adopt OpenSensorHub</em>:</p>
 <ol type="1">
@@ -1478,8 +1482,10 @@ merge into the single <strong>Data server</strong> card (OpenSensorHub,
 OGC Connected Systems);</li>
 <li>spreads the CSV importer and Models across the back end that the
 subsystems have left;</li>
-<li>changes the table to "OpenSensorHub covers all of these", with each
-subsystem ticked. No number is shown (§16).</li>
+<li>adds a column, "With OpenSensorHub": each subsystem ticked, the
+display client, Models and the CSV importer "Written by us", the
+scientific libraries adopted, the data folder unchanged. No number is
+shown (§16).</li>
 </ol>
 <p>This takes about 1.5 seconds. With reduced motion it is
 immediate.</p></li>

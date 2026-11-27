@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="site.css">
 </head>
 <body>
-<div class="banner">Preview of pull request #22 (020dca7). Not the published document.</div>
+<div class="banner">Preview of pull request #22 (d8904d9). Not the published document.</div>
 <main>
 <p class="demo-link"><a href="demo/"><strong>Open the working demonstrator →</strong></a> It runs whole in your browser. · <a href="index.html">Requirements</a> · <a href="interfaces.html">Version 4 interfaces</a> · Mockups: <a href="mockups/mockup-1-display-client.png">1</a>, <a href="mockups/mockup-2-models.png">2</a>, <a href="mockups/mockup-3-data-server.png">3</a></p>
 <nav id="TOC" aria-label="Contents">
@@ -1220,8 +1220,14 @@ end's label sits at its bottom left.</p></li>
 head at each end. Besides FR-120a's table, <code>models ↔︎ scilibs</code>
 and <code>importer ↔︎ folder</code> are drawn, as in §3.1.</p></li>
 <li><p><strong>Wording.</strong> The lead reads: written ourselves, the
-data server is a range of subsystem components to develop, among them
-these. No count appears (FR-120, FR-124).</p></li>
+system is a range of components to develop; which of them could be
+adopted rather than written is not yet decided. No count appears
+(FR-120, FR-124).</p></li>
+<li><p><strong>The table</strong> (FR-123, D-359) has a row for every
+card of the opening, in the flowchart's order (<code>ROWS</code> in
+<code>opening.ts</code>); clicking any card highlights its row. After
+Adopt a column, "With OpenSensorHub", ticks the subsystems and says what
+became of the rest.</p></li>
 <li><p><strong>Before Adopt:</strong></p>
 <ul>
 <li><code>runtime.start()</code> is <strong>not called</strong>: no
