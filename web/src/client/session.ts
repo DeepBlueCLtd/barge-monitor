@@ -334,6 +334,14 @@ export class DisplayClientSession {
     return !!http && http === this.http && !http.closed;
   }
 
+  /**
+   * Still the open dataset (D-356). A dataset's reads run concurrently with opening another (a poll's runs logs, a
+   * slower open): a reply that arrives after another dataset was opened is dropped, never applied to it.
+   */
+  private current(dataset: string): boolean {
+    return this.clock.state.value?.dataset === dataset;
+  }
+
   /** Run a viewer's action: its requests' messages wear the gold ring on the flowchart. */
   private async act<T>(fn: (http: ClientHttp) => Promise<T>): Promise<T | undefined> {
     const http = this.http;
@@ -563,8 +571,9 @@ export class DisplayClientSession {
       return;
     }
     await fetchSchemas(http, d, datasetDatastreams(d, dataset));
-    if (!this.live(http)) return;
+    if (!this.live(http) || !this.current(dataset)) return;
     await this.readRuns(http, buildView(d, dataset));
+    if (!this.live(http) || !this.current(dataset)) return;
     const v = buildView(d, dataset, this.completeSystems());
     const keep = new Set(v.props.map((p) => p.key));
     const sel = this.selection.value;
@@ -598,7 +607,8 @@ export class DisplayClientSession {
       }
       out.push({ ds, label: d.systems.get(ds.systemId)?.label ?? ds.systemUid, runs, latest });
     }));
-    if (!this.live(http)) return;
+    // Another dataset opened meanwhile: these are not its runs, and its view is not this one (D-356).
+    if (!this.live(http) || !this.current(v.id)) return;
     const before = this.completeRuns();
     this.runs.set(out.sort((a, b) => a.label.localeCompare(b.label)));
     const after = this.completeRuns();
@@ -719,7 +729,7 @@ export class DisplayClientSession {
         const r = await http.request<any[]>('GET', `datastreams/${id}/observations`, { f: SWE, phenomenonTime: `${iso(from)}/${iso(until)}`, limit: '200000' });
         this.lastRead.set({ chain: r.chain, outputName: u.src.ds.outputName });
         if (r.status !== 200) throw new HttpError(`observations of ${u.src.ds.outputName}`, r.status);
-        if (!this.live(http)) return;
+        if (!this.live(http) || !this.current(s.dataset)) return;
         let rows = (r.body ?? []).map(toRow);
         let run: string | null = null;
         if (u.src.runs) {
@@ -779,7 +789,7 @@ export class DisplayClientSession {
       return [...keep, ...got.filter((x) => x.t > t0 || !keep.length)];
     };
     const [clusters, changes] = await Promise.all([read(of(clustersOut), old?.clusters ?? []), read(of(changesOut), old?.changes ?? [])]);
-    if (!this.live(http)) return;
+    if (!this.live(http) || !this.current(v.id)) return;
     this.analysis.set({ runId, algorithm: String(row.algorithm ?? ''), start, end, clusters, changes });
   }
 
