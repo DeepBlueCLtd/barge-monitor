@@ -128,8 +128,6 @@ function TopBar({ ready }: { ready: boolean }) {
           {runtime.kind === 'standin' && <p className="standin-notice" data-testid="standin-notice">{STANDIN_NOTICE}</p>}
         </div>
         <nav className="controls" aria-label="Controls" data-testid="controls">
-          {reason && <span id={REASON_ID} className="sr-only" data-testid="control-reason">{reason}</span>}
-          {replayReason && replayReason !== reason && <span id="replay-reason" className="sr-only" data-testid="replay-reason">{replayReason}</span>}
           {/* §8.6, interfaces §8: a mirror of the display client's replay bar, driving its own clock in the page. */}
           <button className={`btn play${playing ? '' : ' primary'}`} onClick={() => (playing ? clientSession.pause() : clientSession.play())} data-testid="play" {...replayOff}>
             {playing ? '❚❚ Pause' : '▶ Play'}
@@ -150,6 +148,9 @@ function TopBar({ ready }: { ready: boolean }) {
           <DemoMenu reason={reason} />
           <button className="btn" onClick={() => setDrawer(!drawer)} aria-expanded={drawer} data-testid="control-panel-toggle" {...off}>Control panel</button>
           <button className="btn" onClick={() => selectComponent(null)} data-testid="overview-button" title="What is adopted, what is written, what is not here" {...off}>Overview</button>
+          {/* FR-125a: why controls are disabled, in sight. A browser shows no tooltip on a disabled button, so a title alone is not enough. */}
+          {reason && <p id={REASON_ID} className="control-reason" data-testid="control-reason">{reason}</p>}
+          {replayReason && replayReason !== reason && <p id="replay-reason" className="control-reason" data-testid="replay-reason">Play and speed: {replayReason}</p>}
         </nav>
         {ready && <DemoBanner />}
       </header>
