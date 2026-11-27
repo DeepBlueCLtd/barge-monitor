@@ -34,6 +34,9 @@ change lists are below. Requirements marked **(4.7)** are new or changed here; *
 - **Startup says why (4.7).** A control that cannot act yet says why, and a startup that
   stalls says where (FR-125a, NFR-10a). The first build stalled at the seam relay's start,
   with every control disabled and no explanation.
+- **Illustrative traffic in the opening (4.7, D-361).** Before Adopt, made-up message icons
+  travel the opening's lines in realistic sequences, so the hand-made system looks alive;
+  nothing runs, and they stop at the Adopt click (FR-120a, FR-122).
 
 ### Changes from Version 4.5
 
@@ -808,7 +811,7 @@ reveal, so nothing is marked as ours in it.
   | Admin | Settings, start, stop, health | configuration files |
 
   The flows of §3.1 are drawn between the subsystems and the other components as plain
-  lines, with no message letters (FR-120a). The back-end band has **two rows** in the
+  lines, without labels; only illustrative traffic travels on them (FR-120a). The back-end band has **two rows** in the
   opening (five cards each), with every card at its normal size. The zones below it
   move down, and return at the merge.
 - **FR-120a (4.6)** **Flows in the opening.** Each external flow is drawn to the
@@ -823,14 +826,29 @@ reveal, so nothing is marked as ours in it.
   | Query engine | Observation store |
   | Accounts | Permissions (both ways) |
   | Admin | Web API |
+
+  **Illustrative traffic (4.7, D-361).** While *Build it ourselves* is shown, message icons,
+  with the real letters (§5), travel these lines in realistic sequences, each request
+  followed by the work behind it and its reply: the display client querying the Web API,
+  which checks Permissions (and Accounts at a login) and asks the Query engine, which reads
+  the Observation store; discovery from the Registry; the CSV importer reading the data
+  folder and writing to the Registry and the Observation store; Commands pushing to the
+  importer and Models, and their status back; Models reading observations, calling the
+  scientific libraries and publishing; Admin changing a setting. A few run at once, at a
+  gentle pace, looping with some variety. They are **illustrative only**: made in the page,
+  from a fixed list, with nothing running (FR-122); they are not messages, so they cannot be
+  clicked, are not counted or captured and never appear in the message strip. The status
+  says so. At the Adopt click they stop at once, the icons in flight fading out before the
+  cards move. With reduced motion there is none.
 - **FR-121** **Nothing is gold.** No card is gold. No ★, diamond or "our value-add" appears
   anywhere in the opening, the detail panel included. Clicking the display client or
   Models does not reveal it.
 - **FR-122** **Nothing runs.** The top bar's controls are **hidden, not disabled**: replay
   mirror, restart client, restart server, failure demos, control panel and
-  overview. No message is sent or drawn. The display client does not handshake. **The back
+  overview. No message is sent, captured or drawn; only the illustrative traffic of FR-120a,
+  made in the page, is drawn (D-361). The display client does not handshake. **The back
   end does not start (4.6)**: no worker runs, no model registers and nothing is fetched until
-  the viewer chooses Adopt (FR-124, FR-125). The status panel shows only "Opening". The **stand-in banner is hidden** until
+  the viewer chooses Adopt (FR-124, FR-125). The status panel shows only "Opening", with "· illustrative traffic" while that traffic is drawn. The **stand-in banner is hidden** until
   hand-over, because it names OpenSensorHub before there is a data server on screen.
 - **FR-123** **The opening panel (4.7, D-359).** The detail panel opens on **The
   components** with:
@@ -984,10 +1002,10 @@ pace), and in 4.4 and 4.6:
 | **AT-60** | A weather-only user is not degraded on any dataset that has every essential source | C2, C6 |
 | **AT-61** | A new model from an empty slot cannot read CO₂ unless the owner grants it | C3, C6 |
 | **AT-62** | Without the `hand-made` flag the demonstrator opens as FR-77 describes; with it, in the adoption opening; reloading with it repeats the opening | Architecture view |
-| **AT-63** | In the opening: no top-bar control and no stand-in banner is in the page; no back-end or model worker has started; no message is captured or drawn; the third-party zone has no data server; nothing gold, no ★ and no diamond anywhere, and clicking the display client or Models reveals nothing | Architecture view |
+| **AT-63** | In the opening: no top-bar control and no stand-in banner is in the page; no back-end or model worker has started and nothing is requested; no message is captured or drawn: the only icons are FR-120a's illustrative traffic, on the opening's lines, not clickable, and gone shortly after the Adopt click; the third-party zone has no data server; nothing gold, no ★ and no diamond anywhere, and clicking the display client or Models reveals nothing | Architecture view |
 | **AT-64** | The subsystem cards match the CSV importer and Models cards in size, outline style, fill and font; no element encloses or labels them as a group; no count of them is shown | Architecture view |
 | **AT-65** | After Adopt: the subsystem cards merge one at a time, shrinking as they go, into one Data server card in the third-party zone, and the normal arrows are drawn; the table shows every subsystem ticked, with no number; the back end starts at the Adopt click, the top-bar controls and banner appear, and the flowchart stays on screen throughout; once it has started, everything but the detail panel matches a load without the flag, and the state passes AT-19 and AT-20 | Architecture view |
-| **AT-66** | With reduced motion, Adopt changes the layout immediately, without animation | Visual style |
+| **AT-66** | With reduced motion, the opening draws no illustrative traffic, and Adopt changes the layout immediately, without animation | Visual style |
 | **AT-67** | After Adopt, nothing plays before login, an open dataset and Play; every disabled top-bar control says why | Architecture view |
 | **AT-68** | With Service Workers blocked, or an older one in control, the page names the stalled step and what to do within 10 seconds | Delivery |
 | **AT-69** | The Dataset selector and Favourites open as popups, close on Escape, outside click and their main action, work from the keyboard, and keep import progress visible on the selector button | C2, C3 |
