@@ -432,13 +432,18 @@ and the dataset, because SWE Common names cannot contain spaces or
 <td><code>urn:x-barge:process:data-cleanse</code></td>
 <td><code>cleaned-bow__{ds}</code>,
 <code>cleaned-stern__{ds}</code></td>
-<td></td>
+<td>One <strong>block</strong> per hour of the dataset (D-280):
+<code>time</code> (the block's start), <code>run_id</code>,
+<code>offsets</code> (Text: a JSON array of seconds from
+<code>time</code>, one per reading), one Text per quantity (a JSON array
+of its cleaned readings, <code>null</code> where removed; the field has
+its raw quantity's definition) and <code>removed</code> (Count)</td>
 </tr>
 <tr>
 <td><code>urn:x-barge:process:data-cleanse:restricted</code></td>
 <td><code>cleaned-co2-bow__{ds}</code>,
 <code>cleaned-co2-stern__{ds}</code></td>
-<td><strong>Restricted</strong></td>
+<td><strong>Restricted</strong>; blocks, with <code>co2</code></td>
 </tr>
 <tr>
 <td><code>urn:x-barge:process:summaries</code></td>
@@ -447,7 +452,10 @@ and the dataset, because SWE Common names cannot contain spaces or
 <code>derived-1min__{ds}</code>, <code>derived-1h__{ds}</code></td>
 <td>Minimum, mean and maximum per quantity (FR-29):
 <code>&lt;f&gt;_min</code>, <code>&lt;f&gt;</code>,
-<code>&lt;f&gt;_max</code></td>
+<code>&lt;f&gt;_max</code>, and <code>readings_removed</code>; derived:
+<code>dew_point</code>, <code>bow_minus_stern</code>,
+<code>pressure_tendency_3h</code>. Minutes and hours aligned to the
+dataset's start; each carries <code>run_id</code></td>
 </tr>
 <tr>
 <td><code>urn:x-barge:process:summaries:restricted</code></td>
@@ -464,7 +472,12 @@ and the dataset, because SWE Common names cannot contain spaces or
 <td><code>urn:x-barge:process:analysis</code></td>
 <td><code>changes__{ds}</code>, <code>clusters__{ds}</code>,
 <code>correlation__{ds}</code></td>
-<td>Appended, keyed by <code>run_id</code> (FR-28a)</td>
+<td>Appended, keyed by <code>run_id</code> (FR-28a):
+<code>changes</code> has <code>scale</code> (<code>minutes</code>,
+<code>hours</code>) and <code>strength</code>; <code>clusters</code> has
+<code>cluster</code> (<code>c1</code>…<code>c8</code>);
+<code>correlation</code> has <code>fields</code> and
+<code>matrix</code></td>
 </tr>
 <tr>
 <td><code>urn:x-barge:process:analysis:restricted</code></td>
@@ -972,25 +985,46 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb3-1"><a hr
 <span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> publish_many(<span class="va">self</span>, key, cols: <span class="bu">dict</span>) <span class="op">-&gt;</span> <span class="bu">int</span>      <span class="co"># loops publish(); counts</span></span>
 <span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> subscribe(<span class="va">self</span>, cs_key, on_command) <span class="op">-&gt;</span> <span class="va">None</span>     <span class="co"># push stream (§9.2); resubscribes after unreachability</span></span>
 <span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> command_status(<span class="va">self</span>, cs_key, cmd_id, status, message<span class="op">=</span><span class="st">&quot;&quot;</span>) <span class="op">-&gt;</span> <span class="va">None</span></span>
-<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> catalogue(<span class="va">self</span>) <span class="op">-&gt;</span> <span class="bu">list</span>[<span class="bu">dict</span>]                   <span class="co"># the importer&#39;s catalogue, folded per file (§7)</span></span>
-<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> score(<span class="va">self</span>, kind, payload) <span class="op">-&gt;</span> <span class="bu">dict</span>              <span class="co"># the referee (scaffolding)</span></span></code></pre></div>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> <span class="bu">all</span>(<span class="va">self</span>, key) <span class="op">-&gt;</span> <span class="bu">list</span>[<span class="bu">dict</span>]                    <span class="co"># every observation, as records, paged by offset</span></span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> catalogue(<span class="va">self</span>) <span class="op">-&gt;</span> <span class="bu">list</span>[<span class="bu">dict</span>]                   <span class="co"># the importer&#39;s catalogue, folded per file (§7)</span></span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> datasets(<span class="va">self</span>) <span class="op">-&gt;</span> <span class="bu">list</span>[<span class="bu">dict</span>]                    <span class="co"># datasets to process, in import order (§10.2)</span></span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> score(<span class="va">self</span>, kind, payload) <span class="op">-&gt;</span> <span class="bu">dict</span>              <span class="co"># the referee (scaffolding)</span></span>
+<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> real(<span class="va">self</span>) <span class="op">-&gt;</span> <span class="bu">float</span>                                   <span class="co"># real time for a runs entry, strictly increasing</span></span></code></pre></div>
+<p>Times are <strong>Unix seconds</strong> in every model (4.7): no
+simulation epoch.</p>
 <div class="sourceCode" id="cb4"><pre
 class="sourceCode python"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> Model:</span>
 <span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>    <span class="bu">id</span>, label, description</span>
-<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>    window: <span class="bu">float</span> <span class="op">=</span> <span class="fl">60.0</span>        <span class="co"># seconds of data per processing window, aligned to the dataset&#39;s start</span></span>
-<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> setup(<span class="va">self</span>, api)                    <span class="co"># register; subscribe; THEN declare ready</span></span>
-<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> declare(<span class="va">self</span>, api, ds)              <span class="co"># create every datastream for dataset ds, runs__{ds} included</span></span>
-<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> process(<span class="va">self</span>, api, ds, t0, t1, run) <span class="co"># one window [t0, t1) of dataset ds, in run `run`</span></span>
-<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> on_command(<span class="va">self</span>, api, cmd) <span class="op">-&gt;</span> <span class="bu">str</span>   <span class="co"># validate; raise Rejected(&quot;…bound…&quot;) to report REJECTED</span></span></code></pre></div>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>    window: <span class="bu">float</span> <span class="op">|</span> <span class="va">None</span> <span class="op">=</span> <span class="fl">60.0</span>  <span class="co"># seconds of data per processing window, aligned to the dataset&#39;s start;</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>                                 <span class="co"># None: a run&#39;s whole data range at once (Analysis)</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>    uses_co2, restricted_runs    <span class="co"># a restricted subsystem; runs that name CO₂ are logged under it too</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>    control, defaults, runs_master  <span class="co"># its control stream and runs record (the masters), its default settings</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> setup(<span class="va">self</span>, api)                    <span class="co"># register: system, restricted subsystem, control stream</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> declare(<span class="va">self</span>, api, ds) <span class="op">-&gt;</span> <span class="bu">bool</span>      <span class="co"># every datastream for dataset ds, runs__{ds} included (calls outputs)</span></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> outputs(<span class="va">self</span>, api, ds) <span class="op">-&gt;</span> <span class="bu">bool</span>      <span class="co"># the model&#39;s own datastreams; False while its inputs are not there</span></span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> process(<span class="va">self</span>, api, ds, t0, t1, run) <span class="co"># one window [t0, t1) of dataset ds, in run `run` (its id, settings)</span></span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> finish(<span class="va">self</span>, api, ds, run)          <span class="co"># after the last window: run.result for the complete entry</span></span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> wanted(<span class="va">self</span>, ds, complete) <span class="op">-&gt;</span> <span class="bu">dict</span> <span class="op">|</span> <span class="va">None</span> <span class="co"># the settings of a run ds still needs, given its complete runs</span></span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> validate(<span class="va">self</span>, api, cmd)                  <span class="co"># every bound; raise Rejected(&quot;…bound…&quot;) to report REJECTED</span></span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> on_command(<span class="va">self</span>, api, cmd) <span class="op">-&gt;</span> <span class="bu">dict</span>  <span class="co"># the runs a command asks for: a dataset (or every one), settings</span></span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> read_cleaned(<span class="va">self</span>, api, ds, source, t0, t1, run_id, names) <span class="op">-&gt;</span> <span class="bu">dict</span>  <span class="co"># Data cleanse&#39;s readings (D-280)</span></span></code></pre></div>
+<p>A run is <code>Run</code>: its <code>id</code>,
+<code>settings</code>, <code>start</code>, <code>end</code> (exclusive),
+<code>source</code> (Data cleanse's run it reads), <code>state</code>
+(the model's own) and <code>result</code>. The runner calls
+<code>step()</code> again and again; the runner, not the model,
+subscribes, finds datasets, plans runs and logs them.</p>
 <h3 id="102-the-runner-47-process-on-import">10.2 The runner (4.7:
 process on import)</h3>
 <p>Models follow <strong>no replay clock and no current dataset</strong>
 (FR-35, D-220). The runner:</p>
 <ul>
 <li><strong>Finds datasets</strong> by reading the importer's
-<code>catalogue</code> once per real second (drawn, like every other
-request). Every dataset whose file status is <code>imported</code>,
-<code>changed</code> or <code>superseded</code> is one to process.</li>
+<code>catalogue</code> once per real second. Every dataset whose file
+status is <code>imported</code>, <code>changed</code> or
+<code>superseded</code> is one to process. Processing (this reading
+included) is <strong>counted, not drawn</strong> (D-283); a command and
+its status reports are drawn.</li>
 <li><strong>On a dataset not yet processed</strong>, it first
 <strong>declares</strong> every datastream the model may publish for it,
 restricted ones included, and <code>runs__{ds}</code>. It then processes
@@ -1003,7 +1037,13 @@ taken in the order they were imported.</li>
 first processing of a dataset. A settings command (§10.3) starts a new
 run of that model over every imported dataset, newest first. Analysis's
 <code>clustering</code> command starts one run on the dataset its
-<code>doi</code> names.</li>
+<code>doi</code> names. Numbers carry on from the dataset's runs log, so
+they are never reused (after Reset instance the log is empty, and the
+next run is 1 again). The command reports <code>ACCEPTED</code>, then
+<code>COMPLETED</code> once its runs are queued, naming them (D-284);
+their progress is in <code>runs__{ds}</code>. Which runs a dataset needs
+is planned from its runs log: a model wants a complete run with its
+current settings; Analysis wants run 1 only (D-282).</li>
 <li><strong>Progress (FR-35b).</strong> Each run appends to
 <code>runs__{ds}</code>: <code>time</code> (real time),
 <code>run_id</code>, <code>status</code> (<code>processing</code> or
@@ -1030,7 +1070,16 @@ The 4.6 restart hold (D-186) is withdrawn (D-228).</li>
 <li><strong>Order.</strong> Data cleanse reads
 <code>weather__{ds}</code> (and <code>co2__{ds}</code>). Every other
 model reads only Data cleanse's outputs (AT-15), and waits until Data
-cleanse's run on the dataset is <code>complete</code>.</li>
+cleanse's run on the dataset is <code>complete</code>. A run reads Data
+cleanse's latest complete run when it starts; it is not run again when
+Data cleanse runs again (D-282).</li>
+<li><strong>Windows (D-281).</strong> Data cleanse and Summaries take an
+hour at a time; Analysis a run's whole data range at once; the example
+new model an hour.</li>
+<li><strong>Speed (D-280).</strong> Data cleanse's blocks make a day a
+few hundred observations. Measured in Chromium: Mission A's three runs
+complete about 3 s after the flowchart in the stand-in and about 30 s
+after it in Python (each model first loads its own Pyodide).</li>
 </ul>
 <h3 id="103-commands-to-models">10.3 Commands to models</h3>
 <table>
@@ -1130,10 +1179,13 @@ these.</li>
 <li><strong>On screen</strong> these are <strong>Favourites</strong>
 (SRD §8.5). The record's name stays "data of interest".</li>
 <li><strong>Resolution</strong> maps to datastreams: <code>PT1S</code>
-reads <code>cleaned-*</code> (or <code>weather</code>);
-<code>PT1M</code> reads <code>summary-1min-*</code>; <code>PT1H</code>
-reads <code>summary-1h-*</code>. Any other resolution is refused, naming
-these three (FR-94a).</li>
+reads <code>weather</code> (Data cleanse's <code>cleaned-*</code> are
+blocks, for models, D-280); <code>PT1M</code> reads
+<code>summary-1min-*</code>; <code>PT1H</code> reads
+<code>summary-1h-*</code>. Analysis reads only Data cleanse's output
+(AT-15): at <code>PT1M</code> and <code>PT1H</code> it takes the means
+of its readings in intervals aligned to the dataset's start (D-288). Any
+other resolution is refused, naming these three (FR-94a).</li>
 </ul>
 <h2 id="12-the-adoption-opening-srd-98">12. The adoption opening (SRD
 §9.8)</h2>
@@ -1249,7 +1301,11 @@ server reads on the next request (§9.3).</p>
 <h3 id="136-url-parameters">13.6 URL parameters</h3>
 <p><code>?backend=python|standin</code>, <code>?sketch=off</code> and
 <code>?hand-made</code>. <code>?seed</code> is withdrawn: the data
-folder is fixed.</p>
+folder is fixed. For tests only,
+<code>?folder=&lt;relative path&gt;/</code> points the importer at
+another folder of the same site (D-272), and
+<code>?idle=&lt;seconds&gt;</code> shortens the display client's
+5-minute idle lock (D-305).</p>
 <h3 id="137-startup-and-readiness-fr-125a-nfr-10a">13.7 Startup and
 readiness (FR-125a, NFR-10a)</h3>
 <ul>
@@ -1259,10 +1315,15 @@ until it controls the page), <code>back end</code> (the worker and, in
 Python mode, Pyodide), <code>server</code> (started and answering),
 <code>import</code> (the silent import of Mission A),
 <code>models</code> (each core model ready).</li>
-<li><strong>The relay.</strong> If a Service Worker already controls the
-page, it is used at once; the page does not wait for
-<code>controllerchange</code>. A new <code>sw.js</code> calls
-<code>skipWaiting()</code> and <code>clients.claim()</code>. If no
+<li><strong>The relay.</strong> The page goes on as soon as <strong>this
+build's</strong> relay controls it: it asks the controller for its
+version, so an older relay left from an earlier deploy (which may not
+forward <code>api-internal/</code>) is waited out; the page does not
+depend on <code>controllerchange</code> alone. A new <code>sw.js</code>
+calls <code>skipWaiting()</code> and <code>clients.claim()</code>;
+because a <code>skipWaiting()</code> at install is lost if the older
+relay is still activating, the page also asks a waiting relay to
+<code>skip-waiting</code>, every second for a minute (D-354). If no
 Service Worker controls the page within <strong>10 s</strong>, or
 registration fails (for example, the browser blocks Service Workers),
 the page says which step stalled and what to do (reload; allow the
