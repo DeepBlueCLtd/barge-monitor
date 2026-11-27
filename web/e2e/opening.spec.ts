@@ -22,7 +22,9 @@ const CONTROLS = ['play', 'speed', 'restart-client', 'restart-server', 'demo-men
 const LINES = ['client>sub-webapi', 'models>sub-webapi', 'sub-commands>importer', 'sub-commands>models', 'importer>sub-obsstore', 'importer>sub-registry',
   'sub-webapi>sub-query', 'sub-webapi>sub-registry', 'sub-webapi>sub-commands', 'sub-webapi>sub-permissions', 'sub-query>sub-obsstore',
   'sub-accounts>sub-permissions', 'sub-admin>sub-webapi', 'models>scilibs', 'importer>folder'];
-const LEAD = 'Written ourselves, the data server is a range of subsystem components to develop, among them these.';
+const LEAD = 'Written ourselves, the system is a range of components to develop. Which of them could be adopted rather than written is not yet decided.';
+/** D-359: every component of the opening has a row in the table, in the flowchart's order. */
+const ROW_IDS = ['client', 'models', 'importer', ...SUBS, 'scilibs', 'folder'];
 
 /** Words the 4.7 opening must never use (4.7: no access gateway, no replay controller, no Freeze; no count of subsystems). */
 const GONE = /gateway|replay controller|freeze|\beight\b/i;
@@ -217,12 +219,12 @@ for (const backend of ['standin', 'python'] as const) {
         expect(text.toLowerCase()).not.toContain('value-add');
       };
       await noGold();
-      // Clicking the display client, Models or any other component card reveals nothing and changes nothing (FR-121, FR-123).
+      // Clicking the display client, Models or any other component card highlights its row and reveals nothing (FR-121, FR-123, D-359).
       for (const id of ['client', 'models', 'importer', 'scilibs', 'folder']) {
         await page.getByTestId(`card-${id}`).click();
         await expect(page.getByTestId('detail-panel')).toHaveAttribute('data-showing', 'opening');
-        await expect(page.locator('.opening-table tr.highlighted')).toHaveCount(0);
-        await expect(page.locator('.card.selected')).toHaveCount(0);
+        await expect(page.getByTestId(`row-${id}`)).toHaveClass(/highlighted/);
+        await expect(page.locator('.opening-table tr.highlighted')).toHaveCount(1);
       }
       await noGold();
       await expect(page.getByTestId('dc-login')).toHaveCount(0); // the display client does not even show its login (FR-122)
@@ -232,11 +234,14 @@ for (const backend of ['standin', 'python'] as const) {
       await page.getByTestId('card-sub-accounts').click();
       await expect(page.getByTestId('row-sub-accounts')).toHaveClass(/highlighted/);
       await expect(page.locator('.opening-table tr.highlighted')).toHaveCount(1);
-      // FR-123: the lead, the table and "Written by us either way", in plain style, in 4.7's words.
+      // FR-123, D-359: the lead, and one table of every component, each with what it does; before Adopt nothing says
+      // which could be adopted rather than written.
       await expect(page.getByTestId('opening-lead')).toHaveText(LEAD);
-      await expect(page.getByTestId('opening-table').locator('tbody tr')).toHaveCount(SUBS.length);
+      expect(await page.getByTestId('opening-table').locator('tbody tr').evaluateAll((rs) => rs.map((r) => r.getAttribute('data-testid')))).toEqual(ROW_IDS.map((id) => `row-${id}`));
+      for (const id of ROW_IDS) expect((await page.getByTestId(`row-${id}`).locator('td').nth(1).innerText()).trim()).not.toBe('');
       await expect(page.getByTestId('row-sub-permissions')).toContainText('Who may see and change what');
-      expect(await page.getByTestId('written-either-way').locator('li').allInnerTexts()).toEqual(['CSV importer', 'Models', 'Display client']);
+      await expect(page.getByTestId('written-either-way')).toHaveCount(0);
+      expect(await page.getByTestId('opening-panel').innerText()).not.toMatch(/written by us|adopted|OpenSensorHub covers/i);
       expect(await page.locator('body').innerText()).not.toMatch(GONE);
       await noGold();
       expect(await workers(page)).toBe(0);
@@ -306,8 +311,10 @@ for (const backend of ['standin', 'python'] as const) {
       // About 1.5 s of merge; the outlines move, they are not redrawn (VS-25).
       await expect(flow).toHaveAttribute('data-mode', 'merging');
       expect(await outline()).toBe(before);
-      await expect(page.getByTestId('opening-lead')).toHaveText('OpenSensorHub covers all of these.');
+      await expect(page.getByTestId('opening-lead')).toHaveText("OpenSensorHub covers the data server's subsystems. The rest is written by us, or adopted as libraries.");
       await expect(page.getByTestId('tick')).toHaveCount(SUBS.length);
+      for (const id of ['client', 'models', 'importer']) await expect(page.getByTestId(`row-${id}`)).toContainText('Written by us');
+      await expect(page.getByTestId('row-scilibs')).toContainText('Adopted');
       expect(await workers(page)).toBe(0); // nothing starts until the merge ends (FR-125)
       // Hand-over: the controls appear and the back end starts, with the usual named loading steps (NFR-10a, D-332).
       await expect(page.getByTestId('controls')).toBeVisible({ timeout: 10_000 });

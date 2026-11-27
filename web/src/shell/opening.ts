@@ -43,13 +43,34 @@ export const SUBSYSTEM_IDS = SUBSYSTEMS.map((s) => s.id);
 export const isSubsystem = (id: unknown): id is SubsystemId => typeof id === 'string' && (SUBSYSTEM_IDS as string[]).includes(id);
 export const subsystem = (id: SubsystemId) => SUBSYSTEMS.find((s) => s.id === id)!;
 
-/** FR-123 (4.7): the lead before adoption. No count (FR-120, D-230). */
-export const LEAD_BUILD = 'Written ourselves, the data server is a range of subsystem components to develop, among them these.';
-/** FR-124: the lead after Adopt. No number (§16). */
-export const LEAD_ADOPTED = 'OpenSensorHub covers all of these.';
+/**
+ * FR-123 (D-359): every component of the opening, in one table, in the order the flowchart shows them. Before
+ * Adopt nothing says which could be adopted rather than written: that is not yet decided. After Adopt, `after` says
+ * what became of each.
+ */
+export interface Row {
+  id: string;
+  name: string;
+  does: string;
+  keeps: string;
+  /** After adopting OpenSensorHub: null for a subsystem it covers (a tick), otherwise what became of it. */
+  after: string | null;
+}
+const own = (id: string, name: string, does: string, keeps: string, after: string): Row => ({ id, name, does, keeps, after });
+export const ROWS: Row[] = [
+  own('client', 'Display client', 'The screen: login, datasets, fields, charts, replay, favourites', 'the browser, for the session only', 'Written by us'),
+  own('models', 'Models', 'Clean the readings, summarise them, find changes in the weather', 'the data server', 'Written by us'),
+  own('importer', 'CSV importer', 'Reads each CSV file once and loads it as a dataset', 'the data server', 'Written by us'),
+  ...SUBSYSTEMS.map((s) => ({ id: s.id, name: s.name, does: s.does, keeps: s.keeps, after: null })),
+  own('scilibs', 'Scientific libraries', 'Numerical work for the models: arrays, statistics, clustering', '—', 'Adopted: numpy and scikit-learn'),
+  own('folder', 'Data folder', "The legacy logger's CSV files, never altered", 'files', 'Unchanged'),
+];
+export const isRow = (id: unknown): id is string => typeof id === 'string' && ROWS.some((r) => r.id === id);
 
-/** FR-123: written by us either way, in plain style (nothing marked: the reveal comes later, FR-74a). */
-export const WRITTEN_EITHER_WAY = ['CSV importer', 'Models', 'Display client'];
+/** FR-123 (4.7, D-359): the lead before adoption. No count (FR-120, D-230), and no split between written and adopted. */
+export const LEAD_BUILD = 'Written ourselves, the system is a range of components to develop. Which of them could be adopted rather than written is not yet decided.';
+/** FR-124: the lead after Adopt. No number (§16). */
+export const LEAD_ADOPTED = 'OpenSensorHub covers the data server\'s subsystems. The rest is written by us, or adopted as libraries.';
 
 export interface OpeningLine {
   a: string;
@@ -85,7 +106,7 @@ class Opening {
   /** True once the viewer has chosen Adopt (from the start of the merge). */
   readonly adopted = new Store<boolean>(false);
   /** The subsystem whose table row is highlighted (FR-123). */
-  readonly highlighted = new Store<SubsystemId | null>(null);
+  readonly highlighted = new Store<string | null>(null);
   /** The opening panel is in the detail panel: from load, and after hand-over until the viewer clicks a component or closes it (FR-125). */
   readonly panel = new Store<boolean>(handMade);
   private handOver: (() => void) | null = null;
@@ -102,7 +123,7 @@ class Opening {
   }
 
   /** FR-123: a subsystem card highlights its row. */
-  highlight(id: SubsystemId) {
+  highlight(id: string) {
     if (this.phase.value === 'build') this.highlighted.set(id);
   }
 

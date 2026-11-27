@@ -454,5 +454,6 @@ a.btn { color: inherit; text-decoration: none; display: inline-block; }
 .opening-table tr.highlighted td:first-child { box-shadow: inset 3px 0 0 var(--ring), inset 0 1px 0 var(--ring), inset 0 -1px 0 var(--ring); }
 .opening-table .tick-col { text-align: center; }
 .opening-table .tick { text-align: center; color: #11703a; font-size: 20px; font-weight: 700; line-height: 1; }
+.opening-table .after { color: var(--muted); font-size: 14px; }
 .opening-panel section { border: 1px solid var(--line); border-radius: 10px; padding: 10px 16px 12px; }
 .opening-panel ul.either-way { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 28px; }

@@ -826,24 +826,26 @@ reveal, so nothing is marked as ours in it.
   end does not start (4.6)**: no worker runs and no model registers until hand-over
   (FR-125). The status panel shows only "Opening". The **stand-in banner is hidden** until
   hand-over, because it names OpenSensorHub before there is a data server on screen.
-- **FR-123** **The opening panel.** The detail panel opens on **Data server** with:
+- **FR-123** **The opening panel (4.7, D-359).** The detail panel opens on **The
+  components** with:
   - a two-way switch, **Build it ourselves | Adopt OpenSensorHub**, with *Build it
     ourselves* selected;
-  - the table of FR-120;
-  - a row, **"Written by us either way"**: CSV importer, Models, display client, in plain
-    style.
-  - the lead, before adoption: written ourselves, the data server is a range of subsystem
-    components to develop, among them these (4.7).
+  - one table of **every component** in the opening, in the flowchart's order: the display
+    client, Models, the CSV importer, the subsystems of FR-120, the scientific libraries and
+    the data folder. Each row says what the component does and where it keeps its data;
+  - the lead, before adoption: written ourselves, the system is a range of components to
+    develop; which of them could be adopted rather than written is not yet decided.
 
-  Clicking a subsystem card highlights its row in the table. Clicking any other card does
-  nothing in the opening.
+  Before Adopt nothing in the panel says which components could be adopted or which are
+  written by us. Clicking any card highlights its row; nothing is revealed (FR-121).
 - **FR-124** **Adopt.** Choosing *Adopt OpenSensorHub*:
   1. moves the subsystem cards into the third-party zone, where they merge into the single
      **Data server** card (OpenSensorHub, OGC Connected Systems);
   2. spreads the CSV importer and Models across the back end that the subsystems have
      left;
-  3. changes the table to "OpenSensorHub covers all of these", with each subsystem
-     ticked. No number is shown (§16).
+  3. adds a column, "With OpenSensorHub": each subsystem ticked, the display client,
+     Models and the CSV importer "Written by us", the scientific libraries adopted, the data
+     folder unchanged. No number is shown (§16).
 
   This takes about 1.5 seconds. With reduced motion it is immediate.
 - **FR-125** **Hand-over.** When the merge ends, the flowchart is **exactly** FR-77's

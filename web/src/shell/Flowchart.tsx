@@ -20,7 +20,7 @@ import {
 import layout from './layout.json';
 import openingLayout from './layout-opening.json';
 import { bus, isHandshakeMessage, isUserMessage, Message } from './messages';
-import { isSubsystem, opening, OPENING_LINES, subsystem, SUBSYSTEM_IDS } from './opening';
+import { isRow, isSubsystem, opening, OPENING_LINES, subsystem, SUBSYSTEM_IDS } from './opening';
 import { GOLD, INK, ZoneId, ZONES } from './palette';
 import { runtime } from './runtime';
 import { useRevealed } from './reveal';
@@ -201,8 +201,8 @@ export function Flowchart() {
 
   const onCardClick = (id: string) => {
     if (opening.active) {
-      // FR-123: a subsystem card highlights its row; any other card does nothing, and nothing is revealed (FR-121).
-      if (isSubsystem(id)) opening.highlight(id);
+      // FR-123 (D-359): any card highlights its row in the table; nothing is revealed (FR-121).
+      if (isRow(id)) opening.highlight(id);
       return;
     }
     if (isComponentId(id)) selectComponent(id);

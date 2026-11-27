@@ -613,8 +613,12 @@ The master is `contracts/schemas/data-of-interest.json`:
 - **Lines** (FR-120a) are drawn from `OPENING_LINES` (the layout's `lines`) in `opening.ts`,
   without letters or labels; a two-way flow has a head at each end. Besides FR-120a's
   table, `models ↔ scilibs` and `importer ↔ folder` are drawn, as in §3.1.
-- **Wording.** The lead reads: written ourselves, the data server is a range of subsystem
-  components to develop, among them these. No count appears (FR-120, FR-124).
+- **Wording.** The lead reads: written ourselves, the system is a range of components to
+  develop; which of them could be adopted rather than written is not yet decided. No count
+  appears (FR-120, FR-124).
+- **The table** (FR-123, D-359) has a row for every card of the opening, in the flowchart's
+  order (`ROWS` in `opening.ts`); clicking any card highlights its row. After Adopt a column,
+  "With OpenSensorHub", ticks the subsystems and says what became of the rest.
 - **Before Adopt:**
   - `runtime.start()` is **not called**: no worker starts and the relay is not
     registered (FR-122);
