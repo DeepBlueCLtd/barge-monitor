@@ -102,6 +102,9 @@ a.btn { color: inherit; text-decoration: none; display: inline-block; }
 .icon { pointer-events: all; position: absolute; left: 0; top: 0; padding: 0; margin: 0; border: 0; background: none; cursor: pointer; width: 38px; height: 38px; line-height: 0; will-change: transform; }
 .icon.selected { cursor: default; z-index: 2; }
 .glyph { display: block; overflow: visible; }
+/* D-361: the opening's illustrative traffic: the real icons, but not messages, so nothing to click. */
+.mock-traffic { position: absolute; left: 0; top: 0; pointer-events: none; }
+.mock-icon { pointer-events: none; position: absolute; left: 0; top: 0; width: 38px; height: 38px; line-height: 0; will-change: transform; }
 
 /* Status box and message key below the flowchart */
 .panel-box { pointer-events: all; position: absolute; background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; }

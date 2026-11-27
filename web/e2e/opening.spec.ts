@@ -187,8 +187,8 @@ for (const backend of ['standin', 'python'] as const) {
       await expect(page.getByTestId('demo-banner')).toHaveCount(0);
       expect((await page.locator('.topbar').innerText()).trim()).toBe('Canal barge weather demonstrator');
       await expect(page.locator('body')).not.toContainText('stand-in');
-      // The status shows only "Opening".
-      expect((await page.getByTestId('status-box').innerText()).replace(/\s+/g, ' ').trim().toLowerCase()).toBe('status opening');
+      // The status shows only "Opening", and that the icons are illustrative traffic (D-361).
+      expect((await page.getByTestId('status-box').innerText()).replace(/\s+/g, ' ').trim().toLowerCase()).toBe('status opening · illustrative traffic');
       // No worker, no relay, no request, no message captured or drawn.
       await page.waitForTimeout(3000);
       expect(await workers(page)).toBe(0);
@@ -248,6 +248,102 @@ for (const backend of ['standin', 'python'] as const) {
       await noGold();
       expect(await workers(page)).toBe(0);
       expect(requests).toEqual([]);
+    });
+
+    test(`D-361: illustrative traffic travels the opening's lines, from the page alone; it stops at Adopt and never reaches the real traffic, ${backend}`, async ({ page }) => {
+      test.setTimeout(SLOW * 2);
+      const requests: string[] = [];
+      page.on('request', (r: Request) => /\/api(\/|\?|$)/.test(new URL(r.url()).pathname) && requests.push(r.url()));
+      const errors: string[] = [];
+      page.on('pageerror', (e) => errors.push(e.message));
+      await openOpening(page);
+      const mock = page.getByTestId('mock-icon');
+      await expect.poll(() => mock.count(), { timeout: 5_000 }).toBeGreaterThan(0);
+      // Where each icon is, in layout units (the flowchart is at scale 1 on the 1920 x 1080 target), and its letter.
+      const icons = () => page.locator('[data-testid="mock-icon"]').evaluateAll((els) => els.map((e) => {
+        const m = /translate\(([-\d.]+)px, ([-\d.]+)px\)/.exec((e as HTMLElement).style.transform)!;
+        return { letter: e.getAttribute('data-mock-letter')!, x: Number(m[1]) + 19, y: Number(m[2]) + 19 };
+      }));
+      const onLine = ({ x, y }: { x: number; y: number }) => openingLayout.lines.some(({ path }) => path.slice(1).some(([x2, y2], i) => {
+        const [x1, y1] = path[i];
+        return x1 === x2 ? Math.abs(x - x1) < 1 && y >= Math.min(y1, y2) - 1 && y <= Math.max(y1, y2) + 1
+          : Math.abs(y - y1) < 1 && x >= Math.min(x1, x2) - 1 && x <= Math.max(x1, x2) + 1;
+      }));
+      // Over several seconds: icons on the opening's lines only, moving, with the real letters, several flows' worth.
+      const letters = new Set<string>();
+      let moved = false;
+      let most = 0;
+      for (let i = 0; i < 40; i++) {
+        const a = await icons();
+        await page.waitForTimeout(250);
+        const b = await icons();
+        for (const ic of [...a, ...b]) {
+          expect(onLine(ic), `${ic.letter} at ${ic.x},${ic.y} is on an opening line`).toBe(true);
+          letters.add(ic.letter);
+        }
+        if (a.length && b.length && b.some((q) => !a.some((p) => Math.abs(p.x - q.x) < 0.5 && Math.abs(p.y - q.y) < 0.5))) moved = true;
+        most = Math.max(most, a.length, b.length);
+      }
+      expect(moved, 'the icons move').toBe(true);
+      expect(most, 'several at once').toBeGreaterThanOrEqual(2);
+      for (const l of letters) expect('QDOKHSLI').toContain(l);
+      expect(letters.size).toBeGreaterThanOrEqual(3);
+      // Not messages: not buttons, not clickable, hidden from assistive technology, and nothing captured, counted or drawn as one.
+      // (Read in one go: an icon is removed as it arrives.)
+      let looks: string[] = [];
+      await expect.poll(async () => (looks = await page.evaluate(() => Array.from(document.querySelectorAll('[data-testid="mock-icon"]')).map((e) =>
+        JSON.stringify({ tag: e.tagName, pe: getComputedStyle(e).pointerEvents, hidden: !!e.closest('[aria-hidden="true"]') })))).length, { timeout: 10_000 }).toBeGreaterThan(0);
+      expect([...new Set(looks)]).toEqual([JSON.stringify({ tag: 'DIV', pe: 'none', hidden: true })]);
+      await expect(page.getByTestId('message-icon')).toHaveCount(0);
+      await expect(page.locator('.flowchart [data-letter]')).toHaveCount(0);
+      expect(await page.evaluate(() => (globalThis as any).bargeCaptured())).toEqual({});
+      expect(await page.evaluate(() => (globalThis as any).bargeMessages())).toEqual([]);
+      // Still nothing runs (FR-122, AT-63): no worker, no relay, no request.
+      expect(await workers(page)).toBe(0);
+      expect(await page.evaluate(async () => (await navigator.serviceWorker.getRegistrations()).length)).toBe(0);
+      expect(requests).toEqual([]);
+      expect(await page.locator('body').innerText()).not.toMatch(GONE);
+      expect(await page.locator('body').innerText()).not.toMatch(/\d/);
+      // Adopt: the traffic stops at once. Every animation frame from the click records whether a mock icon is drawn.
+      await page.evaluate(() => {
+        const w = window as unknown as { __mock: { click: number; last: number; frames: number } };
+        w.__mock = { click: 0, last: -1, frames: 0 };
+        document.querySelector('[data-testid="switch-adopt"]')!.addEventListener('click', () => { w.__mock.click = performance.now(); }, { capture: true });
+        const loop = () => {
+          const m = w.__mock;
+          if (m.click) {
+            m.frames++;
+            if (document.querySelector('[data-testid="mock-icon"]')) m.last = performance.now() - m.click;
+          }
+          requestAnimationFrame(loop);
+        };
+        requestAnimationFrame(loop);
+      });
+      await expect.poll(() => mock.count(), { timeout: 10_000 }).toBeGreaterThan(0);
+      await page.getByTestId('switch-adopt').click();
+      await expect(page.getByTestId('flowchart')).toHaveAttribute('data-mode', 'merging');
+      await page.waitForTimeout(500);
+      // Sampled shortly after the click: none left, while the cards are still merging.
+      await expect(mock).toHaveCount(0);
+      expect(await page.getByTestId('flowchart').getAttribute('data-mode')).toBe('merging');
+      const seen = await page.evaluate(() => (window as unknown as { __mock: { last: number; frames: number } }).__mock);
+      expect(seen.frames).toBeGreaterThan(5);
+      expect(seen.last, 'ms after the click that a mock icon was last drawn').toBeLessThan(400);
+      await expect(page.getByTestId('status-illustrative')).toHaveCount(0);
+      // After hand-over: none again, and the real traffic is the system's own.
+      await expect(page.getByTestId('flowchart')).toHaveAttribute('data-mode', 'normal', { timeout: SLOW });
+      await expect(page.getByTestId('flowchart')).toHaveAttribute('data-ready', 'true', { timeout: SLOW });
+      await page.getByTestId('card-client').click();
+      await page.getByTestId('demo-login-owner').click();
+      await expect(page.getByTestId('chips')).toBeVisible({ timeout: SLOW });
+      await expect(page.getByTestId('message-icon').first()).toBeAttached({ timeout: SLOW });
+      await expect(mock).toHaveCount(0);
+      const real = await page.evaluate(() => (globalThis as any).bargeMessages() as { src: string; dst: string }[]);
+      expect(real.length).toBeGreaterThan(0);
+      expect(real.filter((m) => /^sub-/.test(m.src) || /^sub-/.test(m.dst))).toEqual([]);
+      expect(Object.keys(await page.evaluate(() => (globalThis as any).bargeCaptured())).filter((k) => k.includes('sub-'))).toEqual([]);
+      await expect(page.getByTestId('message-strip')).toBeVisible();
+      expect(errors).toEqual([]);
     });
 
     test(`AT-64: the subsystem cards are the equals of the CSV importer and Models, ungrouped and uncounted, ${backend}`, async ({ page }) => {
@@ -476,6 +572,10 @@ for (const backend of ['standin', 'python'] as const) {
     test(`AT-66: with reduced motion, Adopt changes the layout at once, without animation; the overview puts the savings away, ${backend}`, async ({ page }) => {
       await page.emulateMedia({ reducedMotion: 'reduce' });
       await openOpening(page);
+      // D-361: no illustrative traffic with reduced motion, and the status says only "Opening".
+      await page.waitForTimeout(3000);
+      await expect(page.getByTestId('mock-icon')).toHaveCount(0);
+      await expect(page.getByTestId('status-opening')).toHaveText('Opening');
       await page.evaluate(() => {
         const w = window as unknown as { __modes: string[] };
         w.__modes = [];

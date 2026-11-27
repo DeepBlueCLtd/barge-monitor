@@ -92,12 +92,15 @@ function StatusRows({ rect }: { rect: Box }) {
   );
 }
 
-/** FR-122: in the adoption opening the status shows only "Opening": nothing runs yet. */
-export function OpeningStatus({ rect }: { rect: Box }) {
+/**
+ * FR-122: in the adoption opening the status shows only "Opening": nothing runs yet. While the illustrative traffic is
+ * drawn it says so (D-361), so that its icons are not taken for a running system.
+ */
+export function OpeningStatus({ rect, illustrative = false }: { rect: Box; illustrative?: boolean }) {
   return (
     <section className="status-box panel-box" style={{ left: rect[0], top: rect[1], width: rect[2], height: rect[3] }} aria-label="Status" data-testid="status-box">
       <h2 className="box-title">Status</h2>
-      <p className="status-opening" data-testid="status-opening">Opening</p>
+      <p className="status-opening" data-testid="status-opening">Opening{illustrative && <span className="status-illustrative" data-testid="status-illustrative"> · illustrative traffic</span>}</p>
     </section>
   );
 }

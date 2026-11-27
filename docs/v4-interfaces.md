@@ -618,6 +618,18 @@ The master is `contracts/schemas/data-of-interest.json`:
 - **Lines** (FR-120a) are drawn from `OPENING_LINES` (the layout's `lines`) in `opening.ts`,
   without letters or labels; a two-way flow has a head at each end. Besides FR-120a's
   table, `models ↔ scilibs` and `importer ↔ folder` are drawn, as in §3.1.
+- **Illustrative traffic** (FR-120a, D-361) is made by `web/src/shell/mocktraffic.ts`, in the
+  page: a fixed list of flows (`MOCK_FLOWS`), each a sequence of hops along the opening's
+  lines in either direction, with the real letters; a hop's time grows with its line's
+  length (0.7 to 2.2 s), the next hop sets off when it arrives, icons on one line keep a gap,
+  a flow starts every 1.6 to 2.8 s, at most four at once, chosen at random by weight and
+  rarely the same twice running. The flowchart draws them with `Glyph`, as `div.mock-icon`
+  (`data-testid="mock-icon"`, `data-mock-letter`) inside an `aria-hidden` layer with no
+  pointer events. They never pass through the message bus (`bus`), so `bargeCaptured`,
+  `bargeMessages`, the counters and the message strip never see them; no `fetch`, worker or
+  Service Worker is involved. `opening.adopt()` calls `mockTraffic.stop()` first: nothing
+  new sets off and what is in flight fades out over 0.25 s. With `prefers-reduced-motion`
+  none is drawn. While it is drawn the status reads "Opening · illustrative traffic".
 - **Wording.** The lead reads: written ourselves, the system is a range of components to
   develop; which of them could be adopted rather than written is not yet decided. No count
   appears (FR-120, FR-124).
@@ -628,7 +640,7 @@ The master is `contracts/schemas/data-of-interest.json`:
   - `runtime.start()` is **not called**: no worker starts, the relay is not
     registered and nothing is fetched (FR-122);
   - the top bar renders only the title;
-  - the status reads "Opening";
+  - the status reads "Opening" (with "· illustrative traffic" while that is drawn);
   - the banner is not rendered.
 - **Adopt** (D-360) calls `runtime.start()` at once, so the relay, the worker script and, in
   Python, Pyodide and its packages load while the cards merge. The merge is drawn frame by
