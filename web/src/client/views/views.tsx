@@ -110,7 +110,20 @@ export function LineView({ session }: { session: DisplayClientSession }) {
     return {
       grid: { left: 52, right: 14, top: 26, bottom: 26 },
       legend: { top: 0, textStyle: { ...AXIS, fontSize: 12 }, itemHeight: 8 },
-      tooltip: { trigger: 'axis', valueFormatter: (v: unknown) => fmt(v) },
+      // Each line's own reading and unit, not the 0 to 1 it is drawn at when the units differ.
+      tooltip: {
+        trigger: 'axis',
+        formatter: (ps: any) => {
+          const list = (Array.isArray(ps) ? ps : [ps]) as any[];
+          if (!list.length) return '';
+          const head = new Date(list[0].axisValue).toISOString().slice(0, 19).replace('T', ' ');
+          return [head, ...list.map((p) => {
+            const l = lines[p.seriesIndex];
+            const v = (series[p.seriesIndex].raw as [number, unknown][])[p.dataIndex]?.[1];
+            return `${p.marker}${l.prop.label} <b>${fmt(v)}</b>${unit(l.prop.uom)}`;
+          })].join('<br/>');
+        },
+      },
       xAxis: timeAxis(w),
       yAxis: { type: 'value', scale: true, name: shared ? [...units][0] : '', nameTextStyle: AXIS, axisLabel: AXIS },
       series,
@@ -137,10 +150,22 @@ export function ErrorBarView({ session }: { session: DisplayClientSession }) {
   const option = useMemo<EChartsOption | null>(() => {
     if (!u || !w || !rows.length) return null;
     const f = u.src.field.name;
+    const uom = u.prop.uom ?? null;
     const bars = rows.filter((r) => isNum(r[`${f}_min`]) && isNum(r[`${f}_max`])).map((r) => [ms(r.t), r[`${f}_min`], r[`${f}_max`]]);
     return {
       grid: { left: 52, right: 14, top: 12, bottom: 26 },
-      tooltip: { trigger: 'axis', valueFormatter: (v: unknown) => fmt(v) },
+      tooltip: {
+        trigger: 'axis',
+        formatter: (ps: any) => {
+          const list = (Array.isArray(ps) ? ps : [ps]) as any[];
+          if (!list.length) return '';
+          const u = unit(uom);
+          const head = new Date(list[0].axisValue).toISOString().slice(0, 19).replace('T', ' ');
+          return [head, ...list.map((p) => p.seriesIndex === 0
+            ? `${p.marker}minimum to maximum <b>${fmt(p.value[1])} to ${fmt(p.value[2])}</b>${u}`
+            : `${p.marker}mean <b>${fmt(p.value[1])}</b>${u}`)].join('<br/>');
+        },
+      },
       xAxis: timeAxis(w),
       yAxis: { type: 'value', scale: true, name: u.prop.uom ?? '', nameTextStyle: AXIS, axisLabel: AXIS },
       series: [
