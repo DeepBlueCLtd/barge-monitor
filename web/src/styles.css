@@ -419,22 +419,22 @@ a.btn { color: inherit; text-decoration: none; display: inline-block; }
 .zone-label.bottom-left { top: auto; bottom: 6px; left: 14px; }
 .status-opening { margin: 6px 0 0; font-size: 20px; }
 .topbar .placeholder { visibility: hidden; }
-/* FR-124: the subsystem cards move into the Data server card; the outlines move with them, not redrawn (VS-25). */
-.flowchart.mode-merging .react-flow__node { transition: transform var(--merge-ms) cubic-bezier(0.45, 0, 0.25, 1); }
-.flowchart.mode-merging .zone-band { transition: height var(--merge-ms) cubic-bezier(0.45, 0, 0.25, 1); }
-.flowchart.mode-merging .zone-band > .sketch { opacity: 0; }
-.card.merge-out { animation: merge-out var(--merge-ms) linear forwards; }
-.card.merge-in { animation: merge-in var(--merge-ms) linear forwards; }
-.opening-lines.fading { animation: fade-out calc(var(--merge-ms) * 0.3) linear forwards; }
-.arrows.arriving { animation: arrive var(--merge-ms) linear forwards; }
-@keyframes merge-out { 0%, 60% { opacity: 1; } 100% { opacity: 0; } }
-@keyframes merge-in { 0%, 55% { opacity: 0; } 100% { opacity: 1; } }
-@keyframes fade-out { to { opacity: 0; } }
-@keyframes arrive { 0%, 75% { opacity: 0; } 100% { opacity: 1; } }
-/* AT-66: with reduced motion Adopt is immediate (opening.ts skips the merge); nothing animates either way. */
+/* FR-124, D-360: the merge is drawn frame by frame (Flowchart.tsx); a card shrinks about its centre as it lands. */
+.flowchart.mode-merging .card { transform-origin: 50% 50%; }
+/* D-360: after Adopt the back end's startup is shown in the status box, under the flowchart, never in its place. */
+.startup-strip { overflow: auto; }
+.startup-strip .starting { margin: 0 0 4px; font-size: 16px; }
+.startup-strip .steps { margin: 0; font-size: 14px; line-height: 1.3; }
+.startup-strip .steps .step { padding: 1px 0; }
+.startup-strip .steps .step.pending { background: none; border-radius: 0; margin: 0; font: inherit; color: var(--muted); }
+.startup-strip .step-detail { display: block; margin-left: 1.4em; font-size: 12.5px; color: var(--muted); }
+.startup-strip .stall { margin: 6px 0 0; padding: 6px 8px; font-size: 12.5px; line-height: 1.3; }
+.startup-strip .stall ul { margin: 2px 0 6px; padding-left: 16px; }
+.startup-strip .error { color: #b91c1c; font-size: 13px; margin: 6px 0 0; }
+/* The table ticks each subsystem as it lands (D-360). */
+.opening-table td.tick { animation: token-in 300ms ease-out; }
 @media (prefers-reduced-motion: reduce) {
-  .flowchart.mode-merging .react-flow__node, .flowchart.mode-merging .zone-band { transition: none; }
-  .card.merge-out, .card.merge-in, .opening-lines.fading, .arrows.arriving { animation: none; }
+  .opening-table td.tick { animation: none; }
 }
 /* The opening panel (FR-123): crisp, plain, nothing gold (FR-121). */
 .opening-panel { display: flex; flex-direction: column; gap: 14px; font-family: var(--sans); font-size: 16px; }

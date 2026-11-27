@@ -241,7 +241,8 @@ for (const backend of ['standin', 'python'] as const) {
       for (const id of ROW_IDS) expect((await page.getByTestId(`row-${id}`).locator('td').nth(1).innerText()).trim()).not.toBe('');
       await expect(page.getByTestId('row-sub-permissions')).toContainText('Who may see and change what');
       await expect(page.getByTestId('written-either-way')).toHaveCount(0);
-      expect(await page.getByTestId('opening-panel').innerText()).not.toMatch(/written by us|adopted|OpenSensorHub covers/i);
+      expect(await page.getByTestId('opening-table').innerText()).not.toMatch(/written by us|adopted|unchanged|OpenSensorHub/i);
+      await expect(page.getByTestId('tick')).toHaveCount(0);
       expect(await page.locator('body').innerText()).not.toMatch(GONE);
       await noGold();
       expect(await workers(page)).toBe(0);
@@ -297,30 +298,55 @@ for (const backend of ['standin', 'python'] as const) {
       expect(await page.locator('body').innerText()).not.toMatch(/\d/);
     });
 
-    test(`AT-65, AT-67: Adopt merges the subsystems into one Data server card and hands over to the normal startup; nothing plays before login, a dataset and Play, ${backend}`, async ({ page, browser }) => {
+    test(`AT-65, AT-67: Adopt merges the subsystems one at a time into one Data server card, the back end starting meanwhile, and the flowchart stays on screen; nothing plays before login, a dataset and Play, ${backend}`, async ({ page, browser }) => {
       test.setTimeout(SLOW * 3);
       const errors: string[] = [];
       page.on('pageerror', (e) => errors.push(e.message));
       const log = clientLog(page);
       await openOpening(page);
       const flow = page.getByTestId('flowchart');
+      await watchHandOver(page);
       const outline = () => page.locator('[data-testid="card-sub-webapi"] svg.sketch path').first().getAttribute('d');
       const before = await outline();
+      const card0 = await box(page, 'card-sub-webapi');
       const t0 = Date.now();
       await page.getByTestId('switch-adopt').click();
-      // About 1.5 s of merge; the outlines move, they are not redrawn (VS-25).
+      // D-360: about six seconds of merge; the outlines move and shrink with their cards, they are not redrawn (VS-25).
       await expect(flow).toHaveAttribute('data-mode', 'merging');
       expect(await outline()).toBe(before);
       await expect(page.getByTestId('opening-lead')).toHaveText("OpenSensorHub covers the data server's subsystems. The rest is written by us, or adopted as libraries.");
-      await expect(page.getByTestId('tick')).toHaveCount(SUBS.length);
+      // The Data server card is there to merge into, and the back end starts now, while the cards merge (D-360).
+      await expect(page.getByTestId('card-server')).toHaveCount(1);
+      await expect.poll(() => workers(page), { timeout: 5_000 }).toBeGreaterThan(0);
+      expect(await flow.getAttribute('data-mode')).toBe('merging');
+      // The first subsystem travels into the Data server card and shrinks smoothly on the way: sampled mid-flight, its box
+      // is between its opening size and its landed size, and away from both its start and its end.
+      let sample: Box | null = null;
+      for (let i = 0; i < 200 && !sample; i++) {
+        const b = await page.getByTestId('card-sub-webapi').boundingBox();
+        if (b && b.width < card0.width * 0.9 && b.width > card0.width * 0.4) sample = b;
+        else await page.waitForTimeout(15);
+      }
+      expect(sample, 'a mid-merge sample of the Web API card').not.toBeNull();
+      expect(Math.abs(sample!.height / card0.height - sample!.width / card0.width)).toBeLessThan(0.05); // it shrinks as a whole
+      expect(sample!.x).not.toBeCloseTo(card0.x, 0);
+      // One at a time: each row is ticked as its card lands, in the table's order, all during the merge.
+      await expect(page.getByTestId('tick')).toHaveCount(SUBS.length, { timeout: 10_000 });
+      expect((await handOverSeen(page)).ticks).toEqual(SUBS.map((_, i) => `${i + 1}@merging`));
+      expect(await page.getByTestId('row-sub-webapi').getByTestId('tick').count()).toBe(1);
       for (const id of ['client', 'models', 'importer']) await expect(page.getByTestId(`row-${id}`)).toContainText('Written by us');
       await expect(page.getByTestId('row-scilibs')).toContainText('Adopted');
-      expect(await workers(page)).toBe(0); // nothing starts until the merge ends (FR-125)
-      // Hand-over: the controls appear and the back end starts, with the usual named loading steps (NFR-10a, D-332).
-      await expect(page.getByTestId('controls')).toBeVisible({ timeout: 10_000 });
-      expect(Date.now() - t0).toBeGreaterThan(1200);
-      await expect.poll(() => workers(page), { timeout: 30_000 }).toBeGreaterThan(0);
-      await expect(flow).toHaveAttribute('data-mode', 'normal', { timeout: SLOW });
+      // Hand-over: the controls appear when the merge ends (FR-125).
+      await expect(page.getByTestId('controls')).toBeVisible({ timeout: 15_000 });
+      expect(Date.now() - t0).toBeGreaterThan(5000);
+      await expect(flow).toHaveAttribute('data-mode', 'normal');
+      // The flowchart was never taken off the page, and the startup page never replaced it (D-360); while the back end was
+      // starting after hand-over, its named steps were in the status box, and the controls said why they could not act.
+      const seen = await handOverSeen(page);
+      expect(seen.gone, 'frames without the flowchart').toBe(0);
+      expect(seen.startupPage, 'frames with the startup page').toBe(0);
+      expect(seen.flowcharts, 'flowchart elements').toBe(1);
+      for (const r of seen.reasons) expect(r).toMatch(/^Starting: /);
       // The opening panel: every subsystem ticked, no number; the switch removed, there is no way back (FR-124, FR-126).
       await expect(page.getByTestId('detail-panel')).toHaveAttribute('data-showing', 'opening');
       await expect(page.getByTestId('tick')).toHaveCount(SUBS.length);
@@ -330,6 +356,14 @@ for (const backend of ['standin', 'python'] as const) {
       await expect(page.getByTestId('card-server')).toHaveCount(1);
       for (const id of SUBS) await expect(page.getByTestId(`card-${id}`)).toHaveCount(0);
       await expect(page.getByTestId('opening-lines')).toHaveCount(0);
+      // The normal arrows, with their labels, are drawn and fully shown.
+      await expect(page.locator('[data-flow]')).toHaveCount(layout.arrows.length);
+      expect(await page.getByTestId('flow-arrows').evaluate((e) => getComputedStyle(e).opacity)).toBe('1');
+      await expect(page.locator('[data-testid^="flow-label-"]').first()).toBeVisible();
+      // Once the server answers, the status box shows its rows (the stand-in is usually ready before the merge ends).
+      await expect(flow).toHaveAttribute('data-ready', 'true', { timeout: SLOW });
+      await expect(page.getByTestId('startup-strip')).toHaveCount(0);
+      await steady(page);
       expect(inside(await box(page, 'card-server'), (await page.locator('[data-zone="third"]').boundingBox())!)).toBe(true);
       // The top-bar controls and the banner appear: the stand-in says so; the Python back end has no such notice (FR-06h).
       for (const id of CONTROLS) await expect(page.getByTestId(id)).toBeVisible();
@@ -447,6 +481,7 @@ for (const backend of ['standin', 'python'] as const) {
         const el = document.querySelector('[data-testid="flowchart"]')!;
         new MutationObserver(() => w.__modes.push(el.getAttribute('data-mode')!)).observe(el, { attributes: true, attributeFilter: ['data-mode'] });
       });
+      await watchHandOver(page);
       const t0 = Date.now();
       await page.getByTestId('switch-adopt').click();
       // At once: the controls of the normal startup are there, and the back end is starting.
@@ -462,6 +497,13 @@ for (const backend of ['standin', 'python'] as const) {
       }).length)).toBe(0);
       await expect(page.getByTestId('card-server')).toBeVisible();
       await expect(page.getByTestId('tick')).toHaveCount(SUBS.length);
+      // The flowchart stays on screen while the back end starts (D-360), its startup in the status box.
+      await expect(page.getByTestId('flowchart')).toHaveAttribute('data-ready', 'true', { timeout: SLOW });
+      const seen = await handOverSeen(page);
+      expect(seen.gone).toBe(0);
+      expect(seen.startupPage).toBe(0);
+      expect(seen.flowcharts).toBe(1);
+      for (const r of seen.reasons) expect(r).toMatch(/^Starting: /);
       // The overview button also puts the savings away (FR-125).
       await expect(page.getByTestId('overview-button')).toBeEnabled();
       await page.getByTestId('overview-button').click();
@@ -469,6 +511,45 @@ for (const backend of ['standin', 'python'] as const) {
       await expect(page.getByTestId('written')).toBeVisible();
     });
   });
+}
+
+/**
+ * D-360: from the Adopt click to a started back end, watch every animation frame: whether the flowchart is on the page,
+ * whether the startup page has replaced it, how many flowchart elements there have been, and what the controls said
+ * while the status box showed the startup steps.
+ */
+async function watchHandOver(page: Page) {
+  await page.evaluate(() => {
+    const w = window as unknown as { __handOver: { gone: number; startupPage: number; els: Set<Element>; reasons: Set<string>; ticks: string[] } };
+    w.__handOver = { gone: 0, startupPage: 0, els: new Set(), reasons: new Set(), ticks: [] };
+    const loop = () => {
+      const h = w.__handOver;
+      const fc = document.querySelector('[data-testid="flowchart"]');
+      if (fc) h.els.add(fc);
+      else h.gone++;
+      if (document.querySelector('main.startup')) h.startupPage++;
+      const ticks = document.querySelectorAll('[data-testid="tick"]').length;
+      if (ticks && h.ticks.length < ticks) h.ticks.push(`${ticks}@${fc?.getAttribute('data-mode')}`);
+      const reason = document.querySelector('[data-testid="control-reason"]')?.textContent;
+      if (document.querySelector('[data-testid="startup-strip"]') && document.querySelector('[data-testid="controls"]')) h.reasons.add(reason ?? '(none)');
+      requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
+  });
+}
+const handOverSeen = (page: Page) => page.evaluate(() => {
+  const h = (window as unknown as { __handOver: { gone: number; startupPage: number; els: Set<Element>; reasons: Set<string>; ticks: string[] } }).__handOver;
+  return { gone: h.gone, startupPage: h.startupPage, flowcharts: h.els.size, reasons: [...h.reasons], ticks: h.ticks };
+});
+
+/** The flowchart at rest: after hand-over it rescales smoothly to the column once the top bar has its controls (D-360). */
+async function steady(page: Page) {
+  const width = async () => (await page.locator('[data-zone="front"]').boundingBox())?.width ?? 0;
+  await expect.poll(async () => {
+    const a = await width();
+    await page.waitForTimeout(250);
+    return Math.abs((await width()) - a);
+  }, { timeout: 10_000 }).toBeLessThan(0.01);
 }
 
 /** The display client's own requests (its chains are `dc<n>-<seq>`); the models' and the tests' are left out. */

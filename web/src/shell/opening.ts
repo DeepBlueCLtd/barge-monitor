@@ -2,12 +2,13 @@
 // URL the demonstrator opens on the data server as we would write it ourselves: a range of
 // subsystem components to develop, the main ones drawn beside the CSV importer and Models,
 // which we write either way. Choosing "Adopt OpenSensorHub" merges them into the single
-// Data server card, then hands over to the normal startup (FR-77, FR-125a) and starts the
-// back end. Nothing runs before that (FR-122).
+// Data server card, one at a time, and hands over to the normal layout (FR-77, FR-125a). The back end starts at the
+// Adopt click, while the cards merge, and its startup is shown in the flowchart's status box: the flowchart stays on
+// screen throughout (D-360). Nothing runs before Adopt (FR-122).
 //
 // The flag belongs to the demonstrator shell only (FR-119): it is read once, here, at load,
 // and has no other effect. There is no way back in a session (FR-126).
-import { OPENING_MERGE_MS } from '../config';
+import { OPENING_MERGE } from '../config';
 import openingLayout from './layout-opening.json';
 import { selectedComponent } from './selection';
 import { Store } from './store';
@@ -83,6 +84,20 @@ export interface OpeningLine {
 /** FR-120a: the flows of the opening, drawn as plain lines without letters, from the opening layout. */
 export const OPENING_LINES: OpeningLine[] = openingLayout.lines as OpeningLine[];
 
+/**
+ * FR-124 (D-360): the merge's schedule, in ms from the Adopt click. The opening's lines fade and the Data server card
+ * appears; the subsystem cards travel into it one at a time, in the table's order, each ticking its row as it lands; then
+ * the rest settles into the normal layout and the normal arrows fade in.
+ */
+export const MERGE_SCHEDULE = (() => {
+  const { intro, stagger, travel, settle } = OPENING_MERGE;
+  const subs = SUBSYSTEM_IDS.map((id, i) => ({ id, start: intro + i * stagger, land: intro + i * stagger + travel }));
+  const settleStart = subs[subs.length - 1].land;
+  return { intro, subs, settleStart, settle, end: settleStart + settle };
+})();
+/** FR-124: how long the merge takes (about six seconds, D-360); with reduced motion it is immediate (AT-66). */
+export const OPENING_MERGE_MS = MERGE_SCHEDULE.end;
+
 /** FR-119: `?hand-made`, with any value or none, read once at load. */
 export const handMade: boolean = (() => {
   try {
@@ -105,11 +120,15 @@ class Opening {
   readonly phase = new Store<OpeningPhase>(handMade ? 'build' : 'off');
   /** True once the viewer has chosen Adopt (from the start of the merge). */
   readonly adopted = new Store<boolean>(false);
+  /** How many subsystem cards have landed in the Data server card (D-360): their rows are ticked, in the table's order. */
+  readonly landed = new Store<number>(0);
+  /** performance.now() at the Adopt click: the merge's clock (D-360). */
+  mergeStart = 0;
+  private onStart: (() => void) | null = null;
   /** The subsystem whose table row is highlighted (FR-123). */
   readonly highlighted = new Store<string | null>(null);
   /** The opening panel is in the detail panel: from load, and after hand-over until the viewer clicks a component or closes it (FR-125). */
   readonly panel = new Store<boolean>(handMade);
-  private handOver: (() => void) | null = null;
 
   /** Before hand-over: nothing runs, nothing is revealed, other cards do nothing (FR-121 to FR-123). */
   get active(): boolean {
@@ -117,9 +136,9 @@ class Opening {
     return p === 'build' || p === 'merging';
   }
 
-  /** The App passes what to do at hand-over: start the back end (FR-125). */
-  onHandOver(fn: () => void) {
-    this.handOver = fn;
+  /** The App passes what to do at the Adopt click: start the back end, while the cards merge (FR-125, D-360). */
+  onAdopt(fn: () => void) {
+    this.onStart = fn;
   }
 
   /** FR-123: a subsystem card highlights its row. */
@@ -132,18 +151,28 @@ class Opening {
     if (this.phase.value !== 'build') return;
     this.highlighted.set(null);
     this.adopted.set(true);
+    // D-360: the back end starts now, concurrently with the merge (its worker script and, in Python, Pyodide load
+    // meanwhile); its startup shows in the status box after hand-over, never in place of the flowchart.
+    this.onStart?.();
     if (prefersReducedMotion()) {
       this.finish();
       return;
     }
+    this.mergeStart = performance.now();
     this.phase.set('merging');
+    // Timers, not animation frames, so the merge ends even in a hidden tab.
+    MERGE_SCHEDULE.subs.forEach((s, i) => setTimeout(() => this.land(i + 1), s.land));
     setTimeout(() => this.finish(), OPENING_MERGE_MS);
+  }
+
+  private land(n: number) {
+    if (this.landed.value < n) this.landed.set(n);
   }
 
   private finish() {
     if (this.phase.value === 'adopted') return;
+    this.land(SUBSYSTEM_IDS.length);
     this.phase.set('adopted');
-    this.handOver?.();
   }
 
   /** The viewer closed the opening panel, or asked for the overview. */

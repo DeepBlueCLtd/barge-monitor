@@ -117,6 +117,8 @@ class Runtime {
   /** The named startup steps and any stall (docs/v4-interfaces.md §13.7). */
   readonly startup = new Startup(this.kind === 'python');
   control = new Store<ControlState | null>(null);
+  /** Why the back end could not start, if it could not (shown by the startup page, or the status box after Adopt). */
+  readonly failure = new Store<string | null>(null);
   server = new Store<'running' | 'waiting' | 'down'>('waiting');
   /** Per model worker: its phase and loading progress (Python back end only). */
   modelWorkers = new Store<Record<string, ModelWorkerStatus>>({});

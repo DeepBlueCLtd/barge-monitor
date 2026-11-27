@@ -30,8 +30,14 @@ export const RUN_PACE_MS = (() => {
   const s = Number(urlParam('runpace'));
   return Number.isFinite(s) && s > 0 ? Math.min(s, 5000) : 0;
 })();
-/** FR-124: the adoption merge takes about this long; with reduced motion it is immediate (AT-66). */
-export const OPENING_MERGE_MS = 1500;
+/**
+ * FR-124 (D-360): the adoption merge, in steps. The opening's lines fade and the Data server card appears (intro); the
+ * subsystem cards then travel into it one at a time, each shrinking as it goes and ticking its row as it lands (each
+ * starts a stagger after the one before and takes a travel); the other cards, the zones and the normal arrows then settle
+ * into the normal layout. About six seconds in all (OPENING_MERGE_MS in shell/opening.ts); with reduced motion it is
+ * immediate (AT-66).
+ */
+export const OPENING_MERGE = { intro: 700, stagger: 420, travel: 900, settle: 1500 } as const;
 /** FR-63: while playing, the display client polls once a real second. */
 export const POLL_MS = 1000;
 
