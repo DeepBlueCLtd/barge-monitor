@@ -36,6 +36,13 @@ const deployRelay = (body: string) => writeFileSync(SITE_SW, body);
 const restore = () => writeFileSync(SITE_SW, CURRENT_SW);
 test.afterEach(restore);
 
+test('the relay answers the version the page waits for (D-354)', () => {
+  const config = readFileSync(new URL('../src/config.ts', import.meta.url), 'utf8');
+  const version = /RELAY_VERSION = '([^']+)'/.exec(config)?.[1];
+  expect(version).toBeTruthy();
+  expect(CURRENT_SW).toContain(`const RELAY_VERSION = '${version}'`);
+});
+
 /** AT-67 ("says why"): every disabled top-bar control gives a non-empty reason, in its title and to assistive technology. */
 async function everyDisabledControlSaysWhy(page: Page): Promise<number> {
   const found = await page.getByTestId('controls').locator('button').evaluateAll((els) => els.map((e) => {

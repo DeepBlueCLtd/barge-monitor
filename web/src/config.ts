@@ -40,3 +40,6 @@ export function urlParam(name: string): string | null {
     return null;
   }
 }
+
+/** The seam relay's version, as public/sw.js answers it; the page waits until a relay of this version controls it (D-354). Change both together. */
+export const RELAY_VERSION = '4.7-server-2';

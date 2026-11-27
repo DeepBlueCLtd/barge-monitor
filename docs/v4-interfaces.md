@@ -683,9 +683,12 @@ folder of the same site (D-272), and `?idle=<seconds>` shortens the display clie
   Service Worker and waiting until it controls the page), `back end` (the worker and, in
   Python mode, Pyodide), `server` (started and answering), `import` (the silent import of
   Mission A), `models` (each core model ready).
-- **The relay.** If a Service Worker already controls the page, it is used at once; the
-  page does not wait for `controllerchange`. A new `sw.js` calls `skipWaiting()` and
-  `clients.claim()`. If no Service Worker controls the page within **10 s**, or
+- **The relay.** The page goes on as soon as **this build's** relay controls it: it asks the
+  controller for its version, so an older relay left from an earlier deploy (which may not
+  forward `api-internal/`) is waited out; the page does not depend on `controllerchange`
+  alone. A new `sw.js` calls `skipWaiting()` and `clients.claim()`; because a `skipWaiting()`
+  at install is lost if the older relay is still activating, the page also asks a waiting
+  relay to `skip-waiting`, every second for a minute (D-354). If no Service Worker controls the page within **10 s**, or
   registration fails (for example, the browser blocks Service Workers), the page says
   which step stalled and what to do (reload; allow the site's storage and Service Workers),
   rather than waiting silently (AT-68).

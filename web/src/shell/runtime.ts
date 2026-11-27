@@ -4,7 +4,7 @@
 // requests go through the relay, like the display client's. The shell's controls (play, restart
 // server, control panel) reach the back-end worker directly: they belong to
 // the demonstrator, not the system.
-import { CORE_MODELS, HISTORY_PATH, PY_ZIP, PYODIDE_PATH, resolve, urlParam } from '../config';
+import { CORE_MODELS, HISTORY_PATH, PY_ZIP, PYODIDE_PATH, RELAY_VERSION, resolve, urlParam } from '../config';
 import type { ComponentId } from './components';
 import { bus, Captured } from './messages';
 import { STAGE_STEP, Startup } from './startup';
@@ -197,31 +197,62 @@ class Runtime {
     // A newer relay that takes over needs its own port to the back end.
     sws.addEventListener('controllerchange', () => this.connect());
     const url = resolve('sw.js');
-    const update = (reg: ServiceWorkerRegistration) => reg.update().catch((e) => console.warn('seam relay: update check failed', e));
-    if (sws.controller) {
-      sws.register(url, { scope: './' }).then(update, (e) => console.warn('seam relay: registration failed', e));
-      return;
-    }
-    const reg = await sws.register(url, { scope: './' });
+    // A newer relay left waiting (its skipWaiting at install is lost if the older relay was still activating then) is asked again.
+    const nudge = (reg: ServiceWorkerRegistration) => reg.waiting?.postMessage({ type: 'skip-waiting' });
+    const watch = (reg: ServiceWorkerRegistration) => {
+      // An install may already be under way, or start later from the browser's own check: keep asking for a minute.
+      let tries = 0;
+      const t = setInterval(() => {
+        nudge(reg);
+        if (++tries >= 60) clearInterval(t);
+      }, 1000);
+      nudge(reg);
+      return reg;
+    };
+    const update = (reg: ServiceWorkerRegistration) => reg.update().then(() => nudge(reg), (e) => console.warn('seam relay: update check failed', e));
+    // Only this build's relay forwards everything this build sends (api-internal/ among it): an older one in control is
+    // waited out until the newer one, which the update installs, takes over (D-354).
+    const current = (sw: ServiceWorker) => new Promise<boolean>((answer) => {
+      const t = setTimeout(() => { sws.removeEventListener('message', on); answer(false); }, 700);
+      const on = (e: MessageEvent) => {
+        if (e.data?.type !== 'relay-version') return;
+        clearTimeout(t);
+        sws.removeEventListener('message', on);
+        answer(e.data.version === RELAY_VERSION);
+      };
+      sws.addEventListener('message', on);
+      sw.postMessage({ type: 'version' });
+    });
+    const reg = watch(await sws.register(url, { scope: './' }));
     void update(reg);
     await new Promise<void>((done) => {
       let asked = -Infinity;
-      const check = () => {
-        if (sws.controller) {
-          clearInterval(poll);
-          sws.removeEventListener('controllerchange', check);
-          done();
-          return;
-        }
-        const now = performance.now();
-        if (reg.active && now - asked > 1000) {
-          asked = now;
-          reg.active.postMessage({ type: 'claim' });
+      let busy = false;
+      const check = async () => {
+        if (busy) return;
+        busy = true;
+        try {
+          const sw = sws.controller;
+          if (sw && await current(sw)) {
+            clearInterval(poll);
+            sws.removeEventListener('controllerchange', check);
+            done();
+            return;
+          }
+          const now = performance.now();
+          if (now - asked > 1000) {
+            asked = now;
+            nudge(reg);
+            // A page loaded without a controller asks the active relay to claim it.
+            if (!sws.controller) reg.active?.postMessage({ type: 'claim' });
+          }
+        } finally {
+          busy = false;
         }
       };
       sws.addEventListener('controllerchange', check);
       const poll = setInterval(check, 200);
-      check();
+      void check();
     });
   }
 
