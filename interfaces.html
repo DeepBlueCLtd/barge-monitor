@@ -218,8 +218,11 @@ request headers:</p>
 <ul>
 <li><code>x-tap-model: &lt;model id&gt;</code> for a model;</li>
 <li><code>x-tap-quiet: 1</code> for work the shell counts but does not
-draw: models registering and catching up at startup, and the silent
-import of Mission A;</li>
+draw: models registering, the models' reads and per-row writes while
+they process a dataset (D-283), and the silent import of Mission A. A
+model's runs-log entries and its calls into the scientific libraries are
+drawn (D-321); the god's-eye note says how many were counted but not
+drawn;</li>
 <li><code>x-tap-chain: &lt;chain&gt;</code> from the display
 client.</li>
 </ul>
@@ -1292,7 +1295,10 @@ is withdrawn.</p>
   folder: [{file, size, modified, status, dataset, pct}],
   datasets: [{id, file, start, end, superseded}],
   models: [{id, label, phase, detail, datastreams, runs: [{dataset, run_id, status, pct}]}],
-  accounts: [{user, role}], capture_counts, backend, import_rate }</code></pre>
+  accounts: [{user, role}], capture_counts, capture, backend, import_rate, instance }</code></pre>
+<p><code>capture</code> says whether capture is on (AT-18);
+<code>instance</code> is the shell's own count of server starts (D-260),
+shown as "Ready · start n".</p>
 <h3 id="135-admin-stub-fr-115">13.5 Admin stub (FR-115)</h3>
 <p>The admin stub is the <code>set-role {user, role}</code> control
 action, offered in the control panel as "OpenSensorHub administration

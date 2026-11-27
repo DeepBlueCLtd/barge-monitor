@@ -1175,7 +1175,10 @@ datastream in use once per real second, up to the replay time.</li>
 nothing.</li>
 <li><strong>FR-63b (4.7)</strong> The client never reads beyond its
 replay time, even where the server holds the whole dataset and its
-results.</li>
+results. <strong>Exception:</strong> the period <strong>the whole
+dataset</strong> shows all of the dataset at once. With it, Play, the
+rates and the timeline are off and say why, and a replay in progress
+pauses (D-358).</li>
 </ul>
 <h3 id="85-data-of-interest-47">8.5 Data of interest (4.7)</h3>
 <p>On screen, data of interest are called <strong>Favourites</strong>.
