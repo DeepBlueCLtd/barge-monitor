@@ -174,10 +174,16 @@ export function ErrorBarView({ session }: { session: DisplayClientSession }) {
           renderItem: (_: unknown, api: any) => {
             const lo = api.coord([api.value(0), api.value(1)]);
             const hi = api.coord([api.value(0), api.value(2)]);
-            return { type: 'line', shape: { x1: lo[0], y1: lo[1], x2: hi[0], y2: hi[1] }, style: { stroke: '#94a3b8', lineWidth: 1.2 } };
+            // A bar with caps, so one interval (early in a replay) is still plain to see.
+            const cap = 5, st = { stroke: '#64748b', lineWidth: 1.6 };
+            return { type: 'group', children: [
+              { type: 'line', shape: { x1: lo[0], y1: lo[1], x2: hi[0], y2: hi[1] }, style: st },
+              { type: 'line', shape: { x1: lo[0] - cap, y1: lo[1], x2: lo[0] + cap, y2: lo[1] }, style: st },
+              { type: 'line', shape: { x1: hi[0] - cap, y1: hi[1], x2: hi[0] + cap, y2: hi[1] }, style: st },
+            ] };
           },
         },
-        { name: 'mean', type: 'line', showSymbol: false, data: rows.map((r) => [ms(r.t), isNum(r[f]) ? r[f] : null]), color: SERIES[0], lineStyle: { width: 1.6 } },
+        { name: 'mean', type: 'line', showSymbol: true, symbolSize: 5, data: rows.map((r) => [ms(r.t), isNum(r[f]) ? r[f] : null]), color: SERIES[0], lineStyle: { width: 1.6 } },
       ],
     } as EChartsOption;
   }, [u, w, rows]);
@@ -235,21 +241,33 @@ export function ClusterView({ session }: { session: DisplayClientSession }) {
   const a = useStore(session.analysis);
   const d = useStore(session.discovery);
   const v = useStore(session.view);
+  useStore(session.clock.state);
+  const now = session.window()?.[1] ?? null;
   const out = (d?.profile?.essentials.find((e) => e.views?.includes('clusters') && e.field === 'cluster')?.datastream ?? 'clusters').split('__')[0];
   const preparing = usePreparing(session, (v?.results.get(out) ?? []).map((x) => x.systemUid).concat(session.awaitedSystems('clusters')));
   const option = useMemo<EChartsOption | null>(() => {
     if (!a || !a.clusters.length) return null;
     const cats = [...new Set(a.clusters.map((r) => String(r.cluster)))].sort();
+    // Each assignment holds until the next one, the last until the replay time: a bar, not a lone dot.
+    const until = Math.min(a.end, Math.max(now ?? a.end, a.clusters[a.clusters.length - 1].t));
+    const spans = a.clusters.map((r, i) => [ms(r.t), ms(i + 1 < a.clusters.length ? a.clusters[i + 1].t : until), cats.indexOf(String(r.cluster))]);
+    const hhmm = (t: number) => new Date(t).toISOString().slice(11, 16);
     return {
       grid: { left: 52, right: 14, top: 12, bottom: 26 },
-      tooltip: { trigger: 'item' },
+      tooltip: { trigger: 'item', confine: true, formatter: (p: any) => p.seriesName === 'changes' ? '' : `${p.marker}${cats[p.value[2]]}: ${hhmm(p.value[0])} to ${hhmm(p.value[1])}` },
       xAxis: timeAxis([a.start, a.end]),
       yAxis: { type: 'category', data: cats, axisLabel: AXIS },
       series: [
-        ...cats.map((c, i) => ({
-          name: c, type: 'scatter', symbolSize: 5, color: CLUSTER_COLOURS[i % CLUSTER_COLOURS.length],
-          data: a.clusters.filter((r) => String(r.cluster) === c).map((r) => [ms(r.t), c]),
-        })),
+        {
+          name: 'clusters', type: 'custom', data: spans, encode: { x: [0, 1], y: 2 },
+          renderItem: (_: unknown, api: any) => {
+            const s0 = api.coord([api.value(0), api.value(2)]);
+            const s1 = api.coord([api.value(1), api.value(2)]);
+            const h = Math.max(6, api.size([0, 1])[1] * 0.5);
+            return { type: 'rect', shape: { x: s0[0], y: s0[1] - h / 2, width: Math.max(3, s1[0] - s0[0]), height: h },
+              style: { fill: CLUSTER_COLOURS[api.value(2) % CLUSTER_COLOURS.length] } };
+          },
+        },
         {
           name: 'changes', type: 'scatter', data: [], markLine: {
             symbol: 'none', silent: true, lineStyle: { color: '#be123c', type: 'dashed' },
@@ -258,7 +276,7 @@ export function ClusterView({ session }: { session: DisplayClientSession }) {
         },
       ],
     } as EChartsOption;
-  }, [a]);
+  }, [a, now]);
   return (
     <ViewFrame preparing={preparing} title="Clusters" sub={a ? `Run ${a.runId}${a.algorithm ? ` · algorithm ${a.algorithm}` : ''} · ${a.changes.length} change${a.changes.length === 1 ? '' : 's'} marked` : 'The latest Analysis run on this dataset'} testid="view-clusters">
       {!option ? <Empty>{preparing.length ? 'Results being prepared.' : a ? 'No clusters up to the replay time yet.' : 'No complete Analysis run on this dataset yet.'}</Empty>
