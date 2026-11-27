@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="site.css">
 </head>
 <body>
-<div class="banner">Preview of pull request #21 (a1763e5). Not the published document.</div>
+<div class="banner">Preview of pull request #21 (9f180c5). Not the published document.</div>
 <main>
 <p class="demo-link"><a href="demo/"><strong>Open the working demonstrator →</strong></a> It runs whole in your browser. · <a href="index.html">Requirements</a> · <a href="interfaces.html">Version 4 interfaces</a> · Mockups: <a href="mockups/mockup-1-display-client.png">1</a>, <a href="mockups/mockup-2-models.png">2</a>, <a href="mockups/mockup-3-data-server.png">3</a></p>
 <nav id="TOC" aria-label="Contents">
@@ -1176,7 +1176,10 @@ datastream in use once per real second, up to the replay time.</li>
 nothing.</li>
 <li><strong>FR-63b (4.7)</strong> The client never reads beyond its
 replay time, even where the server holds the whole dataset and its
-results.</li>
+results. <strong>Exception:</strong> the period <strong>the whole
+dataset</strong> shows all of the dataset at once. With it, Play, the
+rates and the timeline are off and say why, and a replay in progress
+pauses (D-358).</li>
 </ul>
 <h3 id="85-data-of-interest-47">8.5 Data of interest (4.7)</h3>
 <p>On screen, data of interest are called <strong>Favourites</strong>.
