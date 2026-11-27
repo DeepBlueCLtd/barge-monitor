@@ -1,0 +1,26 @@
+{
+ "type": "DataRecord",
+ "name": "record",
+ "label": "Summaries settings",
+ "description": "settings, under urn:x-barge:process:summaries: a new run over every dataset (interfaces §10.3).",
+ "fields": [
+  {
+   "type": "Quantity",
+   "name": "tendency_hours",
+   "label": "Pressure tendency span",
+   "definition": "https://deepbluecltd.github.io/barge-monitor/def/tendency_hours",
+   "uom": {
+    "code": "h"
+   },
+   "constraint": {
+    "type": "AllowedValues",
+    "intervals": [
+     [
+      1,
+      6
+     ]
+    ]
+   }
+  }
+ ]
+}

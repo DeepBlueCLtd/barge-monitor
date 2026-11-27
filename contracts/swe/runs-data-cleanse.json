@@ -1,0 +1,71 @@
+{
+ "type": "DataRecord",
+ "name": "record",
+ "label": "Data cleanse runs",
+ "description": "runs__{dataset}, under urn:x-barge:process:data-cleanse: each run's progress on the dataset, and the settings it used (interfaces §10.2, FR-35b). A reader takes the latest complete run.",
+ "fields": [
+  {
+   "type": "Time",
+   "name": "time",
+   "label": "Time of the entry (real time)",
+   "definition": "http://www.opengis.net/def/property/OGC/0/SamplingTime",
+   "referenceFrame": "http://www.opengis.net/def/trs/BIPM/0/UTC",
+   "uom": {
+    "href": "http://www.opengis.net/def/uom/ISO-8601/0/Gregorian"
+   }
+  },
+  {
+   "type": "Text",
+   "name": "run_id",
+   "label": "Run",
+   "definition": "https://deepbluecltd.github.io/barge-monitor/def/run_id"
+  },
+  {
+   "type": "Category",
+   "name": "status",
+   "label": "Run status",
+   "definition": "https://deepbluecltd.github.io/barge-monitor/def/status",
+   "codeSpace": "https://deepbluecltd.github.io/barge-monitor/def/status",
+   "constraint": {
+    "type": "AllowedTokens",
+    "values": [
+     "processing",
+     "complete"
+    ]
+   }
+  },
+  {
+   "type": "Time",
+   "name": "done_until",
+   "label": "Processed up to",
+   "definition": "https://deepbluecltd.github.io/barge-monitor/def/done_until",
+   "uom": {
+    "href": "http://www.opengis.net/def/uom/ISO-8601/0/Gregorian"
+   }
+  },
+  {
+   "type": "Count",
+   "name": "pct",
+   "label": "Progress, percent",
+   "definition": "https://deepbluecltd.github.io/barge-monitor/def/pct",
+   "constraint": {
+    "type": "AllowedValues",
+    "intervals": [
+     [
+      0,
+      100
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Quantity",
+   "name": "spike_threshold",
+   "label": "Spike threshold, in multiples of the local noise",
+   "definition": "https://deepbluecltd.github.io/barge-monitor/def/spike_threshold",
+   "uom": {
+    "code": "1"
+   }
+  }
+ ]
+}

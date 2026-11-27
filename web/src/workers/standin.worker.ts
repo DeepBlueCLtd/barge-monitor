@@ -37,7 +37,7 @@ async function start(seed: number, historyUrl: string | null) {
     if (!res.ok) throw new Error(`history file ${name}: HTTP ${res.status}`);
     return gunzip(res);
   }, post);
-  rt = createStandin(seed, history, hostSeconds, post);
+  rt = await createStandin(seed, history, hostSeconds, post);
   const runtime = rt;
   self.postMessage({ type: 'state', state: runtime.controlState() });
   let n = 0;
@@ -57,18 +57,31 @@ async function start(seed: number, historyUrl: string | null) {
 async function serve(req: HttpRequest & { body: ArrayBuffer | Uint8Array | null }, reply: MessagePort) {
   if (!rt) await new Promise<void>((r) => queue.push(r));
   try {
-    const res = rt!.handle({ ...req, body: req.body ? new Uint8Array(req.body) : null });
+    const res = await rt!.handle({ ...req, body: req.body ? new Uint8Array(req.body) : null });
     if (res === null) {
-      // The server is down: no answer at all, so the relay reports a network failure (FR-49).
-      const chain = req.headers.find(([k]) => k.toLowerCase() === 'x-tap-chain')?.[1] ?? null;
-      self.postMessage({ type: 'relay-failed', chain, path: req.path, method: req.method });
+      // Starting or down: no answer at all, so the relay reports a network failure (§9.1).
+      const h = (name: string) => req.headers.find(([k]) => k.toLowerCase() === name)?.[1] ?? null;
+      if (h('x-tap-quiet') !== '1') self.postMessage({ type: 'relay-failed', chain: h('x-tap-chain'), model: h('x-tap-model'), path: req.path, method: req.method });
       reply.postMessage({ down: true });
+      return;
+    }
+    if (res.stream) { // a push subscription (§9.2): its headers at once, its lines as they come
+      const stream = res.stream;
+      reply.postMessage({ status: res.status, headers: res.headers, stream: true });
+      reply.onmessage = (m) => m.data?.cancel && stream.cancel();
+      stream.attach({
+        chunk: (b) => {
+          const buf = b.slice().buffer;
+          reply.postMessage({ chunk: buf }, [buf]);
+        },
+        end: () => reply.postMessage({ end: true }),
+      });
       return;
     }
     const body = res.body.slice().buffer;
     reply.postMessage({ status: res.status, headers: res.headers, body }, [body]);
   } catch (e) {
-    reply.postMessage({ status: 500, headers: [['content-type', 'application/json']], body: JSON.stringify({ code: 'InternalError', description: String(e) }) });
+    reply.postMessage({ status: 500, headers: [['content-type', 'text/html']], body: `<!doctype html><title>500 Internal Server Error</title><p>${String(e)}</p>` });
   }
 }
 

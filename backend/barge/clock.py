@@ -54,6 +54,11 @@ class SimClock:
                 "rates": C.CLOCK_RATES, "default_rate": C.CLOCK_DEFAULT_RATE}
 
 
+def real_seconds() -> float:
+    """Real time, Unix seconds: the stamp on commands and status reports (§9.1), never simulated time."""
+    return time.time()
+
+
 class ManualClock:
     """Set by hand: for tests, and the shape replay will take."""
 

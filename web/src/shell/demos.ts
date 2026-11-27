@@ -42,15 +42,15 @@ export const DEMOS: Demo[] = [
       },
       {
         label: 'Bring the server up', run: () => runtime.send('up'),
-        watch: 'The server starts in waiting mode: 503 with Retry-After (H) while the store adapter rebuilds its index. It has a new instance identifier, so the display client clears its state and repeats its handshake. No records were lost.',
+        watch: 'While the store adapter rebuilds its index the server answers nothing. Once it answers again the display client, which lost it, clears its state and repeats its handshake. No records were lost.',
       },
     ],
   },
   {
-    id: 'restart', title: 'The server restarts', shows: 'Waiting mode, a new instance, the client starts again by itself',
+    id: 'restart', title: 'The server restarts', shows: 'No answer while it starts; the client starts again by itself',
     steps: [{
       label: 'Restart the server', run: () => runtime.send('restart-server'),
-      watch: 'While the store adapter rebuilds its index every request gets 503 with Retry-After (H). The new instance identifier tells the display client to clear its state and repeat its handshake. The server enforces nothing.',
+      watch: 'While the store adapter rebuilds its index the server answers nothing. A display client that saw it go repeats its handshake; one that did not carries on, as every identifier it holds is still good.',
     }],
   },
   {

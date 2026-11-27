@@ -20,7 +20,7 @@ export function ControlPanel({ onClose }: { onClose: () => void }) {
           ? <button className="btn" onClick={() => runtime.send('up')} data-testid="server-up">Bring server up</button>
           : <button className="btn" onClick={() => runtime.send('down')} data-testid="server-down">Take server down</button>}
         <span className={`server-pill ${server}`} data-testid="drawer-server-state">
-          Server {server}{st?.instance ? ` · instance ${st.instance}` : ''}
+          Server {server}{st?.instance ? ` · start ${st.instance}` : ''}
         </span>
       </div>
       {!st ? <p>Waiting for the back end's state…</p> : (

@@ -65,8 +65,9 @@ async function started(page: Page) {
   await expect(page.getByTestId('play')).toBeEnabled();
   await expect(page.getByTestId('play')).toHaveText(/Play/);
   await expect(page.getByTestId('sim-state')).toHaveText('Paused');
-  // The relay answers for the system: a request under api/ reaches the back end.
-  const status = await page.evaluate(async () => (await fetch('api/', { headers: { accept: 'application/json' } })).status);
+  // The relay answers for the system: a request under api/ reaches the back end (with the
+  // demo owner's credentials: every request needs them, docs/v4-interfaces.md §9.3).
+  const status = await page.evaluate(async () => (await fetch('api/', { headers: { authorization: 'Basic ' + btoa('owner:demo-owner') } })).status);
   expect(status).toBe(200);
 }
 

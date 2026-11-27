@@ -72,25 +72,50 @@ _hist = None
   queue.splice(0).forEach((f) => f());
 }
 
+/**
+ * One request through the seam. While the server is starting or down the bridge answers nothing, and the
+ * relay reports a network failure (§9.1). A push subscription (§9.2) is streamed: {status, headers, stream: true},
+ * then {chunk} per command and {end: true}; the relay's {cancel: true} ends it.
+ */
 async function serve(req: any, reply: MessagePort) {
   if (!bridge) await new Promise<void>((r) => queue.push(r));
+  const header = (name: string) => (req.headers as [string, string][]).find(([k]) => k.toLowerCase() === name)?.[1] ?? null;
+  let streaming = false;
+  const onStream = (kind: string, a?: any, b?: any) => {
+    if (kind === 'start') {
+      streaming = true;
+      reply.postMessage({ status: a, headers: Array.from(b ?? [], (h: any) => [String(h[0]), String(h[1])]), stream: true });
+    } else if (kind === 'chunk') {
+      const bytes = new Uint8Array(a).slice();
+      reply.postMessage({ chunk: bytes.buffer }, [bytes.buffer]);
+    } else {
+      reply.postMessage({ end: true });
+    }
+  };
   try {
-    const res = await bridge.handle(req.method, req.path, req.query, req.body ? new Uint8Array(req.body) : null,
-      req.rootPath, req.headers, req.origin);
+    const call = bridge.handle(req.method, req.path, req.query, req.body ? new Uint8Array(req.body) : undefined, // undefined is None; null is JsNull
+      req.rootPath, req.headers, req.origin, onStream);
+    reply.onmessage = (m) => {
+      if (m.data?.cancel) call.cancel?.(); // the page dropped the stream: the subscription ends
+    };
+    const res = await call;
     if (res === undefined || res === null) {
-      const header = (name: string) => (req.headers as [string, string][]).find(([k]) => k === name)?.[1] ?? null;
       if (header('x-tap-quiet') !== '1') {
         self.postMessage({ type: 'relay-failed', chain: header('x-tap-chain'), path: req.path, method: req.method, model: header('x-tap-model') });
       }
-      reply.postMessage({ down: true });
+      if (streaming) reply.postMessage({ end: true });
+      else reply.postMessage({ down: true });
       return;
     }
-    const [status, headers, body] = res.toJs();
-    res.destroy();
-    const bytes: Uint8Array = body;
+    if (res === 'stream') return; // its chunks and its end have been sent
+    const [status, headers, body] = res.toJs ? res.toJs() : res;
+    res.destroy?.();
+    const bytes = new Uint8Array(body).slice();
     reply.postMessage({ status, headers, body: bytes.buffer }, [bytes.buffer]);
   } catch (e) {
-    reply.postMessage({ status: 500, headers: [['content-type', 'application/json']], body: JSON.stringify({ code: 'InternalError', description: String(e) }) });
+    const msg = new TextEncoder().encode(`<!doctype html><title>500 Internal Server Error</title><p>${String(e)}</p>`);
+    if (streaming) reply.postMessage({ end: true });
+    else reply.postMessage({ status: 500, headers: [['content-type', 'text/html']], body: msg.buffer }, [msg.buffer]);
   }
 }
 

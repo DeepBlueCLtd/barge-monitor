@@ -1,0 +1,26 @@
+{
+ "type": "DataRecord",
+ "name": "record",
+ "label": "Data cleanse settings",
+ "description": "settings, under urn:x-barge:process:data-cleanse: a new run over every dataset (interfaces §10.3).",
+ "fields": [
+  {
+   "type": "Quantity",
+   "name": "spike_threshold",
+   "label": "Spike threshold, in multiples of the local noise",
+   "definition": "https://deepbluecltd.github.io/barge-monitor/def/spike_threshold",
+   "uom": {
+    "code": "1"
+   },
+   "constraint": {
+    "type": "AllowedValues",
+    "intervals": [
+     [
+      1,
+      10
+     ]
+    ]
+   }
+  }
+ ]
+}

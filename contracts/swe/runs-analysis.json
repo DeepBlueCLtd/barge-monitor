@@ -1,0 +1,140 @@
+{
+ "type": "DataRecord",
+ "name": "record",
+ "label": "Analysis runs",
+ "description": "runs__{dataset}, under urn:x-barge:process:analysis: each run's progress on the dataset, and the settings it used (interfaces §10.2, FR-35b). A reader takes the latest complete run.",
+ "fields": [
+  {
+   "type": "Time",
+   "name": "time",
+   "label": "Time of the entry (real time)",
+   "definition": "http://www.opengis.net/def/property/OGC/0/SamplingTime",
+   "referenceFrame": "http://www.opengis.net/def/trs/BIPM/0/UTC",
+   "uom": {
+    "href": "http://www.opengis.net/def/uom/ISO-8601/0/Gregorian"
+   }
+  },
+  {
+   "type": "Text",
+   "name": "run_id",
+   "label": "Run",
+   "definition": "https://deepbluecltd.github.io/barge-monitor/def/run_id"
+  },
+  {
+   "type": "Category",
+   "name": "status",
+   "label": "Run status",
+   "definition": "https://deepbluecltd.github.io/barge-monitor/def/status",
+   "codeSpace": "https://deepbluecltd.github.io/barge-monitor/def/status",
+   "constraint": {
+    "type": "AllowedTokens",
+    "values": [
+     "processing",
+     "complete"
+    ]
+   }
+  },
+  {
+   "type": "Time",
+   "name": "done_until",
+   "label": "Processed up to",
+   "definition": "https://deepbluecltd.github.io/barge-monitor/def/done_until",
+   "uom": {
+    "href": "http://www.opengis.net/def/uom/ISO-8601/0/Gregorian"
+   }
+  },
+  {
+   "type": "Count",
+   "name": "pct",
+   "label": "Progress, percent",
+   "definition": "https://deepbluecltd.github.io/barge-monitor/def/pct",
+   "constraint": {
+    "type": "AllowedValues",
+    "intervals": [
+     [
+      0,
+      100
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Time",
+   "name": "start",
+   "label": "Data range: start",
+   "definition": "https://deepbluecltd.github.io/barge-monitor/def/start",
+   "uom": {
+    "href": "http://www.opengis.net/def/uom/ISO-8601/0/Gregorian"
+   }
+  },
+  {
+   "type": "Time",
+   "name": "end",
+   "label": "Data range: end",
+   "definition": "https://deepbluecltd.github.io/barge-monitor/def/end",
+   "uom": {
+    "href": "http://www.opengis.net/def/uom/ISO-8601/0/Gregorian"
+   }
+  },
+  {
+   "type": "Category",
+   "name": "algorithm",
+   "label": "Algorithm",
+   "definition": "https://deepbluecltd.github.io/barge-monitor/def/algorithm",
+   "codeSpace": "https://deepbluecltd.github.io/barge-monitor/def/algorithm",
+   "constraint": {
+    "type": "AllowedTokens",
+    "values": [
+     "A",
+     "B",
+     "C"
+    ]
+   }
+  },
+  {
+   "type": "Text",
+   "name": "resolution",
+   "label": "Resolution read",
+   "definition": "https://deepbluecltd.github.io/barge-monitor/def/resolution"
+  },
+  {
+   "type": "Quantity",
+   "name": "sensitivity",
+   "label": "Change detector sensitivity",
+   "definition": "https://deepbluecltd.github.io/barge-monitor/def/sensitivity",
+   "uom": {
+    "code": "1"
+   }
+  },
+  {
+   "type": "Count",
+   "name": "records",
+   "label": "Records used",
+   "definition": "https://deepbluecltd.github.io/barge-monitor/def/records"
+  },
+  {
+   "type": "Count",
+   "name": "clusters",
+   "label": "Clusters",
+   "definition": "https://deepbluecltd.github.io/barge-monitor/def/clusters"
+  },
+  {
+   "type": "Quantity",
+   "name": "score_changes",
+   "label": "Score: changes found against the manifest",
+   "definition": "https://deepbluecltd.github.io/barge-monitor/def/score_changes",
+   "uom": {
+    "code": "1"
+   }
+  },
+  {
+   "type": "Quantity",
+   "name": "score_clusters",
+   "label": "Score: clusters against the manifest (adjusted Rand index)",
+   "definition": "https://deepbluecltd.github.io/barge-monitor/def/score_clusters",
+   "uom": {
+    "code": "1"
+   }
+  }
+ ]
+}

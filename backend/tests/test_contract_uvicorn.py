@@ -1,4 +1,4 @@
-"""AT-02 (CPython half) and AT-12: the contract suite against the app under uvicorn."""
+"""AT-02 (CPython half): the server-neutral contract suite (PR-04) against the app under uvicorn."""
 import asyncio
 import socket
 import threading
@@ -19,7 +19,7 @@ def server():
     s.bind(("127.0.0.1", 0))
     port = s.getsockname()[1]
     s.close()
-    rt = Runtime(seed=3, pregen_days=1, local_models=True)
+    rt = Runtime(seed=3, pregen_days=0.3, local_models=True, hold_s=0.5)
     while not (rt.server.ready and rt.local.live):
         rt.tick()
     srv = uvicorn.Server(uvicorn.Config(create_app(rt), host="127.0.0.1", port=port, log_level="warning"))
@@ -34,16 +34,41 @@ def server():
     th.join(timeout=5)
 
 
+class Stream:
+    def __init__(self, client, cm, resp):
+        self._client, self._cm, self.resp = client, cm, resp
+        self.status = resp.status_code
+        self._lines = resp.aiter_lines() if self.status == 200 else None
+
+    async def next_line(self, timeout=10):
+        if self._lines is None:
+            return None
+        try:
+            return await asyncio.wait_for(self._lines.__anext__(), timeout)
+        except (StopAsyncIteration, asyncio.TimeoutError):
+            return None
+
+    async def close(self):
+        await self._cm.__aexit__(None, None, None)
+        await self._client.aclose()
+
+
 class Client:
+    """The suite's client over real HTTP; the internal endpoint is /api-internal beside the API."""
+
     def __init__(self, base):
         self.base = base
 
     async def request(self, method, path, params=None, body=None, headers=None):
         async with httpx.AsyncClient(base_url=self.base, timeout=60) as c:
             r = await c.request(method, path, params=params, json=body, headers=headers)
-            ctype = r.headers.get("content-type", "")
-            data = r.json() if ("json" in ctype and r.content) else r.text
-            return r.status_code, dict(r.headers), data
+            return r.status_code, dict(r.headers), suite.read_body(r.content)
+
+    async def open_stream(self, path, params=None, headers=None, internal=False):
+        c = httpx.AsyncClient(base_url=self.base + ("api-internal/" if internal else ""), timeout=60)
+        cm = c.stream("GET", path, params=params, headers=headers)
+        resp = await cm.__aenter__()
+        return Stream(c, cm, resp)
 
 
 def test_contract_suite_under_uvicorn(server):

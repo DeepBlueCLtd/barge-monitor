@@ -13,6 +13,7 @@ from __future__ import annotations
 import contextvars
 import itertools
 import json
+import re
 
 LETTERS = {
     "Q": "OGC API – Connected Systems request",
@@ -33,6 +34,16 @@ _chain: contextvars.ContextVar = contextvars.ContextVar("tap_chain", default=Non
 _ids = itertools.count(1)
 
 
+_AUTH = re.compile(r"(?im)^(authorization:[ \t]*)[^\r\n]*")
+_PASSWORD = re.compile(r'("password"\s*:\s*)"(?:[^"\\]|\\.)*"')
+
+
+def redact(text: str) -> str:
+    """Credentials never reach a captured message (§9.4, FR-16a): the value of ``Authorization`` becomes
+    ``****``, and so does any JSON member named ``password``."""
+    return _PASSWORD.sub(r'\1"****"', _AUTH.sub(r"\1****", text))
+
+
 def _clip(content) -> str:
     if content is None:
         return ""
@@ -41,6 +52,7 @@ def _clip(content) -> str:
             content = json.dumps(content, default=str)
         except (TypeError, ValueError):
             content = repr(content)
+    content = redact(content)
     return content if len(content) <= MAX_CONTENT else content[:MAX_CONTENT] + f"… ({len(content)} characters in all)"
 
 
@@ -69,7 +81,7 @@ class Tap:
         self.counts[key] = self.counts.get(key, 0) + n
 
     def emit(self, src: str, dst: str, letter: str, summary: str, content=None, failed: bool = False,
-             model: str | None = None, quiet: bool = False) -> None:
+             model: str | None = None, quiet: bool = False, push: bool = False) -> None:
         if not self.enabled:
             return
         assert letter in LETTERS, letter
@@ -82,7 +94,7 @@ class Tap:
             "id": next(_ids), "t": self.now(), "src": src, "dst": dst, "letter": letter,
             "summary": summary, "content": _clip(content), "failed": failed,
             "chain": ch.id if ch else None, "hop": ch.next() if ch else 0,
-            **({"model": model} if model else {}),
+            **({"model": model} if model else {}), **({"push": True} if push else {}),
         })
 
     def drain(self) -> list[dict]:
@@ -101,7 +113,10 @@ class Tap:
     @staticmethod
     def end_chain(token) -> int:
         ch = _chain.get()
-        _chain.reset(token)
+        try:
+            _chain.reset(token)
+        except ValueError:  # ended in another task's context (a streamed answer is sent from its own task)
+            _chain.set(token.old_value if token.old_value is not contextvars.Token.MISSING else None)
         return ch.hop if ch else 0
 
 

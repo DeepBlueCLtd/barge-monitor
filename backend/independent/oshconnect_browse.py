@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""AT-16: browse the CPython build of the server with OSHConnect-Python.
+"""AT-05: browse the CPython build of the server with OSHConnect-Python, with credentials.
 
 OSHConnect-Python is an independent Connected Systems client. This script
 starts the server under uvicorn (mounted where OSHConnect expects a server,
@@ -25,6 +25,8 @@ from starlette.routing import Mount  # noqa: E402
 from barge.api import create_app  # noqa: E402
 from barge.runtime import Runtime  # noqa: E402
 
+USER, PASSWORD = "owner", "demo-owner"  # labelled demo credentials (PR-07)
+
 
 def serve() -> int:
     s = socket.socket()
@@ -48,7 +50,11 @@ def main() -> int:
     from oshconnect.schema_datamodels import SWEDatastreamRecordSchema
 
     port = serve()
-    node = Node(protocol="http", address="127.0.0.1", port=port)
+    AUTH = (USER, PASSWORD)  # every request carries credentials (§9.3); the helpers send them only when given them
+    try:
+        node = Node(protocol="http", address="127.0.0.1", port=port, username=USER, password=PASSWORD)
+    except TypeError:
+        node = Node(protocol="http", address="127.0.0.1", port=port)
     base = node.get_api_helper().get_base_url()
     api_root = "sensorhub/api"
     failures, client_defects = [], []
@@ -59,13 +65,13 @@ def main() -> int:
         for ds in sysm.discover_datastreams() or []:
             discovered[ds.get_resource().ds_id] = (sysm.label, ds.get_resource().name)
     # Subsystems (bow and stern) are not top-level systems: list every datastream too.
-    listing = H.list_all_datastreams(base, api_root=api_root)
+    listing = H.list_all_datastreams(base, api_root=api_root, auth=AUTH)
     if not listing.ok:
         failures.append(f"list datastreams: HTTP {listing.status_code}")
     for item in listing.json().get("items", []):
         discovered.setdefault(item["id"], (item["system@id"], item["name"]))
     for ds_id, (owner, name) in discovered.items():
-        sch = H.retrieve_datastream_schema(base, ds_id, api_root=api_root, obs_format="application/swe+json")
+        sch = H.retrieve_datastream_schema(base, ds_id, api_root=api_root, auth=AUTH, obs_format="application/swe+json")
         note = ""
         try:
             SWEDatastreamRecordSchema.from_swejson_dict(sch.json())
@@ -84,7 +90,7 @@ def main() -> int:
             else:
                 failures.append(f"schema {ds_id}: {type(e).__name__}: {e}")
                 note = "schema failed"
-        obs = H.list_observations_from_datastream(base, ds_id, api_root=api_root)
+        obs = H.list_observations_from_datastream(base, ds_id, api_root=api_root, auth=AUTH)
         if not (obs.ok and isinstance(obs.json(), (list, dict))):
             failures.append(f"observations {ds_id}: HTTP {obs.status_code}")
         print(f"  {owner} / {name}: {note}, observations HTTP {obs.status_code}")

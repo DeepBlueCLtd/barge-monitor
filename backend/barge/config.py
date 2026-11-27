@@ -40,7 +40,7 @@ QUERY_BUDGET_MS = {  # FR-31 declared queries over four weeks of history
     "last-hour-each-sensor": 1500,  # raw records, both sensors (store queries)
     "one-field-four-weeks-summary": 1000,  # one field from an hourly summary datastream
 }
-RETRY_AFTER_S = 2  # FR-44: Retry-After while the index rebuilds (seconds)
+COMMAND_HOLD_S = 5.0  # §9.1: a command's POST is answered after this hold, in real seconds (OpenSensorHub: ~29.5 s unheard)
 INDEX_CHUNK_RECORDS = 200_000  # records indexed per rebuild step
 
 # --- Models (FR-33..FR-37) ------------------------------------------------------

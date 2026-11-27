@@ -39,7 +39,7 @@ export const LETTERS: Record<Letter, { name: string; key: string; standard: stri
   O: { name: 'Observations', key: 'Observations, SWE JSON', standard: 'SWE Common JSON (application/swe+json)', isPublic: true, colour: LETTER_COLOURS.O },
   K: { name: 'Command', key: 'Command', standard: 'OGC API – Connected Systems Part 2', isPublic: true, colour: LETTER_COLOURS.K },
   P: { name: 'Declared profile', key: 'Declared profile', standard: 'JSON Schema', isPublic: true, colour: LETTER_COLOURS.P },
-  H: { name: 'HTTP status', key: 'HTTP status, 503', standard: 'RFC 9110', isPublic: true, colour: LETTER_COLOURS.H },
+  H: { name: 'HTTP status', key: 'HTTP status, 401, 403', standard: 'RFC 9110', isPublic: true, colour: LETTER_COLOURS.H },
   S: { name: 'Store query', key: 'Store query, internal', standard: 'internal, no public standard', isPublic: false, colour: LETTER_COLOURS.S },
   L: { name: 'Legacy record', key: 'Legacy record', standard: "the logger's own format, no public standard", isPublic: false, colour: LETTER_COLOURS.L },
   I: { name: 'Internal object', key: 'Internal object', standard: 'internal typed object, no public standard', isPublic: false, colour: LETTER_COLOURS.I },

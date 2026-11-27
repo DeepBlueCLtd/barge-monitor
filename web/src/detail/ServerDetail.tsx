@@ -71,10 +71,10 @@ export function ServerDetail() {
           <li>One <b>record datastream</b> carries all seven parameters per reading, with QC flags beside them.</li>
           <li>Models are first-class <b>process systems</b>: a model registers itself by <b>ordinary resource creation</b>, over the same interface the display reads.</li>
           <li>Settings travel as <b>commands</b>, with their bounds in the control stream's schema.</li>
-          <li>A restart needs nothing special: <b>plain HTTP</b> says wait (503 with Retry-After) and an instance identifier says start again.</li>
+          <li>A restart needs nothing special: while it starts the server <b>answers nothing</b>, and a client that lost it repeats its handshake.</li>
         </ul>
-        <p className="gaps"><b>Gaps:</b> no standard aggregation, so summaries are their own datastreams; publish/subscribe (Part 3) is not yet published, so the display and the models poll; a result that holds the latest run only is replaced with a plain HTTP PUT.</p>
-        <p className="gaps"><b>Not used:</b> deployments, procedures, sampling features, system events and history, command feasibility, and replacing or deleting resources. Each is refused by name.</p>
+        <p className="gaps"><b>Gaps:</b> no standard aggregation, so summaries are their own datastreams; publish/subscribe (Part 3) is not yet published, so commands reach a model over the server's own subscription; results are appended, each run under its own id, and never replaced.</p>
+        <p className="gaps"><b>Not used:</b> deployments, procedures, sampling features, system events and history, command feasibility, and replacing or deleting resources, which are refused.</p>
       </div>
       <h4 className="small-caps">Messages</h4>
       <Counters id="server" />

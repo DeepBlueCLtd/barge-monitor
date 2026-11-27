@@ -8,6 +8,7 @@ import { History, HistoryManifest, Progress, Runtime } from './runtime';
 
 export type { HttpRequest, HttpResponse } from './api';
 export type { Captured } from './tap';
+export { DEMO_PASSWORDS } from './accounts';
 export { Runtime } from './runtime';
 export type { History, HistoryManifest, Progress } from './runtime';
 
@@ -35,9 +36,11 @@ export async function loadHistory(manifest: HistoryManifest, readFile: (name: st
 }
 
 /** Start the stand-in over a loaded history: build the index, catch the models up, ready to serve. */
-export function createStandin(seed: number, history: History, hostSeconds: () => number, progress?: (p: Progress) => void): Runtime {
+export async function createStandin(seed: number, history: History, hostSeconds: () => number, progress?: (p: Progress) => void,
+  holdS?: number): Promise<Runtime> {
   progress?.({ stage: 'store', detail: 'loading the history into the logger store', pct: 90 });
   const rt = new Runtime(seed, history, hostSeconds);
-  rt.catchUp(progress);
+  if (holdS !== undefined) rt.holdS = holdS;
+  await rt.catchUp(progress);
   return rt;
 }
