@@ -87,7 +87,7 @@ export class ClientHttp {
    */
   paced = false;
   /** Every request, as it is sent. */
-  onRequest: ((r: { chain: string; method: string; path: string }) => void) | null = null;
+  onRequest: ((r: { chain: string; method: string; path: string; query: string; handshake: boolean }) => void) | null = null;
 
   constructor(user: string, password: string) {
     this.authorization = basic(user, password);
@@ -131,7 +131,7 @@ export class ClientHttp {
       handshakeChains.add(chain);
       if (handshakeChains.size > 500) handshakeChains.delete(handshakeChains.values().next().value!);
     }
-    this.onRequest?.({ chain, method, path });
+    this.onRequest?.({ chain, method, path, query: q, handshake: paced });
     const abort = new AbortController();
     this.inflight.add(abort);
     let r: Response;

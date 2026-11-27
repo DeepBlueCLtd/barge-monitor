@@ -96,10 +96,11 @@ function useReason(ready: boolean): string | null {
 function useReplayReason(startup: string | null): string | null {
   const phase = useStore(clientSession.phase);
   const replay = useStore(clientSession.clock.state);
+  useStore(clientSession.selection);
   if (startup) return startup;
   if (phase === 'login' || phase === 'locked') return 'Log in to the display client first';
   if (!replay) return 'Open a dataset first';
-  return null;
+  return clientSession.replayOff();
 }
 
 const REASON_ID = 'control-reason';

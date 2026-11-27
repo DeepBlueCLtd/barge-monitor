@@ -657,7 +657,9 @@ always on screen, to leave the space to the views.
   second, up to the replay time.
 - **FR-63a (4.3)** While paused, the client polls nothing.
 - **FR-63b (4.7)** The client never reads beyond its replay time, even where the server
-  holds the whole dataset and its results.
+  holds the whole dataset and its results. **Exception:** the period **the whole dataset**
+  shows all of the dataset at once. With it, Play, the rates and the timeline are off and
+  say why, and a replay in progress pauses (D-358).
 
 ### 8.5 Data of interest (4.7)
 

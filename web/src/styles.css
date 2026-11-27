@@ -370,6 +370,7 @@ h1, h2, h3, h4 { margin: 0; font-weight: 400; }
 .dc-demo-row { display: flex; align-items: center; gap: 8px; font-size: 13.5px; margin: 3px 0; }
 .dc-demo-row span { flex: 1; color: #4b5563; }
 .dc-phase { color: #6b7280; font-size: 13.5px; }
+.dc-handshake-request { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12.5px; color: #1f2937; background: #f3f4f6; border-radius: 4px; padding: 1px 6px; max-width: 52ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dc-waiting.short { min-height: 120px; }
 .dc-row-head { display: flex; align-items: center; gap: 8px; margin: 2px 0 4px; }
 .dc-tag { margin-left: 6px; font-family: var(--sans); font-size: 11.5px; background: #2f4ac0; color: #fff; border-radius: 8px; padding: 0 6px; }

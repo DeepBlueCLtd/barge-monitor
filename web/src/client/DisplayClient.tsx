@@ -128,6 +128,7 @@ function Main({ session }: { session: DisplayClientSession }) {
   const opening = useStore(session.opening);
   const opened = useStore(session.opened);
   const replay = useStore(session.clock.state);
+  const handshakeRequest = useStore(session.handshakeRequest);
   return (
     <div className={`dc${stale ? ' is-stale' : ''}`} data-testid="dc" data-phase={phase} data-view={view?.id ?? ''}>
       <div className="dc-status">
@@ -135,6 +136,8 @@ function Main({ session }: { session: DisplayClientSession }) {
         {discovery && !discovery.rejected && <DatasetSelector session={session} />}
         {discovery && !discovery.rejected && <Favourites session={session} />}
         <span className="dc-phase" data-testid="dc-phase">{phase === 'handshake' ? 'Discovering what the server offers…' : phase === 'unreachable' ? 'Server not answering' : ''}</span>
+        {/* D-357: the request in hand during the handshake, for a viewer to follow the interrogation. */}
+        {phase === 'handshake' && handshakeRequest && <code className="dc-handshake-request" data-testid="dc-handshake-request">{handshakeRequest}</code>}
         <button className="dc-btn small" onClick={() => session.lock()} data-testid="dc-lock">Lock</button>
       </div>
       {phase === 'unreachable' && (
@@ -257,6 +260,9 @@ function DatasetSelector({ session }: { session: DisplayClientSession }) {
 /** FR-90: play/pause, rate and a timeline of the current dataset, on the client's own clock (§8.6). No command is sent. */
 function ReplayBar({ session }: { session: DisplayClientSession }) {
   const s = useStore(session.clock.state);
+  useStore(session.selection);
+  const offWhy = session.replayOff();
+  const off = offWhy ? { disabled: true, title: offWhy, 'aria-describedby': 'dc-replay-off' } : {};
   const [drag, setDrag] = useState<number | null>(null);
   if (!s) return null;
   const pos = drag ?? s.time;
@@ -267,17 +273,18 @@ function ReplayBar({ session }: { session: DisplayClientSession }) {
   return (
     <div className="dc-replay" data-testid="replay-bar" data-playing={String(s.playing)} data-rate={String(s.rate)} data-dataset={s.dataset}
       data-time={iso(s.time)} data-at-end={String(s.atEnd)}>
-      <button className={`dc-btn${s.playing ? '' : ' primary'}`} onClick={() => (s.playing ? session.pause() : session.play())} data-testid="dc-play">
+      <button className={`dc-btn${s.playing ? '' : ' primary'}`} onClick={() => (s.playing ? session.pause() : session.play())} data-testid="dc-play" {...off}>
         {s.playing ? '❚❚ Pause' : '▶ Play'}
       </button>
       <span className="dc-rates" aria-label="Rate">
         {RATES.map((r) => (
-          <button key={r} className={`dc-btn small${s.rate === r ? ' on' : ''}`} aria-pressed={s.rate === r} onClick={() => session.setRate(r)} data-testid={`dc-rate-${r}`}>{r}×</button>
+          <button key={r} className={`dc-btn small${s.rate === r ? ' on' : ''}`} aria-pressed={s.rate === r} onClick={() => session.setRate(r)} data-testid={`dc-rate-${r}`} {...off}>{r}×</button>
         ))}
       </span>
-      <input type="range" className="dc-timeline" min={s.start} max={s.end} step={1} value={Math.floor(pos)} data-testid="dc-timeline" aria-label="Replay position"
+      <input type="range" className="dc-timeline" min={s.start} max={s.end} step={1} value={Math.floor(pos)} data-testid="dc-timeline" aria-label="Replay position" {...off}
         onChange={(e) => setDrag(Number(e.target.value))} onPointerUp={commit} onKeyUp={commit} />
       <span className="dc-time mono" data-testid="dc-time">{iso(pos).replace('T', ' ').replace('Z', '')}</span>
+      {offWhy && <span id="dc-replay-off" className="dc-sent" data-testid="dc-replay-off">{offWhy}</span>}
       <span className="dc-sent" data-testid="dc-at-end">{s.atEnd ? 'At the end of the dataset: paused' : ''}</span>
     </div>
   );

@@ -10,7 +10,7 @@
 //
 // Nothing sensitive is kept in the browser (FR-100): the credentials live in the
 // ClientHttp object, in memory, and every list and value is dropped on lock.
-import { IDLE_LOCK_MS, POLL_MS } from '../config';
+import { API_BASE, IDLE_LOCK_MS, POLL_MS } from '../config';
 import { Store } from '../shell/store';
 import { ReplayClock } from './clock';
 import {
@@ -183,6 +183,8 @@ export class DisplayClientSession {
   phase = new Store<Phase>('login');
   user = new Store<string | null>(null);
   loginError = new Store<string | null>(null);
+  /** The handshake's request in hand, shown while it runs so a viewer can follow the interrogation (D-357). */
+  handshakeRequest = new Store<string | null>(null);
   discovery = new Store<Discovery | null>(null);
   catalogue = new Store<CatalogueEntry[]>([]);
   /** The client's own replay clock (§8.6). */
@@ -256,6 +258,9 @@ export class DisplayClientSession {
     this.stop();
     this.loginError.set(null);
     const http = new ClientHttp(user, password);
+    http.onRequest = (r) => {
+      if (r.handshake) this.handshakeRequest.set(`${r.method} /${API_BASE}${r.path}${r.query ? `?${decodeURIComponent(r.query)}` : ''}`);
+    };
     this.http = http;
     this.lastInput = Date.now();
     const place = this.place && this.place.user === user ? this.place : null;
@@ -680,11 +685,28 @@ export class DisplayClientSession {
     return out;
   }
 
-  /** The current period's window, ending at the replay time. */
+  /** The current period's window, ending at the replay time; for the whole dataset, all of it (D-358). */
   window(): [number, number] | null {
     const s = this.clock.state.value;
     if (!s || !this.view.value) return null;
+    if (this.wholeDataset()) return [s.start, s.end];
     return windowOf(this.selection.value.period, s.time, s.start);
+  }
+
+  /** D-358: "Whole dataset" shows all of the dataset at once, so there is nothing to replay. */
+  wholeDataset(): boolean {
+    return periodOf(this.selection.value.period).seconds === null;
+  }
+
+  /** Why Play, the rates and the timeline cannot act now, or null (FR-125a). */
+  replayOff(): string | null {
+    return this.wholeDataset() ? 'Whole dataset shows everything: choose a shorter period to play' : null;
+  }
+
+  /** The time reads run up to: the replay time, or the dataset's end for the whole dataset (FR-63b, D-358). */
+  private readTime(): number {
+    const s = this.clock.state.value;
+    return s && this.wholeDataset() ? s.end : this.clock.now();
   }
 
   /** Rows of a datastream within the window. */
@@ -704,14 +726,15 @@ export class DisplayClientSession {
     const s = this.clock.state.value;
     const w = this.window();
     if (!s || !w) return;
-    const now = this.clock.now();
+    const now = this.readTime();
+    const whole = this.wholeDataset();
     const seen = new Set<string>();
     const tasks: Promise<void>[] = [];
     for (const u of this.inUse()) {
       const id = u.src.ds.id;
       if (seen.has(id)) continue;
       seen.add(id);
-      const until = Math.max(w[0], readableUntil(now, u.res));
+      const until = whole ? w[1] : Math.max(w[0], readableUntil(now, u.res));
       const c = this.cache.get(id);
       const fresh = full || !c || c.from > w[0] || c.to > until;
       const from = fresh ? w[0] : Math.min(until, c!.to + 1);
@@ -762,7 +785,7 @@ export class DisplayClientSession {
     const runId = String(row.run_id);
     const start = parseIso(String(row.start ?? iso(s.start)));
     const end = parseIso(String(row.end ?? iso(s.end)));
-    const until = Math.min(end, Math.floor(this.clock.now()));
+    const until = Math.min(end, Math.floor(this.readTime()));
     const old = this.analysis.value;
     const same = !full && old?.runId === runId;
     const lastT = (rows: Row[]) => (rows.length ? rows[rows.length - 1].t : start - 1);
@@ -871,6 +894,7 @@ export class DisplayClientSession {
 
   // --- the replay bar (FR-90): the client's own clock; no command is sent (AT-33) ------------------------------
   play() {
+    if (this.replayOff()) return;
     this.clock.play();
   }
 
@@ -907,6 +931,8 @@ export class DisplayClientSession {
 
   setPeriod(period: PeriodId) {
     this.selection.set({ ...this.selection.value, period });
+    // D-358: the whole dataset is shown at once; a replay in progress stops where it is.
+    if (this.wholeDataset() && this.clock.state.value?.playing) this.clock.pause();
     void this.act((http) => this.readData(http, true));
   }
 
