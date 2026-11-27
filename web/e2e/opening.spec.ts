@@ -142,7 +142,10 @@ for (const backend of ['standin', 'python'] as const) {
       await page.goto(`demo/?backend=${backend}`);
       // FR-77: the back end starts at once (its worker is created) and no opening is shown.
       await expect.poll(() => workers(page), { timeout: 30_000 }).toBeGreaterThan(0);
-      await expect(page.getByTestId('startup-steps')).toBeVisible();
+      // The normal startup: its named steps, or, once the server answers (the stand-in's in well under a second), the
+      // flowchart in its normal mode; never the opening's.
+      await expect(page.getByTestId('startup-steps').or(page.locator('[data-testid="flowchart"][data-mode="normal"]'))).toBeVisible();
+      await expect(page.getByTestId('flowchart').and(page.locator('[data-mode="opening"]'))).toHaveCount(0);
       await expect(page.getByTestId('opening-panel')).toHaveCount(0);
       await expect(page.getByTestId('card-sub-webapi')).toHaveCount(0);
       await openOpening(page);
