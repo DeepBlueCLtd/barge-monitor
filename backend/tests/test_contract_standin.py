@@ -1,13 +1,12 @@
 """AT-24, AT-27: the one contract suite against the JavaScript stand-in (PR-04).
 
 The stand-in runs in Node behind a tiny HTTP server (web/scripts/standin-server.mjs),
-over the same pre-calculated history the Python back end loads (FR-06d). Skipped,
-with the reason, when Node, the web dependencies or the history are missing:
-build the history with ``python scripts/build_history.py --days 1 .cache/history 1 2 3``
-and install the web dependencies with ``cd web && npm ci``.
+over the same data folder the Python back end reads (FR-06d). Skipped, with the reason,
+when Node or the web dependencies are missing: install them with ``cd web && npm ci``.
+AT-27 (both back ends return identical values from the same files) is the importer test
+below; the 4.1 pre-calculated history it was checked on is retired (D-320).
 """
 import asyncio
-import gzip
 import json
 import shutil
 import socket
@@ -23,18 +22,6 @@ from contract_suite import suite
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "web" / "scripts" / "standin-server.mjs"
-SEED = 1
-
-
-def _history_dir():
-    ptr = ROOT / "web" / "public" / "py" / "history.json"
-    if not ptr.exists():
-        return None, "web/public/py/history.json is missing: run scripts/build_history.py"
-    h = json.loads(ptr.read_text())
-    d = ROOT / ".cache" / "history" / h["code_hash"] / f"days-{h['days']:g}"
-    if not (d / f"seed-{SEED}" / "manifest.json").exists():
-        return None, f"no pre-calculated history at {d}: run scripts/build_history.py --days {h['days']:g} .cache/history {SEED}"
-    return d, None
 
 
 def _why_skip():
@@ -42,7 +29,7 @@ def _why_skip():
         return "node is not installed: the stand-in runs in Node for the contract suite"
     if not (ROOT / "web" / "node_modules" / "esbuild").exists():
         return "web/node_modules/esbuild is missing: run npm ci in web/"
-    return _history_dir()[1]
+    return None
 
 
 class Standin:
@@ -86,9 +73,7 @@ def standin(data_folder):
     s.bind(("127.0.0.1", 0))
     port = s.getsockname()[1]
     s.close()
-    hist, _ = _history_dir()
-    proc = subprocess.Popen(["node", str(SCRIPT), "--port", str(port), "--seed", str(SEED), "--history", str(hist),
-                             "--hold", "0.5", "--folder", str(data_folder)],
+    proc = subprocess.Popen(["node", str(SCRIPT), "--port", str(port), "--hold", "0.5", "--folder", str(data_folder)],
                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, cwd=ROOT)
     try:
         deadline = time.monotonic() + 180
@@ -121,51 +106,7 @@ def test_contract_suite_against_the_standin(standin):
     results = asyncio.run(suite.run(Client(standin.base)))
     failed = [r for r in results if r["outcome"] != "passed"]
     assert not failed, failed
-    print(f"stand-in startup with the pre-built history: {standin.startup_ms} ms")
-
-
-def test_history_observations_match_the_python_back_end(standin):
-    """AT-27: both back ends read the same history files and return identical values."""
-    from fastapi.testclient import TestClient
-
-    from barge.api import create_app
-    from barge.runtime import Runtime
-
-    hist, _ = _history_dir()
-    d = hist / f"seed-{SEED}"
-    manifest = json.loads((d / "manifest.json").read_text())
-    files = {f["name"]: gzip.decompress((d / f"{f['name']}.gz").read_bytes()) for f in manifest["files"]}
-    rt = Runtime(seed=SEED, pregen_days=manifest["days"], history={"manifest": manifest, "files": files})
-    assert rt.history_source == "pre-built", "the Python back end refused the history (code hash or length)"
-    while not rt.server.ready:
-        rt.tick()
-    py = TestClient(create_app(rt), headers=OWNER)
-    js = httpx.Client(base_url=standin.base, timeout=60, headers=OWNER)
-    uid = lambda c, p: {s["uniqueId"]: s["id"] for s in c.get(p + "systems", params={"searchMembers": "true", "f": "application/sml+json"}).json()["items"]}
-    sy_py, sy_js = uid(py, "/"), uid(js, "")
-    for sensor in ("bow", "stern"):
-        u = f"urn:x-barge:sensor:{sensor}"
-        assert sy_py[u] == sy_js[u]  # the same opaque identifiers, made in the same order
-        ds_py = next(x for x in py.get(f"/systems/{sy_py[u]}/datastreams").json()["items"] if x["outputName"] == "weather")
-        ds_js = next(x for x in js.get(f"systems/{sy_js[u]}/datastreams").json()["items"] if x["outputName"] == "weather")
-        assert ds_py["id"] == ds_js["id"]
-        assert ds_py["phenomenonTime"] == ds_js["phenomenonTime"]
-        from barge.server import iso
-
-        end = manifest["days"] * 86400.0
-        swe = {"f": "application/swe+json"}
-        for params in ({"phenomenonTime": f"{iso(end / 2 - 120)}/{iso(end / 2 + 480)}", **swe},
-                       {"phenomenonTime": f"{iso(end - 60)}/..", "limit": "500", **swe},  # the end of history
-                       {"limit": "50", "offset": str(int(end) - 10), **swe},
-                       {"resultTime": "latest", **swe},
-                       {"phenomenonTime": f"{iso(end / 2)}/..", "limit": "3"}):  # application/json, the default
-            a = py.get(f"/datastreams/{ds_py['id']}/observations", params=params)
-            b = js.get(f"datastreams/{ds_js['id']}/observations", params=params)
-            assert a.status_code == b.status_code == 200, (a.text, b.text)
-            ja, jb = a.json(), b.json()
-            if isinstance(ja, dict):  # links carry each server's own base
-                ja, jb = ja["items"], jb["items"]
-            assert ja == jb, (sensor, params)
+    print(f"stand-in startup over the data folder: {standin.startup_ms} ms")
 
 
 def _answers(c) -> httpx.Response:
@@ -215,11 +156,7 @@ def test_the_importer_is_the_same_in_both_back_ends(standin, data_folder):
     from barge.api import create_app
     from barge.runtime import Runtime
 
-    hist, _ = _history_dir()
-    d = hist / f"seed-{SEED}"
-    manifest = json.loads((d / "manifest.json").read_text())
-    files = {f["name"]: gzip.decompress((d / f"{f['name']}.gz").read_bytes()) for f in manifest["files"]}
-    rt = Runtime(seed=SEED, pregen_days=manifest["days"], history={"manifest": manifest, "files": files}, folder=data_folder)
+    rt = Runtime(folder=data_folder)
     while not (rt.running and rt.importer.subscribed):
         rt.tick()
     c_file = "MISSION_C_20310421.csv"
@@ -278,7 +215,7 @@ def test_the_models_declare_the_same_outputs_in_both_back_ends(standin, data_fol
     from barge.api import create_app
     from barge.runtime import Runtime
 
-    rt = Runtime(seed=SEED, pregen_days=0.05, folder=data_folder, local_models=True)
+    rt = Runtime(folder=data_folder, local_models=True)
     while not (rt.running and rt.local.live and all(r.completed for r in rt.local.runners)):
         rt.tick()
     py = TestClient(create_app(rt), headers=OWNER)

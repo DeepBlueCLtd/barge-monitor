@@ -33,7 +33,11 @@ export function EChart({ option, testid, extra }: { option: EChartsOption; testi
     };
   }, []);
   useEffect(() => {
-    chart.current?.setOption({ animation: false, textStyle: { fontFamily: MONITOR_FONT }, ...option }, true);
+    // Merged, not replaced: replacing the whole option once a second while playing hid the tooltip under the pointer.
+    // Series are replaced, so one removed from the selection goes. The tooltip stays inside the chart, not cut by its panel.
+    const tooltip = option.tooltip ? { confine: true, ...(option.tooltip as object) } : undefined;
+    chart.current?.setOption({ animation: false, textStyle: { fontFamily: MONITOR_FONT }, ...option, ...(tooltip ? { tooltip } : {}) },
+      { replaceMerge: ['series', 'visualMap'] });
   }, [option]);
   return <div ref={ref} className="echart" data-testid={testid} {...extra} />;
 }

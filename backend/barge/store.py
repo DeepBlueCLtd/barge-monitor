@@ -4,10 +4,8 @@ Like OpenSensorHub's database it outlives a server restart (decision D-11). Iden
 **opaque** (four base-32 characters, like OpenSensorHub's ``040g``): nobody may rely on them;
 clients find everything by uniqueId and outputName (docs/v4-interfaces.md §6, §9.1).
 
-A datastream is either ``stored`` (its observations are kept here, as columns) or ``sensor``
-(its observations are read from the 4.1 logger store through the store adapter, for the 4.1 display
-client and models, until plans Phases 6 and 7). The CSV importer writes its datasets **in bulk** into
-stored datastreams (``append_cols``, FR-20a). Columns: numbers as float arrays (NaN for a
+Every datastream's observations are kept here, as columns. The CSV importer writes its datasets
+**in bulk** (``append_cols``, FR-20a). Columns: numbers as float arrays (NaN for a
 missing value), everything else as object arrays. Each observation also has an insertion
 sequence: ``resultTime=latest`` is the last one inserted.
 
@@ -175,7 +173,7 @@ class Store:
         return out
 
     # --- datastreams and control streams --------------------------------------------
-    def add_datastream(self, system_id, output, name, schema, owner=None, kind="stored", sensor=None) -> tuple[dict, bool]:
+    def add_datastream(self, system_id, output, name, schema, owner=None) -> tuple[dict, bool]:
         """The same outputName with the same fields is the datastream already there (201 with its Location); a
         different schema makes a new datastream with a new id, and the old one is no longer listed (FR-51).
         Going back to a schema served before brings that datastream, and its identifier, back."""
@@ -191,7 +189,7 @@ class Store:
             return back, False
         did = self.ids.next("datastream")
         d = {"id": did, "system": system_id, "outputName": output, "name": name, "schema": schema, "owner": owner,
-             "kind": kind, "sensor": sensor, "series": Series(schema["fields"]) if kind == "stored" else None,
+             "series": Series(schema["fields"]),
              "replaced": False}
         self.datastreams[did] = d
         return d, True

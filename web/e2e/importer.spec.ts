@@ -141,12 +141,14 @@ for (const backend of ['standin', 'python'] as const) {
       const counts = await captured(page);
       expect(touches(counts, 'importer')).toEqual([]);
       expect(touches(counts, 'folder')).toEqual([]);
-      // The control panel shows the folder as the catalogue has it, and the silent import's rows/s (FR-109, FR-110).
-      await page.getByTestId('control-panel-toggle').click();
+      // The data folder's panel shows the folder as the catalogue has it, and the importer's the silent import's rows/s
+      // (FR-109, FR-110). Phase 8 moved both from the control panel to their own panels (D-322).
+      await page.getByTestId('card-folder').click();
       await expect(page.locator(`[data-testid="folder-table"] tr[data-file="${A}"]`)).toHaveAttribute('data-status', 'imported');
       await expect(page.locator(`[data-testid="folder-table"] tr[data-file="${C}"]`)).toHaveAttribute('data-status', 'not-imported');
+      await page.getByTestId('card-importer').click();
       await expect(page.getByTestId('import-rate')).toContainText(/MISSION_A_20310407\.csv, 86,400 rows .* rows\/s \(silently, at startup\)/);
-      await page.getByTestId('control-panel-toggle').click();
+      await page.getByTestId('detail-close').click();
     });
 
     test('import Mission C over HTTP: ACCEPTED, EXECUTING, COMPLETED; its datastreams match the CSV (AT-01, AT-41, FR-21)', async () => {
@@ -190,10 +192,10 @@ for (const backend of ['standin', 'python'] as const) {
       expect(counts['folder>importer:L']).toBeGreaterThanOrEqual(1);
       expect(counts['importer>server:I']).toBeGreaterThanOrEqual(44); // 43,200 rows, plus catalogue and status messages
       expect(counts['server>importer:K']).toBe(1);
-      // The importer's speed, for its panel (FR-110).
-      await page.getByTestId('control-panel-toggle').click();
+      // The importer's speed, on its panel (FR-110; D-322).
+      await page.getByTestId('card-importer').click();
       await expect(page.getByTestId('import-rate')).toContainText(/MISSION_C_20310421\.csv, 43,200 rows .* rows\/s\./);
-      await page.getByTestId('control-panel-toggle').click();
+      await page.getByTestId('detail-close').click();
     });
 
     test('Mission B and its re-export are kept apart (AT-42, FR-21b)', async () => {

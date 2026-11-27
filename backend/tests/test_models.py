@@ -21,7 +21,7 @@ SWE = {"f": "application/swe+json"}
 def rig(data_folder):
     """The back end and the core models over the data folder: Mission A imported silently and processed."""
     t = time.perf_counter()
-    r = Rig(seed=5, days=0.05, folder=data_folder)
+    r = Rig(folder=data_folder)
     r.ready_s = time.perf_counter() - t
     return r
 
@@ -123,7 +123,7 @@ def test_outputs_are_per_dataset_and_whole(rig):
 
 def test_at15_every_model_but_data_cleanse_reads_only_its_output(rig, data_folder):
     """AT-15: a fresh back end, whose models' every read is recorded as it processes Mission A."""
-    r = Rig(seed=5, days=0.05, folder=data_folder, models=False)
+    r = Rig(folder=data_folder, models=False)
     from barge.local_models import LocalModels
 
     local = LocalModels(r.rt, loop=r.rt.loop)

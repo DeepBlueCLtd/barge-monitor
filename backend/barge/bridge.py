@@ -44,20 +44,17 @@ def _none(x):
 
 
 class Bridge:
-    def __init__(self, seed: int, progress=None, pregen_days: float | None = None, history: dict | None = None,
-                 fetch_index=None, fetch_file=None):
+    def __init__(self, fetch_index=None, fetch_file=None):
         """``fetch_index()`` and ``fetch_file(name)`` read the data folder in the browser (``folder.FetchFolder``):
         the worker fetches ``index.json`` and each ``<file>.gz``, and decompresses them."""
-        kw = {} if pregen_days is None else {"pregen_days": pregen_days}
         folder = FetchFolder(fetch_index, fetch_file) if _none(fetch_index) is not None else None
         # In Pyodide the page's event loop runs the importer: its subscription and imports are tasks on it. In
         # CPython (tests) the runtime keeps a loop of its own, run at each tick.
-        self.rt = Runtime(seed=seed, progress=progress, history=history, folder=folder,
-                          own_loop=sys.platform != "emscripten", **kw)
+        self.rt = Runtime(folder=folder, own_loop=sys.platform != "emscripten")
         self.app = create_app(self.rt)
 
     def startup_phase(self) -> str:
-        """``index``, ``import`` (the importer starting, and the silent import of Mission A) or ``ready``."""
+        """``import`` (the importer starting, and the silent import of Mission A) or ``ready``."""
         return self.rt.startup_phase()
 
     def set_model_phase(self, model: str, phase: str, detail: str, label: str) -> None:
@@ -66,20 +63,13 @@ class Bridge:
     def tick(self) -> str:
         """Advance the system; return captured messages and state as JSON for the page."""
         self.rt.tick()
-        return json.dumps({"messages": self.rt.tap.drain(), "clock": self.rt.clock.state(),
-                           "server": "down" if self.rt.down else ("waiting" if not self.rt.server.ready else "running"),
-                           "pending_commands": self.rt.pending_commands()},
+        return json.dumps({"messages": self.rt.tap.drain(),
+                           "server": "down" if self.rt.down else ("waiting" if not self.rt.server.ready else "running")},
                           default=str)
 
     def control(self, action: str, arg=None) -> str:
         rt = self.rt
-        if action == "play":
-            rt.play()
-        elif action == "pause":
-            rt.pause()
-        elif action == "rate":
-            rt.set_rate(float(arg))
-        elif action == "restart-server":
+        if action == "restart-server":
             rt.restart_server()
         elif action == "down":
             rt.take_down()
@@ -88,7 +78,8 @@ class Bridge:
         elif action == "field":
             rt.set_field(arg["name"], arg["on"])
         elif action == "profile-lie":
-            rt.set_profile_lie(arg)
+            a = _py(arg)
+            rt.set_profile_lie(a.get("on") if isinstance(a, dict) else a)
         elif action == "capture":
             rt.tap.enabled = bool(arg)
         elif action == "reset-instance":

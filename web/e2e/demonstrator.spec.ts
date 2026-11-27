@@ -255,12 +255,55 @@ for (const backend of ['standin', 'python'] as const) {
       expect(await serverOutputs(page)).toBe(before);
     });
 
+    test(`the handshake shows its request in hand (D-357); Whole dataset shows all of it, with replay off and saying why (D-358), ${backend}`, async ({ page }) => {
+      await open(page, backend);
+      // Record each request the client shows while it runs its handshake.
+      await page.evaluate(() => {
+        const w = window as unknown as { hsSeen: string[] };
+        w.hsSeen = [];
+        new MutationObserver(() => {
+          const e = document.querySelector('[data-testid="dc-handshake-request"]');
+          if (e?.textContent && w.hsSeen[w.hsSeen.length - 1] !== e.textContent) w.hsSeen.push(e.textContent);
+        }).observe(document.body, { subtree: true, childList: true, characterData: true });
+      });
+      await login(page);
+      const seen = await page.evaluate(() => (window as unknown as { hsSeen: string[] }).hsSeen);
+      expect(seen).toContain('GET /api/conformance');
+      expect(seen.some((x) => x.startsWith('GET /api/systems?'))).toBe(true);
+      await expect(page.getByTestId('dc-handshake-request')).toHaveCount(0);
+      await results(page);
+      await page.getByTestId('dc-rate-100').click();
+      await play(page);
+      await page.getByTestId('preset-all').click();
+      // A replay in progress stops; Play, the rates and the timeline say why they cannot act, in the client and the top bar.
+      await expect(bar(page)).toHaveAttribute('data-playing', 'false');
+      const why = 'Whole dataset shows everything: choose a shorter period to play';
+      await expect(page.getByTestId('dc-play')).toBeDisabled();
+      await expect(page.getByTestId('dc-play')).toHaveAttribute('title', why);
+      await expect(page.getByTestId('dc-rate-10')).toBeDisabled();
+      await expect(page.getByTestId('dc-timeline')).toBeDisabled();
+      await expect(page.getByTestId('dc-replay-off')).toHaveText(why);
+      await expect(page.getByTestId('play')).toBeDisabled();
+      await expect(page.getByTestId('replay-reason')).toContainText(why);
+      // All of the dataset is drawn: the lines reach far beyond the replay time (here, early in the day).
+      await expect.poll(async () => {
+        const v = await shown(page);
+        const last = Math.max(...v.lines.flatMap((l) => l.rows.map(([t]) => t)));
+        return last - (v.time ?? 0);
+      }, { timeout: SLOW }).toBeGreaterThan(12 * 3600);
+      // A shorter period turns replay on again.
+      await page.getByTestId('preset-1h').click();
+      await expect(page.getByTestId('dc-play')).toBeEnabled();
+      await expect(page.getByTestId('dc-replay-off')).toHaveCount(0);
+    });
+
     test(`two clients replay one dataset at different rates and positions and see the same results; the server is unchanged (AT-70), ${backend}`, async ({ page }) => {
       await open(page, backend);
       await login(page);
       await results(page);
       const before = await serverOutputs(page);
-      await page.getByTestId('preset-all').click();
+      // A day, not the whole dataset: the whole dataset is shown at once, with nothing to replay (D-358).
+      await page.getByTestId('preset-1d').click();
       await page.getByTestId('dc-rate-100').click();
       await play(page);
       await page.waitForTimeout(6000);
@@ -273,7 +316,7 @@ for (const backend of ['standin', 'python'] as const) {
           seek: (t: number) => void; clock: { state: { value: { start: number } } }; shown: () => unknown; lock: () => void };
         const c = (window as unknown as { bargeNewClient: () => C }).bargeNewClient();
         await c.login('owner', 'demo-owner');
-        c.setPeriod('all');
+        c.setPeriod('1d');
         c.setRate(10);
         c.seek(c.clock.state.value.start + 5 * 3600);
         c.play();
@@ -287,11 +330,13 @@ for (const backend of ['standin', 'python'] as const) {
       expect(one.dataset).toBe(two.dataset);
       expect(two.time!).toBeGreaterThan(one.time! + 3600);
       expect(one.lines.length).toBeGreaterThan(0);
-      // Up to the first client's replay time, both show exactly the same results.
+      // Up to what the first client may read, both show exactly the same results: at "A day" the per-minute summaries,
+      // each readable once its minute has ended (FR-63b), so up to the minute before its replay time.
+      const upTo = one.time! - 60;
       for (const l of one.lines) {
         const other = two.lines.find((x) => x.key === l.key)!;
         expect(l.rows.length).toBeGreaterThan(0);
-        expect(other.rows.filter(([t]) => t <= one.time!)).toEqual(l.rows);
+        expect(other.rows.filter(([t]) => t <= upTo)).toEqual(l.rows.filter(([t]) => t <= upTo));
         expect(other.rows.length).toBeGreaterThan(l.rows.length);
       }
       expect(two.run).toBe(one.run);

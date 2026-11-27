@@ -47,7 +47,7 @@ const FORMATS: Record<string, string> = {
 const FIELD_TYPES = new Set(['Quantity', 'Count', 'Category', 'Boolean', 'Text', 'Time']);
 const SHOWN = 4 * 4000;
 const PRECISION = 2;
-const COMPONENTS = new Set(['platform', 'store', 'adapter', 'folder', 'importer', 'server', 'models', 'scilibs', 'client']);
+const COMPONENTS = new Set(['folder', 'importer', 'server', 'models', 'scilibs', 'client']);
 // Restricted systems, matched by unique id (§9.3): reading them, or anything under them, answers 403.
 const CO2 = /^urn:x-barge:sensor:[^:]+:co2(:|$)/;
 const RESTRICTED = /^urn:x-barge:process:[^:]+:restricted(:|$)/;
@@ -234,7 +234,7 @@ function decode(name: string, ty: string, v: unknown): unknown {
 }
 
 /** api._column: one column of values as JSON ("NaN" for a missing number). */
-function column(fd: Record<string, any>, v: ArrayLike<unknown>, sensor: boolean): unknown[] {
+function column(fd: Record<string, any>, v: ArrayLike<unknown>): unknown[] {
   const ty = fd.type;
   if (ty === 'Time') {
     return Array.from(v, (x) => {
@@ -245,11 +245,6 @@ function column(fd: Record<string, any>, v: ArrayLike<unknown>, sensor: boolean)
   if (ty === 'Quantity') return Array.from(v as ArrayLike<number>, (x) => (Number.isNaN(x) ? 'NaN' : new PyFloat(npRound(x, PRECISION))));
   if (ty === 'Count') return Array.from(v as ArrayLike<number>, (x) => (Number.isNaN(x) ? 'NaN' : Math.trunc(x)));
   if (ty === 'Boolean') return Array.from(v as ArrayLike<number>, (x) => (Number.isNaN(x) ? null : !!x));
-  if (sensor && ty === 'Category' && v instanceof Float64Array) { // the adapter's coded columns
-    if (fd.name.endsWith('_qc')) return Array.from(v, (x) => (Number.isNaN(x) ? null : String(Math.trunc(x))));
-    const tokens: string[] = fd.constraint?.values ?? [];
-    return Array.from(v, (x) => (Number.isNaN(x) ? null : tokens[Math.trunc(x)]));
-  }
   return Array.from(v, (x) => (typeof x === 'number' && Number.isNaN(x) ? null : x));
 }
 
@@ -381,7 +376,7 @@ export class Api {
       }
       if (seg.length === 3 && d === 'schema' && get) {
         this.readable(c, ds.system);
-        return json(schemaResponse(this.srv().visible(ds.schema), this.fmt(c.q.get('obsFormat') ?? c.q.get('f'), JSON_TYPE, OBS_FORMATS)));
+        return json(schemaResponse(this.srv().visible(ds), this.fmt(c.q.get('obsFormat') ?? c.q.get('f'), JSON_TYPE, OBS_FORMATS)));
       }
       if (seg.length === 3 && d === 'observations') return get ? this.observations(c, ds) : this.postObservation(c, ds);
       return nope();
@@ -567,16 +562,16 @@ export class Api {
 
   // --- datastreams and observations --------------------------------------------------------------
   private dsJson(c: Ctx, d: DatastreamRec) {
-    const rec = this.srv().visible(d.schema);
+    const rec = this.srv().visible(d);
     const props = rec.fields.filter((f) => !(f.type === 'Time' && f.name === 'time'))
       .map((f) => ({ definition: f.definition ?? '', label: f.label ?? f.name, name: f.name }));
     const span = this.srv().timeRange(d);
     const spanIso = span ? [iso(span[0]), iso(span[1])] : null;
-    const now = iso(this.rt.now());
+    const now = new Date(Math.floor(this.rt.real()) * 1000).toISOString().slice(0, 19) + 'Z';
     const times = spanIso ? { validTime: spanIso, phenomenonTime: spanIso, resultTime: spanIso } : { validTime: [now, now] };
     return {
       id: d.id, name: d.name, outputName: d.outputName, 'system@id': d.system, 'system@link': { href: c.base + `/systems/${d.system}` },
-      ...times, resultType: 'record', live: d.kind === 'sensor', formats: [...OBS_FORMATS], observedProperties: props,
+      ...times, resultType: 'record', live: false, formats: [...OBS_FORMATS], observedProperties: props,
       links: [this.link(c, `/datastreams/${d.id}`, 'self'), this.link(c, `/datastreams/${d.id}/schema?obsFormat=application%2Fswe%2Bjson`, 'schema'),
         this.link(c, `/datastreams/${d.id}/observations`, 'observations')],
     };
@@ -621,38 +616,26 @@ export class Api {
       t0 = Math.max(t0, r0);
       t1 = Math.min(t1, r1);
     }
-    const rec = this.srv().visible(d.schema);
+    const rec = this.srv().visible(d);
     const names = rec.fields.map((f) => f.name).filter((n) => n !== 'time');
-    let cols: Cols;
-    if (d.kind === 'sensor') {
-      if (latest) {
-        const tr = this.srv().adapter.timeRange(d.sensor!);
-        if (!tr) return this.obsResponse(c, d, rec, { t: new Float64Array(0) }, of, lim, offset);
-        t0 = t1 = tr[1];
-      }
-      cols = this.srv().sensorRecords(d.sensor!, t0, Math.min(t1, this.rt.now()), lim, offset, names.filter((n) => !n.endsWith('_qc')),
-        c.model ? `${c.model} read` : 'observation request', c.quiet);
+    const ser = d.series;
+    let idx: number[];
+    if (latest) {
+      const i = ser.latest();
+      idx = i === null ? [] : [i];
     } else {
-      const ser = d.series!;
-      let idx: number[];
-      if (latest) {
-        const i = ser.latest();
-        idx = i === null ? [] : [i];
-      } else {
-        const [i0, i1] = ser.range(t0, t1);
-        idx = [];
-        for (let i = i0 + offset; i < Math.min(i1, i0 + offset + lim); i++) idx.push(i);
-      }
-      cols = ser.take(idx, names);
+      const [i0, i1] = ser.range(t0, t1);
+      idx = [];
+      for (let i = i0 + offset; i < Math.min(i1, i0 + offset + lim); i++) idx.push(i);
     }
+    const cols: Cols = ser.take(idx, names);
     return this.obsResponse(c, d, rec, cols, of, lim, offset);
   }
 
   private obsResponse(c: Ctx, d: DatastreamRec, rec: DataRecord, cols: Cols, of: string, lim: number, offset: number): Reply {
     const fields = rec.fields.filter((f) => f.name !== 'time' && f.name in cols);
     const times = Array.from(cols.t, (x) => iso(x));
-    const sensor = d.kind === 'sensor';
-    const columns: [string, unknown[]][] = fields.map((f) => [f.name, column(f, cols[f.name] as ArrayLike<unknown>, sensor)]);
+    const columns: [string, unknown[]][] = fields.map((f) => [f.name, column(f, cols[f.name] as ArrayLike<unknown>)]);
     if (of === SWE_JSON) { // an array of records, time first; no next link (§9.1)
       const keys = columns.map(([n]) => ',' + dumps(n, true) + ':');
       const seen = new Map<string, string>();
@@ -693,7 +676,6 @@ export class Api {
   private postObservation(c: Ctx, d: DatastreamRec): Reply {
     this.readable(c, d.system);
     this.writable(c, d.system);
-    if (d.kind === 'sensor') throw new Refusal(405, "a sensor's observations come from the logger store, not from clients");
     const body = this.jsonBody(c);
     if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Refusal(400, 'one observation per request: the body must be one JSON object');
     let t: unknown;

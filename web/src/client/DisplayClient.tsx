@@ -55,7 +55,8 @@ function Login({ session, demoAccounts, locked }: { session: DisplayClientSessio
       <form onSubmit={submit} className="dc-login-form">
         <label>Name <input value={user} onChange={(e) => setUser(e.target.value)} autoComplete="off" data-testid="login-user" /></label>
         <label>Password <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="off" data-testid="login-password" /></label>
-        <button className="dc-btn primary" type="submit" disabled={busy || !user} data-testid="login-submit">{busy ? 'Logging in…' : 'Log in'}</button>
+        <button className="dc-btn primary" type="submit" disabled={busy || !user} data-testid="login-submit"
+          title={busy ? 'Logging in: wait for the answer' : !user ? 'Enter a name first' : undefined}>{busy ? 'Logging in…' : 'Log in'}</button>
       </form>
       {error && <p className="dc-login-error" aria-live="assertive" data-testid="login-error">{error}</p>}
       {demoAccounts.length > 0 && (
@@ -64,7 +65,7 @@ function Login({ session, demoAccounts, locked }: { session: DisplayClientSessio
           {demoAccounts.map((a) => (
             <div key={a.user} className="dc-demo-row">
               <code>{a.user}</code> <code>{a.password}</code> <span>{a.note}</span>
-              <button className="dc-btn small" disabled={busy} onClick={() => {
+              <button className="dc-btn small" disabled={busy} title={busy ? 'Logging in: wait for the answer' : undefined} onClick={() => {
                 setUser(a.user);
                 void go(a.user, a.password);
               }} data-testid={`demo-login-${a.user}`}>Log in</button>
@@ -127,6 +128,7 @@ function Main({ session }: { session: DisplayClientSession }) {
   const opening = useStore(session.opening);
   const opened = useStore(session.opened);
   const replay = useStore(session.clock.state);
+  const handshakeRequest = useStore(session.handshakeRequest);
   return (
     <div className={`dc${stale ? ' is-stale' : ''}`} data-testid="dc" data-phase={phase} data-view={view?.id ?? ''}>
       <div className="dc-status">
@@ -134,6 +136,8 @@ function Main({ session }: { session: DisplayClientSession }) {
         {discovery && !discovery.rejected && <DatasetSelector session={session} />}
         {discovery && !discovery.rejected && <Favourites session={session} />}
         <span className="dc-phase" data-testid="dc-phase">{phase === 'handshake' ? 'Discovering what the server offers…' : phase === 'unreachable' ? 'Server not answering' : ''}</span>
+        {/* D-357: the request in hand during the handshake, for a viewer to follow the interrogation. */}
+        {phase === 'handshake' && handshakeRequest && <code className="dc-handshake-request" data-testid="dc-handshake-request">{handshakeRequest}</code>}
         <button className="dc-btn small" onClick={() => session.lock()} data-testid="dc-lock">Lock</button>
       </div>
       {phase === 'unreachable' && (
@@ -233,7 +237,9 @@ function DatasetSelector({ session }: { session: DisplayClientSession }) {
                   </td>
                   <td>{e.start != null && e.end != null ? span(e.start, e.end) : '–'}</td>
                   <td>
-                    <button className="dc-btn small" disabled={busy || isCurrent || (!!importing && !openable)} onClick={() => {
+                    <button className="dc-btn small" disabled={busy || isCurrent || (!!importing && !openable)}
+                      title={busy ? 'Being imported: wait until it is done' : isCurrent ? 'This dataset is open already'
+                        : importing && !openable ? 'Another file is being imported: one import at a time' : undefined} onClick={() => {
                       session.open(e);
                       close();
                       anchor.current?.focus();
@@ -254,6 +260,9 @@ function DatasetSelector({ session }: { session: DisplayClientSession }) {
 /** FR-90: play/pause, rate and a timeline of the current dataset, on the client's own clock (§8.6). No command is sent. */
 function ReplayBar({ session }: { session: DisplayClientSession }) {
   const s = useStore(session.clock.state);
+  useStore(session.selection);
+  const offWhy = session.replayOff();
+  const off = offWhy ? { disabled: true, title: offWhy, 'aria-describedby': 'dc-replay-off' } : {};
   const [drag, setDrag] = useState<number | null>(null);
   if (!s) return null;
   const pos = drag ?? s.time;
@@ -264,17 +273,18 @@ function ReplayBar({ session }: { session: DisplayClientSession }) {
   return (
     <div className="dc-replay" data-testid="replay-bar" data-playing={String(s.playing)} data-rate={String(s.rate)} data-dataset={s.dataset}
       data-time={iso(s.time)} data-at-end={String(s.atEnd)}>
-      <button className={`dc-btn${s.playing ? '' : ' primary'}`} onClick={() => (s.playing ? session.pause() : session.play())} data-testid="dc-play">
+      <button className={`dc-btn${s.playing ? '' : ' primary'}`} onClick={() => (s.playing ? session.pause() : session.play())} data-testid="dc-play" {...off}>
         {s.playing ? '❚❚ Pause' : '▶ Play'}
       </button>
       <span className="dc-rates" aria-label="Rate">
         {RATES.map((r) => (
-          <button key={r} className={`dc-btn small${s.rate === r ? ' on' : ''}`} aria-pressed={s.rate === r} onClick={() => session.setRate(r)} data-testid={`dc-rate-${r}`}>{r}×</button>
+          <button key={r} className={`dc-btn small${s.rate === r ? ' on' : ''}`} aria-pressed={s.rate === r} onClick={() => session.setRate(r)} data-testid={`dc-rate-${r}`} {...off}>{r}×</button>
         ))}
       </span>
-      <input type="range" className="dc-timeline" min={s.start} max={s.end} step={1} value={Math.floor(pos)} data-testid="dc-timeline" aria-label="Replay position"
+      <input type="range" className="dc-timeline" min={s.start} max={s.end} step={1} value={Math.floor(pos)} data-testid="dc-timeline" aria-label="Replay position" {...off}
         onChange={(e) => setDrag(Number(e.target.value))} onPointerUp={commit} onKeyUp={commit} />
       <span className="dc-time mono" data-testid="dc-time">{iso(pos).replace('T', ' ').replace('Z', '')}</span>
+      {offWhy && <span id="dc-replay-off" className="dc-sent" data-testid="dc-replay-off">{offWhy}</span>}
       <span className="dc-sent" data-testid="dc-at-end">{s.atEnd ? 'At the end of the dataset: paused' : ''}</span>
     </div>
   );
@@ -398,12 +408,12 @@ function DoiRow({ item, picked, onPick, session, onOpened }: { item: DoiItem; pi
   const greyed = item.greyed;
   return (
     <li className={greyed ? 'greyed' : ''} data-testid="doi-item" data-label={r.label} data-greyed={greyed ? 'true' : 'false'}>
-      <input type="checkbox" checked={picked} disabled={!!greyed} onChange={onPick} aria-label={`Pick ${r.label} to compare`} data-testid="doi-pick" />
+      <input type="checkbox" checked={picked} disabled={!!greyed} title={greyed ? `Cannot be compared: ${greyed}` : undefined} onChange={onPick} aria-label={`Pick ${r.label} to compare`} data-testid="doi-pick" />
       <b>{r.label}</b> <span>{r.dataset.file} · {r.start.slice(5, 16).replace('T', ' ')} to {r.end.slice(5, 16).replace('T', ' ')} · {r.resolution}</span>
       {r.note && <i> · {r.note}</i>}
       {greyed && <span className="dc-greyed" data-testid="doi-greyed">{greyed}</span>}
       <span className="dc-doi-actions">
-        <button className="dc-btn small" disabled={!!greyed} onClick={() => {
+        <button className="dc-btn small" disabled={!!greyed} title={greyed ? `Cannot be opened: ${greyed}` : undefined} onClick={() => {
           void session.openDoi(item);
           onOpened();
         }} data-testid="doi-open">Open</button>

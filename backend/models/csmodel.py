@@ -908,7 +908,12 @@ class Runner:
                "done_until": run.done_until, "pct": 100 if status == "complete" else run.pct}
         if status == "complete":
             rec.update(run.result)
-        await self.api.publish(m.runs_key(run.ds["id"], run.restricted), rec)
+        # A runs-log entry is drawn, though processing is not (D-321): the model's progress, a dozen per run.
+        quiet, self.api.quiet = self.api.quiet, False
+        try:
+            await self.api.publish(m.runs_key(run.ds["id"], run.restricted), rec)
+        finally:
+            self.api.quiet = quiet
 
     async def _entries(self, ds_id: str) -> list:
         """Every entry of this model's runs logs on a dataset (the restricted one too, when it has one)."""
@@ -1021,7 +1026,7 @@ class Runner:
             if m.control_key and not self.subscribed.is_set():
                 self.phase, self.detail = "subscribing", "subscribing to its commands"
                 return  # ready only once its subscription is open (AT-38)
-            api.quiet = True  # processing a dataset is counted, not drawn (D-283)
+            api.quiet = True  # processing a dataset is counted, not drawn (D-283), but for its runs entries and calls (D-321)
             now = float(api._real())
             if now - self._scanned >= self.scan_s:
                 self._scanned = now

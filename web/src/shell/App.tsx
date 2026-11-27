@@ -30,7 +30,7 @@ export function App() {
     if (progress.stage === 'error') setFailure(progress.detail);
   }, [progress]);
 
-  // FR-15: the flowchart becomes available when the back end has loaded the history.
+  // FR-15: the flowchart becomes available when the server answers, Mission A imported silently.
   // Until then the top bar is shown with its controls disabled, each saying why (FR-125a).
   const ready = progress.stage === 'ready';
   return (
@@ -72,8 +72,8 @@ function Loading({ pct, detail, failure }: { pct: number; detail: string; failur
           <progress max={100} value={pct} aria-label="Loading" />
           <p data-testid="progress">{detail}</p>
           <p className="hint">Everything runs in this tab. The {runtime.kind === 'python' ? 'Python back end (Pyodide)' : 'JavaScript stand-in'} is
-            loading the logger store's pre-calculated history, in the store's own format. The flowchart opens when it has finished
-            (budget {STARTUP_BUDGET_MS / 1000} s).</p>
+            starting the data server, whose CSV importer imports Mission A from the data folder before the server answers. The flowchart
+            opens when it has (budget {STARTUP_BUDGET_MS / 1000} s).</p>
         </>
       )}
     </main>
@@ -96,10 +96,11 @@ function useReason(ready: boolean): string | null {
 function useReplayReason(startup: string | null): string | null {
   const phase = useStore(clientSession.phase);
   const replay = useStore(clientSession.clock.state);
+  useStore(clientSession.selection);
   if (startup) return startup;
   if (phase === 'login' || phase === 'locked') return 'Log in to the display client first';
   if (!replay) return 'Open a dataset first';
-  return null;
+  return clientSession.replayOff();
 }
 
 const REASON_ID = 'control-reason';
@@ -128,8 +129,6 @@ function TopBar({ ready }: { ready: boolean }) {
           {runtime.kind === 'standin' && <p className="standin-notice" data-testid="standin-notice">{STANDIN_NOTICE}</p>}
         </div>
         <nav className="controls" aria-label="Controls" data-testid="controls">
-          {reason && <span id={REASON_ID} className="sr-only" data-testid="control-reason">{reason}</span>}
-          {replayReason && replayReason !== reason && <span id="replay-reason" className="sr-only" data-testid="replay-reason">{replayReason}</span>}
           {/* §8.6, interfaces §8: a mirror of the display client's replay bar, driving its own clock in the page. */}
           <button className={`btn play${playing ? '' : ' primary'}`} onClick={() => (playing ? clientSession.pause() : clientSession.play())} data-testid="play" {...replayOff}>
             {playing ? '❚❚ Pause' : '▶ Play'}
@@ -139,7 +138,7 @@ function TopBar({ ready }: { ready: boolean }) {
               <button key={r} className={`btn${r === rate ? ' on' : ''}`} aria-pressed={r === rate} onClick={() => clientSession.setRate(r)} data-testid={`speed-${r}`} {...replayOff}>{r}×</button>
             ))}
           </div>
-          {/* FR-46, FR-75: discard all client state, credentials included; un-reveal. */}
+          {/* FR-46, FR-75: discard all client state, credentials included; un-reveal. §9.1: Restart client and Restart server are here, in the top bar. */}
           <button className="btn" data-testid="restart-client" onClick={() => {
             clientSession.restart();
             unrevealAll();
@@ -150,6 +149,9 @@ function TopBar({ ready }: { ready: boolean }) {
           <DemoMenu reason={reason} />
           <button className="btn" onClick={() => setDrawer(!drawer)} aria-expanded={drawer} data-testid="control-panel-toggle" {...off}>Control panel</button>
           <button className="btn" onClick={() => selectComponent(null)} data-testid="overview-button" title="What is adopted, what is written, what is not here" {...off}>Overview</button>
+          {/* FR-125a: why controls are disabled, in sight. A browser shows no tooltip on a disabled button, so a title alone is not enough. */}
+          {reason && <p id={REASON_ID} className="control-reason" data-testid="control-reason">{reason}</p>}
+          {replayReason && replayReason !== reason && <p id="replay-reason" className="control-reason" data-testid="replay-reason">Play and speed: {replayReason}</p>}
         </nav>
         {ready && <DemoBanner />}
       </header>

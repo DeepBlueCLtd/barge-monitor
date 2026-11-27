@@ -3,9 +3,8 @@
 // Identifiers are opaque (four base-32 characters, like OpenSensorHub's `040g`): nobody may rely on
 // them; clients find everything by uniqueId and outputName (docs/v4-interfaces.md §6, §9.1).
 //
-// A datastream is `stored` (its observations are kept here) or `sensor` (read from the 4.1 logger
-// store through the store adapter, for the 4.1 display client and models, until plan Phases 6 and 7).
-// The CSV importer writes its datasets in bulk into stored datastreams (`appendCols`, FR-20a). Each
+// Every datastream's observations are kept here. The CSV importer writes its datasets in bulk
+// (`appendCols`, FR-20a). Each
 // resource carries its `owner`, for the permission checks of §9.3, which are the server's own.
 import type { PushStream } from './stream';
 import type { Account } from './accounts';
@@ -152,9 +151,7 @@ export interface DatastreamRec {
   name: string;
   schema: DataRecord;
   owner: string | null;
-  kind: 'stored' | 'sensor';
-  sensor: string | null;
-  series: Series | null;
+  series: Series;
   replaced: boolean;
 }
 
@@ -230,7 +227,7 @@ export class Store {
 
   /** store.add_datastream: the same fields are the datastream already there; a new schema a new one (FR-51). */
   addDatastream(system: string, outputName: string, name: string, schema: DataRecord, owner: string | null = null,
-    kind: 'stored' | 'sensor' = 'stored', sensor: string | null = null): [DatastreamRec, boolean] {
+): [DatastreamRec, boolean] {
     const same = [...this.datastreams.values()].filter((d) => d.system === system && d.outputName === outputName);
     const live = same.find((d) => !d.replaced);
     if (live && sameSchema(live.schema, schema)) return [live, false];
@@ -240,8 +237,8 @@ export class Store {
       back.replaced = false;
       return [back, false];
     }
-    const d: DatastreamRec = { id: this.ids.next('datastream'), system, outputName, name, schema, owner, kind, sensor,
-      series: kind === 'stored' ? new Series(schema.fields) : null, replaced: false };
+    const d: DatastreamRec = { id: this.ids.next('datastream'), system, outputName, name, schema, owner,
+      series: new Series(schema.fields), replaced: false };
     this.datastreams.set(d.id, d);
     return [d, true];
   }
@@ -273,12 +270,12 @@ export class Store {
   }
 
   appendRow(d: DatastreamRec, t: number, values: Record<string, unknown>): void {
-    d.series!.appendRow(t, values, ++this.seq);
+    d.series.appendRow(t, values, ++this.seq);
   }
 
   /** Rows in bulk, inside the server (FR-20a): the CSV importer's write. */
   appendCols(d: DatastreamRec, t: ArrayLike<number>, cols: Record<string, ArrayLike<unknown>>): void {
-    d.series!.appendCols(t, cols, this.seq + 1);
+    d.series.appendCols(t, cols, this.seq + 1);
     this.seq += t.length;
   }
 }

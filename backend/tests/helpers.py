@@ -4,21 +4,19 @@ import httpx
 
 from barge.accounts import basic, password_of
 from barge.api import create_app
-from barge.clock import ManualClock
 from barge.runtime import Runtime
 
 HOLD_S = 0.01  # the server's hold on a command's answer, shortened for the tests (§9.1: 5 s)
 
 
 class Rig:
-    """The application over a runtime with a hand-set clock, called in-process. ``folder``: a data folder for
-    the CSV importer (none: an empty one); ``models=False`` runs no in-process models."""
+    """The application over a runtime, called in-process. ``folder``: a data folder for the CSV importer (none:
+    an empty one); ``models=False`` runs no in-process models. There is no clock to set: the 4.1 simulation clock
+    is retired (D-320)."""
 
-    def __init__(self, seed=5, days=2.0, capture=True, user="owner", models=True, **store):
-        self.clock = ManualClock(days * 86400.0)
+    def __init__(self, capture=True, user="owner", models=True, **kw):
         self.user = user
-        self.rt = Runtime(seed=seed, clock=self.clock, pregen_days=days, capture=capture, local_models=models,
-                          hold_s=HOLD_S, **store)
+        self.rt = Runtime(capture=capture, local_models=models, hold_s=HOLD_S, **kw)
         self.app = create_app(self.rt)
         self.ready()
 
@@ -32,7 +30,7 @@ class Rig:
         raise AssertionError("the server, the importer and the models never became ready")
 
     def step(self, n=1):
-        """Let the back end's loop run (pushed commands, imports) without moving the clock."""
+        """Let the back end's loop run (pushed commands, imports)."""
         for _ in range(n):
             self.rt.tick()
 
@@ -60,12 +58,6 @@ class Rig:
         """The id of the current (not superseded) dataset imported from a file whose name starts so."""
         return next(d["id"] for d in reversed(list(self.rt.importer.datasets.values()))
                     if d["file"].startswith(file_prefix) and not d["superseded"])
-
-    def advance(self, seconds):
-        self.clock.play()
-        self.clock.advance(seconds)
-        self.rt.server and self.rt.server.adapter.refresh()
-        self.rt.tick()
 
     def auth(self, user=None) -> dict:
         user = user or self.user
