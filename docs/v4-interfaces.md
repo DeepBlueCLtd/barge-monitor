@@ -317,6 +317,8 @@ interface ReplayClock {
   under the same system) answers `201` with the **existing** `Location`. A different
   schema under an existing outputName makes a new datastream, with a new id (FR-51).
 - **One observation per `POST`.** An array body is refused with `400`.
+- **A SWE JSON record's members come in its schema's order** (D-346). OpenSensorHub reads them in order and
+  refuses another (`400`); both `csmodel`s send them in order. The stand-ins still accept any order.
 - A missing value is the string `"NaN"`. JSON `null` in a Quantity is refused with `400`.
 - `PUT` and `DELETE` on observations, systems and datastreams are **refused with a `4xx`**
   (D-200): the stand-ins answer `405`; OpenSensorHub answers `400` to `PUT` with an empty
@@ -731,3 +733,6 @@ answer comes, this table, FR-06c and both stand-ins are brought into line.
 | `sender` on a pushed command (FR-112a) | The user id | The user id | Settled (D-152) |
 | Role change at once (FR-116) | On the next request | On the next request | Settled (D-151) |
 | Bulk import inside the server | Feasible, about 300,000 rows/s (finding of 2026-11-25) | Inside the stand-ins | Settled |
+| An allow-list by id (D-222; AT-32 of 2026-11-26, D-348) | **Leaks**: a schema is checked as `get/datastreams[parent=<datastream id>]` and observations as `list/obs[parent=<datastream id>]`, and each is also tried against every ancestor system with the same form; system and datastream ids share strings, so a grant on an open datastream is a grant on the system with that id. The friend read every restricted datastream | Restrict by resource, as wanted | A restriction that holds; until then C6 does not hold on a stock server |
+| The profile beside the API (FR-41, D-345) | Served only as a static document (`/sensorhub/profile.json`), **without authentication** | At `api/profile.json`, with credentials | Served with credentials beside the API |
+| Order of a SWE JSON record's members (D-346) | The schema's order, or `400` | Any order | The stand-ins refuse another order (PR-05) |

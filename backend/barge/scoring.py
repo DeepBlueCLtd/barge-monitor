@@ -75,3 +75,26 @@ def score_clusters(world: World, t, labels) -> dict:
     reach = world.reach_index(world.sensor_chainage(b, "bow"))
     kinds = np.array([r["kind"] for r in world.m["canal"]["reaches"]])[reach]
     return {"ari_air_mass": ari(labels, world.mass_label(t)), "ari_reach_kind": ari(labels, kinds)}
+
+
+def referee(kind: str, payload: dict) -> dict:
+    """The demonstrator's referee (scaffolding, FR-37): a model's result scored against the data folder's world,
+    outside the model. Times are Unix seconds (4.7); the world counts from its epoch. Raises ``KeyError``,
+    ``TypeError`` or ``ValueError`` for a payload it cannot read, ``LookupError`` for a kind it does not score.
+    Served by the demonstrator's server at ``/demonstrator/referee/{kind}``; beside OpenSensorHub, by the AT-32
+    harness (D-347)."""
+    from . import config as C
+
+    w = folder_world()
+    epoch = C.SIM_EPOCH_UNIX
+    if kind == "changes":
+        det = {"t": np.asarray(payload["t"], dtype=float) - epoch, "scale": np.asarray(payload["scale"], dtype=int)}
+        r = score_changes(w, det, float(payload["t0"]) - epoch, float(payload["t1"]) - epoch)
+        return {k: (None if v is None else float(v)) for k, v in r.items()}
+    if kind == "clusters":
+        t = np.asarray(payload["t"], dtype=float) - epoch
+        if len(t) < 2:
+            return {"ari_air_mass": None, "ari_reach_kind": None}
+        r = score_clusters(w, t, np.asarray(payload["labels"]))
+        return {k: (None if not np.isfinite(v) else float(v)) for k, v in r.items()}
+    raise LookupError(f"the referee scores changes and clusters, not {kind}")

@@ -418,10 +418,12 @@ class Api:
             types = await self.schema(key) if ds not in self._types else self._types[ds]
             t = row.get("time", row.get("t"))
             obs = {"time": t if isinstance(t, str) else self.iso(t)}
-            for k, v in row.items():
-                if k in ("t", "time") or k not in types:
+            # In the schema's order: OpenSensorHub reads a SWE JSON record field by field, in order, and refuses one
+            # whose members come in another ("Expected field 'air_temperature' but was 'removed'", AT-32, D-346).
+            for k, ty in types.items():
+                if k in ("t", "time") or k not in row:
                     continue
-                obs[k] = _json_value(types[k], v, self.iso)
+                obs[k] = _json_value(ty, row[k], self.iso)
             await self.request("POST", f"/datastreams/{ds}/observations", obs, ctype="application/swe+json")
         return await self._on(key, go)
 
@@ -430,8 +432,14 @@ class Api:
         names = [k for k in cols if k != "t"]
         t = np.asarray(cols["t"], dtype=float)
         rows = [{"t": float(t[i]), **{k: cols[k][i] for k in names}} for i in range(len(t))]
-        for i in range(0, len(rows), IN_FLIGHT):
-            await asyncio.gather(*(self.publish(key, r) for r in rows[i:i + IN_FLIGHT]))
+        # A sliding window of IN_FLIGHT requests, each started in row order: the next starts as soon as one answers,
+        # rather than after the slowest of a batch, so the server is never left idle between batches (D-342).
+        gate = asyncio.Semaphore(IN_FLIGHT)
+
+        async def one(r):
+            async with gate:
+                await self.publish(key, r)
+        await asyncio.gather(*(one(r) for r in rows))
         return len(rows)
 
     # --- commands (FR-27): pushed, validated by the receiver ---------------------------------------------
@@ -560,7 +568,20 @@ def block_fields(names: list) -> list:
 
 
 def _num(v) -> list:
-    return [None if not np.isfinite(x) else (int(x) if float(x).is_integer() else float(x)) for x in np.asarray(v, dtype=float)]
+    """Values as JSON numbers: whole numbers as integers, nan and infinities as null. Vectorised (D-342): a block is
+    3,600 readings per field, and an element-wise loop was most of Data cleanse's time in Pyodide."""
+    a = np.asarray(v, dtype=float).ravel()
+    finite = np.isfinite(a)
+    whole = np.zeros(a.shape, dtype=bool)
+    whole[finite] = a[finite] == np.trunc(a[finite])
+    if whole.all() and (a.size == 0 or np.abs(a).max() < 2.0 ** 53):
+        return a.astype(np.int64).tolist()
+    out = a.tolist()
+    for i in np.flatnonzero(whole).tolist():
+        out[i] = int(out[i])
+    for i in np.flatnonzero(~finite).tolist():
+        out[i] = None
+    return out
 
 
 def encode_block(t0: float, cols: dict, names: list, removed: int, run_id: str) -> dict:
@@ -582,7 +603,7 @@ def decode_blocks(cols: dict, names: list, t0: float = -np.inf, t1: float = np.i
         for n in names:
             raw = cols.get(n)
             vals = json.loads(raw[i]) if raw is not None and raw[i] else [None] * len(off)
-            out[n].append(np.array([np.nan if v is None else v for v in vals], dtype=float))
+            out[n].append(np.array(vals, dtype=float))  # None becomes nan
     t = np.concatenate(ts) if ts else np.empty(0)
     keep = (t >= t0) & (t < t1)
     res = {"t": t[keep]}

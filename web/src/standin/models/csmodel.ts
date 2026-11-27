@@ -347,9 +347,10 @@ export class ModelApi {
       const types = this.types.get(ds) ?? (await this.schema(key));
       const t = row.time ?? row.t;
       const obs: Record<string, unknown> = { time: typeof t === 'string' ? t : this.iso(Number(t)) };
-      for (const [k, v] of Object.entries(row)) {
-        if (k === 't' || k === 'time' || !types.has(k)) continue;
-        obs[k] = jsonValue(types.get(k)!, v, (x) => this.iso(x));
+      // In the schema's order: OpenSensorHub reads a SWE JSON record field by field, in order (D-346).
+      for (const [k, ty] of types) {
+        if (k === 't' || k === 'time' || !(k in row)) continue;
+        obs[k] = jsonValue(ty, row[k], (x) => this.iso(x));
       }
       await this.request('POST', `/datastreams/${ds}/observations`, obs, 'application/swe+json');
     });

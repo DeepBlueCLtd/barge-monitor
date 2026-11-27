@@ -275,6 +275,18 @@ class Runtime {
   }
 
   /**
+   * A second port to the back-end worker, speaking the relay's protocol (FR-02): for the end-to-end tests only, where
+   * the contract suite runs in Pyodide against the back end in the page (AT-02, D-341). The application is reached as
+   * the relay reaches it, without the relay's own work (it drops WWW-Authenticate, D-226).
+   */
+  seamPort(): MessagePort | null {
+    if (!this.backend) return null;
+    const ch = new MessageChannel();
+    this.backend.postMessage({ type: 'connect' }, [ch.port1]);
+    return ch.port2;
+  }
+
+  /**
    * A control action (docs/v4-interfaces.md §13.3): restart-server, down, up, field, profile-lie, capture, reset-instance,
    * set-role, state. There is no play, pause or rate: replay is the display client's own (§8, D-302).
    */
@@ -337,3 +349,5 @@ class Runtime {
 export const runtime = new Runtime();
 // Read-only, for the end-to-end tests (beside D-273's bargeCaptured; D-323): the back end's control state as the shell holds it.
 (globalThis as { bargeControlState?: () => ControlState | null }).bargeControlState = () => runtime.control.value;
+// For the end-to-end tests only (AT-02's Pyodide half, D-341): a port to the back end, as the relay is given one.
+(globalThis as { bargeSeamPort?: () => MessagePort | null }).bargeSeamPort = () => runtime.seamPort();

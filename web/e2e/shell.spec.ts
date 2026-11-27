@@ -170,7 +170,10 @@ for (const backend of ['standin', 'python'] as const) {
       // FR-68a: the god's-eye note, and what is counted but not drawn (D-321).
       await expect(page.getByTestId('gods-eye')).toContainText('God’s-eye view');
       await expect(page.getByTestId('gods-eye')).toContainText('CO₂ traffic included');
-      await expect.poll(async () => Number(await page.getByTestId('counted-not-drawn').getAttribute('data-count'))).toBeGreaterThan(1000);
+      // Processing Mission A is thousands of requests, counted. In Python they come as the models process it, after
+      // they register: a model waiting for Data cleanse no longer polls continuously (D-342), so wait for them.
+      await expect.poll(async () => Number(await page.getByTestId('counted-not-drawn').getAttribute('data-count')),
+        { timeout: SLOW, intervals: [1000] }).toBeGreaterThan(1000);
       // The message key names the letters as SRD §5 does.
       await expect(page.getByTestId('key-S')).toContainText('File request, internal');
       await expect(page.getByTestId('key-L')).toContainText('Legacy CSV');
