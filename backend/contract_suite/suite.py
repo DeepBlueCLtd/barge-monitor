@@ -250,28 +250,58 @@ async def the_profile_is_beside_the_server(x: Ctx):
 
 @need
 async def every_fixed_essential_is_found(x: Ctx):
-    """FR-40: each essential the profile names, found by uniqueId and outputName, with its type and unit.
-    Template essentials (``{dataset}``) are checked once a dataset is imported (plan Phase 5)."""
+    """FR-40, FR-40a: each essential the profile names, found by uniqueId and outputName, with its type and unit.
+    A template essential (``{dataset}``) must be met by some dataset: the client checks each dataset when it opens
+    it, and a dataset missing one is degraded, not the server (D-301)."""
     st, _, prof = await x.get("profile.json")
     prof = json.loads(prof) if isinstance(prof, str) else prof
     missing = []
     for e in prof["essentials"]:
-        if "{dataset}" in e["datastream"]:
-            continue
         if e.get("kind") == "controlstream":
             if await x.cs(e["system"], e["datastream"]) is None:
                 missing.append(e["id"])
             continue
-        d = await x.ds(e["system"], e["datastream"])
-        if d is None:
-            missing.append(e["id"])
-            continue
-        st, _, sch = await x.get(f"datastreams/{d['id']}/schema", {"obsFormat": SWE})
-        assert st == 200, (st, sch)
-        f = next((f for f in sch["recordSchema"]["fields"] if f["name"] == e["field"]), None)
-        if f is None or f["type"] != e["type"] or (e.get("uom") and (f.get("uom") or {}).get("code") != e["uom"]):
+        if "{dataset}" in e["datastream"]:
+            prefix = e["datastream"].replace("{dataset}", "")
+            found = [y for y in await x.datastreams(e["system"]) if y["outputName"].startswith(prefix)]
+        else:
+            d = await x.ds(e["system"], e["datastream"])
+            found = [d] if d else []
+        ok = False
+        for d in found:
+            st, _, sch = await x.get(f"datastreams/{d['id']}/schema", {"obsFormat": SWE})
+            assert st == 200, (st, sch)
+            f = next((f for f in sch["recordSchema"]["fields"] if f["name"] == e["field"]), None)
+            if f is not None and f["type"] == e["type"] and (not e.get("uom") or (f.get("uom") or {}).get("code") == e["uom"]):
+                ok = True
+                break
+        if not ok:
             missing.append(e["id"])
     assert not missing, f"essentials not found: {missing}"
+
+
+@need
+async def the_importer_offers_its_catalogue_and_import(x: Ctx):
+    """§7: the importer's system, its ``catalogue`` datastream and ``import`` control stream, as the masters
+    declare them; every catalogue row names a file, and ``records`` is 0 until the file is imported (D-197)."""
+    uid = URN + "importer"
+    assert await x.system(uid), "no importer system"
+    d = await x.ds(uid, "catalogue")
+    assert d, "no catalogue datastream"
+    st, _, sch = await x.get(f"datastreams/{d['id']}/schema", {"obsFormat": SWE})
+    assert st == 200, st
+    master = json.loads((x.dir / "swe" / "catalogue-record.json").read_text())
+    assert [(f["name"], f["type"]) for f in sch["recordSchema"]["fields"]] == [(f["name"], f["type"]) for f in master["fields"]]
+    for r in await x.obs(d["id"], {"limit": "100000"}):
+        assert r["file"] and r["status"] in ("not-imported", "importing", "imported", "changed", "superseded"), r
+        if r["status"] in ("not-imported", "importing"):
+            assert r["records"] == 0 and r["dataset"] == "", r
+    c = await x.cs(uid, "import")
+    assert c, "no import control stream"
+    st, _, cs = await x.get(f"controlstreams/{c['id']}/schema")
+    assert st == 200, st
+    fields = {f["name"]: f for f in cs["parametersSchema"]["fields"]}
+    assert list(fields) == ["action", "file"] and fields["action"]["constraint"]["values"] == ["import", "rescan"]
 
 
 @need

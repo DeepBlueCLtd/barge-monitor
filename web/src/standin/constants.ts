@@ -27,6 +27,12 @@ export const MAX_LIMIT = 100_000;
 export const RETRY_AFTER_S = 2;
 export const INDEX_CHUNK_RECORDS = 200_000;
 
+// --- CSV importer (interfaces §5, §7) ----------------------------------------------------
+/** One knot in m/s: the dialect writes apparent wind speed in knots (dialect.KNOT). */
+export const KNOT = 0.514444;
+/** One captured bulk-write message per this many rows (config.ROWS_PER_MESSAGE, FR-67). */
+export const BULK_ROWS = 1000;
+
 // --- Models (FR-33..FR-37) ------------------------------------------------------------
 
 export const SOSA = 'http://www.w3.org/ns/sosa/';

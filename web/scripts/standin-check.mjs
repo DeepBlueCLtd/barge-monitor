@@ -234,6 +234,49 @@ try {
   check(sent2.status === 200, 'Data cleanse is subscribed again after the restart', String(sent2.status));
   const rej = (await get(`/controlstreams/${dc.id}/status`)).json.items.find((r) => r['command@id'] === sent2.json?.id && r.statusCode === 'REJECTED');
   check(!!rej && /spike_threshold/.test(rej.message ?? ''), 'the receiver rejects a bound, naming it (FR-27)', JSON.stringify(rej));
+
+  // --- the CSV importer (interfaces §7), when the harness has the data folder -------------------------
+  const imp = (await systems()).get(URN + 'importer');
+  check(!!imp, 'the importer registers its system (urn:x-barge:importer)');
+  const catDs = (await get(`/systems/${imp}/datastreams`)).json.items.find((d) => d.outputName === 'catalogue');
+  const fold = async () => {
+    const rows = (await get(`/datastreams/${catDs.id}/observations?f=${encodeURIComponent(SWE)}&limit=100000`)).json;
+    const latest = new Map();
+    for (const r of rows) latest.set(r.file, r);
+    return latest;
+  };
+  const cat = await fold();
+  if (!cat.size) console.log('SKIP  the importer: the harness has no data folder (scripts/build_data_folder.py)');
+  else {
+    const A = 'MISSION_A_20310407.csv';
+    const Cf = 'MISSION_C_20310421.csv';
+    check(cat.size === 4 && cat.get(A)?.status === 'imported' && cat.get(A)?.records === 86400, 'the catalogue lists four files, Mission A imported silently');
+    check([...cat.values()].filter((r) => r.file !== A).every((r) => r.status === 'not-imported' && r.records === 0 && r.dataset === ''), 'the others not imported, records 0 (D-197)');
+    const ics = (await get(`/systems/${imp}/controlstreams`)).json.items.find((c) => c.inputName === 'import');
+    const send = (parameters) => post(`/controlstreams/${ics.id}/commands`, { parameters });
+    const settle = async (id) => {
+      for (let i = 0; i < 100; i++) {
+        const st = (await get(`/commands/${id}/status`)).json.items.filter((r) => r.statusCode !== 'PENDING');
+        if (st.length && ['COMPLETED', 'FAILED', 'REJECTED'].includes(st[st.length - 1].statusCode)) return st.map((r) => r.statusCode);
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      return null;
+    };
+    const bad = await send({ action: 'import', file: 'NO_SUCH.csv' });
+    check((await settle(bad.json.id))?.pop() === 'REJECTED', 'an unknown file is REJECTED');
+    const ok = await send({ action: 'import', file: Cf });
+    const codes = await settle(ok.json.id);
+    check(codes?.join(',') === ['ACCEPTED', ...Array(10).fill('EXECUTING'), 'COMPLETED'].join(','), 'import: ACCEPTED, EXECUTING every 10 %, COMPLETED', String(codes));
+    const c = (await fold()).get(Cf);
+    check(c?.status === 'imported' && c.records === 43200 && /^mission-c-20310421-[0-9a-f]{8}$/.test(c.dataset), 'Mission C imported as <slug>-<h8>');
+    const sy2 = await systems();
+    const stern = (await get(`/systems/${sy2.get(URN + 'sensor:stern')}/datastreams`)).json.items.find((d) => d.outputName === `weather__${c.dataset}`);
+    const fields = (await get(`/datastreams/${stern.id}/schema?obsFormat=${encodeURIComponent(SWE)}`)).json.recordSchema.fields.map((f) => f.name);
+    check(!fields.includes('apparent_wind_speed') && fields.includes('air_temperature'), 'its stern record has no apparent wind speed (FR-21)');
+    const co2ds = (await get(`/systems/${sy2.get(URN + 'sensor:stern:co2')}/datastreams`)).json.items.find((d) => d.outputName === `co2__${c.dataset}`);
+    check((await get(`/datastreams/${co2ds.id}/observations`, 'friend')).status === 403 && (await get(`/datastreams/${co2ds.id}/observations`)).status === 200,
+      'its CO₂ datastream: 403 for the friend, read by the owner (FR-93)');
+  }
 } catch (e) {
   failures++;
   console.log(`FAIL  ${e?.stack ?? e}`);

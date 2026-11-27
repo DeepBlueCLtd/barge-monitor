@@ -1,8 +1,10 @@
 """The data server (C-04): one start of the stand-in for OpenSensorHub.
 
 An instance is created at each server start. It freezes the field offering
-(FR-51) and drops the store adapter's index so the adapter rebuilds it; while it
-does, the server answers nothing (4.7, §9.1: no 503 and no instance identifier).
+(FR-51) and drops the store adapter's index so the adapter rebuilds it; then its
+modules start: the CSV importer registers, lists the data folder and, at the first
+start of a page load, imports Mission A silently (FR-15). Until then the server
+answers nothing (4.7, §9.1: no 503 and no instance identifier).
 The store of created resources (``store.py``: systems, datastreams, control
 streams, commands and observations) outlives it, as OpenSensorHub's database does.
 
@@ -29,9 +31,9 @@ from .store import URN, Store
 from .tap import Tap
 
 SOSA = "http://www.w3.org/ns/sosa/"
-# The profile the 4.1 display client is built against. The 4.7 template (contracts/profile.json) is served
-# from plan Phase 7, with the client that reads it (decision D-252).
-INTERIM_PROFILE = "interim/profile-v4.1.json"
+# The declared profile, the 4.7 template (FR-40, FR-40a), served beside the API (FR-41). The interim 4.1 profile
+# of D-252 is retired with the 4.1 display client (D-301).
+PROFILE = "profile.json"
 SENSORS = ("bow", "stern")
 QC_RANGE = {
     "air_temperature": (-30.0, 50.0), "relative_humidity": (0.0, 100.0), "pressure": (900.0, 1100.0),
@@ -98,10 +100,12 @@ class Server:
         self.tap = tap
         self.number = number  # internal only: the server serves no instance identifier (4.7, §9.1)
         self.adapter = (getattr(runtime, "adapter_class", None) or StoreAdapter)(runtime.logger, tap)
-        self.ready = False
+        self.indexed = False  # the adapter's index is rebuilt
+        self.starting = False  # its modules are starting (the CSV importer)
+        self.ready = False  # answering requests
         self.store: Store = runtime.store
         self.lie_about_profile = runtime.lie_about_profile
-        self.profile = json.loads((contracts_dir() / INTERIM_PROFILE).read_text())
+        self.profile = json.loads((contracts_dir() / PROFILE).read_text())
         raw = self.offering.raw()
         fields = [swe.time_field()]
         for f in raw:
@@ -115,8 +119,9 @@ class Server:
     def _configure(self) -> dict:
         """What OpenSensorHub's configuration creates at start (docs/v4-interfaces.md §6): the platform, its
         sensors and their CO₂ analysers (restricted), Models, and a workspace per user. Each sensor's
-        ``weather`` datastream is read from the logger store through the adapter until the CSV importer
-        (plan Phase 5); its schema is this start's offering, so a new offering is a new datastream (FR-51)."""
+        ``weather`` datastream is read from the 4.1 logger store through the adapter, for the 4.1 display client
+        and models (D-271); its schema is this start's offering, so a new offering is a new datastream (FR-51).
+        The CSV importer registers itself, at each start, once the index is rebuilt (``importer.py``)."""
         st = self.store
         add = st.add_system
         barge, _ = add(URN + "platform:barge", "Collection platform", "The uncrewed electric cargo barge. It records no position.",
@@ -143,12 +148,16 @@ class Server:
             ids[f"workspace:{u}"] = w["id"]
         return ids
 
-    # --- start-up: waiting mode while the index is rebuilt (FR-47) ----------------
+    # --- start-up: no answer while the index is rebuilt and the modules start (FR-47) --------
     def index_step(self) -> bool:
-        done = self.adapter.index_step()
-        if done:
-            self.ready = True
-        return done
+        """One step of rebuilding the adapter's index; True once it is rebuilt. The runtime then starts the
+        server's modules, and the server answers once they have started."""
+        if not self.indexed:
+            self.indexed = self.adapter.index_step()
+        return self.indexed
+
+    def phase(self) -> str:
+        return "ready" if self.ready else ("import" if self.indexed else "index")
 
     def progress(self) -> dict:
         return {"indexed": self.adapter.indexed_records(), "stored": self.adapter.store_records()}
@@ -172,16 +181,35 @@ class Server:
         """Essential sources this offering does not satisfy (empty when it does)."""
         problems = []
         for e in self.profile["essentials"]:
-            ds = self.store.datastream(e["system"], e["datastream"])
-            rec = self.visible(ds["schema"]) if ds and self.served(ds) else None
-            fld = rec and next((f for f in rec["fields"] if f["name"] == e["field"]), None)
-            if not fld:
-                problems.append({"id": e["id"], "reason": "missing"})
-            elif fld["type"] != e["type"]:
-                problems.append({"id": e["id"], "reason": "wrong type"})
-            elif (fld.get("uom") or {}).get("code") != e.get("uom"):
-                problems.append({"id": e["id"], "reason": "wrong unit"})
+            if e.get("kind") == "controlstream":
+                if self.store.controlstream(e["system"], e["datastream"]) is None:
+                    problems.append({"id": e["id"], "reason": "missing"})
+                continue
+            found = self._per_dataset(e["system"], e["datastream"])
+            if found is None:
+                ds = self.store.datastream(e["system"], e["datastream"])
+                found = [ds] if ds and self.served(ds) else []
+            reasons = []
+            for ds in found:
+                fld = next((f for f in self.visible(ds["schema"])["fields"] if f["name"] == e["field"]), None)
+                reasons.append("missing" if not fld else "wrong type" if fld["type"] != e["type"]
+                               else "wrong unit" if (fld.get("uom") or {}).get("code") != e.get("uom") else "")
+            if "" not in reasons:
+                problems.append({"id": e["id"], "reason": reasons[-1] if reasons else "missing"})
         return problems
+
+    def _per_dataset(self, system_uid: str, template: str) -> dict | None:
+        """A template essential (``weather__{dataset}``, FR-40a) is met for the claim when some dataset's datastream
+        carries it (D-301): the client checks each dataset itself when it opens it, and a dataset missing one is
+        degraded (FR-45), not the server. The datastream returned is the newest dataset's that carries the field."""
+        if "{dataset}" not in template:
+            return None
+        s = self.store.system_by_uid(system_uid)
+        if s is None:
+            return None
+        prefix = template.replace("{dataset}", "")
+        return [d for d in self.store.datastreams.values()
+                if d["system"] == s["id"] and d["outputName"].startswith(prefix) and self.served(d)]
 
     def claims_profile(self) -> bool:
         return self.lie_about_profile or not self.satisfies_profile()

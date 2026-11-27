@@ -5,7 +5,7 @@
 import { Node, NodeProps, ReactFlow, useReactFlow, ViewportPortal } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
-import { simClock } from './clock';
+import { drawClock } from './drawclock';
 import { COMPONENT_IDS, COMPONENTS, ComponentId } from './components';
 import { Diamond } from './Diamond';
 import { allLanes, arrowhead, cardRect, laneFor, LAYOUT_SIZE, Pt, pointAt } from './geometry';
@@ -77,12 +77,9 @@ const Zone = memo(function Zone({ data }: NodeProps<Node<ZoneData>>) {
 
 const NODE_TYPES = { card: Card, zone: Zone };
 
-/** One-line live roles: the collection platform shows simulated time (mockups). */
+/** One-line roles. The 4.1 platform card's simulated time is gone with the simulation clock (D-302); Phase 8 redraws the cards. */
 function useRoles(): Record<ComponentId, string> {
-  useStore(simClock.state);
-  const roles = Object.fromEntries(COMPONENT_IDS.map((id) => [id, COMPONENTS[id].role])) as Record<ComponentId, string>;
-  roles.platform = simClock.state.value ? `sim time ${simClock.hms()}` : 'sim time';
-  return roles;
+  return Object.fromEntries(COMPONENT_IDS.map((id) => [id, COMPONENTS[id].role])) as Record<ComponentId, string>;
 }
 
 function FixedView({ box }: { box: { w: number; h: number } }) {
@@ -172,7 +169,7 @@ function position(m: Message, now: number): Pt | null {
   return pointAt(lane, m.failed ? Math.min(f, 0.55) : f);
 }
 
-/** Messages move on the simulation clock: paused, they freeze in place and stay clickable (FR-77). */
+/** Messages move on the drawing clock, in real time (D-302); a picked one stays where it was picked. */
 function Icons() {
   const live = useStore(bus.live);
   const picked = useStore(selectedMessage);
@@ -181,16 +178,13 @@ function Icons() {
     let raf = 0;
     const loop = () => {
       bus.tick();
-      // A message picked while paused travels on at Play; once it arrives it is deselected.
-      const sel = selectedMessage.value;
-      if (sel?.follow && simClock.playing && !position(sel.m, simClock.displayNow())) selectedMessage.set(null);
       setFrame((f) => (f + 1) % 1e6);
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
   }, []);
-  const now = simClock.displayNow();
+  const now = drawClock.now();
   return (
     <>
       {live.map((m) => {
@@ -203,7 +197,7 @@ function Icons() {
             style={{ transform: `translate(${at[0] - 19}px, ${at[1] - 19}px)` }}
             onClick={(e) => {
               e.stopPropagation();
-              selectedMessage.set({ m, at, follow: !simClock.playing });
+              selectedMessage.set({ m, at, follow: false });
             }}>
             <Glyph letter={m.letter} failed={m.failed} user={isUserMessage(m)} />
           </button>

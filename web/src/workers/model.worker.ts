@@ -7,6 +7,10 @@
 // endpoint, a streaming response through the relay (§9.2). There is no other way in.
 // A model that raises errors, or never returns, stops only itself: the data
 // server, the other models and the display client carry on (AT-14).
+//
+// 4.7 (§10.2): a model follows no clock. Its runner finds datasets in the
+// importer's catalogue and processes each whole dataset, a few windows a step,
+// back to back while there is work; the shell's clock only stamps what it draws.
 import { passwordOf } from '../standin/accounts';
 import { loadRuntime } from './common';
 
@@ -16,7 +20,7 @@ let py: any = null;
 let port: MessagePort | null = null;
 let modelId = '';
 let apiUrl = '';
-let clock = { t: 0, playing: false };
+let clock = { t: 0 }; // the shell's simulation time: it stamps the messages drawn, nothing else
 let busy = false;
 let taps: any[] = [];
 let tapSeq = 0;
@@ -119,26 +123,24 @@ async def _stream(path, headers, internal=False):
 
 _mod = importlib.import_module(${JSON.stringify(module)})
 model = _mod.MODEL()
-api = csmodel.Api(model.id, _transport, _user, _password, stream=_stream, now=lambda: _clock["t"], epoch=csmodel.SIM_EPOCH_UNIX)
-_clock = {"t": 0.0}
+api = csmodel.Api(model.id, _transport, _user, _password, stream=_stream)
 def _tap(dst, summary, content=None):
     src, to = ("models", "scilibs") if dst == "scilibs" else ("scilibs", "models")
     _post_tap(src, to, f"{model.id}: {summary}", json.dumps(content, default=str)[:4000], api.quiet)
 api.tap = _tap
 runner = csmodel.Runner(model, api)
 
-async def tick(t, playing):
-    _clock["t"] = t
-    await runner.tick(playing)
+async def tick():
+    await runner.step()
     return [runner.phase, runner.detail, model.label]
 `);
   post({ type: 'progress', model, stage: 'ready', detail: 'model loaded', pct: 100 });
   void loop();
 }
 
-/** Step the model: every 250 ms when live, back to back while it catches up on history. */
+/** Step the model: back to back while it processes a dataset, every 250 ms otherwise. */
 function schedule(phase: string) {
-  setTimeout(loop, phase === 'catching up' ? 0 : 250);
+  setTimeout(loop, phase === 'processing' ? 0 : 250);
 }
 
 async function loop() {
@@ -146,7 +148,7 @@ async function loop() {
   busy = true;
   let phase = 'live';
   try {
-    const r = await py.globals.get('tick')(clock.t, clock.playing);
+    const r = await py.globals.get('tick')();
     const [ph, detail, label] = r.toJs();
     r.destroy();
     phase = ph;
@@ -174,6 +176,6 @@ self.onmessage = (e: MessageEvent) => {
     start(d.pyodideUrl, d.pyZipUrl, d.model, d.code ?? null, d.apiUrl).catch((err) =>
       post({ type: 'progress', model: d.model, stage: 'error', detail: String(err), pct: 0 }));
   } else if (d.type === 'clock') {
-    clock = { t: d.state.t, playing: d.state.playing };
+    clock = { t: d.state.t };
   }
 };

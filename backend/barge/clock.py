@@ -54,6 +54,11 @@ class SimClock:
                 "rates": C.CLOCK_RATES, "default_rate": C.CLOCK_DEFAULT_RATE}
 
 
+def perf() -> float:
+    """A monotonic stopwatch, in seconds: how long an import took (FR-110). Never a time of day."""
+    return time.perf_counter()
+
+
 def real_seconds() -> float:
     """Real time, Unix seconds: the stamp on commands and status reports (§9.1), never simulated time."""
     return time.time()

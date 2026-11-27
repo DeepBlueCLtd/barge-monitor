@@ -43,4 +43,7 @@ QUERY_BUDGET_MS = {  # FR-31 declared queries over four weeks of history
 COMMAND_HOLD_S = 5.0  # §9.1: a command's POST is answered after this hold, in real seconds (OpenSensorHub: ~29.5 s unheard)
 INDEX_CHUNK_RECORDS = 200_000  # records indexed per rebuild step
 
+# --- CSV importer (FR-20 to FR-22, interfaces §7) ---------------------------------
+ROWS_PER_MESSAGE = 1000  # one captured bulk-write message per this many rows (FR-67)
+
 # --- Models (FR-33..FR-37) ------------------------------------------------------

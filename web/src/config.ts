@@ -12,20 +12,27 @@ export const EXAMPLE_MODEL = 'py/example_new_model.py';
 export const CORE_MODELS = ['data-cleanse', 'summaries', 'analysis'] as const;
 // NFR-10: start-up budget, measured by the e2e test.
 export const STARTUP_BUDGET_MS = 30_000;
-// Each hop of a captured message takes this long on the flowchart, in simulated seconds.
-export const HOP_S = 0.8;
+// Each hop of a captured message takes this long on the flowchart, in real seconds (the drawing clock, D-302).
+export const HOP_S = 1.2;
 // The handshake's messages travel faster, because the display client sends each handshake
 // request only when the reply to the one before has been drawn arriving (decision log D-89).
 export const HANDSHAKE_HOP_S = 0.3;
-/** Speeds offered (FR-78): ½× is the default; there is no faster mode than 1×. */
-export const RATES = [0.25, 0.5, 1];
-export const DEFAULT_RATE = 0.5;
+/** The display client's replay rates (FR-86): no model bounds them. */
+export const RATES = [0.1, 0.5, 1, 10, 100] as const;
+export type Rate = (typeof RATES)[number];
+/** FR-99: the display client locks after this long without input; `?idle=<seconds>` shortens it, for tests only (D-305). */
+export const IDLE_LOCK_MS = (() => {
+  const s = Number(urlParam('idle'));
+  return Number.isFinite(s) && s > 0 ? s * 1000 : 5 * 60_000;
+})();
+/** FR-63: while playing, the display client polls once a real second. */
+export const POLL_MS = 1000;
 
 export function resolve(rel: string): string {
   return new URL(rel, document.baseURI).toString();
 }
 
-/** URL parameters (docs/v4-interfaces.md §8): ?backend=python|standin, ?seed=N, ?sketch=off. */
+/** URL parameters (docs/v4-interfaces.md §13.6): ?backend=python|standin, ?seed=N, ?sketch=off, and for tests ?folder= and ?idle=. */
 export function urlParam(name: string): string | null {
   try {
     return new URLSearchParams(location.search).get(name);

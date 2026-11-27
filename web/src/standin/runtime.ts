@@ -10,6 +10,12 @@
 // 4.7 (plan Phase 4): the server behaves as a configured stock OpenSensorHub
 // (docs/v4-interfaces.md §9): accounts and roles, commands pushed to
 // subscribers, no 503 and no instance identifier.
+//
+// 4.7 (plan Phase 5): the CSV importer is a module of the data server
+// (importer.ts). At each server start, once the index is rebuilt, it registers
+// and lists the data folder, and at the first start of a page load imports
+// Mission A silently (FR-15); only then does the server answer. Reset instance
+// (FR-50a) deletes the whole store and starts the server again, empty.
 import { Accounts } from './accounts';
 import { Api, HttpRequest, HttpResponse } from './api';
 import { CLOCK_DEFAULT_RATE, CLOCK_RATES, SENSORS, URN } from './constants';
@@ -18,6 +24,8 @@ import { DataCleanse } from './models/dataCleanse';
 import { Model, ModelApi, Runner } from './models/csmodel';
 import { Summaries } from './models/summaries';
 import { Analysis } from './models/analysis';
+import type { Folder } from './folder';
+import { EMPTY_FOLDER, Importer } from './importer';
 import { Platform } from './platform';
 import { ControlstreamRec, Hub, StatusReport, Store } from './resources';
 import { Server } from './server';
@@ -88,7 +96,7 @@ export interface Progress {
   pct: number;
 }
 
-/** The core models, run in-process on the simulation clock (local_models.py), each with its service account. */
+/** The core models, run in-process (local_models.py), each with its service account. They follow no clock (§10.2). */
 class LocalModels {
   readonly runners: Runner[] = [];
   private busy = new Set<Runner>();
@@ -106,7 +114,7 @@ class LocalModels {
 
   private async one(r: Runner): Promise<void> {
     try {
-      await r.tick(this.rt.clock.playing);
+      await r.step();
     } catch (e) { // a broken model never stops the others (FR-33)
       r.phase = 'failed';
       r.detail = `${(e as Error)?.name ?? 'Error'}: ${(e as Error)?.message ?? e}`;
@@ -134,13 +142,18 @@ class LocalModels {
   get live(): boolean {
     return this.runners.every((r) => r.phase === 'live');
   }
+
+  /** Registered and subscribed: each model answers commands, and processes datasets as they come. */
+  get ready(): boolean {
+    return this.runners.every((r) => !['starting', 'subscribing'].includes(r.phase));
+  }
 }
 
 export class Runtime {
   readonly clock: SimClock;
   readonly tap: Tap;
   readonly logger = new LoggerStore();
-  readonly store = new Store(); // created resources and their observations: they outlive restarts (D-11)
+  store = new Store(); // created resources and their observations: they outlive restarts (D-11), not Reset instance
   readonly accounts = new Accounts(); // the server's accounts and user-to-role assignment (§9.3)
   readonly hub = new Hub(); // push subscriptions (§9.2)
   readonly phases = new Map<string, { label: string; phase?: string; detail?: string }>(); // what each model says of itself
@@ -154,15 +167,22 @@ export class Runtime {
   down = false;
   /** How long a command's POST is held before it is answered, in real seconds (§9.1). */
   holdS = 5;
+  /** The CSV importer, a module of the data server (§7). */
+  readonly importer: Importer;
+  /** Mission A is imported silently once per page load: not again after Reset instance (FR-15, FR-50a). */
+  silentImport = true;
+  instanceResets = 0;
 
   constructor(readonly seed: number, history: History, hostSeconds: () => number,
-    private readonly realSeconds: () => number = () => Date.now() / 1000) {
+    private readonly realSeconds: () => number = () => Date.now() / 1000, folder: Folder = EMPTY_FOLDER) {
+    this.importer = new Importer(this, folder);
     const m = history.manifest;
     if (m.seed !== seed) throw new Error(`the history is for seed ${m.seed}, not ${seed}`);
     this.clock = new SimClock(m.end_t, hostSeconds);
     this.tap = new Tap(() => this.now());
     // FR-15, FR-06d: the pre-calculated files are the store's contents.
     for (const name of [...history.files.keys()].sort()) this.logger.load(name, history.files.get(name)!);
+
     for (const [k, v] of Object.entries(m.capture_counts ?? {})) this.tap.counts[k] = (this.tap.counts[k] ?? 0) + v;
     this.platform = new Platform(this.logger, this.tap, seed, m.end_t);
     this.api = new Api(this);
@@ -198,7 +218,11 @@ export class Runtime {
       const p = srv.progress();
       progress?.({ stage: 'index', detail: `store adapter: indexing ${p.indexed} of ${p.stored} records`, pct: 90 + Math.round((4 * p.indexed) / p.stored) });
     }
-    for (let i = 0; i < 1000 && !this.models.live; i++) {
+    progress?.({ stage: 'import', detail: 'the CSV importer: listing the data folder and importing Mission A', pct: 94 });
+    srv.starting = true;
+    await this.startModules(srv);
+    // The models register and subscribe before the flowchart appears; they then process each dataset (§10.2).
+    for (let i = 0; i < 1000 && !this.models.ready; i++) {
       await this.models.tickAll();
       const r = this.models.runners.find((x) => x.phase !== 'live');
       progress?.({ stage: 'models', detail: r ? `${r.model.label}: ${r.detail || r.phase}` : 'models live', pct: 95 });
@@ -209,11 +233,56 @@ export class Runtime {
   /** Bring the store up to the clock; let a starting server rebuild its index; step the models. */
   tick(): void {
     if (this.clock.playing) this.platform.sampleUntil(this.clock.now() + 1);
-    if (this.server && !this.down) {
-      if (!this.server.ready) this.server.indexStep();
-      else this.server.adapter.indexStep(); // the index follows the growing store (FR-21)
+    const srv = this.server;
+    if (srv && !this.down) {
+      if (!srv.ready) {
+        if (srv.indexStep() && !srv.starting) {
+          srv.starting = true;
+          void this.startModules(srv);
+        }
+      } else srv.adapter.indexStep(); // the index follows the growing store (FR-21)
     }
     this.models.tick();
+  }
+
+  // --- the server's modules: the CSV importer (§7) -----------------------------------------------
+  /**
+   * After the index: the importer registers and lists the folder, imports Mission A silently at the first
+   * start of a page load (FR-15), and the server then answers. The importer subscribes once it does.
+   */
+  async startModules(srv: Server): Promise<void> {
+    try {
+      await this.importer.start();
+      if (this.silentImport) {
+        this.silentImport = false;
+        await this.importer.silentImport();
+      }
+    } catch (e) { // a broken folder never stops the server
+      this.tap.emit('importer', 'server', 'I', `importer: ${String((e as Error)?.message ?? e)}`, String(e), { quiet: true });
+    }
+    if (srv !== this.server || this.down) return;
+    srv.ready = true;
+    await this.importer.listen();
+  }
+
+  /** For the page's loading steps (§13.7): `index`, `import`, `ready` (or `down`). */
+  startupPhase(): string {
+    if (!this.server || this.down) return 'down';
+    return this.server.phase();
+  }
+
+  /**
+   * FR-50a: stop the server, delete its whole store, and start it again empty: no dataset imported, no results,
+   * no data of interest. Nothing is deleted record by record, and the data folder is untouched. Mission A is not
+   * imported again until the page is reloaded (FR-15). Identifiers keep counting (runtime.reset_instance).
+   */
+  resetInstance(): void {
+    this.hub.closeAll();
+    this.server = null;
+    this.store = new Store(this.store.ids);
+    this.importer.reset();
+    this.instanceResets += 1;
+    this.startServer();
   }
 
   serverStatus(): 'running' | 'waiting' | 'down' {
@@ -234,7 +303,7 @@ export class Runtime {
   push(cs: ControlstreamRec, cmd: Record<string, unknown>): number {
     const subs = this.hub.subscribers(cs.id);
     for (const s of subs) {
-      const who = s.account.component === 'models' ? 'models' : 'client';
+      const who = s.account.component === 'models' || s.account.component === 'importer' ? s.account.component : 'client';
       const p = Object.entries(cmd.parameters as Record<string, unknown>).map(([k, v]) => `${k}=${v}`).join(', ');
       this.tap.emit('server', who, 'K', `${s.model ? s.model + ': ' : ''}push: ${p}`.slice(0, 120), cmd, { model: s.model ?? undefined, push: true });
       s.put(cmd);
@@ -283,6 +352,7 @@ export class Runtime {
       }
       case 'profile-lie': this.lieAboutProfile = !!arg; break;
       case 'capture': this.tap.enabled = !!arg; break;
+      case 'reset-instance': this.resetInstance(); break;
       case 'set-role': {
         const a = arg as { user: string; role: string };
         this.accounts.setRole(a.user, a.role);
@@ -323,6 +393,11 @@ export class Runtime {
       models,
       accounts: this.accounts.state(),
       backend: 'standin' as const,
+      folder: this.importer.folderState(),
+      datasets: this.importer.datasetsState(),
+      import_rate: this.importer.rate,
+      importer: { subscribed: this.importer.subscribed, silent_done: !this.silentImport },
+      resets: this.instanceResets,
     };
   }
 }

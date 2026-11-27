@@ -5,7 +5,6 @@
 // server, control panel) reach the back-end worker directly: they belong to
 // the demonstrator, not the system.
 import { CORE_MODELS, HISTORY_PATH, PY_ZIP, PYODIDE_PATH, resolve, urlParam } from '../config';
-import { simClock } from './clock';
 import type { ComponentId } from './components';
 import { bus, Captured } from './messages';
 import { STAGE_STEP, Startup } from './startup';
@@ -40,7 +39,26 @@ export interface ModelState {
   datastreams?: number | string[];
 }
 
-/** Control state (docs/v4-interfaces.md §8). */
+/** A file of the data folder, as the importer's catalogue has it now (§13.4). */
+export interface FolderFile {
+  file: string;
+  size: number;
+  modified: string;
+  status: 'not-imported' | 'importing' | 'imported' | 'changed' | 'superseded';
+  dataset: string;
+  pct: number;
+}
+
+export interface DatasetState {
+  id: string;
+  file: string;
+  start: string;
+  end: string;
+  records: number;
+  superseded: boolean;
+}
+
+/** Control state (docs/v4-interfaces.md §13.4). */
 export interface ControlState {
   server: 'running' | 'waiting' | 'down';
   instance: string | null;
@@ -53,6 +71,24 @@ export interface ControlState {
   models?: ModelState[];
   capture_counts?: Record<string, number>;
   backend?: BackendKind;
+  folder?: FolderFile[];
+  datasets?: DatasetState[];
+  /** The last import's speed, for the importer's panel (FR-110). */
+  import_rate?: { file: string; rows: number; seconds: number; rows_per_s: number; silent: boolean } | null;
+  importer?: { subscribed: boolean; silent_done: boolean };
+  resets?: number;
+  /** The user-to-role assignment (§13.4), changed by the admin stub (§13.5). */
+  accounts?: { user: string; role: string; kind: string; label: string }[];
+}
+
+/**
+ * Where the data folder is (FR-15): `data/folder/` in the site. A test may point the importer at another
+ * folder of the same site with `?folder=<relative path>` (decision D-272); nothing else is accepted.
+ */
+function folderPath(): string {
+  const asked = urlParam('folder');
+  if (asked && /^[A-Za-z0-9_\-./]+\/$/.test(asked) && !asked.startsWith('/') && !asked.includes('..')) return asked;
+  return 'data/folder/';
 }
 
 export interface ModelWorkerStatus {
@@ -139,7 +175,7 @@ class Runtime {
       this.progress.set({ stage: 'error', detail: why, pct: 0 });
       this.startup.fail(this.startup.current()?.id ?? 'back end', why);
     };
-    this.backend.postMessage({ type: 'start', pyodideUrl: resolve(PYODIDE_PATH), pyZipUrl: resolve(PY_ZIP), seed, historyUrl });
+    this.backend.postMessage({ type: 'start', pyodideUrl: resolve(PYODIDE_PATH), pyZipUrl: resolve(PY_ZIP), seed, historyUrl, folderUrl: resolve(folderPath()) });
     this.connect();
   }
 
@@ -196,7 +232,7 @@ class Runtime {
         if (d.stage === 'error') this.startup.fail(this.startup.current()?.id ?? 'back end', String(d.detail));
         else if (STAGE_STEP[d.stage]) this.startup.enter(STAGE_STEP[d.stage], d.detail);
         if (d.stage === 'ready' && this.readyMs == null) {
-          this.startup.finish('server');
+          this.startup.finish('import');
           this.readyMs = performance.now() - this.startedAt;
           // The model workers load once the back end can take their ports.
           if (this.kind === 'python') CORE_MODELS.forEach((m) => this.startModel(m));
@@ -204,22 +240,18 @@ class Runtime {
         }
         break;
       case 'tick':
-        simClock.update(d.clock);
         if (d.server && d.server !== this.server.value) this.server.set(d.server);
         bus.add(d.messages ?? []);
-        // Every model reads time from the simulation clock (FR-13).
-        for (const w of this.models.values()) w.postMessage({ type: 'clock', state: d.clock, pending: d.pending_commands ?? {} });
         break;
       case 'state':
         this.control.set(d.state);
         this.checkModels();
-        if (d.state?.clock) simClock.update(d.state.clock);
         if (d.state?.server) this.server.set(d.state.server);
         break;
       case 'relay-failed': {
         // A request that got no answer (server down) is drawn stopped at the boundary (VS-14).
         const kOrQ = d.method === 'POST' && String(d.path).endsWith('/commands') ? 'K' : 'Q';
-        bus.add([{ t: simClock.now(), src: d.model ? 'models' : 'client', dst: 'server', letter: kOrQ, ...(d.model ? { model: d.model } : {}), summary: `${d.method} ${d.path}: no answer, the server is down`,
+        bus.add([{ t: 0, src: d.model ? 'models' : 'client', dst: 'server', letter: kOrQ, ...(d.model ? { model: d.model } : {}), summary: `${d.method} ${d.path}: no answer, the server is down`,
           content: `${d.method} ${d.path}\n\nnetwork failure: the relay found no server to answer`, failed: true, chain: d.chain ?? null, hop: 0 }]);
         break;
       }
@@ -231,7 +263,7 @@ class Runtime {
 
   /** The last step, models, is done once every core model is live (after the server is). */
   private checkModels() {
-    if (this.readyMs == null || this.startup.steps.value[4].state === 'done') return;
+    if (this.readyMs == null || this.startup.steps.value.find((s) => s.id === 'models')?.state === 'done') return;
     if (this.coreModelsLive()) this.startup.finish('models');
     else this.startup.enter('models', 'starting each core model');
   }
@@ -245,7 +277,10 @@ class Runtime {
     sw.postMessage({ type: 'port' }, [ch.port2]);
   }
 
-  /** A control action (docs/v4-interfaces.md §8): play, pause, rate, restart-server, down, up, field, profile-lie, capture, state. */
+  /**
+   * A control action (docs/v4-interfaces.md §13.3): restart-server, down, up, field, profile-lie, capture, reset-instance,
+   * set-role, state. There is no play, pause or rate: replay is the display client's own (§8, D-302).
+   */
   send(action: string, arg?: unknown) {
     this.backend?.postMessage({ type: 'control', action, arg });
   }
@@ -266,8 +301,6 @@ class Runtime {
     const ch = new MessageChannel();
     this.backend.postMessage({ type: 'model-connect', model }, [ch.port1]);
     w.postMessage({ type: 'start', pyodideUrl: resolve(PYODIDE_PATH), pyZipUrl: resolve(PY_ZIP), model, apiUrl: resolve('api'), ...(code ? { code } : {}) }, [ch.port2]);
-    const clock = simClock.state.value;
-    if (clock) w.postMessage({ type: 'clock', state: clock });
     return true;
   }
 

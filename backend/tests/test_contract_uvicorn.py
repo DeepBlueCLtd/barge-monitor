@@ -14,12 +14,13 @@ from contract_suite import suite
 
 
 @pytest.fixture(scope="module")
-def server():
+def server(data_folder):
     s = socket.socket()
     s.bind(("127.0.0.1", 0))
     port = s.getsockname()[1]
     s.close()
-    rt = Runtime(seed=3, pregen_days=0.3, local_models=True, hold_s=0.5)
+    # Over the data folder: Mission A imported and processed, so that the models' outputs exist (D-285).
+    rt = Runtime(seed=3, pregen_days=0.3, local_models=True, hold_s=0.5, folder=data_folder)
     while not (rt.server.ready and rt.local.live):
         rt.tick()
     srv = uvicorn.Server(uvicorn.Config(create_app(rt), host="127.0.0.1", port=port, log_level="warning"))

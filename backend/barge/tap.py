@@ -27,8 +27,9 @@ LETTERS = {
     "I": "Internal typed object, no public standard",
 }
 MAX_CONTENT = 4000
-# The eight components of SRD §3 (docs/v4-interfaces.md §1).
-COMPONENTS = ("platform", "store", "adapter", "server", "models", "scilibs", "client")
+# The components of SRD §3 (docs/v4-interfaces.md §1): the 4.7 data folder and CSV importer, and, until the
+# 4.1 display client and models are replaced (plan Phases 6 and 7), the 4.1 platform, logger store and adapter.
+COMPONENTS = ("platform", "store", "adapter", "folder", "importer", "server", "models", "scilibs", "client")
 
 _chain: contextvars.ContextVar = contextvars.ContextVar("tap_chain", default=None)
 _ids = itertools.count(1)

@@ -1,13 +1,12 @@
 // ECharts, drawn plainly with no sketch effect (FR-80, VS-20), in the monitor's
 // plain sans-serif (VS-03). Only the parts the views use are bundled.
 import { CustomChart, HeatmapChart, LineChart, ScatterChart } from 'echarts/charts';
-import { GridComponent, MarkLineComponent, TooltipComponent, VisualMapComponent } from 'echarts/components';
+import { GridComponent, LegendComponent, MarkLineComponent, TooltipComponent, VisualMapComponent } from 'echarts/components';
 import * as echarts from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
 import { useEffect, useRef } from 'react';
-import { SIM_EPOCH_UNIX } from '../../shell/clock';
 
-echarts.use([LineChart, ScatterChart, HeatmapChart, CustomChart, GridComponent, TooltipComponent, VisualMapComponent, MarkLineComponent, CanvasRenderer]);
+echarts.use([LineChart, ScatterChart, HeatmapChart, CustomChart, GridComponent, LegendComponent, TooltipComponent, VisualMapComponent, MarkLineComponent, CanvasRenderer]);
 
 export type EChartsOption = echarts.EChartsCoreOption;
 export const MONITOR_FONT = "'Inter', system-ui, sans-serif";
@@ -15,11 +14,11 @@ export const AXIS = { color: '#4b5563', fontSize: 13, fontFamily: MONITOR_FONT }
 /** Series colours inside the monitor: the display client's own, not the demonstrator's letters. */
 export const SERIES = ['#2f4ac0', '#c2410c', '#0f766e', '#9333ea', '#be123c', '#4d7c0f', '#0369a1', '#a16207'];
 
-/** Simulated seconds to a JavaScript time value, for the time axes. */
-export const ms = (t: number) => (SIM_EPOCH_UNIX + t) * 1000;
+/** Replay time (Unix seconds, UTC as in the files) to a JavaScript time value, for the time axes. */
+export const ms = (t: number) => t * 1000;
 
 /** A chart that fills its panel and follows the panel's size. */
-export function EChart({ option, testid }: { option: EChartsOption; testid?: string }) {
+export function EChart({ option, testid, extra }: { option: EChartsOption; testid?: string; extra?: Record<string, string> }) {
   const ref = useRef<HTMLDivElement>(null);
   const chart = useRef<echarts.ECharts | null>(null);
   useEffect(() => {
@@ -36,7 +35,7 @@ export function EChart({ option, testid }: { option: EChartsOption; testid?: str
   useEffect(() => {
     chart.current?.setOption({ animation: false, textStyle: { fontFamily: MONITOR_FONT }, ...option }, true);
   }, [option]);
-  return <div ref={ref} className="echart" data-testid={testid} />;
+  return <div ref={ref} className="echart" data-testid={testid} {...extra} />;
 }
 
 export function timeLabel(v: number, spanS: number): string {

@@ -990,7 +990,7 @@
   },
   "/demonstrator/referee/{kind}": {
    "post": {
-    "description": "Scored here, outside the model: a model never sees the manifest or the position (FR-37).",
+    "description": "Scored here, outside the model: a model never sees the manifest or the position (FR-37). Times are\nUnix seconds (4.7); the ground truth is the data folder's world, which counts from its epoch.",
     "operationId": "referee_demonstrator_referee__kind__post",
     "parameters": [
      {

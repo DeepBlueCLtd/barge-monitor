@@ -2,10 +2,9 @@
 // the stacked flowchart on the left with status and key below it; the detail
 // panel on the right. The shell frames the system and is not a component.
 import { useEffect, useState } from 'react';
-import { restartClient } from '../client/session';
-import { STARTUP_BUDGET_MS } from '../config';
+import { clientSession } from '../client/session';
+import { RATES, STARTUP_BUDGET_MS } from '../config';
 import { DetailPanel } from '../detail/DetailPanel';
-import { simClock } from './clock';
 import { ControlPanel } from './ControlPanel';
 import { DemoBanner, DemoMenu } from './Demos';
 import { Flowchart } from './Flowchart';
@@ -13,7 +12,6 @@ import { runtime } from './runtime';
 import { selectComponent, unrevealAll } from './selection';
 import { sketchEnabled } from './sketch';
 import type { StepState } from './startup';
-import { SPEED_LABELS } from './StatusBox';
 import { useStore } from './store';
 
 const TITLE = 'Canal barge weather demonstrator';
@@ -94,6 +92,16 @@ function useReason(ready: boolean): string | null {
   return ready ? null : runtime.startup.reason() ?? 'Starting';
 }
 
+/** Why the replay mirror cannot act (§13.7): before login, and with no dataset open. */
+function useReplayReason(startup: string | null): string | null {
+  const phase = useStore(clientSession.phase);
+  const replay = useStore(clientSession.clock.state);
+  if (startup) return startup;
+  if (phase === 'login' || phase === 'locked') return 'Log in to the display client first';
+  if (!replay) return 'Open a dataset first';
+  return null;
+}
+
 const REASON_ID = 'control-reason';
 
 /** Props that disable a control and say why, or nothing when it can act. */
@@ -102,13 +110,15 @@ function disabledBy(reason: string | null) {
 }
 
 function TopBar({ ready }: { ready: boolean }) {
-  const clock = useStore(simClock.state);
+  const replay = useStore(clientSession.clock.state);
   const control = useStore(runtime.control);
   const [drawer, setDrawer] = useState(false);
   const reason = useReason(ready);
   const off = disabledBy(reason);
-  const playing = clock?.playing ?? false;
-  const rate = clock?.rate ?? 0.5;
+  const replayReason = useReplayReason(reason);
+  const replayOff = replayReason === reason ? off : { disabled: true, title: replayReason!, 'aria-describedby': 'replay-reason' };
+  const playing = replay?.playing ?? false;
+  const rate = replay?.rate ?? null;
   return (
     <>
       <header className="topbar">
@@ -119,18 +129,19 @@ function TopBar({ ready }: { ready: boolean }) {
         </div>
         <nav className="controls" aria-label="Controls" data-testid="controls">
           {reason && <span id={REASON_ID} className="sr-only" data-testid="control-reason">{reason}</span>}
-          {/* FR-77: one play/pause button starts and stops the simulation clock. */}
-          <button className={`btn play${playing ? '' : ' primary'}`} onClick={() => runtime.send(playing ? 'pause' : 'play')} data-testid="play" {...off}>
+          {replayReason && replayReason !== reason && <span id="replay-reason" className="sr-only" data-testid="replay-reason">{replayReason}</span>}
+          {/* §8.6, interfaces §8: a mirror of the display client's replay bar, driving its own clock in the page. */}
+          <button className={`btn play${playing ? '' : ' primary'}`} onClick={() => (playing ? clientSession.pause() : clientSession.play())} data-testid="play" {...replayOff}>
             {playing ? '❚❚ Pause' : '▶ Play'}
           </button>
-          <div className="segmented" role="group" aria-label="Speed" data-testid="speed">
-            {simClock.rates.map((r) => (
-              <button key={r} className={`btn${r === rate ? ' on' : ''}`} aria-pressed={r === rate} onClick={() => runtime.send('rate', r)} {...off}>{SPEED_LABELS[r] ?? `${r}×`}</button>
+          <div className="segmented" role="group" aria-label="Replay rate" data-testid="speed">
+            {RATES.map((r) => (
+              <button key={r} className={`btn${r === rate ? ' on' : ''}`} aria-pressed={r === rate} onClick={() => clientSession.setRate(r)} data-testid={`speed-${r}`} {...replayOff}>{r}×</button>
             ))}
           </div>
-          {/* FR-46, FR-75: discard all client state, handshake again, un-reveal. */}
+          {/* FR-46, FR-75: discard all client state, credentials included; un-reveal. */}
           <button className="btn" data-testid="restart-client" onClick={() => {
-            restartClient();
+            clientSession.restart();
             unrevealAll();
             selectComponent(null);
           }} {...off}>Restart client</button>

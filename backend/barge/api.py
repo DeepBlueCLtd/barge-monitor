@@ -25,8 +25,10 @@ and refused with 403** (FR-93 as relaxed in 4.7). Creating and appending is allo
 one's own systems. Roles are read on every request (FR-116). Receivers subscribe on the internal
 endpoint ``/api-internal``, for service accounts only (D-223).
 
-Until the CSV importer (plan Phase 5), each sensor's ``weather`` datastream is read from the 4.1
-logger store through the store adapter (letter ``S``), and the profile served is the 4.1 one.
+The CSV importer (``importer.py``) is a module of this server: its datasets are stored datastreams
+under the sensors and the CO₂ analysers. Beside them, until the 4.1 display client and models are
+replaced (plan Phases 6 and 7), each sensor's ``weather`` datastream is read from the 4.1 logger store
+through the store adapter (letter ``S``), and the profile served is the 4.1 one (D-252, D-271).
 
 One thing here is not OpenSensorHub and says so: ``/demonstrator/referee`` (scaffolding: the only
 code that reads the manifest, FR-37).
@@ -798,16 +800,18 @@ def create_app(rt) -> Gate:
     @app.post(REFEREE + "/{kind}", summary="Score a result against the manifest (demonstrator scaffolding)",
               tags=["demonstrator"])
     async def referee(request: Request, kind: str = Path(...)):
-        """Scored here, outside the model: a model never sees the manifest or the position (FR-37)."""
+        """Scored here, outside the model: a model never sees the manifest or the position (FR-37). Times are
+        Unix seconds (4.7); the ground truth is the data folder's world, which counts from its epoch."""
         payload = await json_body(request)
-        w = rt.world
+        w = scoring.folder_world()
+        epoch = C.SIM_EPOCH_UNIX
         try:
             if kind == "changes":
-                det = {"t": np.asarray(payload["t"], dtype=float), "scale": np.asarray(payload["scale"], dtype=int)}
-                r = scoring.score_changes(w, det, float(payload["t0"]), float(payload["t1"]))
+                det = {"t": np.asarray(payload["t"], dtype=float) - epoch, "scale": np.asarray(payload["scale"], dtype=int)}
+                r = scoring.score_changes(w, det, float(payload["t0"]) - epoch, float(payload["t1"]) - epoch)
                 return {k: (None if v is None else float(v)) for k, v in r.items()}
             if kind == "clusters":
-                t = np.asarray(payload["t"], dtype=float)
+                t = np.asarray(payload["t"], dtype=float) - epoch
                 if len(t) < 2:
                     return {"ari_air_mass": None, "ari_reach_kind": None}
                 r = scoring.score_clusters(w, t, np.asarray(payload["labels"]))
