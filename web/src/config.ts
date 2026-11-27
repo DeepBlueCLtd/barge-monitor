@@ -30,6 +30,8 @@ export const RUN_PACE_MS = (() => {
   const s = Number(urlParam('runpace'));
   return Number.isFinite(s) && s > 0 ? Math.min(s, 5000) : 0;
 })();
+/** FR-124: the adoption merge takes about this long; with reduced motion it is immediate (AT-66). */
+export const OPENING_MERGE_MS = 1500;
 /** FR-63: while playing, the display client polls once a real second. */
 export const POLL_MS = 1000;
 

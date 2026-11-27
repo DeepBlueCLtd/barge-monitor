@@ -37,13 +37,23 @@ export function StatusBox({ rect }: { rect: Box }) {
     ['Back end', runtime.kind === 'python' ? 'Python' : 'JavaScript stand-in', 'backend-state'],
   ];
   return (
-    <section className="status-box panel-box" style={{ left: rect[0], top: rect[1], width: rect[2], height: rect[3] }} aria-label="Status">
+    <section className="status-box panel-box" style={{ left: rect[0], top: rect[1], width: rect[2], height: rect[3] }} aria-label="Status" data-testid="status-box">
       <h2 className="box-title">Status</h2>
       <dl>
         {rows.map(([k, v, id]) => (
           <div key={k} className="status-row"><dt>{k}</dt><dd data-testid={id}>{v}</dd></div>
         ))}
       </dl>
+    </section>
+  );
+}
+
+/** FR-122: in the adoption opening the status shows only "Opening": nothing runs yet. */
+export function OpeningStatus({ rect }: { rect: Box }) {
+  return (
+    <section className="status-box panel-box" style={{ left: rect[0], top: rect[1], width: rect[2], height: rect[3] }} aria-label="Status" data-testid="status-box">
+      <h2 className="box-title">Status</h2>
+      <p className="status-opening" data-testid="status-opening">Opening</p>
     </section>
   );
 }
