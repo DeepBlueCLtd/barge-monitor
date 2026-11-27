@@ -382,16 +382,20 @@ async def commands_are_pushed_to_a_subscriber(x: Ctx):
 
 @need
 async def restricted_resources_are_listed_and_refused(x: Ctx):
-    """FR-93 (4.7), AT-55: a weather-only role finds CO₂ systems listed, and is refused (403) reading them,
-    their datastreams, schemas and observations; a role with emissions reads them."""
+    """FR-93 (4.7), AT-55, D-351: a weather-only role finds CO₂ systems listed and described, a stream's title and
+    schema included (a stream's title may be known), and is refused (403) its contents, the observations; a role with
+    emissions reads them."""
     c = await x.co2()
     friend = await x.systems("friend")
     assert URN + "sensor:bow:co2" in friend, "a restricted system is listed, as OpenSensorHub lists it"
     st, _, body = await x.get("datastreams", {"limit": "100000"}, user="friend")
     assert st == 200 and c["ds"] in {d["id"] for d in body["items"]}, "a restricted datastream is listed"
     for path, params in ((f"systems/{c['system']}", None), (f"datastreams/{c['ds']}", None),
-                         (f"datastreams/{c['ds']}/schema", {"obsFormat": SWE}),
-                         (f"datastreams/{c['ds']}/observations", {"f": SWE})):
+                         (f"datastreams/{c['ds']}/schema", {"obsFormat": SWE})):
+        st, _, _ = await x.get(path, params, user="friend")
+        assert st == 200, f"{path} answered {st} for the friend: a stream's title and schema may be known (D-351)"
+    for path, params in ((f"datastreams/{c['ds']}/observations", {"f": SWE}),
+                         (f"datastreams/{c['ds']}/observations", {"f": SWE, "resultTime": "latest"})):
         st, _, _ = await x.get(path, params, user="friend")
         assert st == 403, f"{path} answered {st} for the friend"
         for user in ("owner", "analyst"):

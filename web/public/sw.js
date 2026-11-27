@@ -21,7 +21,7 @@
  * `skip-waiting`: its own skipWaiting at install does nothing if the older relay was
  * still activating then.
  */
-const RELAY_VERSION = '4.7-server-2'; // web/src/config.ts RELAY_VERSION: change both together
+const RELAY_VERSION = '4.7-server-3'; // web/src/config.ts RELAY_VERSION: change both together
 const TIMEOUT_MS = 120000;
 let port = null;
 let waiting = [];

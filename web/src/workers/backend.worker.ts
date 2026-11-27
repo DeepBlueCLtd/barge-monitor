@@ -69,6 +69,8 @@ bridge = Bridge(fetch_index=_fetch_index, fetch_file=_fetch_file)
  * relay reports a network failure (§9.1). A push subscription (§9.2) is streamed: {status, headers, stream: true},
  * then {chunk} per command and {end: true}; the relay's {cancel: true} ends it.
  */
+let requestSeq = 0;
+
 async function serve(req: any, reply: MessagePort) {
   if (!bridge) await new Promise<void>((r) => queue.push(r));
   const header = (name: string) => (req.headers as [string, string][]).find(([k]) => k.toLowerCase() === name)?.[1] ?? null;
@@ -84,11 +86,14 @@ async function serve(req: any, reply: MessagePort) {
       reply.postMessage({ end: true });
     }
   };
+  const rid = ++requestSeq;
   try {
-    const call = bridge.handle(req.method, req.path, req.query, req.body ? new Uint8Array(req.body) : undefined, // undefined is None; null is JsNull
+    // A task the bridge knows by this request's id, so that the relay's {cancel: true} ends a push subscription
+    // (D-343). A PyProxy of the task cannot be cancelled from here: awaiting it destroys it.
+    const call = bridge.start(rid, req.method, req.path, req.query, req.body ? new Uint8Array(req.body) : undefined, // undefined is None; null is JsNull
       req.rootPath, req.headers, req.origin, onStream);
     reply.onmessage = (m) => {
-      if (m.data?.cancel) call.cancel?.(); // the page dropped the stream: the subscription ends
+      if (m.data?.cancel) bridge.cancel(rid); // the page dropped the stream: the subscription ends
     };
     const res = await call;
     if (res === undefined || res === null) {

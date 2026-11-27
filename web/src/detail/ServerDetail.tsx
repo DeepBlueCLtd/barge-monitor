@@ -87,7 +87,7 @@ export function ServerDetail() {
       </div>
       <div className="why">
         <h4 className="small-caps">Authentication and permissions</h4>
-        <p className="gaps" data-testid="server-auth">Every request and every push subscription needs credentials; without them, <b>401</b>. Accounts, roles and service accounts are OpenSensorHub's own, and permissions are granted per system and inherited by its datastreams. A user without permission for a system (the CO₂ analysers and every model's restricted subsystem, for a weather-only user) gets <b>403</b> reading it; for now it is still <b>listed</b> in discovery, as stock OpenSensorHub does (FR-93; hiding it is open with the OpenSensorHub team). No account may read another's workspace. Receivers subscribe on the internal endpoint, for service accounts only (D-223).</p>
+        <p className="gaps" data-testid="server-auth">Every request and every push subscription needs credentials; without them, <b>401</b>. Accounts, roles and service accounts are OpenSensorHub's own, and permissions are granted per system and inherited by its datastreams. A user without permission for a system (the CO₂ analysers and every model's restricted subsystem, for a weather-only user) finds it <b>listed</b> and described, its streams' titles and schemas included, and gets <b>403</b> reading their contents: observations, commands and their status (FR-93, D-351). No account may read another's workspace. Receivers subscribe on the internal endpoint, for service accounts only (D-223).</p>
         <table className="letters-table" data-testid="server-accounts">
           <thead><tr><th>Account</th><th>Role</th></tr></thead>
           <tbody>

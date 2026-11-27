@@ -1,0 +1,183 @@
+{
+ "server": "OpenSensorHub osh-core 2.0.4 (75bb094), unmodified",
+ "gateway": "none (4.7, ADR 0010)",
+ "date": "2026-11-27",
+ "rows_imported": 900,
+ "run": {
+  "setup": {
+   "osh_start_s": 1.09,
+   "import": {
+    "datasets": [
+     "mission-a-20310407-424e1911"
+    ],
+    "observations": 3600,
+    "seconds": 4.1,
+    "observations_per_s": 1063,
+    "refusals": []
+   },
+   "models_live_after_s": 1.8,
+   "models": {
+    "data-cleanse": "live: every dataset processed",
+    "summaries": "live: every dataset processed",
+    "analysis": "live: every dataset processed"
+   },
+   "restart_s": 0.9,
+   "allow_list": {
+    "systems": 16,
+    "datastreams": 29,
+    "controlstreams": 4,
+    "open_but_refused": {
+     "viewer": [],
+     "service-no-co2": []
+    }
+   },
+   "receivers_resubscribed_after_s": 0.8,
+   "models_after_restart": {
+    "data-cleanse": "subscribing: subscribing to its commands",
+    "summaries": "subscribing: subscribing to its commands",
+    "analysis": "subscribing: subscribing to its commands"
+   },
+   "restricted_read_by_the_friend": {
+    "restricted": 12,
+    "open": 17,
+    "restricted_contents_read": [],
+    "restricted_described": 12,
+    "open_contents_refused": []
+   }
+  },
+  "results": [
+   {
+    "name": "landing_and_conformance",
+    "group": "need",
+    "outcome": "passed",
+    "detail": ""
+   },
+   {
+    "name": "credentials_are_needed_everywhere",
+    "group": "need",
+    "outcome": "failed",
+    "detail": "AssertionError: profile.json without credentials answered 200"
+   },
+   {
+    "name": "every_system_is_found_by_unique_id",
+    "group": "need",
+    "outcome": "passed",
+    "detail": ""
+   },
+   {
+    "name": "the_profile_is_beside_the_server",
+    "group": "need",
+    "outcome": "passed",
+    "detail": ""
+   },
+   {
+    "name": "every_fixed_essential_is_found",
+    "group": "need",
+    "outcome": "passed",
+    "detail": ""
+   },
+   {
+    "name": "the_importer_offers_its_catalogue_and_import",
+    "group": "need",
+    "outcome": "passed",
+    "detail": ""
+   },
+   {
+    "name": "a_sensor_record_has_quality_flags",
+    "group": "need",
+    "outcome": "passed",
+    "detail": ""
+   },
+   {
+    "name": "observations_by_time_latest_and_offset",
+    "group": "need",
+    "outcome": "passed",
+    "detail": ""
+   },
+   {
+    "name": "creating_again_answers_the_same_location",
+    "group": "need",
+    "outcome": "passed",
+    "detail": ""
+   },
+   {
+    "name": "one_observation_with_a_missing_value",
+    "group": "need",
+    "outcome": "passed",
+    "detail": ""
+   },
+   {
+    "name": "commands_are_pushed_to_a_subscriber",
+    "group": "need",
+    "outcome": "passed",
+    "detail": ""
+   },
+   {
+    "name": "restricted_resources_are_listed_and_refused",
+    "group": "need",
+    "outcome": "passed",
+    "detail": ""
+   },
+   {
+    "name": "workspaces_are_private",
+    "group": "need",
+    "outcome": "passed",
+    "detail": ""
+   },
+   {
+    "name": "creating_only_under_ones_own_systems",
+    "group": "need",
+    "outcome": "passed",
+    "detail": ""
+   },
+   {
+    "name": "refusals_are_html_and_401_challenges",
+    "group": "standin",
+    "outcome": "failed",
+    "detail": "AssertionError: {'www-authenticate': 'basic realm=\"OpenSensorHub: Authentication Required\"', 'cache-control': 'must-revalidate,no-cache,no-store', 'content-type': 'text/html;charset=iso-8859-1', 'content-length': '343'}"
+   },
+   {
+    "name": "put_patch_and_delete_are_not_allowed",
+    "group": "standin",
+    "outcome": "failed",
+    "detail": "AssertionError: PUT systems/o2rq3g8upg0c2: 403"
+   },
+   {
+    "name": "sensorml_as_json_and_codes_not_ucum_are_refused",
+    "group": "standin",
+    "outcome": "passed",
+    "detail": ""
+   },
+   {
+    "name": "one_observation_per_post_and_nan_not_null",
+    "group": "standin",
+    "outcome": "passed",
+    "detail": ""
+   },
+   {
+    "name": "accept_is_ignored_and_f_chooses",
+    "group": "standin",
+    "outcome": "passed",
+    "detail": ""
+   },
+   {
+    "name": "no_instance_identifier_and_all_systems_items_refused",
+    "group": "standin",
+    "outcome": "passed",
+    "detail": ""
+   },
+   {
+    "name": "a_command_without_a_subscriber_is_dropped",
+    "group": "standin",
+    "outcome": "passed",
+    "detail": ""
+   },
+   {
+    "name": "only_services_subscribe_on_the_internal_endpoint",
+    "group": "standin",
+    "outcome": "failed",
+    "detail": "AssertionError: (dict_keys(['Authorization']), True, 200)"
+   }
+  ]
+ }
+}

@@ -104,7 +104,7 @@ for (const backend of ['standin', 'python'] as const) {
       expect((await call(page, 'GET', 'api/collections/all_systems/items', 'owner')).status).toBe(400);
     });
 
-    test('the friend lists a CO₂ system but gets 403 reading its datastream or schema; the owner reads it (FR-93, AT-55)', async () => {
+    test('the friend lists and describes a CO₂ datastream, its schema included, but gets 403 reading its observations; the owner reads them (FR-93, AT-55, D-351)', async () => {
       const sy = await systems(page);
       const analyser = sy.get('urn:x-barge:sensor:bow:co2')!;
       // A CO₂ datastream, made as the importer makes them (§7): under the analyser, by its service account.
@@ -121,9 +121,13 @@ for (const backend of ['standin', 'python'] as const) {
       expect((await systems(page, 'friend')).get('urn:x-barge:sensor:bow:co2')).toBe(analyser);
       const dsList = json(await call(page, 'GET', 'api/datastreams?limit=1000', 'friend')).items.map((d: any) => d.id);
       expect(dsList).toContain(ds);
-      // ... and refused with 403; read by the owner.
-      for (const path of [`api/systems/${analyser}`, `api/datastreams/${ds}`, `api/datastreams/${ds}/schema?obsFormat=application/swe%2Bjson`,
-        `api/datastreams/${ds}/observations?f=application/swe%2Bjson`]) {
+      // ... described, its title and schema included (D-351) ...
+      for (const path of [`api/systems/${analyser}`, `api/datastreams/${ds}`, `api/datastreams/${ds}/schema?obsFormat=application/swe%2Bjson`]) {
+        expect((await call(page, 'GET', path, 'friend')).status, `friend ${path}`).toBe(200);
+      }
+      // ... and its contents refused with 403; read by the owner.
+      for (const path of [`api/datastreams/${ds}/observations?f=application/swe%2Bjson`,
+        `api/datastreams/${ds}/observations?f=application/swe%2Bjson&resultTime=latest`]) {
         const f = await call(page, 'GET', path, 'friend');
         expect(f.status, `friend ${path}`).toBe(403);
         expect(f.headers['content-type']).toMatch(/^text\/html/);

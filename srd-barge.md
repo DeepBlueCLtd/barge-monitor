@@ -17,7 +17,10 @@ change lists are below. Requirements marked **(4.7)** are new or changed here; *
 - **No access gateway, for now (4.7).** Clients talk to OpenSensorHub directly.
   Restricted resources are **listed in discovery and refused with 403**, as stock
   OpenSensorHub does, instead of being hidden (FR-93, FR-06c). C6 is restated. Hiding them is
-  an open question the owner is taking up with the OpenSensorHub team (§15).
+  an open question the owner is taking up with the OpenSensorHub team (§15). **A stream's title
+  may be known, not its contents** (the owner, 2026-11-27, D-351): a restricted datastream is
+  listed and described, its schema included; its observations, and a restricted control stream's
+  commands and status, are refused.
 - **Replay moves into the display client (4.7).** There is no replay controller on the
   server. **Models process each dataset as soon as it is imported**; each display client keeps
   its own replay clock and reveals data and results up to it (§8.6). C4 is restated; model
@@ -137,9 +140,10 @@ six claims:
 5. **C5. The data is protected at the screen (4.4).** Nothing is served or shown without
    logging in, an unattended screen locks, and the browser keeps nothing sensitive.
 6. **C6. Sensitive data is restricted per user (4.7).** CO₂ and everything derived from it
-   can be read only by users the owner permits. Anyone else is refused (403): for now they
-   can see in discovery that such sources exist, but never their data (§15). The display
-   client has no restriction-specific code: it offers only what it can read.
+   can be read only by users the owner permits. Anyone else is refused (403) the data: they
+   can see that such sources exist, their titles and schemas included, but never their contents
+   (§15; D-351). The display client has no restriction-specific code: it offers only what it can
+   read.
 
 The claims are supported by acceptance tests (§14), never asserted by the display.
 
@@ -403,10 +407,12 @@ the system **needs** of it. ✓ marks what the spike confirmed.
     without them the answer is **401** and nothing is served;
   - permissions are granted **per system** and **inherited by its datastreams and control
     streams**. Nothing in this system needs permission per field;
-  - a user **without permission** for a system is **refused (403)** when reading it, its
-    datastreams, their schemas or their observations. **For now it is still listed** in
-    discovery, as stock OpenSensorHub does: its existence and name are visible, its data
-    never. Hiding it from discovery is wanted, and is an open question (§15);
+  - a user **without permission** for a system is **refused (403)** its **contents**: its
+    datastreams' observations, and its control streams' commands and their status. **Its
+    description is not restricted (4.7, D-351)**: it is listed in discovery, as stock
+    OpenSensorHub does, and the system, its datastreams with their titles and schemas, and its
+    control streams can be read. A stream's title may be known, never its contents. Hiding it
+    from discovery is wanted, and is an open question (§15);
   - **users** may read what their role permits, send commands to the importer and the
     models, and create and append only under **their own workspace**;
   - each **model** and the **importer** has its own **service account**, allowed to create
@@ -947,7 +953,7 @@ pace), and in 4.4 and 4.6:
 | AT-28 | Regenerating the data folder from the seeds reproduces the files exactly | Delivery |
 | AT-29 | A model creates its resources; creating them again returns the same `Location` | C3 |
 | AT-31 | Each failure demo shows what its banner says | C1, C2, C4, C5, C6 |
-| AT-32 | The server-neutral contract suite passes against a stock OpenSensorHub, with credentials | C1 |
+| AT-32 | The server-neutral contract suite passes against a stock OpenSensorHub, with credentials, configured only as interfaces §14 allows (no component of ours in front of it) | C1 |
 | AT-33 | Open, play, pause, each rate and seek act on the display client's own clock and send no command; the views follow within one real second | C4 |
 | AT-34 | Every model's outputs for a dataset are identical however often it is processed, and whatever any client's replay does | C4 |
 | AT-35 | Withdrawn (4.7): no model bounds the rate | |
@@ -970,7 +976,7 @@ pace), and in 4.4 and 4.6:
 | **AT-52** | One analyst cannot read another's data of interest; a model's service account cannot create outside its own system | C5 |
 | **AT-53** | No captured message shows a credential | C5 |
 | **AT-54** | Reset instance empties the store and leaves the data folder byte-identical | C1 |
-| **AT-55** | Logged in as weather only: reading any CO₂ datastream, schema or observation, or any restricted model output, gives 403; no CO₂ value reaches the client; the client offers no CO₂ source | C6 |
+| **AT-55** | Logged in as weather only: reading the observations of any CO₂ datastream or restricted model output gives 403 (its title and schema may be read, D-351); no CO₂ value reaches the client; the client offers no CO₂ source | C6 |
 | **AT-56** | Every model output with CO₂ among its inputs, and every runs-log entry naming CO₂, is published only under a restricted subsystem; no unrestricted datastream contains a CO₂ value or name | C6 |
 | **AT-57** | A weather-only user's command naming CO₂ is rejected by the model, whatever the client sent | C6 |
 | **AT-58** | The display client's code contains no reference to CO₂ or to roles; the same build shows CO₂ to the owner and nothing of it to the friend | C2, C6 |
@@ -994,8 +1000,8 @@ pace), and in 4.4 and 4.6:
 - **Hiding restricted resources from discovery (4.7, open).** FR-93 is relaxed: restricted
   resources are listed and refused with 403, as stock OpenSensorHub does. The owner is
   working with the OpenSensorHub team so that a user is not shown resources they may not
-  read. Until then C6 is the weaker claim of §1, and the friend can see that CO₂ sources
-  exist.
+  read. Until then C6 is the weaker claim of §1: the friend can see that CO₂ sources exist,
+  their titles and schemas included, never their contents (D-351).
 - **Refusing replace and delete in OpenSensorHub (4.7, open).** The delete probe of
   2026-11-26 found that stock OpenSensorHub lets the owner, and a user on their own
   workspace, delete. FR-28a needs that forbidden by configuration. To be confirmed with the

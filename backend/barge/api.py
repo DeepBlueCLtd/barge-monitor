@@ -130,10 +130,14 @@ def _shown(b: bytes) -> str:
 
 
 # --- permissions (§9.3) ---------------------------------------------------------------------------
-def restricted_for(chain: list[dict], acct: A.Account) -> bool:
-    """True when this account may not read a system (given with its ancestors): listed, but refused with 403."""
+def restricted_for(chain: list[dict], acct: A.Account, contents: bool = True) -> bool:
+    """True when this account may not read a system (given with its ancestors): listed, but refused with 403.
+
+    D-351 (the owner): a stream's title may be known, not its contents. A restricted system, datastream or control
+    stream (CO₂, a restricted model output) is described to everyone, its schema included (``contents=False``); its
+    observations, commands and status are refused. Another user's workspace is refused whole (FR-94)."""
     for s in chain:
-        if (CO2.match(s["uid"]) or RESTRICTED.match(s["uid"])) and not A.may_read_co2(acct.role):
+        if contents and (CO2.match(s["uid"]) or RESTRICTED.match(s["uid"])) and not A.may_read_co2(acct.role):
             return True
         m = WORKSPACE.match(s["uid"])
         if m and m.group(1) != acct.user:
@@ -153,14 +157,22 @@ def owns(chain: list[dict], acct: A.Account) -> bool:
     return any(u == mine or u.startswith(mine + ":") for u in uids)
 
 
+OBSERVATIONS = re.compile(r"/datastreams/([^/]+)/observations")
+
+
 class Gate:
     """The server's front: lifecycle (no answer while starting or down), the two endpoints, authentication,
     capture. A pure ASGI middleware around the FastAPI application, so that a push subscription streams
     through it. Nothing is decided by the capture headers (§2)."""
 
-    def __init__(self, app: FastAPI, rt):
+    def __init__(self, app: FastAPI, rt, post_observation=None):
         self.app = app
         self.rt = rt
+        # Publishing one observation is most of the requests while models process a dataset (thousands per
+        # dataset, one per POST, §9.1). It is dispatched straight to its handler, the same function FastAPI routes
+        # to, without FastAPI's routing and dependency solving: in Pyodide that halves the back end's time for
+        # each (NFR-10, D-342). Its answers are the same, refusals included.
+        self.post_observation = post_observation
 
     def openapi(self) -> dict:
         return self.app.openapi()
@@ -201,7 +213,8 @@ class Gate:
         token = tap.begin_chain(headers.get("x-tap-chain"), int(hop) if hop.isdigit() else 1)
         where = INTERNAL if internal else ""
         ask = f"{method} {where}{rel}{'?' + query if query else ''}"
-        shown = ask + (f"\nAuthorization: {auth}" if auth else "") + ("\n\n" + _shown(body) if body else "")
+        # A quiet message is counted, not recorded (tap.emit): its content is not built (D-342).
+        shown = None if quiet else ask + (f"\nAuthorization: {auth}" if auth else "") + ("\n\n" + _shown(body) if body else "")
         tap.emit(who, "server", _letter_for_request(method, rel), f"{model}: {ask}" if model else ask, shown,
                  model=model, quiet=quiet)
         chain_id = tap.chain_id()
@@ -218,7 +231,7 @@ class Gate:
             t2 = tap.begin_chain(chain_id, hops)
             summary = f"{status} {where}{rel}" + (" (subscribed)" if streamed else "")
             tap.emit("server", who, _letter_for_response(status, rel, ctype), f"{model}: {summary}" if model else summary,
-                     "push subscription open: commands follow as they are sent" if streamed else _shown(payload),
+                     None if quiet else "push subscription open: commands follow as they are sent" if streamed else _shown(payload),
                      model=model, quiet=quiet)
             tap.end_chain(t2)
             token = tap.begin_chain(chain_id, hops + 2)
@@ -267,7 +280,15 @@ class Gate:
                         await respond(st, hs, payload)
                         await send({"type": "http.response.body", "body": payload})
 
-            await self.app(inner, inner_receive, inner_send)
+            m = OBSERVATIONS.fullmatch(rel) if method == "POST" and self.post_observation else None
+            if m:
+                try:
+                    r = await self.post_observation(Request(inner, inner_receive), m.group(1))
+                except Refusal as e:
+                    r = refusal_page(e.status, e.description, e.headers)
+                await r(inner, inner_receive, inner_send)
+            else:
+                await self.app(inner, inner_receive, inner_send)
         finally:
             tap.end_chain(token)
 
@@ -335,10 +356,11 @@ def create_app(rt) -> Gate:
             raise Refusal(404, f"system {sid} not found")
         return s
 
-    def readable(request, sid) -> list[dict]:
-        """The system and its ancestors; 403 when the account may not read it (listed, refused: §9.3)."""
+    def readable(request, sid, contents=True) -> list[dict]:
+        """The system and its ancestors; 403 when the account may not read it (listed, refused: §9.3). With
+        ``contents`` False, only its description is read: a restricted one is described to everyone (D-351)."""
         chain = store().chain(sid)
-        if restricted_for(chain, who(request)):
+        if restricted_for(chain, who(request), contents):
             raise Refusal(403, "this account may not read this resource")
         return chain
 
@@ -470,7 +492,7 @@ def create_app(rt) -> Gate:
     async def system(request: Request, systemId: str = Path(...), f: str | None = Query(None)):
         form = fmt(f, GEO_JSON, (GEO_JSON, SML_JSON, swe.JSON))
         s = get_system(systemId)
-        readable(request, systemId)
+        readable(request, systemId, contents=False)
         return system_json(request, s, form, listed=False)
 
     @app.get("/systems/{systemId}/subsystems", summary="Subsystems")
@@ -478,7 +500,7 @@ def create_app(rt) -> Gate:
                          offset: int = Query(0), f: str | None = Query(None)):
         form = fmt(f, GEO_JSON, (GEO_JSON, SML_JSON, swe.JSON))
         get_system(systemId)
-        readable(request, systemId)
+        readable(request, systemId, contents=False)
         items = [system_json(request, s, form) for s in store().systems.values() if s["parent"] == systemId]
         return page(items, request, f"/systems/{systemId}/subsystems", limit, offset)
 
@@ -549,14 +571,14 @@ def create_app(rt) -> Gate:
     @app.get("/datastreams/{dsId}", summary="A datastream")
     async def datastream(request: Request, dsId: str = Path(...)):
         d = get_ds(dsId)
-        readable(request, d["system"])
+        readable(request, d["system"], contents=False)
         return ds_json(request, d)
 
     @app.get("/datastreams/{dsId}/schema", summary="A datastream's schema")
     async def ds_schema(request: Request, dsId: str = Path(...), obsFormat: str | None = Query(None),
                         f: str | None = Query(None)):
         d = get_ds(dsId)
-        readable(request, d["system"])
+        readable(request, d["system"], contents=False)
         return swe.schema_response(srv().visible(d), fmt(obsFormat or f, swe.JSON, swe.OBS_FORMATS))
 
     @app.post("/systems/{systemId}/datastreams", status_code=201, summary="Create a datastream")
@@ -654,13 +676,13 @@ def create_app(rt) -> Gate:
     @app.get("/controlstreams/{csId}", summary="A control stream")
     async def controlstream(request: Request, csId: str = Path(...)):
         c = get_cs(csId)
-        readable(request, c["system"])
+        readable(request, c["system"], contents=False)
         return cs_json(request, c)
 
     @app.get("/controlstreams/{csId}/schema", summary="A control stream's schema, with its bounds")
     async def controlstream_schema(request: Request, csId: str = Path(...)):
         c = get_cs(csId)
-        readable(request, c["system"])
+        readable(request, c["system"], contents=False)
         return {"commandFormat": swe.JSON, "parametersSchema": c["schema"]}
 
     @app.post("/systems/{systemId}/controlstreams", status_code=201, summary="Create a control stream")
@@ -788,22 +810,12 @@ def create_app(rt) -> Gate:
         """Scored here, outside the model: a model never sees the manifest or the position (FR-37). Times are
         Unix seconds (4.7); the ground truth is the data folder's world, which counts from its epoch."""
         payload = await json_body(request)
-        w = scoring.folder_world()
-        epoch = C.SIM_EPOCH_UNIX
         try:
-            if kind == "changes":
-                det = {"t": np.asarray(payload["t"], dtype=float) - epoch, "scale": np.asarray(payload["scale"], dtype=int)}
-                r = scoring.score_changes(w, det, float(payload["t0"]) - epoch, float(payload["t1"]) - epoch)
-                return {k: (None if v is None else float(v)) for k, v in r.items()}
-            if kind == "clusters":
-                t = np.asarray(payload["t"], dtype=float) - epoch
-                if len(t) < 2:
-                    return {"ari_air_mass": None, "ari_reach_kind": None}
-                r = scoring.score_clusters(w, t, np.asarray(payload["labels"]))
-                return {k: (None if not np.isfinite(v) else float(v)) for k, v in r.items()}
-        except (KeyError, TypeError, ValueError) as e:
+            return scoring.referee(kind, payload)
+        except (KeyError, TypeError, ValueError) as e:  # KeyError first: it is a LookupError too
             raise Refusal(400, f"referee: {e}")
-        raise Refusal(404, f"the referee scores changes and clusters, not {kind}")
+        except LookupError as e:
+            raise Refusal(404, str(e))
 
     # --- everything else ----------------------------------------------------------------------------
     @app.api_route("/{rest:path}", methods=["GET", "HEAD", "OPTIONS", "POST", "PUT", "PATCH", "DELETE"],
@@ -815,7 +827,7 @@ def create_app(rt) -> Gate:
             raise Refusal(405, f"{request.method} /{rest} is not allowed")
         raise Refusal(404, f"no resource at /{rest}")
 
-    return Gate(app, rt)
+    return Gate(app, rt, post_observation)
 
 
 # --- module helpers -----------------------------------------------------------------------------

@@ -9,8 +9,8 @@ export const PY_ZIP = 'py/barge.zip';
 export const EXAMPLE_MODEL = 'py/example_new_model.py';
 /** The core models, each in its own worker in the Python back end (FR-33, FR-34). */
 export const CORE_MODELS = ['data-cleanse', 'summaries', 'analysis'] as const;
-// NFR-10: start-up budget, measured by the e2e test.
-export const STARTUP_BUDGET_MS = 30_000;
+// NFR-10: the start-up budget and the download sizes, declared in budgets.ts and measured by the e2e tests (D-340).
+export { STARTUP_BUDGET_MS } from './budgets';
 // Each hop of a captured message takes this long on the flowchart, in real seconds (the drawing clock, D-302).
 export const HOP_S = 1.2;
 // The handshake's messages travel faster, because the display client sends each handshake
@@ -55,4 +55,4 @@ export function urlParam(name: string): string | null {
 }
 
 /** The seam relay's version, as public/sw.js answers it; the page waits until a relay of this version controls it (D-354). Change both together. */
-export const RELAY_VERSION = '4.7-server-2';
+export const RELAY_VERSION = '4.7-server-3';

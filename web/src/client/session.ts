@@ -223,6 +223,12 @@ export class DisplayClientSession {
   private statusWatch: { cs: string; since: number; until: number }[] = [];
   private statusSeen = new Set<string>();
   private wantHandshake = false;
+  /**
+   * A dataset whose models' outputs, awaited at the handshake, have since appeared: discovery is repeated for it
+   * (FR-44) while it is the open dataset. Opening another dataset first leaves it pending, and it is asked for
+   * again if that dataset is opened again (D-352): it is not a handshake the other dataset needs (AT-44).
+   */
+  private handshakeFor: string | null = null;
   private lastHandshake = 0;
   private lastRetry = 0;
 
@@ -395,6 +401,7 @@ export class DisplayClientSession {
     this.phase.set('handshake');
     this.lastHandshake = Date.now();
     this.wantHandshake = false;
+    this.handshakeFor = null;
     let d: Discovery;
     try {
       d = await handshake(http);
@@ -626,7 +633,7 @@ export class DisplayClientSession {
       if (this.view.value) {
         const nv = buildView(d, v.id, this.completeSystems());
         // A model's output awaited at the handshake, and now complete: discover it (FR-44).
-        if (v.awaited.some((e) => this.completeSystems().has(e.system))) this.wantHandshake = true;
+        if (v.awaited.some((e) => this.completeSystems().has(e.system))) this.handshakeFor = v.id;
         else this.view.set(nv);
       }
     }
@@ -829,7 +836,8 @@ export class DisplayClientSession {
     this.busy = true;
     try {
       const phase = this.phase.value;
-      if (phase === 'unreachable' || (this.wantHandshake && phase === 'ready')) {
+      const want = this.wantHandshake || (this.handshakeFor !== null && this.handshakeFor === this.view.value?.id);
+      if (phase === 'unreachable' || (want && phase === 'ready')) {
         // FR-48: after any period of unreachability, repeat the handshake; so after a source in use went away.
         if (Date.now() - this.lastRetry > 2000 && Date.now() - this.lastHandshake > 2500) {
           this.lastRetry = Date.now();
@@ -852,7 +860,7 @@ export class DisplayClientSession {
         await this.readRuns(http);
         // A model that has not yet declared its outputs for the dataset (no runs log at the handshake): discover again (FR-44).
         const logs = new Set(this.runs.value.map((l) => l.ds.systemUid));
-        if ((this.view.value?.awaited ?? []).some((e) => !logs.has(e.system)) && Date.now() - this.lastHandshake > 4000) this.wantHandshake = true;
+        if ((this.view.value?.awaited ?? []).some((e) => !logs.has(e.system)) && Date.now() - this.lastHandshake > 4000) this.handshakeFor = this.view.value!.id;
         if (!this.preparing().length && !this.reload && !this.importing.value && !this.statusWatch.length && !this.awaitingCommand) this.watchUntil = 0;
       }
       if (playing || this.reload) {

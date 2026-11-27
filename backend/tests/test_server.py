@@ -31,13 +31,22 @@ def test_at49_credentials_are_needed_and_the_challenge_is_basic(r):
 def test_at59_a_role_change_takes_effect_on_the_next_request(r):
     """FR-116, D-151: the server reads the user-to-role assignment on every request."""
     bow_co2 = r.systems()["urn:x-barge:sensor:bow:co2"]
-    assert r.get(f"/systems/{bow_co2}", user="friend")[0] == 403
+    resp = r.request("POST", f"/systems/{bow_co2}/datastreams", json={"name": "CO₂", "outputName": "co2__test", "schema": {"obsFormat": "application/swe+json", "recordSchema": {
+        "type": "DataRecord", "name": "record", "label": "CO₂", "fields": [
+            {"type": "Time", "name": "time", "label": "Time", "definition": "http://www.opengis.net/def/property/OGC/0/SamplingTime",
+             "uom": {"href": "http://www.opengis.net/def/uom/ISO-8601/0/Gregorian"}},
+            {"type": "Quantity", "name": "co2", "label": "CO₂", "definition": "https://deepbluecltd.github.io/barge-monitor/def/co2",
+             "uom": {"code": "[ppm]"}}]}}}, user="svc-importer")
+    obs = resp.headers["location"].rsplit("/", 1)[-1]
+    obs = f"/datastreams/{obs}/observations"
+    assert r.get(f"/systems/{bow_co2}", user="friend")[0] == 200  # described to everyone (D-351)
+    assert r.get(obs, user="friend")[0] == 403
     r.rt.set_role("friend", "viewer-emissions")
     try:
-        assert r.get(f"/systems/{bow_co2}", user="friend")[0] == 200
+        assert r.get(obs, user="friend")[0] == 200
     finally:
         r.rt.set_role("friend", "viewer")
-    assert r.get(f"/systems/{bow_co2}", user="friend")[0] == 403
+    assert r.get(obs, user="friend")[0] == 403
     with pytest.raises(ValueError):
         r.rt.set_role("friend", "service")  # a user account takes a user's role only
 
@@ -51,8 +60,17 @@ def test_restricted_model_subsystems_are_refused_too(r):
                      headers={"content-type": "application/sml+json"}, user="svc-analysis")
     assert resp.status_code == 201
     sid = resp.headers["location"].rsplit("/", 1)[-1]
-    assert r.get(f"/systems/{sid}", user="friend")[0] == 403
-    assert r.get(f"/systems/{sid}", user="analyst")[0] == 200
+    assert r.get(f"/systems/{sid}", user="friend")[0] == 200  # described to everyone (D-351)
+    resp = r.request("POST", f"/systems/{sid}/datastreams", json={"name": "CO₂", "outputName": "clusters__test", "schema": {"obsFormat": "application/swe+json", "recordSchema": {
+        "type": "DataRecord", "name": "record", "label": "CO₂", "fields": [
+            {"type": "Time", "name": "time", "label": "Time", "definition": "http://www.opengis.net/def/property/OGC/0/SamplingTime",
+             "uom": {"href": "http://www.opengis.net/def/uom/ISO-8601/0/Gregorian"}},
+            {"type": "Quantity", "name": "co2", "label": "CO₂", "definition": "https://deepbluecltd.github.io/barge-monitor/def/co2",
+             "uom": {"code": "[ppm]"}}]}}},
+                     user="svc-analysis")
+    obs = "/datastreams/" + resp.headers["location"].rsplit("/", 1)[-1] + "/observations"
+    assert r.get(obs, user="friend")[0] == 403
+    assert r.get(obs, user="analyst")[0] == 200
     assert sid in {s["id"] for s in r.get("/systems", {"searchMembers": "true"}, user="friend")[1]["items"]}
 
 

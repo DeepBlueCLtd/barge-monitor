@@ -20,7 +20,12 @@ are not listed.
    restated: other users can see that CO₂ sources exist, but never read them.
 3. OpenSensorHub inherits grants but not denies, so restriction is an **allow-list**: each
    role is granted read on every open resource by id. The list is extended as imports and
-   models create datastreams (D-222).
+   models create datastreams (D-222). **Revised 2026-11-27 (D-351):** a stream's title may be
+   known, not its contents. Descriptions (systems, datastreams with their schemas, control
+   streams) are granted to every role; contents (observations, commands, status) by the
+   allow-list, with every contents form denied for each restricted resource and each system above
+   it, and OpenSensorHub started with `useSecureIds`, so ids of different kinds cannot collide (as
+   they did in the first AT-32 run, D-348, and opened restricted contents).
 4. Receivers subscribe on the **internal endpoint** (`/api-internal`), because public
    subscriptions close with access control on (D-223).
 5. The display client **leaves out any datastream whose schema answers `403`** (D-225). It

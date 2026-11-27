@@ -132,26 +132,34 @@ runner = csmodel.Runner(model, api)
 
 async def tick():
     await runner.step()
-    return [runner.phase, runner.detail, model.label]
+    # Whether a run is in hand: a model only waiting for its inputs steps at the idle pace (D-342).
+    return [runner.phase, runner.detail, model.label, runner.current is not None]
 `);
   post({ type: 'progress', model, stage: 'ready', detail: 'model loaded', pct: 100 });
   void loop();
 }
 
 /** Step the model: back to back while it processes a dataset, every 250 ms otherwise. */
-function schedule(phase: string) {
-  setTimeout(loop, phase === 'processing' ? 0 : 250);
+/**
+ * The next step: at once while a run is in hand, else after 250 ms. A model waiting for its inputs (Summaries and
+ * Analysis while Data cleanse processes) reports "processing" too, but stepping it at once only re-reads Data
+ * cleanse's runs log, taking the back end's single thread from the run that is processing (D-342).
+ */
+function schedule(working: boolean) {
+  setTimeout(loop, working ? 0 : 250);
 }
 
 async function loop() {
   if (!py || busy) return;
   busy = true;
   let phase = 'live';
+  let working = false;
   try {
     const r = await py.globals.get('tick')();
-    const [ph, detail, label] = r.toJs();
+    const [ph, detail, label, inHand] = r.toJs();
     r.destroy();
     phase = ph;
+    working = ph === 'processing' && inHand === true;
     port!.postMessage({ type: 'phase', phase, detail, label });
     post({ type: 'status', model: modelId, phase, detail });
   } catch (err) {
@@ -166,7 +174,7 @@ async function loop() {
     post({ type: 'tap', messages: taps });
     taps = [];
   }
-  schedule(phase);
+  schedule(working);
 }
 
 self.onmessage = (e: MessageEvent) => {

@@ -317,6 +317,8 @@ interface ReplayClock {
   under the same system) answers `201` with the **existing** `Location`. A different
   schema under an existing outputName makes a new datastream, with a new id (FR-51).
 - **One observation per `POST`.** An array body is refused with `400`.
+- **A SWE JSON record's members come in its schema's order** (D-346). OpenSensorHub reads them in order and
+  refuses another (`400`); both `csmodel`s send them in order. The stand-ins still accept any order.
 - A missing value is the string `"NaN"`. JSON `null` in a Quantity is refused with `400`.
 - `PUT` and `DELETE` on observations, systems and datastreams are **refused with a `4xx`**
   (D-200): the stand-ins answer `405`; OpenSensorHub answers `400` to `PUT` with an empty
@@ -427,17 +429,20 @@ configuration is not yet proven, §14 says so.
     an account create **subsystems under any system**, and lets any account read another
     user's workspace (S-AUTH). Both are open (§14); the stand-ins refuse them, as the
     configured server is expected to.
-- **A system the account may not read is listed, and refused (4.7, FR-93).** It appears in
-  `/systems`, `/systems?searchMembers=true`, `/systems/{id}/subsystems`, `/datastreams`,
-  `/systems/{id}/datastreams` and `/controlstreams`, as OpenSensorHub lists it. Reading it,
-  or anything under it (its datastreams' schemas, its observations, its control streams'
-  commands), answers **`403`**. The restricted systems are matched by unique id:
+- **A system the account may not read is listed and described, and its contents refused (4.7, FR-93;
+  D-351: a stream's title may be known, not its contents).** It appears in `/systems`,
+  `/systems?searchMembers=true`, `/systems/{id}/subsystems`, `/datastreams`,
+  `/systems/{id}/datastreams` and `/controlstreams`, as OpenSensorHub lists it, and the system, its
+  datastreams, their schemas, its control streams and their schemas can be read. Its **contents**
+  answer **`403`**: its datastreams' observations, and its control streams' commands (sent or listed)
+  and status. Another user's workspace is refused whole (its system answers `403` too). The restricted
+  systems are matched by unique id:
   - `urn:x-barge:sensor:*:co2`;
   - `urn:x-barge:process:*:restricted`;
   - other users' `urn:x-barge:workspace:*`.
 - **The display client offers only what it can read (FR-118).** At the handshake, a
-  datastream whose schema answers `403` is left out of the field list, like a datastream it
-  cannot use. It is not reported as missing, and it never makes a dataset degraded. The
+  datastream whose schema or whose observations (`resultTime=latest`) answer `403` is left out
+  of the field list, like a datastream it cannot use (D-351). It is not reported as missing, and it never makes a dataset degraded. The
   client has no list of restricted ids.
 - **Role changes** take effect **on the next request** (FR-116, D-151): the server reads
   the user-to-role assignment on every request. The admin stub (§13.5) changes it.
@@ -715,7 +720,10 @@ folder of the same site (D-272), and `?idle=<seconds>` shortens the display clie
 - **Steps.** The loading progress names each step in turn: `relay` (registering the
   Service Worker and waiting until it controls the page), `back end` (the worker and, in
   Python mode, Pyodide), `server` (started and answering), `import` (the silent import of
-  Mission A), `models` (each core model ready).
+  Mission A), `models` (each core model ready: registered and subscribed to its commands).
+- **Startup ends when each core model is ready** (D-350), not when it has processed Mission A. Processing follows
+  (§10.2), and until a dataset's runs are complete the display client says its results are being prepared
+  (FR-35b). The startup budget (NFR-10, 30 s in both back ends) is measured to this point, cold and on a reload.
 - **The relay.** The page goes on as soon as **this build's** relay controls it: it asks the
   controller for its version, so an older relay left from an earlier deploy (which may not
   forward `api-internal/`) is waited out; the page does not depend on `controllerchange`
@@ -752,3 +760,6 @@ answer comes, this table, FR-06c and both stand-ins are brought into line.
 | `sender` on a pushed command (FR-112a) | The user id | The user id | Settled (D-152) |
 | Role change at once (FR-116) | On the next request | On the next request | Settled (D-151) |
 | Bulk import inside the server | Feasible, about 300,000 rows/s (finding of 2026-11-25) | Inside the stand-ins | Settled |
+| Restricting by role (D-222, D-348, D-351) | Holds when configured so: descriptions granted whole; contents (observations, commands, status) allowed by id, and every contents form denied for each restricted resource and each system above it; **`useSecureIds`** at start, so ids of different kinds never share strings. AT-32 of 2026-11-27: no restricted observation read, every open one read. Without `useSecureIds` the ids collide, and either restricted contents open (D-348) or open contents close | Descriptions to everyone, contents by role (D-351) | Restriction by resource without an id list to maintain at every import |
+| The profile beside the API (FR-41, D-345) | Served only as a static document (`/sensorhub/profile.json`), **without authentication** | At `api/profile.json`, with credentials | Served with credentials beside the API |
+| Order of a SWE JSON record's members (D-346) | The schema's order, or `400` | Any order | The stand-ins refuse another order (PR-05) |
