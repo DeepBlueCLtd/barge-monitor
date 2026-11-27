@@ -25,6 +25,12 @@ export const IDLE_LOCK_MS = (() => {
   const s = Number(urlParam('idle'));
   return Number.isFinite(s) && s > 0 ? s * 1000 : 5 * 60_000;
 })();
+/** `?runpace=<ms>`, for tests only (D-355): the stand-in's models wait this long at each 10 % of a run, so a run lasts long
+ * enough for a test to see "results being prepared" (in the stand-in a run otherwise takes about a second). */
+export const RUN_PACE_MS = (() => {
+  const s = Number(urlParam('runpace'));
+  return Number.isFinite(s) && s > 0 ? Math.min(s, 5000) : 0;
+})();
 /** FR-63: while playing, the display client polls once a real second. */
 export const POLL_MS = 1000;
 
@@ -32,7 +38,7 @@ export function resolve(rel: string): string {
   return new URL(rel, document.baseURI).toString();
 }
 
-/** URL parameters (docs/v4-interfaces.md §13.6): ?backend=python|standin, ?seed=N, ?sketch=off, and for tests ?folder= and ?idle=. */
+/** URL parameters (docs/v4-interfaces.md §13.6): ?backend=python|standin, ?seed=N, ?sketch=off, and for tests ?folder=, ?idle= and ?runpace=. */
 export function urlParam(name: string): string | null {
   try {
     return new URLSearchParams(location.search).get(name);

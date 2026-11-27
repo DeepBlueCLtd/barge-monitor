@@ -716,6 +716,8 @@ export abstract class Model {
  */
 export class Runner {
   static MAX_WINDOWS = 6;
+  /** For tests only (`?runpace=`, D-355): a wait at each 10 % of a run, so a run lasts long enough to be seen. */
+  static paceMs = 0;
   phase = 'starting';
   detail = '';
   errors = 0;
@@ -925,6 +927,7 @@ export class Runner {
       if (tenth > run.logged && run.next < run.end) {
         run.logged = tenth;
         await this.log(run, 'processing');
+        if (Runner.paceMs) await new Promise((r) => setTimeout(r, Runner.paceMs));
       }
     }
     this.detail = `${run.id}: ${run.pct}%`;

@@ -8,6 +8,7 @@
 // once a second and after each control, and `relay-failed`.
 // The stand-in runs its own models: `model-connect` is not used (FR-06f).
 import { createStandin, fetchFolder, HttpRequest, loadHistory, Progress, Runtime } from '../standin';
+import { Runner } from '../standin/models/csmodel';
 
 declare const self: DedicatedWorkerGlobalScope;
 
@@ -89,6 +90,7 @@ async function serve(req: HttpRequest & { body: ArrayBuffer | Uint8Array | null 
 self.onmessage = (e: MessageEvent) => {
   const d = e.data;
   if (d.type === 'start') {
+    Runner.paceMs = Number(d.runPaceMs) || 0;
     start(Number(d.seed), d.historyUrl ?? null, d.folderUrl ?? null).catch((err) => post({ stage: 'error', detail: String(err?.message ?? err), pct: 0 }));
   } else if (d.type === 'connect') {
     const port: MessagePort = e.ports[0];

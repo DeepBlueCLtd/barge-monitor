@@ -359,7 +359,9 @@ for (const backend of ['standin', 'python'] as const) {
     });
 
     test(`"results being prepared" while a model processes a new dataset, then its results (FR-35b, AT-44), ${backend}`, async ({ page }) => {
-      await open(page, backend);
+      // In the stand-in a run takes about a second and the client looks about once a second, so seeing it was luck:
+      // `?runpace=` makes each run last long enough to be seen (D-355). Python's runs are long enough as they are.
+      await open(page, backend, backend === 'standin' ? '&runpace=400' : '');
       await login(page);
       await results(page);
       // Record every "results being prepared" the client shows, however briefly.
