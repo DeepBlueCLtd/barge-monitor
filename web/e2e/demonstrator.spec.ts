@@ -343,7 +343,13 @@ for (const backend of ['standin', 'python'] as const) {
       expect(since(log, t0).some((x) => landing(x.url))).toBe(true);
       // AT-07: Mission C opens degraded, naming its missing source.
       await expect(page.getByTestId('dc-degraded')).toContainText('Stern wind speed', { timeout: SLOW });
-      await expect(page.getByTestId('client-state')).toHaveText('Degraded');
+      // While Mission C's models declare their outputs, the client discovers them again (FR-44): "Handshake", then
+      // "Degraded" again. Its models take longer in Python, so this waits for it (D-352).
+      await expect(page.getByTestId('client-state')).toHaveText('Degraded', { timeout: SLOW });
+      // Mission C at rest before switching: no result of it still being prepared, so no discovery of it is due or in
+      // flight. A handshake started for Mission C just before the switch is not one Mission A needs (D-352).
+      await expect(page.getByTestId('preparing')).toHaveCount(0, { timeout: SLOW });
+      await expect(page.getByTestId('client-state')).toHaveText('Degraded', { timeout: SLOW });
       await button.click();
       await expect(popup.locator(`[data-file="${C}"]`).getByTestId('degraded-mark')).toContainText('Stern wind speed');
       await expect(popup.locator(`[data-file="${A}"]`).getByTestId('degraded-mark')).toHaveCount(0);

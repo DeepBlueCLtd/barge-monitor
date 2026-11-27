@@ -186,11 +186,14 @@ export async function handshake(http: ClientHttp): Promise<Discovery> {
  */
 export async function fetchSchemas(http: ClientHttp, d: Discovery, list: DatastreamInfo[], parallel = true): Promise<void> {
   const one = async (x: DatastreamInfo) => {
-    const r = await http.request('GET', `datastreams/${x.id}/schema`, { obsFormat: 'application/swe+json' });
+    // Its schema, and its contents too, at once: a stream's title and schema may be known to a user who may not read
+    // its observations (D-351).
+    const [r, o] = await Promise.all([
+      http.request('GET', `datastreams/${x.id}/schema`, { obsFormat: 'application/swe+json' }),
+      http.request('GET', `datastreams/${x.id}/observations`, { f: 'application/swe+json', resultTime: 'latest' }),
+    ]);
     if (r.status === 403 || r.status === 404) return void d.refused.add(x.id);
     if (r.status !== 200) throw new HttpError(`datastreams/${x.id}/schema`, r.status);
-    // Its contents too: a stream's title and schema may be known to a user who may not read it (D-351).
-    const o = await http.request('GET', `datastreams/${x.id}/observations`, { f: 'application/swe+json', resultTime: 'latest' });
     if (o.status === 403 || o.status === 404) return void d.refused.add(x.id);
     if (o.status !== 200) throw new HttpError(`datastreams/${x.id}/observations`, o.status);
     d.schemas.set(x.id, fieldsOf(r.body));
