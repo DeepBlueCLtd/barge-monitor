@@ -1,42 +1,47 @@
 """Data cleanse: the core model that runs first (FR-34).
 
-It reads each sensor's raw records from the data server, removes readings the
-server's QC flags mark as suspect, failed or missing and readings that stand
-out from their neighbours by more than its ``spike_threshold`` setting, then
-smooths what is left over five seconds. It publishes one cleaned datastream
-per sensor. **Every other model reads these, not the raw datastreams** (AT-15).
+For each imported dataset it reads each sensor's ``weather__{ds}`` (and each analyser's ``co2__{ds}``),
+removes readings the QC flags mark as suspect, failed or missing and readings that stand out from
+their neighbours by more than its ``spike_threshold`` setting, then smooths what is left over five
+seconds. **Every other model reads its output, never the sensors' datastreams** (AT-15).
 
-Cleaned values lag the raw records by two seconds: a reading is judged only
-once both its neighbours have arrived.
+It publishes ``cleaned-<sensor>__{ds}``, and CO₂ only under its restricted subsystem
+(``cleaned-co2-<sensor>__{ds}``, FR-112), one **block** per window of an hour: each quantity's
+readings as a JSON array (D-280), so that a whole day is a few hundred observations, not a few
+hundred thousand. A removed reading is ``null`` in its block.
+
+Windows are whole hours aligned to the dataset's start (D-129); each reads two seconds either side,
+so its first and last readings have neighbours. Its outputs depend only on the dataset and its
+settings (AT-34).
 """
 from __future__ import annotations
 
 import numpy as np
 
-from csmodel import PRECIP, QUANTITIES, Model, category, measurement_fields, quantity, record, time_field
+from csmodel import QUANTITIES, SENSORS, URN, Model, block_fields, encode_block
 
-SENSORS = ("bow", "stern")
-LAG_S = 2.0
 SMOOTH = 5  # readings in the moving mean
+MARGIN = 2.0  # seconds read either side of a window, so its edge readings have neighbours
 
 
 def robust_noise(v: np.ndarray) -> float:
     d = np.diff(v[np.isfinite(v)])
     if len(d) < 10:
         return np.inf
-    return float(1.4826 * np.median(np.abs(d - np.median(d))) / np.sqrt(2)) + 1e-9
+    step = np.abs(d[d != 0])
+    floor = 0.5 * float(step.min()) if len(step) else 0.0  # readings written to a resolution (whole %, tenths)
+    return max(float(1.4826 * np.median(np.abs(d - np.median(d))) / np.sqrt(2)), floor) + 1e-9
 
 
-def clean(cols: dict, threshold: float) -> tuple[dict, int]:
-    """Cleaned columns and the number of readings removed."""
+def clean(cols: dict, names: list, threshold: float) -> tuple[dict, int]:
+    """Cleaned columns and the number of readings removed (QC flag other than 1, or a spike)."""
     out = {"t": cols["t"]}
     removed = 0
-    for p in QUANTITIES:
-        if p not in cols:
-            continue
+    for p in names:
         v = np.asarray(cols[p], dtype=float).copy()
-        flag = np.asarray(cols.get(f"{p}_qc", np.ones(len(v))), dtype=float)
-        bad = flag != 1.0
+        flags = cols.get(f"{p}_qc")
+        bad = (np.asarray([str(x) for x in flags], dtype=object) != "1") if flags is not None else ~np.isfinite(v)
+        bad = bad | ~np.isfinite(v)
         if len(v) >= 3 and p != "apparent_wind_direction":
             mid = np.full(len(v), np.nan)
             mid[1:-1] = 0.5 * (v[:-2] + v[2:])
@@ -54,59 +59,64 @@ def clean(cols: dict, threshold: float) -> tuple[dict, int]:
             with np.errstate(invalid="ignore", divide="ignore"):
                 v = np.where(ok, (c[hi] - c[lo]) / np.maximum(n[hi] - n[lo], 1), np.nan)
         out[p] = np.round(v, 3)
-    if "precipitation_type" in cols:
-        out["precipitation_type"] = np.asarray(cols["precipitation_type"], dtype=object)
     return out, removed
 
 
 class DataCleanse(Model):
     id = "data-cleanse"
     label = "Data cleanse"
-    description = "Core model, runs first: flags and removes noise before any other model sees the data."
-    interval = 10.0
-    catch_up_margin = 30.0  # the models that read its output must be able to come within their own margin of now
-    catch_up_chunk = 4 * 3600.0  # history is read a few hours at a request, so the server stays responsive
+    description = "Core model, runs first: removes noise before any other model sees the data."
+    window = 3600.0
+    uses_co2 = True
+    control = ("settings", "controlstreams/data-cleanse-settings.json")
+    defaults = {"spike_threshold": 6.0}
+    runs_master = "runs-data-cleanse.json"
+    reads_cleanse = False  # it is the one that reads the sensors (AT-15)
 
     def __init__(self):
-        self.settings = {"spike_threshold": 6.0}
-        self.raw = {}
-        self.out = {}
+        super().__init__()
+        self.src: dict = {}  # dataset -> {source: (key, fields, output key)}
 
-    async def setup(self, api):
-        await super().setup(api)
-        fields = [time_field()] + measurement_fields() + [category("precipitation_type", "Precipitation", PRECIP)]
+    async def outputs(self, api, ds):
+        d = ds["id"]
+        src = {}
         for s in SENSORS:
-            self.raw[s] = await api.find(f"urn:x-barge:sensor:{s}", "weather")
-            self.out[s] = await api.create_datastream(self.system, {
-                "name": f"Cleaned {s} record", "outputName": f"cleaned-{s}",
-                "schema": record(f"Cleaned {s} record", fields)})
-        self.control_key = await api.create_controlstream(self.system, {
-            "name": "Data cleanse settings", "inputName": "settings",
-            "schema": record("Data cleanse settings", [
-                quantity("spike_threshold", "Spike threshold, in multiples of the local noise", "1", lo=1, hi=10)])})
+            k = await api.find(f"{URN}sensor:{s}", f"weather__{d}")
+            if k is None:
+                return False
+            names = [n for n in (await api.schema(k)) if n in QUANTITIES]
+            out = await api.create_datastream(self.system, {
+                "name": f"Cleaned {s} record · {d}", "outputName": f"cleaned-{s}__{d}",
+                "schema": {"type": "DataRecord", "name": "record", "label": f"Cleaned {s} record",
+                           "fields": block_fields(names)}})
+            src[s] = (k, names, out)
+        for s in SENSORS:  # CO₂ only under the restricted subsystem (FR-112)
+            kc = await api.find(f"{URN}sensor:{s}:co2", f"co2__{d}")
+            if kc is None:
+                continue
+            out = await api.create_datastream(self.restricted, {
+                "name": f"Cleaned {s} CO₂ · {d}", "outputName": f"cleaned-co2-{s}__{d}",
+                "schema": {"type": "DataRecord", "name": "record", "label": f"Cleaned {s} CO₂",
+                           "fields": block_fields(["co2"])}})
+            src[f"co2-{s}"] = (kc, ["co2"], out)
+        self.src[d] = src
+        return True
 
-    async def on_command(self, api, cmd):
-        self.settings.update(cmd["parameters"])
-        return f"spike threshold {self.settings['spike_threshold']}"
-
-    async def step(self, api, t0, t1):
-        done = t1
-        for s in SENSORS:
-            cols = await api.read(self.raw[s], t0 - LAG_S, t1)
+    async def process(self, api, ds, t0, t1, run):
+        thr = float(run.settings["spike_threshold"])
+        for name, (key, names, out) in self.src[ds["id"]].items():
+            cols = await api.read(key, t0 - MARGIN, t1 + MARGIN - 0.001)
             t = cols["t"]
-            if len(t) < 3:
-                return t0
-            api.tap("scilibs", f"numpy: clean {len(t)} {s} readings",
-                    {"calls": ["numpy.diff", "numpy.median", "numpy.cumsum"], "readings": int(len(t)),
-                     "spike_threshold": self.settings["spike_threshold"]})
-            out, removed = clean(cols, float(self.settings["spike_threshold"]))
-            last = float(t[-1]) - LAG_S
-            keep = ((t > t0) if t0 > 0 else (t >= 0)) & (t <= last)
-            out = {k: np.asarray(v)[keep] for k, v in out.items()}
+            if not len(t):
+                continue
+            api.tap("scilibs", f"numpy: clean {len(t)} {name} readings",
+                    {"calls": ["numpy.diff", "numpy.median", "numpy.cumsum"], "readings": int(len(t)), "spike_threshold": thr})
+            cleaned, _ = clean(cols, names, thr)
+            keep = (t >= t0) & (t < t1)
+            block = {k: np.asarray(v)[keep] for k, v in cleaned.items()}
+            removed = int(sum(int(np.sum(~np.isfinite(block[n]))) for n in names))
             api.tap("models", f"numpy: {int(keep.sum())} cleaned, {removed} removed", {"rows": int(keep.sum()), "removed": removed})
-            await api.publish_many(self.out[s], out)
-            done = min(done, last)
-        return done
+            await api.publish(out, encode_block(t0, block, names, removed, run.id))
 
 
 MODEL = DataCleanse

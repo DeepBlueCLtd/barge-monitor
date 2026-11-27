@@ -5,6 +5,21 @@ import numpy as np
 
 from .truth import World
 
+_FOLDER_WORLD = None
+
+
+def folder_world() -> World:
+    """The ground truth of the data folder's datasets (4.7): the world it was generated from, by its seed (FR-15a).
+    Only the referee reads it."""
+    global _FOLDER_WORLD
+    if _FOLDER_WORLD is None:
+        from .datafolder import SEED
+        from .world import generate
+
+        _FOLDER_WORLD = World(generate(SEED))
+    return _FOLDER_WORLD
+
+
 PLACE_TOLERANCE_S = 120.0
 FRONT_MARGIN_S = 3600.0
 

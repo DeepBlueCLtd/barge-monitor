@@ -1,8 +1,10 @@
 /// <reference lib="webworker" />
 // The back-end worker (Python): Pyodide running the collection platform, the
-// logger store, the store adapter and the data server on FastAPI. It answers
-// requests the relay forwards, from the display client and from each model
-// worker alike (docs/v4-interfaces.md §7), and ticks the system.
+// logger store, the store adapter, the data server on FastAPI and its CSV
+// importer. It answers requests the relay forwards, from the display client and
+// from each model worker alike (docs/v4-interfaces.md §13), and ticks the system.
+// The importer reads the data folder through two functions this worker gives
+// it: the folder's listing (index.json) and each file (<file>.gz, decompressed).
 import { loadRuntime, Progress } from './common';
 
 declare const self: DedicatedWorkerGlobalScope;
@@ -42,17 +44,38 @@ async function loadHistory(historyUrl: string | null, seed: number): Promise<boo
   return true;
 }
 
-async function start(pyodideUrl: string, pyZipUrl: string, seed: number, pregenDays: number | null, historyUrl: string | null) {
+/** The data folder, read for the importer (FR-15, FR-17a): its listing, and each CSV, decompressed here. */
+function folderReaders(folderUrl: string) {
+  const root = folderUrl.endsWith('/') ? folderUrl : folderUrl + '/';
+  return {
+    index: async () => {
+      const r = await fetch(root + 'index.json', { cache: 'no-cache', signal: AbortSignal.timeout(30_000) });
+      if (!r.ok) throw new Error(`the data folder has no listing (HTTP ${r.status})`);
+      return r.text();
+    },
+    file: async (name: string) => {
+      const r = await fetch(root + encodeURIComponent(name) + '.gz', { cache: 'no-cache', signal: AbortSignal.timeout(120_000) });
+      if (!r.ok || !r.body) throw new Error(`${name}: HTTP ${r.status}`);
+      return new Uint8Array(await new Response(r.body.pipeThrough(new DecompressionStream('gzip'))).arrayBuffer());
+    },
+  };
+}
+
+async function start(pyodideUrl: string, pyZipUrl: string, seed: number, pregenDays: number | null, historyUrl: string | null,
+  folderUrl: string | null) {
   py = await loadRuntime(pyodideUrl, pyZipUrl, ['numpy', 'fastapi', 'jsonschema'], post);
   const prebuilt = await loadHistory(historyUrl, seed).catch((e) => { console.warn(e); return false; });
   if (prebuilt) pregenDays = historyDays;
   if (!prebuilt) post({ stage: 'pregen', detail: 'no pre-built history for this seed: generating its history here', pct: 10 });
   py.globals.set('_progress', (f: number) => post({ stage: 'pregen', detail: `generating history: ${Math.round(f * 100)}%`, pct: 10 + Math.round(85 * f) }));
+  const folder = folderUrl ? folderReaders(folderUrl) : null;
+  py.globals.set('_fetch_index', folder ? folder.index : null);
+  py.globals.set('_fetch_file', folder ? folder.file : null);
   py.runPython(`
 from barge.bridge import Bridge
 import json
 _h = {"manifest": json.loads(_manifest_json), "files": _hist} if ${prebuilt ? 'True' : 'False'} else None
-bridge = Bridge(${seed}, progress=_progress${pregenDays == null ? '' : `, pregen_days=${pregenDays}`}, history=_h)
+bridge = Bridge(${seed}, progress=_progress${pregenDays == null ? '' : `, pregen_days=${pregenDays}`}, history=_h, fetch_index=_fetch_index, fetch_file=_fetch_file)
 del _h
 _hist = None
 `);
@@ -68,6 +91,15 @@ _hist = None
       console.error(e);
     }
   }, 100);
+  // The server answers once its index is rebuilt and the importer has started: Mission A is imported silently
+  // first, at this first start only (FR-15). The steps are named while that happens (§13.7).
+  for (;;) {
+    const phase = String(bridge.startup_phase());
+    if (phase === 'ready') break;
+    if (phase === 'index') post({ stage: 'index', detail: 'the data server: indexing the logger store', pct: 92 });
+    else if (phase === 'import') post({ stage: 'import', detail: 'the CSV importer: listing the data folder and importing Mission A', pct: 95 });
+    await new Promise((r) => setTimeout(r, 100));
+  }
   post({ stage: 'ready', detail: 'running', pct: 100 });
   queue.splice(0).forEach((f) => f());
 }
@@ -121,7 +153,7 @@ async function serve(req: any, reply: MessagePort) {
 
 self.onmessage = (e: MessageEvent) => {
   const d = e.data;
-  if (d.type === 'start') start(d.pyodideUrl, d.pyZipUrl, d.seed, d.pregenDays ?? null, d.historyUrl ?? null).catch((err) => post({ stage: 'error', detail: String(err), pct: 0 }));
+  if (d.type === 'start') start(d.pyodideUrl, d.pyZipUrl, d.seed, d.pregenDays ?? null, d.historyUrl ?? null, d.folderUrl ?? null).catch((err) => post({ stage: 'error', detail: String(err), pct: 0 }));
   else if (d.type === 'connect') {
     const port: MessagePort = e.ports[0];
     port.onmessage = (m) => serve(m.data, m.ports[0]);

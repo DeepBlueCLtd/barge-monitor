@@ -1,9 +1,11 @@
 """Acceptance tests that run in CPython (SRD §14). Browser halves are in web/e2e.
 
-These are the Version 4.1 acceptance tests, kept while the 4.1 world, logger and models run, on a
-server that now behaves as a configured stock OpenSensorHub (4.7, plan Phase 4): every request
-carries credentials, observations are asked for with ``f=application/swe+json``, identifiers are
-opaque, there is no ``503`` and no instance identifier, and commands are pushed to the models."""
+These are the Version 4.1 acceptance tests, kept while the 4.1 world and logger run, on a server that
+now behaves as a configured stock OpenSensorHub (4.7, plan Phase 4): every request carries credentials,
+observations are asked for with ``f=application/swe+json``, identifiers are opaque, there is no ``503``
+and no instance identifier, and commands are pushed to the models. The models are 4.7's (plan Phase 6):
+they process each imported dataset, so the tests that need their outputs run on the data folder, and
+``test_models.py`` has the models' own."""
 import time
 
 import numpy as np
@@ -14,13 +16,6 @@ from barge.api import ServerUnavailable
 from barge.server import iso, parse_iso
 from tests.helpers import Rig
 
-CLUSTERING = {"algorithm": "B", "fields": "air_temperature,apparent_wind_speed", "period": "PT1M", "clusters": 4,
-              "sensitivity": 5}  # every parameter, on every command (§9.1)
-
-
-@pytest.fixture(scope="module")
-def rig():
-    return Rig(seed=12, days=3)
 
 
 def ids(r):
@@ -81,7 +76,6 @@ def test_at03_a_second_store_format_changes_the_adapter_only():
     swe = {"f": "application/swe+json"}
     for path, params in ((f"/datastreams/{d['id']}/observations", {"limit": "5000", **swe}),
                          (f"/datastreams/{second.ds('stern', 'weather')['id']}/observations", {"resultTime": "latest", **swe}),
-                         (f"/datastreams/{second.ds('summaries', 'summary-1min-bow')['id']}/observations", {"limit": "500"}),
                          ("/datastreams", {"limit": "100"}), (f"/systems/{second.sid('models')}/subsystems", None)):
         assert second.get(path, params)[2].content == first.get(path, params)[2].content, path
     second.rt.restart_server(); second.ready()  # the index is rebuilt from the second store, with identical results
@@ -90,37 +84,9 @@ def test_at03_a_second_store_format_changes_the_adapter_only():
         first.get(f"/datastreams/{d['id']}/observations", p)[2].content
 
 
-def test_at13_a_new_model_registers_itself_and_is_served_by_schema_type():
-    """The example for an empty slot, run as any model runs: it creates its own system and datastream with
-    ordinary HTTP requests, under its own service account, and discovery then offers its output with no
-    change to the server."""
-    r = Rig(seed=14, days=0.2)
-    import example_new_model  # backend/models is on the path once the in-process models are loaded
-    before = {d["id"] for d in r.get("/datastreams", {"limit": "100"})[1]["items"]}
-    runner = r.rt.local.add(example_new_model.MODEL())
-    for _ in range(20):
-        r.advance(60)
-        if runner.phase == "live":
-            break
-    assert runner.phase == "live", runner.detail
-    subs = r.get(f"/systems/{r.sid('models')}/subsystems", {"f": "application/sml+json"})[1]["items"]
-    assert "urn:x-barge:process:new-model-1" in {s["uniqueId"] for s in subs}
-    d = r.ds("new-model-1", "wind-chill")
-    assert d["id"] not in before
-    fields = r.get(f"/datastreams/{d['id']}/schema", {"obsFormat": "application/swe+json"})[1]["recordSchema"]["fields"]
-    assert [(f["name"], f["type"]) for f in fields] == [("time", "Time"), ("wind_chill", "Quantity")]
-    obs = r.obs(d["id"], {"limit": "5"})
-    assert len(obs) == 5 and all(isinstance(o["wind_chill"], float) for o in obs)
-    r.rt.tap.drain()
-    for _ in range(18):
-        r.advance(10)  # now live: its traffic is drawn
-    made = [m for m in r.rt.tap.drain() if m.get("model") == "new-model-1" and m["src"] == "models"]
-    assert made and all(m["dst"] in ("server", "scilibs") for m in made)  # HTTP and the libraries: no other way in
-
-
 def test_at04_declared_queries_meet_budget_and_rebuild_identically():
-    """AT-04 at one week: CI loads a week of history (decision D-37); four weeks is published. The models
-    catch up only their backlog (D-251), so the hourly summary holds what that backlog gives."""
+    """AT-04 at one week of the logger's history: CI loads a week (decision D-37). Summaries are per dataset in
+    4.7: their budget is checked on a dataset (``test_import.py``, ``test_models.py``)."""
     r = Rig(seed=14, days=7)
     d = {s: r.ds(s, "weather")["id"] for s in ("bow", "stern")}
     now = r.clock.now()
@@ -128,19 +94,15 @@ def test_at04_declared_queries_meet_budget_and_rebuild_identically():
     t0 = time.perf_counter()
     last = {s: r.get(f"/datastreams/{d[s]}/observations", hour)[2].content for s in d}
     assert (time.perf_counter() - t0) * 1000 < C.QUERY_BUDGET_MS["last-hour-each-sensor"]
-    t0 = time.perf_counter()
-    summary = r.ds("summaries", "summary-1h-bow")["id"]
-    obs = r.obs(summary, {"phenomenonTime": f"{iso(now - 28 * 86400)}/..", "limit": "1000"})
-    assert (time.perf_counter() - t0) * 1000 < C.QUERY_BUDGET_MS["one-field-four-weeks-summary"]
-    assert isinstance(obs, list)
     r.rt.restart_server(); r.ready()  # the index is dropped and rebuilt from the store
     d2 = {s: r.ds(s, "weather")["id"] for s in ("bow", "stern")}
     again = {s: r.get(f"/datastreams/{d2[s]}/observations", hour)[2].content for s in d}
     assert again == last
 
 
-def test_at07_server_side_profile_claim_is_honest_unless_misconfigured():
-    r = Rig(seed=4, days=0.2)
+def test_at07_server_side_profile_claim_is_honest_unless_misconfigured(data_folder):
+    """The 4.7 template's essentials are per dataset: met for the claim by some dataset (D-301)."""
+    r = Rig(seed=4, days=0.2, folder=data_folder)
     conf = lambda: r.get("/conformance")[1]["conformsTo"]
     pid = r.get("/profile.json")[1]["id"]
     assert pid in conf()
@@ -172,7 +134,7 @@ def test_at10_restart_server_answers_nothing_while_starting_and_no_records_lost(
     obs = r.obs(d2["id"], {"phenomenonTime": "2031-04-07T11:50:00Z/..", "limit": "100000"})
     t = np.array([parse_iso(o["time"]) for o in obs])
     assert np.all(np.diff(t) == 1.0) and t.max() >= 12 * 3600 + 110
-    assert r.ds("analysis", "runs")
+    assert r.sid("analysis")  # the models registered again
 
 
 def test_at11_server_down_is_no_answer_store_and_models_carry_on():
@@ -203,8 +165,9 @@ def test_at11_server_down_is_no_answer_store_and_models_carry_on():
     assert st == 401  # it answers again: without credentials, 401
 
 
-def test_at12_field_toggles_apply_only_at_next_start_and_restore_history():
-    r = Rig(seed=11, days=0.5)
+def test_at12_field_toggles_apply_only_at_next_start_and_restore_history(data_folder):
+    r = Rig(seed=11, days=0.5, folder=data_folder)
+    a = r.dataset("MISSION_A")
     schema = lambda dsid: [f["name"] for f in r.get(f"/datastreams/{dsid}/schema", {"obsFormat": "application/swe+json"})[1]["recordSchema"]["fields"]]
     before = ids(r)
     r.rt.set_field("relative_humidity", False)
@@ -216,11 +179,11 @@ def test_at12_field_toggles_apply_only_at_next_start_and_restore_history():
     after = ids(r)
     assert after["weather@bow"] != before["weather@bow"]  # a new schema, a new identifier
     assert "relative_humidity" not in schema(after["weather@bow"])
-    assert "relative_humidity" not in schema(after["summary-1min-bow@summaries"])
-    derived = schema(after["derived-1min@summaries"])
+    assert "relative_humidity" not in schema(after[f"summary-1min-bow__{a}@summaries"])  # every datastream's (FR-50)
+    derived = schema(after[f"derived-1min__{a}@summaries"])
     assert "dew_point" not in derived  # its inputs are off (FR-52)
     assert "pressure_tendency_3h" in derived and "bow_minus_stern" in derived
-    assert "readings_removed" in schema(after["summary-1h-bow@summaries"])
+    assert "readings_removed" in schema(after[f"summary-1h-bow__{a}@summaries"])
     assert "precipitation_type" in schema(after["weather@bow"])
     r.rt.set_field("relative_humidity", True)
     for x in ("precipitation_type", "pressure_tendency_3h", "readings_removed"):
@@ -232,73 +195,18 @@ def test_at12_field_toggles_apply_only_at_next_start_and_restore_history():
     assert obs[0]["time"] == "2031-04-07T00:00:00Z" and "relative_humidity" in obs[0]  # full history restored
 
 
-def test_at14_a_failing_or_stuck_model_leaves_the_rest_running():
-    import csmodel
-
-    class Broken(csmodel.Model):
-        id, label, interval = "new-model-1", "New model 1", 10.0
-
-        async def step(self, api, t0, t1):
-            raise RuntimeError("a bug in a new model")
-
-    r = Rig(seed=15, days=0.1)
-    broken = r.rt.local.add(Broken())
-    r.advance(120)
-    assert broken.phase == "failed"
-    assert all(x.phase == "live" for x in r.rt.local.runners if x is not broken)
-    assert r.get("/")[0] == 200
-    assert "urn:x-barge:process:new-model-1" in r.systems()  # it registered first
-
-
-def test_at15_models_other_than_data_cleanse_read_only_its_output():
-    r = Rig(seed=16, days=0.2)
-    r.rt.tap.drain()
-    cs = cs_of(r, "analysis")
-    for period in ("PT1H", "P1D", "P7D"):
-        r.request("POST", f"/controlstreams/{cs}/commands",
-                  json={"parameters": {**CLUSTERING, "period": period, "fields": "air_temperature,dew_point"}})
-    for _ in range(70):
-        r.advance(10)
-    names = {i: u.rsplit(":", 1)[-1] for u, i in r.systems().items()}
-    owner = {d["id"]: names[d["system@id"]] for d in r.get("/datastreams", {"limit": "1000"})[1]["items"]}
-    reads = [m for m in r.rt.tap.drain() if m["src"] == "models" and m["dst"] == "server" and "/observations?" in m["summary"]
-             and " GET " in m["summary"]]
-    by = {}
-    for m in reads:
-        ds = m["summary"].split("/datastreams/")[1].split("/")[0]
-        by.setdefault(m["model"], set()).add(owner[ds])
-    assert by["data-cleanse"] == {"bow", "stern"}
-    assert by["summaries"] == {"data-cleanse"}
-    assert by["analysis"] <= {"data-cleanse", "summaries"} and by["analysis"]
-
-
-def test_at16_change_detection_recovers_the_manifest(rig):
-    """The hour-long half of the 4.1 AT-16. Clustering a week against air masses needs the whole history
-    processed, which the bounded backlog does not give (D-251): plan Phase 6 checks it on a dataset."""
-    cs = cs_of(rig, "analysis")
-    runs = rig.ds("analysis", "runs")["id"]
-    st = rig.request("POST", f"/controlstreams/{cs}/commands",
-                     json={"parameters": {"period": "PT1H", "fields": "air_temperature,relative_humidity,water_temperature",
-                                          "algorithm": "A", "clusters": 4, "sensitivity": 6}}).status_code
-    assert st == 200  # pushed to a subscriber, answered after the hold (§9.1)
-    rig.advance(2)  # the command was pushed: the model takes it at once
-    hour = rig.obs(runs, {"resultTime": "latest"})[0]
-    assert hour["period"] == "PT1H" and hour["scored_against"] == "reach kinds"
-    assert hour["score_changes"] == "NaN" or hour["score_changes"] >= 0.5, hour
-    changes = rig.obs(rig.ds("analysis", "changes")["id"], {"limit": "100000"})
-    assert all(c["run_id"].startswith("run-") for c in changes)  # appended, keyed by run, never replaced (FR-28a)
-
-
-def test_at18_capture_changes_nothing_and_every_busy_boundary_is_tapped():
+def test_at18_capture_changes_nothing_and_every_busy_boundary_is_tapped(data_folder):
     bodies = []
     for capture in (True, False):
-        r = Rig(seed=9, days=0.3, capture=capture)
+        r = Rig(seed=9, days=0.3, capture=capture, folder=data_folder)
+        a = r.dataset("MISSION_A")
         for _ in range(9):
             r.advance(10)
         out = [r.get(f"/datastreams/{r.ds('bow', 'weather')['id']}/observations", {"limit": "50"})[2].content,
-               r.get(f"/datastreams/{r.ds('summaries', 'summary-1min-bow')['id']}/observations", {"limit": "50"})[2].content,
+               r.get(f"/datastreams/{r.ds('summaries', f'summary-1min-bow__{a}')['id']}/observations",
+                     {"limit": "50", "f": "application/swe+json"})[2].content,
                bytes(r.rt.logger.read(r.rt.logger.list_files()[0][0]))]
-        r.request("POST", f"/controlstreams/{cs_of(r, 'analysis')}/commands", json={"parameters": {**CLUSTERING, "algorithm": "A"}})
+        r.request("POST", f"/controlstreams/{cs_of(r, 'data-cleanse')}/commands", json={"parameters": {"spike_threshold": 5}})
         r.advance(2)
         bodies.append(out)
         if capture:

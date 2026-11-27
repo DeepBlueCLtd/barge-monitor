@@ -5,8 +5,9 @@ Like OpenSensorHub's database it outlives a server restart (decision D-11). Iden
 clients find everything by uniqueId and outputName (docs/v4-interfaces.md §6, §9.1).
 
 A datastream is either ``stored`` (its observations are kept here, as columns) or ``sensor``
-(its observations are read from the logger store through the store adapter, as in 4.1, until the
-CSV importer of plan Phase 5 replaces the logger). Columns: numbers as float arrays (NaN for a
+(its observations are read from the 4.1 logger store through the store adapter, for the 4.1 display
+client and models, until plans Phases 6 and 7). The CSV importer writes its datasets **in bulk** into
+stored datastreams (``append_cols``, FR-20a). Columns: numbers as float arrays (NaN for a
 missing value), everything else as object arrays. Each observation also has an insertion
 sequence: ``resultTime=latest`` is the last one inserted.
 
@@ -16,7 +17,6 @@ Each resource carries its ``owner`` (the account that created it), for the permi
 from __future__ import annotations
 
 import asyncio
-import itertools
 
 import numpy as np
 
@@ -63,6 +63,30 @@ class Series:
 
     def append_row(self, t: float, values: dict, seq: int) -> None:
         self._rows.append((t, seq, values))
+
+    def append_cols(self, t: np.ndarray, cols: dict, seq: np.ndarray) -> None:
+        """Many observations at once, as columns: the importer's bulk write (FR-20a)."""
+        self._flush()
+        t = np.asarray(t, dtype=float)
+        if not len(t):
+            return
+        prev = self.t[-1] if len(self.t) else -np.inf
+        self.t = np.concatenate([self.t, t])
+        self.seq = np.concatenate([self.seq, np.asarray(seq, dtype=np.int64)])
+        for n, ty in self.types.items():
+            v = cols.get(n)
+            if ty in NUMERIC or ty == "Time":
+                col = np.full(len(t), np.nan) if v is None else np.asarray(v, dtype=float)
+            else:
+                col = np.empty(len(t), dtype=object)
+                if v is not None:
+                    col[:] = v
+            self.cols[n] = np.concatenate([self.cols[n], col])
+        if t[0] < prev or np.any(np.diff(t) < 0):
+            order = np.argsort(self.t, kind="stable")
+            self.t, self.seq = self.t[order], self.seq[order]
+            for n in self.cols:
+                self.cols[n] = self.cols[n][order]
 
     def _flush(self):
         if not self._rows:
@@ -112,16 +136,17 @@ def _same_schema(a: dict, b: dict) -> bool:
 
 
 class Store:
-    """Created resources. Everything is kept across restarts."""
+    """Created resources. Everything is kept across restarts; only Reset instance deletes the whole store
+    (FR-50a), and then a new one keeps counting identifiers, so that none is reused for something else."""
 
-    def __init__(self):
-        self.ids = Ids()
+    def __init__(self, ids: Ids | None = None):
+        self.ids = ids or Ids()
         self.systems: dict[str, dict] = {}
         self.datastreams: dict[str, dict] = {}
         self.controlstreams: dict[str, dict] = {}
         self.commands: dict[str, dict] = {}
         self.status_reports: dict[str, list] = {}  # control stream id -> reports
-        self.seq = itertools.count(1)
+        self._seq = 0
 
     # --- systems ------------------------------------------------------------------
     def system_by_uid(self, uid: str) -> dict | None:
@@ -199,7 +224,15 @@ class Store:
 
     # --- observations ------------------------------------------------------------------
     def append_row(self, d: dict, t: float, values: dict) -> None:
-        d["series"].append_row(t, values, next(self.seq))
+        self._seq += 1
+        d["series"].append_row(t, values, self._seq)
+
+    def append_cols(self, d: dict, t, cols: dict) -> None:
+        """Rows in bulk, inside the server (FR-20a): the CSV importer's write."""
+        n = len(t)
+        seq = np.arange(self._seq + 1, self._seq + 1 + n, dtype=np.int64)
+        self._seq += n
+        d["series"].append_cols(t, cols, seq)
 
 
 class Subscription:

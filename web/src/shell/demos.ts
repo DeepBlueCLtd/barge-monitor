@@ -100,9 +100,8 @@ export function startDemo(demo: Demo) {
 export function takeStep() {
   const a = activeDemo.value;
   if (!a || a.done >= a.demo.steps.length) return;
-  // The display client is where every one of these shows; nothing moves unless the clock runs.
+  // The display client is where every one of these shows.
   selectComponent('client');
-  runtime.send('play');
   a.demo.steps[a.done].run();
   activeDemo.set({ demo: a.demo, done: a.done + 1 });
 }

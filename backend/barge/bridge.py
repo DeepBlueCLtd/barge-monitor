@@ -18,9 +18,11 @@ is no other interface. Each model only tells the shell its phase.
 from __future__ import annotations
 
 import json
+import sys
 
 from . import asgi
 from .api import create_app
+from .folder import FetchFolder
 from .runtime import Runtime
 
 
@@ -42,10 +44,21 @@ def _none(x):
 
 
 class Bridge:
-    def __init__(self, seed: int, progress=None, pregen_days: float | None = None, history: dict | None = None):
+    def __init__(self, seed: int, progress=None, pregen_days: float | None = None, history: dict | None = None,
+                 fetch_index=None, fetch_file=None):
+        """``fetch_index()`` and ``fetch_file(name)`` read the data folder in the browser (``folder.FetchFolder``):
+        the worker fetches ``index.json`` and each ``<file>.gz``, and decompresses them."""
         kw = {} if pregen_days is None else {"pregen_days": pregen_days}
-        self.rt = Runtime(seed=seed, progress=progress, history=history, **kw)
+        folder = FetchFolder(fetch_index, fetch_file) if _none(fetch_index) is not None else None
+        # In Pyodide the page's event loop runs the importer: its subscription and imports are tasks on it. In
+        # CPython (tests) the runtime keeps a loop of its own, run at each tick.
+        self.rt = Runtime(seed=seed, progress=progress, history=history, folder=folder,
+                          own_loop=sys.platform != "emscripten", **kw)
         self.app = create_app(self.rt)
+
+    def startup_phase(self) -> str:
+        """``index``, ``import`` (the importer starting, and the silent import of Mission A) or ``ready``."""
+        return self.rt.startup_phase()
 
     def set_model_phase(self, model: str, phase: str, detail: str, label: str) -> None:
         self.rt.set_phase(model, phase, detail, label)
@@ -78,6 +91,8 @@ class Bridge:
             rt.set_profile_lie(arg)
         elif action == "capture":
             rt.tap.enabled = bool(arg)
+        elif action == "reset-instance":
+            rt.reset_instance()
         elif action == "set-role":
             a = _py(arg)
             rt.set_role(a["user"], a["role"])

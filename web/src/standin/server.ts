@@ -1,12 +1,14 @@
 // The data server (C-04; server.py): one start of the stand-in for OpenSensorHub. An
 // instance is created at each server start: it freezes the field offering (FR-51) and
-// drops the store adapter's index so the adapter rebuilds it; while it does, the server
-// answers nothing (4.7, §9.1: no 503 and no instance identifier). The store of created
+// drops the store adapter's index so the adapter rebuilds it; then its modules start (the
+// CSV importer registers, lists the folder and, at the first start of a page load, imports
+// Mission A silently, FR-15). Until then the server answers nothing (4.7, §9.1: no 503 and
+// no instance identifier). The store of created
 // resources (resources.ts) outlives it, as OpenSensorHub's database does.
 //
-// The profile served is the one the 4.1 display client is built against; the 4.7
-// template (contracts/profile.json) is served from plan Phase 7 (D-252).
-import profileJson from '../../../contracts/interim/profile-v4.1.json';
+// The profile served is the 4.7 template (contracts/profile.json, FR-40a); the interim 4.1
+// profile of D-252 is retired with the 4.1 display client (D-301).
+import profileJson from '../../../contracts/profile.json';
 import { USERS } from './accounts';
 import { StoreAdapter } from './adapter';
 import { SENSORS, SOSA, URN } from './constants';
@@ -30,7 +32,7 @@ export const QC_SPIKE: Record<string, number> = {
 
 export interface Profile {
   id: string;
-  essentials: { id: string; system: string; datastream: string; field: string; type: string; uom?: string | null }[];
+  essentials: { id: string; system: string; datastream: string; field: string; type: string; uom?: string | null; kind?: string }[];
   [k: string]: unknown;
 }
 export const PROFILE = profileJson as unknown as Profile;
@@ -67,6 +69,11 @@ function capitalize(s: string) {
 export class Server {
   readonly offering: Offering;
   readonly adapter: StoreAdapter;
+  /** The adapter's index is rebuilt. */
+  indexed = false;
+  /** Its modules (the CSV importer) are starting. */
+  starting = false;
+  /** Answering requests: once indexed and its modules have started. */
   ready = false;
   readonly store: Store;
   readonly lieAboutProfile: boolean;
@@ -91,7 +98,7 @@ export class Server {
   /**
    * What OpenSensorHub's configuration creates at start (server._configure; interfaces §6): the platform,
    * its sensors and their CO₂ analysers (restricted), Models, and a workspace per user. Each sensor's
-   * `weather` datastream is read from the logger store until the CSV importer (plan Phase 5); its schema
+   * `weather` datastream is read from the 4.1 logger store, for the 4.1 display client and models (D-271); its schema
    * is this start's offering, so a new offering is a new datastream (FR-51).
    */
   private configure(): void {
@@ -113,10 +120,14 @@ export class Server {
   }
 
   // --- start-up: the index is rebuilt; meanwhile the server answers nothing (§9.1) -----------------------
+  /** One step of rebuilding the index; true once it is rebuilt. The runtime then starts the modules. */
   indexStep(): boolean {
-    const done = this.adapter.indexStep();
-    if (done) this.ready = true;
-    return done;
+    if (!this.indexed) this.indexed = this.adapter.indexStep();
+    return this.indexed;
+  }
+
+  phase(): 'index' | 'import' | 'ready' {
+    return this.ready ? 'ready' : this.indexed ? 'import' : 'index';
   }
 
   progress(): { indexed: number; stored: number } {
@@ -142,14 +153,34 @@ export class Server {
   satisfiesProfile(): { id: string; reason: string }[] {
     const problems: { id: string; reason: string }[] = [];
     for (const e of this.profile.essentials) {
-      const ds = this.store.datastream(e.system, e.datastream);
-      const rec = ds && this.served(ds) ? this.visible(ds.schema) : null;
-      const fld = rec?.fields.find((f) => f.name === e.field);
-      if (!fld) problems.push({ id: e.id, reason: 'missing' });
-      else if (fld.type !== e.type) problems.push({ id: e.id, reason: 'wrong type' });
-      else if ((fld.uom?.code ?? null) !== (e.uom ?? null)) problems.push({ id: e.id, reason: 'wrong unit' });
+      if (e.kind === 'controlstream') {
+        if (!this.store.controlstream(e.system, e.datastream)) problems.push({ id: e.id, reason: 'missing' });
+        continue;
+      }
+      let found = this.perDataset(e.system, e.datastream);
+      if (!found) {
+        const ds = this.store.datastream(e.system, e.datastream);
+        found = ds && this.served(ds) ? [ds] : [];
+      }
+      const reasons = found.map((ds) => {
+        const fld = this.visible(ds.schema).fields.find((f) => f.name === e.field);
+        return !fld ? 'missing' : fld.type !== e.type ? 'wrong type' : (fld.uom?.code ?? null) !== (e.uom ?? null) ? 'wrong unit' : '';
+      });
+      if (!reasons.includes('')) problems.push({ id: e.id, reason: reasons[reasons.length - 1] ?? 'missing' });
     }
     return problems;
+  }
+
+  /**
+   * A template essential (`weather__{dataset}`, FR-40a) is met for the claim when some dataset's datastream carries it
+   * (D-301): the client checks each dataset when it opens it, and a dataset missing one is degraded (FR-45), not the server.
+   */
+  private perDataset(systemUid: string, template: string): DatastreamRec[] | null {
+    if (!template.includes('{dataset}')) return null;
+    const s = this.store.systemByUid(systemUid);
+    if (!s) return null;
+    const prefix = template.replace('{dataset}', '');
+    return [...this.store.datastreams.values()].filter((d) => d.system === s.id && d.outputName.startsWith(prefix) && this.served(d));
   }
 
   claimsProfile(): boolean {

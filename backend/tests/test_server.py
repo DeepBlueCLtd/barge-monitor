@@ -117,7 +117,8 @@ def test_at38_receivers_resubscribe_after_a_restart_and_starting_answers_nothing
         r.get("/")
     assert not r.rt.hub.subs  # every subscription ended with the server
     r.ready()
-    assert all(x.subscribed.is_set() for x in r.rt.local.runners) and len(r.rt.hub.subs) == 3
+    # The three core models and the CSV importer, each subscribed again (AT-38).
+    assert all(x.subscribed.is_set() for x in r.rt.local.runners) and r.rt.importer.subscribed and len(r.rt.hub.subs) == 4
     cs = cs_of(r, "summaries")
     resp = r.request("POST", f"/controlstreams/{cs}/commands", json={"parameters": {"tendency_hours": 2}})
     assert resp.status_code == 200  # a subscriber was there

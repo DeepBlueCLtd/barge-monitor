@@ -3,7 +3,7 @@
 // line has its own queue, so icons on one line travel one behind another,
 // and a message's next hop sets off when its previous hop arrives.
 import { HANDSHAKE_HOP_S, HOP_S } from '../config';
-import { simClock } from './clock';
+import { drawClock } from './drawclock';
 import type { ComponentId } from './components';
 import { LETTER_COLOURS } from './palette';
 import { Store } from './store';
@@ -13,7 +13,7 @@ export type Letter = 'Q' | 'D' | 'O' | 'K' | 'P' | 'H' | 'S' | 'L' | 'I';
 /** A captured message (docs/v4-interfaces.md §3), as the back end and the model workers post it. */
 export interface Captured {
   id?: number | string;
-  t: number; // simulated seconds since the simulation epoch
+  t: number; // when it was captured, on the back end's own clock (shown, never used for drawing)
   src: ComponentId;
   dst: ComponentId;
   letter: Letter;
@@ -28,8 +28,8 @@ export interface Captured {
 /** A message as the page holds it: a page-wide key and when it sets off on the flowchart. */
 export interface Message extends Captured {
   key: string;
-  start: number; // simulated seconds
-  dur: number; // simulated seconds on its line
+  start: number; // seconds on the drawing clock (drawclock.ts)
+  dur: number; // seconds on its line
 }
 
 /** SRD §5: the nine letters, what each is and the standard it meets (FR-16: internal ones say so). */
@@ -46,7 +46,7 @@ export const LETTERS: Record<Letter, { name: string; key: string; standard: stri
 };
 export const LETTER_ORDER: Letter[] = ['Q', 'D', 'O', 'K', 'P', 'H', 'S', 'L', 'I'];
 
-// Scheduling on the flowchart, in simulated seconds. If a line falls far
+// Scheduling on the flowchart, in real seconds on the drawing clock (D-302). If a line falls far
 // behind, spacing is relaxed rather than letting the drawing lag ever
 // further behind the system: every message is still drawn.
 const GAP_S = HOP_S * 0.34;
@@ -77,9 +77,9 @@ class MessageBus {
     return this.replyEnd.get(chain) ?? null;
   }
 
-  private schedule(m: Captured): number {
+  private schedule(m: Captured, at: number): number {
     const lane = `${m.src}>${m.dst}`;
-    let start = m.t;
+    let start = at;
     if (m.chain && this.chainEnd.has(m.chain)) start = Math.max(start, this.chainEnd.get(m.chain)!);
     // The handshake is drawn one hop after another, never queued behind other traffic: the
     // client itself waits for each reply to be drawn before it sends the next request.
@@ -100,7 +100,7 @@ class MessageBus {
       return own;
     }
     const queued = Math.max(start, free);
-    start = queued - m.t > MAX_LAG_S ? Math.max(start, m.t + MAX_LAG_S) : queued;
+    start = queued - at > MAX_LAG_S ? Math.max(start, at + MAX_LAG_S) : queued;
     this.laneFree.set(lane, Math.max(free, start + GAP_S));
     if (m.chain) this.chainEnd.set(m.chain, start + HOP_S);
     if (this.chainEnd.size > 5000) this.chainEnd.clear();
@@ -111,7 +111,9 @@ class MessageBus {
     if (!list?.length) return;
     // Within a chain, hops play in order; otherwise in order of capture.
     const ordered = [...list].sort((a, b) => a.t - b.t || (a.chain ?? '').localeCompare(b.chain ?? '') || (a.hop ?? 0) - (b.hop ?? 0));
-    const added: Message[] = ordered.map((m) => ({ ...m, key: `m${++seq}`, start: this.schedule(m), dur: isHandshakeMessage(m) ? HANDSHAKE_HOP_S : HOP_S }));
+    // Drawn from when it reaches the page (D-302): the back end's capture time is not a drawing time.
+    const at = drawClock.now();
+    const added: Message[] = ordered.map((m) => ({ ...m, key: `m${++seq}`, start: this.schedule(m, at), dur: isHandshakeMessage(m) ? HANDSHAKE_HOP_S : HOP_S }));
     const counts = { ...this.counts.value };
     for (const m of added) counts[`${m.src}>${m.dst}:${m.letter}`] = (counts[`${m.src}>${m.dst}:${m.letter}`] ?? 0) + 1;
     this.total += added.length;
@@ -122,9 +124,9 @@ class MessageBus {
     this.version.set(this.version.value + 1);
   }
 
-  /** Drop messages that have arrived. While paused nothing arrives: icons stay where they are, clickable (FR-77). */
+  /** Drop messages that have arrived. */
   private prune(list = this.live.value): Message[] {
-    const now = simClock.displayNow();
+    const now = drawClock.now();
     return list.filter((m) => m.start + m.dur > now);
   }
 
@@ -152,6 +154,13 @@ class MessageBus {
 }
 
 export const bus = new MessageBus();
+
+// Read-only, for the end-to-end tests (decision D-273): how many captured messages reached the shell, per
+// "src>dst:letter". Messages counted but not drawn (x-tap-quiet) never reach it, so a silent import adds nothing.
+(globalThis as { bargeCaptured?: () => Record<string, number> }).bargeCaptured = () => ({ ...bus.counts.value });
+// Read-only, for the end-to-end tests (AT-53, AT-55; D-306): the recent captured messages the shell holds, as drawn.
+(globalThis as { bargeMessages?: () => Captured[] }).bargeMessages = () => bus.find(() => true)
+  .map(({ src, dst, letter, summary, content, chain }) => ({ t: 0, src, dst, letter, summary, content, chain }));
 
 /** Chains started by a viewer's own action in the display client: their icons wear a gold ring. */
 export const userChains = new Set<string>();

@@ -6,11 +6,14 @@
 // serves the stand-in's HTTP interface at the root of the given port; the
 // server's internal endpoint (§9.2, D-223) is /api-internal beside it.
 //
-// Usage: node web/scripts/standin-server.mjs [--port N] [--seed N] [--history DIR] [--play] [--hold S]
+// Usage: node web/scripts/standin-server.mjs [--port N] [--seed N] [--history DIR] [--folder DIR] [--play] [--hold S]
 //   DIR holds seed-<n>/manifest.json and the gzipped logger files, as
 //   scripts/build_history.py writes them; by default
 //   .cache/history/<code hash>/days-<d>/ from web/public/py/history.json.
 //   --hold S: how long a command's POST is held, in seconds (§9.1; 5 by default).
+//   --folder DIR: the data folder the CSV importer reads (index.json and <file>.gz, as
+//   scripts/build_data_folder.py writes it); by default web/public/data/folder, when built.
+//   Each file is read when the importer asks for it, so a file changed there is seen on rescan.
 //
 // When ready it prints one line, `READY <port> <startup ms>`. Control actions
 // (docs/v4-interfaces.md §13.3) are read from stdin, one JSON object a line:
@@ -18,7 +21,7 @@
 // While the server is starting or down a request gets no answer: the socket is
 // closed, a network failure (§9.1). A push subscription (§9.2) is a chunked
 // response that stays open.
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { dirname, join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
@@ -43,6 +46,17 @@ if (!historyDir) {
   historyDir = join(root, '.cache', 'history', h.code_hash, `days-${h.days}`);
 }
 const seedDir = join(resolve(historyDir), `seed-${seed}`);
+const folderDir = resolve(arg('folder', join(root, 'web', 'public', 'data', 'folder')));
+// The folder as a directory: its listing, and each CSV, gzipped or plain (FR-17a: nothing here writes).
+const folder = existsSync(join(folderDir, 'index.json')) ? {
+  async list() {
+    return JSON.parse(readFileSync(join(folderDir, 'index.json'), 'utf8')).files;
+  },
+  async read(file) {
+    const gz = join(folderDir, `${file}.gz`);
+    return new Uint8Array(existsSync(gz) ? gunzipSync(readFileSync(gz)) : readFileSync(join(folderDir, file)));
+  },
+} : undefined;
 
 const t0 = performance.now();
 const bundle = await build({
@@ -55,7 +69,7 @@ const tBundle = performance.now();
 const manifest = JSON.parse(readFileSync(join(seedDir, 'manifest.json'), 'utf8'));
 const history = await mod.loadHistory(manifest, async (name) => new Uint8Array(gunzipSync(readFileSync(join(seedDir, `${name}.gz`)))));
 const tLoad = performance.now();
-const rt = await mod.createStandin(seed, history, () => performance.now() / 1000, undefined, hold === null ? undefined : Number(hold));
+const rt = await mod.createStandin(seed, history, () => performance.now() / 1000, undefined, hold === null ? undefined : Number(hold), folder);
 const tReady = performance.now();
 if (process.argv.includes('--play')) rt.control('play');
 

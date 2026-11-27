@@ -5,7 +5,7 @@
 // silently with the controls disabled. A disabled control says why: "Starting: <step>".
 import { Store } from './store';
 
-export type StepId = 'relay' | 'back end' | 'history' | 'server' | 'models';
+export type StepId = 'relay' | 'back end' | 'history' | 'server' | 'import' | 'models';
 export type StepState = 'pending' | 'active' | 'done' | 'failed';
 
 export interface Step {
@@ -38,6 +38,7 @@ export const STAGE_STEP: Record<string, StepId> = {
   pregen: 'history',
   store: 'history',
   index: 'server',
+  import: 'import',
   models: 'models',
 };
 
@@ -58,6 +59,7 @@ export class Startup {
       'back end': python ? 'loading the Python back end (Pyodide) in its worker' : 'starting the JavaScript stand-in in its worker',
       history: 'loading the logger store’s pre-calculated history',
       server: 'starting the data server and indexing the store',
+      import: 'the CSV importer: listing the data folder and importing Mission A, silently (FR-15)',
       models: 'starting each core model',
     };
     this.steps = new Store<Step[]>((Object.keys(what) as StepId[]).map((id) => ({ id, what: what[id], state: 'pending', detail: '', since: null })));

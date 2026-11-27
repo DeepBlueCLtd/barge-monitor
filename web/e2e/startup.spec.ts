@@ -6,7 +6,7 @@ import { SUB_DEMO } from './site';
 // part, AT-68). Every test serves the site under a pull request's published sub-path, as the
 // preview is, and starts from a fresh browser context, so no relay is installed unless the
 // test installs one. The default back end (the JavaScript stand-in) starts in seconds.
-const STEPS = ['relay', 'back end', 'history', 'server', 'models'];
+const STEPS = ['relay', 'back end', 'history', 'server', 'import', 'models'];
 const STARTED_MS = 30_000; // NFR-10's budget
 const STALL_SAYS_WITHIN_MS = 12_000; // NFR-10a: 10 s, plus a little for the page to load
 
@@ -36,6 +36,13 @@ const deployRelay = (body: string) => writeFileSync(SITE_SW, body);
 const restore = () => writeFileSync(SITE_SW, CURRENT_SW);
 test.afterEach(restore);
 
+test('the relay answers the version the page waits for (D-354)', () => {
+  const config = readFileSync(new URL('../src/config.ts', import.meta.url), 'utf8');
+  const version = /RELAY_VERSION = '([^']+)'/.exec(config)?.[1];
+  expect(version).toBeTruthy();
+  expect(CURRENT_SW).toContain(`const RELAY_VERSION = '${version}'`);
+});
+
 /** AT-67 ("says why"): every disabled top-bar control gives a non-empty reason, in its title and to assistive technology. */
 async function everyDisabledControlSaysWhy(page: Page): Promise<number> {
   const found = await page.getByTestId('controls').locator('button').evaluateAll((els) => els.map((e) => {
@@ -60,9 +67,12 @@ async function started(page: Page) {
   await expect(page.getByTestId('flowchart')).toBeVisible({ timeout: STARTED_MS });
   await expect(page.getByTestId('step-models')).toHaveCount(0); // the steps give way to the flowchart
   await expect(page.getByTestId('stall')).toHaveCount(0);
-  // The controls are enabled, and nothing has started playing (FR-125a).
-  expect(await everyDisabledControlSaysWhy(page)).toBe(0);
-  await expect(page.getByTestId('play')).toBeEnabled();
+  // Nothing has started playing; a control that cannot act yet says why (FR-125a). 4.7 (D-307): replay is the
+  // display client's own, so Play and the rates wait for a login, and say so (interfaces §13.7).
+  await everyDisabledControlSaysWhy(page);
+  await expect(page.getByTestId('restart-server')).toBeEnabled();
+  await expect(page.getByTestId('play')).toBeDisabled();
+  await expect(page.getByTestId('play')).toHaveAttribute('title', 'Log in to the display client first');
   await expect(page.getByTestId('play')).toHaveText(/Play/);
   await expect(page.getByTestId('sim-state')).toHaveText('Paused');
   // The relay answers for the system: a request under api/ reaches the back end (with the

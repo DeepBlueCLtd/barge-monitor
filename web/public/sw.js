@@ -17,9 +17,11 @@
  * Startup (docs/v4-interfaces.md §13.7, NFR-10a): a new relay takes over at once
  * (skipWaiting, then clients.claim). A page that loaded without a controller (a hard
  * reload, or a relay that was already active and so never activates again) asks with
- * a `claim` message, and the relay claims it.
+ * a `claim` message, and the relay claims it. A relay left waiting is asked to
+ * `skip-waiting`: its own skipWaiting at install does nothing if the older relay was
+ * still activating then.
  */
-const RELAY_VERSION = '4.7-server-1';
+const RELAY_VERSION = '4.7-server-2'; // web/src/config.ts RELAY_VERSION: change both together
 const TIMEOUT_MS = 120000;
 let port = null;
 let waiting = [];
@@ -30,6 +32,9 @@ self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
 self.addEventListener('message', (e) => {
   if (e.data && e.data.type === 'claim') {
     e.waitUntil(self.clients.claim());
+  } else if (e.data && e.data.type === 'skip-waiting') {
+    // Asked by the page: a skipWaiting at install is lost if the older relay was still activating.
+    e.waitUntil(self.skipWaiting());
   } else if (e.data && e.data.type === 'version') {
     if (e.source) e.source.postMessage({ type: 'relay-version', version: RELAY_VERSION });
   } else if (e.data && e.data.type === 'port') {
