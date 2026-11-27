@@ -241,7 +241,9 @@ for (const backend of ['standin', 'python'] as const) {
       for (const id of ROW_IDS) expect((await page.getByTestId(`row-${id}`).locator('td').nth(1).innerText()).trim()).not.toBe('');
       await expect(page.getByTestId('row-sub-permissions')).toContainText('Who may see and change what');
       await expect(page.getByTestId('written-either-way')).toHaveCount(0);
-      expect(await page.getByTestId('opening-panel').innerText()).not.toMatch(/written by us|adopted|OpenSensorHub covers/i);
+      // The table itself says nothing of what is written or adopted: there is no such column yet.
+      expect(await page.getByTestId('opening-table').innerText()).not.toMatch(/written by us|adopted|unchanged|OpenSensorHub/i);
+      await expect(page.getByTestId('tick')).toHaveCount(0);
       expect(await page.locator('body').innerText()).not.toMatch(GONE);
       await noGold();
       expect(await workers(page)).toBe(0);
