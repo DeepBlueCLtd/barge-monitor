@@ -199,11 +199,12 @@ def test_at56_at57_co2_is_restricted_and_refused_to_a_sender_without_emissions(r
     settle(rig, lambda: any(e["run_id"] == rid and e["status"] == "complete" for e in rows(rig, AN + ":restricted", f"runs__{a}")))
     assert not any(e["run_id"] == rid for e in rows(rig, AN, f"runs__{a}"))
     assert any(x["run_id"] == rid for x in rows(rig, AN + ":restricted", f"clusters__{a}"))
-    # AT-56: no datastream the friend may read carries a CO₂ value or name; the restricted ones answer 403.
+    # AT-56: no datastream whose contents the friend may read carries a CO₂ value or name; the restricted ones answer
+    # 403 to their observations (their titles and schemas may be known, D-351).
     for d in rig.get("/datastreams", {"limit": "1000"}, user="friend")[1]["items"]:
-        st, body, _ = rig.get(f"/datastreams/{d['id']}/schema", {"obsFormat": "application/swe+json"}, user="friend")
-        if st == 403:
+        if rig.get(f"/datastreams/{d['id']}/observations", {"f": "application/swe+json", "limit": "1"}, user="friend")[0] == 403:
             continue
+        st, body, _ = rig.get(f"/datastreams/{d['id']}/schema", {"obsFormat": "application/swe+json"}, user="friend")
         names = [f["name"] for f in body["recordSchema"]["fields"]]
         assert not any("co2" in n for n in names), (d["outputName"], names)
         assert "co2" not in d["outputName"], d["outputName"]

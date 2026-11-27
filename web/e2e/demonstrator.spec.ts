@@ -426,10 +426,12 @@ for (const backend of ['standin', 'python'] as const) {
       await page.getByTestId('favourites-button').click();
       expect(await monitorText(page)).not.toMatch(/CO₂|co2/i);
       await page.keyboard.press('Escape');
-      // AT-55: no CO₂ value reaches the client: every schema or observation it read without CO₂, or refused.
+      // AT-55: no CO₂ value reaches the client: every observation it read is without CO₂, or refused. A CO₂ schema
+      // may be read: a stream's title may be known, not its contents (D-351).
       expect(bodies.length).toBeGreaterThan(10);
-      expect(bodies.filter((b) => b.startsWith('200') && /co2/i.test(b)).map((b) => b.split('\n')[0])).toEqual([]);
-      expect(bodies.some((b) => b.startsWith('403'))).toBe(true); // it asked, and was refused: left out generically (FR-118)
+      const observations = bodies.filter((b) => /\/observations/.test(b.split('\n')[0]));
+      expect(observations.filter((b) => b.startsWith('200') && /co2/i.test(b)).map((b) => b.split('\n')[0])).toEqual([]);
+      expect(observations.some((b) => b.startsWith('403'))).toBe(true); // it asked, and was refused: left out generically (FR-118)
     });
 
     test(`the owner sees CO₂; a change of role takes effect at the next request, the favourite naming CO₂ greyed (AT-58, AT-59), ${backend}`, async ({ page }) => {

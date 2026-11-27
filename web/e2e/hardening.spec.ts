@@ -8,9 +8,9 @@ import { runSuiteInPyodide } from './suite-in-pyodide';
 
 // Phase 10, hardening (plan-v4.7 §3): Python in a real browser, in both back ends.
 //
-// * NFR-10: the startup budget, from navigation until every step is done and the flowchart is shown (the
-//   models included, NFR-05), from a cold cache, and the download size of a start and of the data folder,
-//   declared in src/config.ts and measured here for each back end (D-340).
+// * NFR-10: the startup budget, from navigation until every step is done, the last being each core model ready
+//   (registered and subscribed, NFR-05, D-350), from a cold cache and again on a reload; and the download size of a
+//   start and of the data folder; declared in src/budgets.ts and measured here for each back end (D-340).
 // * AT-02, Pyodide half: the server-neutral contract suite, run in Pyodide against each back end in the page
 //   (the CPython half is tests/test_contract_uvicorn.py; the stand-in in Node, tests/test_contract_standin.py).
 //
@@ -50,21 +50,17 @@ test.afterAll(async () => new Promise<void>((r) => server.close(() => r())));
 const MB = (n: number) => `${(n / 1e6).toFixed(1)} MB`;
 
 /**
- * Every core model live: registered, subscribed and done processing Mission A, which is when the startup step
- * "models" is done in this build (NFR-05). ms since navigation, in the page's own clock. On the way, when each core
- * model was first ready (registered and subscribed: processing or live) is noted too, for the record (D-340).
+ * When every core model is ready, registered and subscribed (processing or live): the end of startup, as the shell's
+ * step "models" ends (D-350); or, with `live`, when each is live, Mission A processed (for the record, not budgeted:
+ * the display client says "results being prepared" until then, FR-35b). ms since navigation, in the page's own clock.
  */
-async function modelsLive(page: Page, timeout: number): Promise<{ live: number; ready: number | null }> {
-  const h = await page.waitForFunction(() => {
-    const g = globalThis as any;
-    const ms = (g.bargeControlState?.()?.models ?? []) as { id: string; phase: string }[];
-    g.bargeReadyAt ??= {};
-    for (const m of ms) if ((m.phase === 'processing' || m.phase === 'live') && g.bargeReadyAt[m.id] == null) g.bargeReadyAt[m.id] = performance.now();
-    if (ms.filter((m) => m.phase === 'live').length !== 3) return false;
-    const r = Object.values(g.bargeReadyAt) as number[];
-    return { live: Math.round(performance.now()), ready: r.length === 3 ? Math.round(Math.max(...r)) : null };
-  }, null, { timeout, polling: 100 });
-  return (await h.jsonValue()) as { live: number; ready: number | null };
+async function modelsAt(page: Page, timeout: number, live = false): Promise<number> {
+  const h = await page.waitForFunction((live) => {
+    const ms = ((globalThis as any).bargeControlState?.()?.models ?? []) as { id: string; phase: string }[];
+    const ok = ms.filter((m) => m.phase === 'live' || (!live && m.phase === 'processing')).length === 3;
+    return ok ? Math.round(performance.now()) : false;
+  }, live, { timeout, polling: 100 });
+  return (await h.jsonValue()) as number;
 }
 
 /** Record, from the first instant, when each startup step is done and when the flowchart appears. */
@@ -86,7 +82,7 @@ async function watchSteps(page: Page) {
 for (const backend of ['standin', 'python'] as const) {
   const name = backend === 'python' ? 'Python in Pyodide' : 'JavaScript stand-in';
 
-  test(`NFR-10: a cold start completes within ${STARTUP_BUDGET_MS / 1000} s, models included, and downloads within its budget, ${backend}`, async ({ browser }) => {
+  test(`NFR-10: a cold start completes within ${STARTUP_BUDGET_MS / 1000} s, models ready, and downloads within its budget, ${backend}`, async ({ browser }) => {
     const context = await browser.newContext();
     const page = await context.newPage();
     await watchSteps(page);
@@ -95,14 +91,15 @@ for (const backend of ['standin', 'python'] as const) {
     await page.goto(`http://localhost:${COUNT_PORT}/demo/?backend=${backend}`);
     // Measured, then judged: the wait is twice the budget, so a miss is measured, not cut short.
     await expect(page.getByTestId('flowchart')).toBeVisible({ timeout: STARTUP_BUDGET_MS * 2 });
-    const { live: started, ready } = await modelsLive(page, STARTUP_BUDGET_MS * 2);
+    const started = await modelsAt(page, STARTUP_BUDGET_MS * 2);
     const wall = Date.now() - t0;
+    const live = await modelsAt(page, 300_000, true);
     const times = await page.evaluate(() => (globalThis as any).bargeStartupTimes as Record<string, number>);
     await page.waitForTimeout(2000); // let late fetches (a model's packages, say) finish before counting
     const bytes = [...served.values()].reduce((a, b) => a + b, 0);
     const folder = [...served].filter(([p]) => p.includes('/data/folder/')).reduce((a, [, b]) => a + b, 0);
     const top = [...served].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([p, b]) => `${MB(b)} ${p.replace(/^.*\//, '')}`);
-    console.log(`${name}: startup ${started} ms from navigation to every core model live, Mission A processed (${wall} ms by the test's clock; each core model ready, registered and subscribed, by ${ready} ms; steps done, ms: ${Object.entries(times).map(([k, v]) => `${k} ${Math.round(v)}`).join(', ')}); ` +
+    console.log(`${name}: startup ${started} ms from navigation to every core model ready, registered and subscribed (${wall} ms by the test's clock; every core model live, Mission A processed, at ${live} ms; steps done, ms: ${Object.entries(times).map(([k, v]) => `${k} ${Math.round(v)}`).join(', ')}); ` +
       `downloaded ${MB(bytes)} (data folder ${MB(folder)}); largest: ${top.join('; ')}`);
     expect(started, `${name}: startup took ${started} ms`).toBeLessThanOrEqual(STARTUP_BUDGET_MS);
     expect(bytes, `${name}: a start downloaded ${MB(bytes)}`).toBeLessThanOrEqual(DOWNLOAD_BUDGET_BYTES[backend]);
@@ -111,7 +108,7 @@ for (const backend of ['standin', 'python'] as const) {
     served.clear();
     await page.reload();
     await expect(page.getByTestId('flowchart')).toBeVisible({ timeout: STARTUP_BUDGET_MS * 2 });
-    await modelsLive(page, STARTUP_BUDGET_MS * 2);
+    await modelsAt(page, STARTUP_BUDGET_MS * 2);
     const again = Date.now() - t1;
     console.log(`${name}: reload ${again} ms, ${MB([...served.values()].reduce((a, b) => a + b, 0))} served`);
     expect(again).toBeLessThanOrEqual(STARTUP_BUDGET_MS);
@@ -124,7 +121,7 @@ for (const backend of ['standin', 'python'] as const) {
     const page = await context.newPage();
     await page.goto(`demo/?backend=${backend}`);
     await expect(page.getByTestId('flowchart')).toBeVisible({ timeout: STARTUP_BUDGET_MS });
-    await modelsLive(page, STARTUP_BUDGET_MS); // the models' resources exist, as in the CPython half (D-285)
+    await modelsAt(page, 300_000, true); // Mission A processed: the models' outputs exist, as in the CPython half (D-285)
     const t0 = Date.now();
     const results = await runSuiteInPyodide(page);
     console.log(`${name}: the suite ran in Pyodide in ${Date.now() - t0} ms`);

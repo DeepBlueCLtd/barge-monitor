@@ -280,7 +280,7 @@ export const DEMOS: Demo[] = [
         clientSession.restart();
         await loggedIn('friend');
       },
-      watch: 'The same build and the same dataset. The friend’s handshake is refused (403) each CO₂ schema, so no chip, view, Favourite or source names CO₂, and none of the client’s own messages carries a CO₂ value. Discovery still lists the CO₂ systems, as OpenSensorHub does for now. The flowchart still shows the models’ CO₂ traffic: it is a god’s-eye view.',
+      watch: 'The same build and the same dataset. The friend’s handshake may read each CO₂ stream’s title and schema, but is refused (403) its observations, so no chip, view, Favourite or source names CO₂, and none of the client’s own messages carries a CO₂ value. A stream’s title may be known, not its contents (D-351). The flowchart still shows the models’ CO₂ traffic: it is a god’s-eye view.',
     }],
   },
   {

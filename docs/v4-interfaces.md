@@ -429,17 +429,20 @@ configuration is not yet proven, §14 says so.
     an account create **subsystems under any system**, and lets any account read another
     user's workspace (S-AUTH). Both are open (§14); the stand-ins refuse them, as the
     configured server is expected to.
-- **A system the account may not read is listed, and refused (4.7, FR-93).** It appears in
-  `/systems`, `/systems?searchMembers=true`, `/systems/{id}/subsystems`, `/datastreams`,
-  `/systems/{id}/datastreams` and `/controlstreams`, as OpenSensorHub lists it. Reading it,
-  or anything under it (its datastreams' schemas, its observations, its control streams'
-  commands), answers **`403`**. The restricted systems are matched by unique id:
+- **A system the account may not read is listed and described, and its contents refused (4.7, FR-93;
+  D-351: a stream's title may be known, not its contents).** It appears in `/systems`,
+  `/systems?searchMembers=true`, `/systems/{id}/subsystems`, `/datastreams`,
+  `/systems/{id}/datastreams` and `/controlstreams`, as OpenSensorHub lists it, and the system, its
+  datastreams, their schemas, its control streams and their schemas can be read. Its **contents**
+  answer **`403`**: its datastreams' observations, and its control streams' commands (sent or listed)
+  and status. Another user's workspace is refused whole (its system answers `403` too). The restricted
+  systems are matched by unique id:
   - `urn:x-barge:sensor:*:co2`;
   - `urn:x-barge:process:*:restricted`;
   - other users' `urn:x-barge:workspace:*`.
 - **The display client offers only what it can read (FR-118).** At the handshake, a
-  datastream whose schema answers `403` is left out of the field list, like a datastream it
-  cannot use. It is not reported as missing, and it never makes a dataset degraded. The
+  datastream whose schema or whose observations (`resultTime=latest`) answer `403` is left out
+  of the field list, like a datastream it cannot use (D-351). It is not reported as missing, and it never makes a dataset degraded. The
   client has no list of restricted ids.
 - **Role changes** take effect **on the next request** (FR-116, D-151): the server reads
   the user-to-role assignment on every request. The admin stub (§13.5) changes it.
@@ -699,7 +702,10 @@ folder of the same site (D-272), and `?idle=<seconds>` shortens the display clie
 - **Steps.** The loading progress names each step in turn: `relay` (registering the
   Service Worker and waiting until it controls the page), `back end` (the worker and, in
   Python mode, Pyodide), `server` (started and answering), `import` (the silent import of
-  Mission A), `models` (each core model ready).
+  Mission A), `models` (each core model ready: registered and subscribed to its commands).
+- **Startup ends when each core model is ready** (D-350), not when it has processed Mission A. Processing follows
+  (§10.2), and until a dataset's runs are complete the display client says its results are being prepared
+  (FR-35b). The startup budget (NFR-10, 30 s in both back ends) is measured to this point, cold and on a reload.
 - **The relay.** If a Service Worker already controls the page, it is used at once; the
   page does not wait for `controllerchange`. A new `sw.js` calls `skipWaiting()` and
   `clients.claim()`. If no Service Worker controls the page within **10 s**, or
@@ -733,6 +739,6 @@ answer comes, this table, FR-06c and both stand-ins are brought into line.
 | `sender` on a pushed command (FR-112a) | The user id | The user id | Settled (D-152) |
 | Role change at once (FR-116) | On the next request | On the next request | Settled (D-151) |
 | Bulk import inside the server | Feasible, about 300,000 rows/s (finding of 2026-11-25) | Inside the stand-ins | Settled |
-| An allow-list by id (D-222; AT-32 of 2026-11-26, D-348) | **Leaks**: a schema is checked as `get/datastreams[parent=<datastream id>]` and observations as `list/obs[parent=<datastream id>]`, and each is also tried against every ancestor system with the same form; system and datastream ids share strings, so a grant on an open datastream is a grant on the system with that id. The friend read every restricted datastream | Restrict by resource, as wanted | A restriction that holds; until then C6 does not hold on a stock server |
+| Restricting by role (D-222, D-348, D-351) | Holds when configured so: descriptions granted whole; contents (observations, commands, status) allowed by id, and every contents form denied for each restricted resource and each system above it; **`useSecureIds`** at start, so ids of different kinds never share strings. AT-32 of 2026-11-27: no restricted observation read, every open one read. Without `useSecureIds` the ids collide, and either restricted contents open (D-348) or open contents close | Descriptions to everyone, contents by role (D-351) | Restriction by resource without an id list to maintain at every import |
 | The profile beside the API (FR-41, D-345) | Served only as a static document (`/sensorhub/profile.json`), **without authentication** | At `api/profile.json`, with credentials | Served with credentials beside the API |
 | Order of a SWE JSON record's members (D-346) | The schema's order, or `400` | Any order | The stand-ins refuse another order (PR-05) |

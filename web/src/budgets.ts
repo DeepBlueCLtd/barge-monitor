@@ -2,8 +2,9 @@
 // Kept apart from config.ts so that the end-to-end tests, which run in Node, can import them.
 
 /**
- * NFR-10 (and NFR-05): from navigation until every startup step is done, the models included, from a cold cache.
- * In this build the step "models" is done when each core model is live, Mission A processed (D-340).
+ * NFR-10 (and NFR-05): from navigation until every startup step is done, from a cold cache and on a reload, in both
+ * back ends. The last step, "models", is done when each core model is ready: registered and subscribed (D-350).
+ * Processing Mission A follows, and is not part of startup: the display client says "results being prepared".
  */
 export const STARTUP_BUDGET_MS = 30_000;
 /**

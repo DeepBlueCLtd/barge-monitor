@@ -2,7 +2,8 @@
 """AT-32: the server-neutral contract suite against a stock OpenSensorHub, with credentials, talking to it directly.
 
 4.7 (ADR 0010, D-221): there is no access gateway. Restriction is OpenSensorHub's own: a restricted resource is
-listed and refused with 403, by an allow-list of what each role may read (D-222). What runs, all on this machine:
+listed and described, and its contents refused with 403 (D-351), by OpenSensorHub's permissions (``osh_server``).
+What runs, all on this machine:
 
 * **OpenSensorHub** ``osh-core`` 2.0.4, unmodified, configured as interfaces §14 allows (``osh_server.py``);
 * the **installation**: the platform, sensors, CO₂ analysers and Models (by the owner), and one workspace per
@@ -396,22 +397,27 @@ async def resources(osh: Osh) -> Resources:
 
 
 async def leaks(osh: Osh, res: Resources) -> dict:
-    """Every restricted datastream named in the allow-list's input, read as the friend (weather only): its
-    resource, schema and observations. Each should answer 403 (AT-55); what answers 200 is listed."""
+    """Every datastream, read as the friend (weather only): a restricted one's description and schema should
+    answer 200 and its observations 403 (D-351, AT-55); an open one's observations 200. Each departure is listed."""
     from osh_server import readable
 
-    out = {"datastreams": 0, "read": []}
+    out = {"restricted": 0, "open": 0, "restricted_contents_read": [], "restricted_described": 0,
+           "open_contents_refused": []}
     async with httpx.AsyncClient(base_url=osh.root + "/api", headers={"Authorization": basic("friend")}, timeout=90,
                                  trust_env=False) as c:
         for did, sid in res.datastreams.items():
+            obs = (await c.get(f"/datastreams/{did}/observations", params={"f": SWE, "limit": "1"})).status_code
             if readable(res, sid, A.WEATHER, "friend"):
+                out["open"] += 1
+                if obs != 200:
+                    out["open_contents_refused"].append(f"{did} ({res.uid(sid)}): {obs}")
                 continue
-            out["datastreams"] += 1
-            for path, q in ((f"/datastreams/{did}", None), (f"/datastreams/{did}/schema", {"obsFormat": SWE}),
-                            (f"/datastreams/{did}/observations", {"f": SWE, "limit": "1"})):
-                r = await c.get(path, params=q)
-                if r.status_code == 200:
-                    out["read"].append(f"{path} ({res.uid(sid)})")
+            out["restricted"] += 1
+            if obs == 200:
+                out["restricted_contents_read"].append(f"{did} ({res.uid(sid)})")
+            meta = [(await c.get(p, params=q)).status_code for p, q in
+                    ((f"/datastreams/{did}", None), (f"/datastreams/{did}/schema", {"obsFormat": SWE}))]
+            out["restricted_described"] += meta == [200, 200]
     return out
 
 
@@ -469,14 +475,14 @@ async def run_once(home: Path, rundir: Path, folder: Path, rows: int, log) -> di
         before = (imp.subscriptions, models.subscriptions)
         out["setup"]["restart_s"] = round(await asyncio.to_thread(osh.restart, res), 2)
         out["setup"]["allow_list"] = {"systems": len(res.systems), "datastreams": len(res.datastreams),
-                                      "controlstreams": len(res.controlstreams), "collisions": osh.collisions}
+                                      "controlstreams": len(res.controlstreams), "open_but_refused": osh.refused}
         log(f"allow-list written for {out['setup']['allow_list']}; restarted in {out['setup']['restart_s']} s")
         again = await wait_for(lambda: imp.subscriptions > before[0] and models.subscriptions >= before[1] + 3, 60)
         out["setup"]["receivers_resubscribed_after_s"] = again
         out["setup"]["models_after_restart"] = models.phases()
         log(f"receivers resubscribed after {again} s; models {models.phases()}")
         out["setup"]["restricted_read_by_the_friend"] = await leaks(osh, res)
-        log(f"restricted resources the friend reads: {out['setup']['restricted_read_by_the_friend']}")
+        log(f"as the friend: {out['setup']['restricted_read_by_the_friend']}")
         out["results"] = await suite.run(Client(osh))
     except Exception as e:  # noqa: BLE001 - reported
         out["error"] = f"{type(e).__name__}: {e}\n{traceback.format_exc(limit=4)}"

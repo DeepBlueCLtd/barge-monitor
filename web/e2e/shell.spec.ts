@@ -498,14 +498,15 @@ for (const backend of ['standin', 'python'] as const) {
       await expect(page.getByTestId('chips')).not.toContainText(/CO₂|co2/i);
       await expect(page.getByTestId('monitor')).not.toContainText(/CO₂/);
       await expect(page.getByTestId('demo-watch')).toContainText('god’s-eye view');
-      // The client's own messages since the friend logged in carry no CO₂ value or schema.
+      // The client's own messages since the friend logged in carry no CO₂ value. A CO₂ schema may be read: a stream's
+      // title may be known, not its contents (D-351).
       const msgs = await page.evaluate(() => (globalThis as any).bargeMessages() as { src: string; dst: string; content: string; chain?: string }[]);
       // The friend's session is the latest: each login's requests carry chains dc<n>- of its own (client/http.ts).
       const session = (m: { chain?: string }) => Number(/^dc(\d+)-/.exec(m.chain ?? '')?.[1] ?? -1);
       const latest = Math.max(...msgs.map(session));
       const friend = msgs.filter((m) => m.dst === 'client' && session(m) === latest);
       expect(friend.length).toBeGreaterThan(5);
-      expect(friend.filter((m) => /"co2"\s*:|"name"\s*:\s*"co2"/.test(m.content))).toEqual([]);
+      expect(friend.filter((m) => /"co2"\s*:/.test(m.content))).toEqual([]);
       await putBack(page);
       await expect(page.getByTestId('chips')).toContainText('CO₂'); // the owner sees CO₂ again
     });

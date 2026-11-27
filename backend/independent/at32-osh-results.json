@@ -1,97 +1,48 @@
 {
  "server": "OpenSensorHub osh-core 2.0.4 (75bb094), unmodified",
  "gateway": "none (4.7, ADR 0010)",
- "date": "2026-11-26",
+ "date": "2026-11-27",
  "rows_imported": 900,
  "run": {
   "setup": {
-   "osh_start_s": 0.87,
+   "osh_start_s": 1.09,
    "import": {
     "datasets": [
      "mission-a-20310407-424e1911"
     ],
     "observations": 3600,
-    "seconds": 5.2,
-    "observations_per_s": 812,
+    "seconds": 4.1,
+    "observations_per_s": 1063,
     "refusals": []
    },
-   "models_live_after_s": 2.0,
+   "models_live_after_s": 1.8,
    "models": {
     "data-cleanse": "live: every dataset processed",
     "summaries": "live: every dataset processed",
     "analysis": "live: every dataset processed"
    },
-   "restart_s": 1.06,
+   "restart_s": 0.9,
    "allow_list": {
     "systems": 16,
     "datastreams": 29,
     "controlstreams": 4,
-    "collisions": {
-     "viewer": [
-      "040g",
-      "0410",
-      "041g",
-      "0420",
-      "0430",
-      "043g",
-      "045g",
-      "0460",
-      "046g",
-      "0470"
-     ],
-     "service-no-co2": [
-      "040g",
-      "0410",
-      "041g",
-      "0420",
-      "0430",
-      "043g",
-      "045g",
-      "0460",
-      "046g",
-      "0470"
-     ]
+    "open_but_refused": {
+     "viewer": [],
+     "service-no-co2": []
     }
    },
-   "receivers_resubscribed_after_s": 1.3,
+   "receivers_resubscribed_after_s": 0.8,
    "models_after_restart": {
     "data-cleanse": "subscribing: subscribing to its commands",
     "summaries": "subscribing: subscribing to its commands",
     "analysis": "subscribing: subscribing to its commands"
    },
    "restricted_read_by_the_friend": {
-    "datastreams": 12,
-    "read": [
-     "/datastreams/041g (urn:x-barge:sensor:bow:co2)",
-     "/datastreams/041g/schema (urn:x-barge:sensor:bow:co2)",
-     "/datastreams/041g/observations (urn:x-barge:sensor:bow:co2)",
-     "/datastreams/042g (urn:x-barge:sensor:stern:co2)",
-     "/datastreams/042g/schema (urn:x-barge:sensor:stern:co2)",
-     "/datastreams/042g/observations (urn:x-barge:sensor:stern:co2)",
-     "/datastreams/0440 (urn:x-barge:process:data-cleanse:restricted)",
-     "/datastreams/0440/schema (urn:x-barge:process:data-cleanse:restricted)",
-     "/datastreams/0440/observations (urn:x-barge:process:data-cleanse:restricted)",
-     "/datastreams/044g (urn:x-barge:process:data-cleanse:restricted)",
-     "/datastreams/044g/observations (urn:x-barge:process:data-cleanse:restricted)",
-     "/datastreams/0480 (urn:x-barge:process:summaries:restricted)",
-     "/datastreams/0480/schema (urn:x-barge:process:summaries:restricted)",
-     "/datastreams/0480/observations (urn:x-barge:process:summaries:restricted)",
-     "/datastreams/0490 (urn:x-barge:process:summaries:restricted)",
-     "/datastreams/0490/observations (urn:x-barge:process:summaries:restricted)",
-     "/datastreams/047g (urn:x-barge:process:summaries:restricted)",
-     "/datastreams/047g/schema (urn:x-barge:process:summaries:restricted)",
-     "/datastreams/047g/observations (urn:x-barge:process:summaries:restricted)",
-     "/datastreams/048g (urn:x-barge:process:summaries:restricted)",
-     "/datastreams/048g/observations (urn:x-barge:process:summaries:restricted)",
-     "/datastreams/04cg (urn:x-barge:process:analysis:restricted)",
-     "/datastreams/04cg/observations (urn:x-barge:process:analysis:restricted)",
-     "/datastreams/04d0 (urn:x-barge:process:analysis:restricted)",
-     "/datastreams/04d0/observations (urn:x-barge:process:analysis:restricted)",
-     "/datastreams/04dg (urn:x-barge:process:analysis:restricted)",
-     "/datastreams/04dg/observations (urn:x-barge:process:analysis:restricted)",
-     "/datastreams/04eg (urn:x-barge:process:analysis:restricted)",
-     "/datastreams/04eg/observations (urn:x-barge:process:analysis:restricted)"
-    ]
+    "restricted": 12,
+    "open": 17,
+    "restricted_contents_read": [],
+    "restricted_described": 12,
+    "open_contents_refused": []
    }
   },
   "results": [
@@ -164,8 +115,8 @@
    {
     "name": "restricted_resources_are_listed_and_refused",
     "group": "need",
-    "outcome": "failed",
-    "detail": "AssertionError: datastreams/04fg answered 200 for the friend"
+    "outcome": "passed",
+    "detail": ""
    },
    {
     "name": "workspaces_are_private",
@@ -189,7 +140,7 @@
     "name": "put_patch_and_delete_are_not_allowed",
     "group": "standin",
     "outcome": "failed",
-    "detail": "AssertionError: PUT systems/0410: 403"
+    "detail": "AssertionError: PUT systems/o2rq3g8upg0c2: 403"
    },
    {
     "name": "sensorml_as_json_and_codes_not_ucum_are_refused",

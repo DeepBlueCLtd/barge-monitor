@@ -130,10 +130,14 @@ def _shown(b: bytes) -> str:
 
 
 # --- permissions (§9.3) ---------------------------------------------------------------------------
-def restricted_for(chain: list[dict], acct: A.Account) -> bool:
-    """True when this account may not read a system (given with its ancestors): listed, but refused with 403."""
+def restricted_for(chain: list[dict], acct: A.Account, contents: bool = True) -> bool:
+    """True when this account may not read a system (given with its ancestors): listed, but refused with 403.
+
+    D-351 (the owner): a stream's title may be known, not its contents. A restricted system, datastream or control
+    stream (CO₂, a restricted model output) is described to everyone, its schema included (``contents=False``); its
+    observations, commands and status are refused. Another user's workspace is refused whole (FR-94)."""
     for s in chain:
-        if (CO2.match(s["uid"]) or RESTRICTED.match(s["uid"])) and not A.may_read_co2(acct.role):
+        if contents and (CO2.match(s["uid"]) or RESTRICTED.match(s["uid"])) and not A.may_read_co2(acct.role):
             return True
         m = WORKSPACE.match(s["uid"])
         if m and m.group(1) != acct.user:
@@ -352,10 +356,11 @@ def create_app(rt) -> Gate:
             raise Refusal(404, f"system {sid} not found")
         return s
 
-    def readable(request, sid) -> list[dict]:
-        """The system and its ancestors; 403 when the account may not read it (listed, refused: §9.3)."""
+    def readable(request, sid, contents=True) -> list[dict]:
+        """The system and its ancestors; 403 when the account may not read it (listed, refused: §9.3). With
+        ``contents`` False, only its description is read: a restricted one is described to everyone (D-351)."""
         chain = store().chain(sid)
-        if restricted_for(chain, who(request)):
+        if restricted_for(chain, who(request), contents):
             raise Refusal(403, "this account may not read this resource")
         return chain
 
@@ -487,7 +492,7 @@ def create_app(rt) -> Gate:
     async def system(request: Request, systemId: str = Path(...), f: str | None = Query(None)):
         form = fmt(f, GEO_JSON, (GEO_JSON, SML_JSON, swe.JSON))
         s = get_system(systemId)
-        readable(request, systemId)
+        readable(request, systemId, contents=False)
         return system_json(request, s, form, listed=False)
 
     @app.get("/systems/{systemId}/subsystems", summary="Subsystems")
@@ -495,7 +500,7 @@ def create_app(rt) -> Gate:
                          offset: int = Query(0), f: str | None = Query(None)):
         form = fmt(f, GEO_JSON, (GEO_JSON, SML_JSON, swe.JSON))
         get_system(systemId)
-        readable(request, systemId)
+        readable(request, systemId, contents=False)
         items = [system_json(request, s, form) for s in store().systems.values() if s["parent"] == systemId]
         return page(items, request, f"/systems/{systemId}/subsystems", limit, offset)
 
@@ -566,14 +571,14 @@ def create_app(rt) -> Gate:
     @app.get("/datastreams/{dsId}", summary="A datastream")
     async def datastream(request: Request, dsId: str = Path(...)):
         d = get_ds(dsId)
-        readable(request, d["system"])
+        readable(request, d["system"], contents=False)
         return ds_json(request, d)
 
     @app.get("/datastreams/{dsId}/schema", summary="A datastream's schema")
     async def ds_schema(request: Request, dsId: str = Path(...), obsFormat: str | None = Query(None),
                         f: str | None = Query(None)):
         d = get_ds(dsId)
-        readable(request, d["system"])
+        readable(request, d["system"], contents=False)
         return swe.schema_response(srv().visible(d), fmt(obsFormat or f, swe.JSON, swe.OBS_FORMATS))
 
     @app.post("/systems/{systemId}/datastreams", status_code=201, summary="Create a datastream")
@@ -671,13 +676,13 @@ def create_app(rt) -> Gate:
     @app.get("/controlstreams/{csId}", summary="A control stream")
     async def controlstream(request: Request, csId: str = Path(...)):
         c = get_cs(csId)
-        readable(request, c["system"])
+        readable(request, c["system"], contents=False)
         return cs_json(request, c)
 
     @app.get("/controlstreams/{csId}/schema", summary="A control stream's schema, with its bounds")
     async def controlstream_schema(request: Request, csId: str = Path(...)):
         c = get_cs(csId)
-        readable(request, c["system"])
+        readable(request, c["system"], contents=False)
         return {"commandFormat": swe.JSON, "parametersSchema": c["schema"]}
 
     @app.post("/systems/{systemId}/controlstreams", status_code=201, summary="Create a control stream")

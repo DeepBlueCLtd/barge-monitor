@@ -139,13 +139,15 @@ def test_a_role_change_takes_effect_on_the_next_request(standin):
     friend = httpx.Client(base_url=standin.base, timeout=30, headers={"Authorization": basic("friend", "demo-friend")})
     sy = {s["uniqueId"]: s["id"] for s in friend.get("systems", params={"searchMembers": "true", "f": "application/sml+json"}).json()["items"]}
     co2 = sy["urn:x-barge:sensor:stern:co2"]
-    assert friend.get(f"systems/{co2}").status_code == 403
+    ds = friend.get(f"systems/{co2}/datastreams").json()["items"][0]["id"]  # described to everyone (D-351)
+    obs = f"datastreams/{ds}/observations"
+    assert friend.get(obs).status_code == 403
     standin.control("set-role", {"user": "friend", "role": "viewer-emissions"})
     try:
-        assert friend.get(f"systems/{co2}").status_code == 200
+        assert friend.get(obs).status_code == 200
     finally:
         standin.control("set-role", {"user": "friend", "role": "viewer"})
-    assert friend.get(f"systems/{co2}").status_code == 403
+    assert friend.get(obs).status_code == 403
 
 
 def test_the_importer_is_the_same_in_both_back_ends(standin, data_folder):

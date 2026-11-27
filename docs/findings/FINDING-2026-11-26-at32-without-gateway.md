@@ -6,6 +6,20 @@ unmodified · **Where:** one cloud container, everything on the same host · **H
 Plan-v4.7 Phase 10; decisions D-344 to D-348. It follows the finding of the same date made through the access
 gateway, now withdrawn (ADR 0010).
 
+> **Update, 2026-11-27 (D-351).** The owner decided that a stream's title may be known, not its contents.
+> The configuration was reworked accordingly (`osh_server.py`): every role reads every description (systems,
+> datastreams with their schemas, control streams); a role without CO₂ reads contents (observations, commands,
+> status) by an allow-list of open resources, with every contents form **denied** for each restricted resource and
+> each system above it; and OpenSensorHub starts with its own `useSecureIds` option, which gives each kind of
+> resource ids of its own, so they no longer share strings. Run again (`at32-osh-results.json`): **13 of 14 `need`
+> checks pass.** As the friend: all 12 restricted datastreams described, **none of their observations read**; all 17
+> open datastreams' observations read. `restricted_resources_are_listed_and_refused` passes (the suite now asks
+> for the description to be readable and the observations refused). The one failure left is
+> `credentials_are_needed_everywhere`: the profile, a static document, is served without credentials (D-345).
+> Without `useSecureIds` the denies still kept every restricted observation closed, but 7 of the 17 open datastreams
+> (the bow's and stern's weather among them) were refused to the friend, their ids being also denied systems'.
+> The rest of this finding describes the run of 2026-11-26.
+
 ## Summary
 
 **AT-32 is not passed: 12 of the 14 `need` checks pass** with the suite unchanged and nothing of ours between the

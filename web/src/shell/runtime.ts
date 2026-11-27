@@ -133,11 +133,15 @@ class Runtime {
 
   private started = false;
 
-  /** True once every core model reports itself live (the display client waits for this before its handshake). */
-  coreModelsLive(): boolean {
+  /**
+   * True once every core model is ready: registered and subscribed, so processing or live (D-350). Startup ends here;
+   * a model then processes each dataset, Mission A first, and the display client says "results being prepared" until
+   * its runs are complete (FR-35b). Processing is not part of startup.
+   */
+  coreModelsReady(): boolean {
     const models = this.control.value?.models;
     if (!models) return this.control.value != null; // a back end that does not report its models
-    return CORE_MODELS.every((id) => models.find((m) => m.id === id)?.phase === 'live');
+    return CORE_MODELS.every((id) => ['processing', 'live'].includes(models.find((m) => m.id === id)?.phase ?? ''));
   }
 
   async start() {
@@ -258,10 +262,10 @@ class Runtime {
     }
   }
 
-  /** The last step, models, is done once every core model is live (after the server is). */
+  /** The last step, models, is done once every core model is ready (after the server is; D-350). */
   private checkModels() {
     if (this.readyMs == null || this.startup.steps.value.find((s) => s.id === 'models')?.state === 'done') return;
-    if (this.coreModelsLive()) this.startup.finish('models');
+    if (this.coreModelsReady()) this.startup.finish('models');
     else this.startup.enter('models', 'starting each core model');
   }
 

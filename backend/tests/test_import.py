@@ -132,9 +132,10 @@ def test_co2_is_never_in_the_weather_record_and_is_restricted(bare):
     assert [f["name"] for f in sch["fields"]] == ["time", "co2", "co2_qc"] and sch["fields"][1]["uom"]["code"] == "[ppm]"
     rows = bare.obs(c["id"], {"limit": "5"})
     assert set(rows[0]) == {"time", "co2", "co2_qc"} and 300 < rows[0]["co2"] < 2000
-    for path in (f"/datastreams/{c['id']}", f"/datastreams/{c['id']}/schema", f"/datastreams/{c['id']}/observations"):
-        assert bare.get(path, user="friend")[0] == 403, path
-        assert bare.get(path, user="analyst")[0] == 200, path
+    for path in (f"/datastreams/{c['id']}", f"/datastreams/{c['id']}/schema"):  # described to everyone (D-351)
+        assert bare.get(path, user="friend")[0] == 200, path
+    assert bare.get(f"/datastreams/{c['id']}/observations", user="friend")[0] == 403
+    assert bare.get(f"/datastreams/{c['id']}/observations", user="analyst")[0] == 200
     assert bare.get(f"/datastreams/{w['id']}/observations", user="friend")[0] == 200
     # The catalogue names files and spans only, never their columns (FR-21c), and every user reads it.
     cat = ds(bare, IMPORTER, "catalogue")

@@ -223,11 +223,14 @@ for (const backend of ['standin', 'python'] as const) {
       for (const i of differ.slice(0, 10)) expect(rb[i].air_temperature).toEqual(num(cell(csvB, 6 * 3600 + i, 'BOW_AT[dC]'), 0.1));
     });
 
-    test('the friend gets 403 on a CO₂ datastream of an imported dataset, and reads its weather (FR-93, FR-21c)', async () => {
+    test('the friend gets 403 on a CO₂ datastream\'s observations, reads its title and schema (D-351), and reads its weather (FR-93, FR-21c)', async () => {
       const ds = (await catalogue(page)).get(A).dataset;
       const co2 = await datastream(page, URN + 'sensor:stern:co2', `co2__${ds}`);
       const weather = await datastream(page, URN + 'sensor:stern', `weather__${ds}`);
-      for (const p of [`api/datastreams/${co2.id}`, `api/datastreams/${co2.id}/schema?obsFormat=${SWE}`, `api/datastreams/${co2.id}/observations?f=${SWE}&limit=5`]) {
+      for (const p of [`api/datastreams/${co2.id}`, `api/datastreams/${co2.id}/schema?obsFormat=${SWE}`]) {
+        expect((await call(page, 'GET', p, 'friend')).status, p).toBe(200); // a stream's title may be known (D-351)
+      }
+      for (const p of [`api/datastreams/${co2.id}/observations?f=${SWE}&limit=5`, `api/datastreams/${co2.id}/observations?f=${SWE}&resultTime=latest`]) {
         expect((await call(page, 'GET', p, 'friend')).status, p).toBe(403);
         expect((await call(page, 'GET', p, 'owner')).status, p).toBe(200);
       }
