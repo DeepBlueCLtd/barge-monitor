@@ -330,11 +330,13 @@ for (const backend of ['standin', 'python'] as const) {
       expect(one.dataset).toBe(two.dataset);
       expect(two.time!).toBeGreaterThan(one.time! + 3600);
       expect(one.lines.length).toBeGreaterThan(0);
-      // Up to the first client's replay time, both show exactly the same results.
+      // Up to what the first client may read, both show exactly the same results: at "A day" the per-minute summaries,
+      // each readable once its minute has ended (FR-63b), so up to the minute before its replay time.
+      const upTo = one.time! - 60;
       for (const l of one.lines) {
         const other = two.lines.find((x) => x.key === l.key)!;
         expect(l.rows.length).toBeGreaterThan(0);
-        expect(other.rows.filter(([t]) => t <= one.time!)).toEqual(l.rows);
+        expect(other.rows.filter(([t]) => t <= upTo)).toEqual(l.rows.filter(([t]) => t <= upTo));
         expect(other.rows.length).toBeGreaterThan(l.rows.length);
       }
       expect(two.run).toBe(one.run);
