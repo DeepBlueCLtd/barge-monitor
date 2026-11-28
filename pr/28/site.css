@@ -1,0 +1,19 @@
+:root { --fg: #1c1c1c; --bg: #ffffff; --muted: #666; --rule: #ddd; --accent: #1f5f8b; }
+@media (prefers-color-scheme: dark) {
+  :root { --fg: #e6e6e6; --bg: #121212; --muted: #9a9a9a; --rule: #333; --accent: #7ab4dc; }
+}
+html { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.5; }
+body { margin: 0; color: var(--fg); background: var(--bg); }
+.banner { background: #ffe9a8; color: #3a2a00; padding: .5rem 1rem; font-weight: 600; text-align: center; }
+main { max-width: 52rem; margin: 0 auto; padding: 1rem 1rem 4rem; }
+nav#TOC { border: 1px solid var(--rule); border-radius: 6px; padding: .5rem 1rem; margin: 1.5rem 0; }
+nav#TOC ul { padding-left: 1.2rem; }
+h1, h2, h3 { line-height: 1.25; }
+h2 { border-bottom: 1px solid var(--rule); padding-bottom: .2rem; margin-top: 2.5rem; }
+a { color: var(--accent); }
+table { border-collapse: collapse; width: 100%; font-size: .95em; }
+th, td { border: 1px solid var(--rule); padding: .4rem .6rem; vertical-align: top; text-align: left; }
+th { background: rgba(127,127,127,.12); }
+code { font-size: .92em; }
+hr { border: 0; border-top: 1px solid var(--rule); margin: 2rem 0; }
+footer { margin-top: 3rem; color: var(--muted); font-size: .9em; }
