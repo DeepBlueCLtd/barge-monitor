@@ -124,7 +124,7 @@ for (const backend of ['standin', 'python'] as const) {
       const context = await browser.newContext({ baseURL: info.project.use.baseURL, viewport: { width: 1920, height: 1080 } });
       page = await context.newPage();
       const t0 = Date.now();
-      await page.goto(`demo/?backend=${backend}`);
+      await page.goto(`demo/?mission-a&backend=${backend}`);
       await expect(page.getByTestId('flowchart')).toBeVisible({ timeout: SLOW_MS });
       const shown = (Date.now() - t0) / 1000;
       await expect.poll(async () => (a = await datasetOf(page, 'MISSION_A')), { timeout: SLOW_MS, intervals: [500] }).not.toBe('');

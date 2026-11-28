@@ -12,9 +12,10 @@ HOLD_S = 0.01  # the server's hold on a command's answer, shortened for the test
 class Rig:
     """The application over a runtime, called in-process. ``folder``: a data folder for the CSV importer (none:
     an empty one); ``models=False`` runs no in-process models. There is no clock to set: the 4.1 simulation clock
-    is retired (D-320)."""
+    is retired (D-320). Mission A is imported silently at startup, as the page does with ``?mission-a`` (D-366)."""
 
     def __init__(self, capture=True, user="owner", models=True, **kw):
+        kw.setdefault("silent_import", True)
         self.user = user
         self.rt = Runtime(capture=capture, local_models=models, hold_s=HOLD_S, **kw)
         self.app = create_app(self.rt)

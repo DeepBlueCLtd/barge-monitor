@@ -156,6 +156,13 @@ def test_mission_a_is_imported_silently_at_startup_and_fast(bare):
         A_FILE: "imported", B_FILE: "not-imported", BX_FILE: "not-imported", C_FILE: "not-imported"}
 
 
+def test_by_default_nothing_is_imported_at_startup(data_folder):
+    """D-366: without ?mission-a the server starts with the folder listed and no dataset imported."""
+    r = Rig(models=False, folder=data_folder, silent_import=False)
+    assert not r.rt.importer.datasets and r.rt.importer.rate is None
+    assert {f["status"] for f in r.rt.control_state()["folder"]} == {"not-imported"}
+
+
 def test_at04_the_last_hour_of_a_dataset_meets_its_budget(bare):
     """AT-04 on a dataset (FR-31): the last hour before a replay time, both sensors, within the declared budget.
     The one-field summary query comes with the summaries on import (plan Phase 6)."""

@@ -145,7 +145,7 @@ test('the opening\'s words: "a range of subsystem components", never a count, a 
 
 for (const backend of ['standin', 'python'] as const) {
   const name = backend === 'python' ? 'Python in Pyodide' : 'JavaScript stand-in';
-  const flag = `demo/?hand-made&backend=${backend}`;
+  const flag = `demo/?mission-a&hand-made&backend=${backend}`;
 
   test.describe(`the adoption opening, ${name}`, () => {
     async function openOpening(page: Page, url = flag) {
@@ -157,7 +157,7 @@ for (const backend of ['standin', 'python'] as const) {
 
     test(`AT-62: without the flag the normal startup; with it the opening; a reload repeats it, ${backend}`, async ({ page }) => {
       await countWorkers(page);
-      await page.goto(`demo/?backend=${backend}`);
+      await page.goto(`demo/?mission-a&backend=${backend}`);
       // FR-77: the back end starts at once (its worker is created) and no opening is shown.
       await expect.poll(() => workers(page), { timeout: 30_000 }).toBeGreaterThan(0);
       // The normal startup: its named steps, or, once the server answers (the stand-in's in well under a second), the
@@ -177,11 +177,11 @@ for (const backend of ['standin', 'python'] as const) {
       await expect(page.getByTestId('opening-panel')).toHaveAttribute('data-view', 'components');
       await expect(page.getByTestId('open-standards')).toBeVisible();
       // Any value, or none, is the flag (FR-119).
-      await openOpening(page, `demo/?backend=${backend}&hand-made=yes`);
+      await openOpening(page, `demo/?mission-a&backend=${backend}&hand-made=yes`);
     });
 
     test(`the top bar's "Custom backend" link reloads this page on the opening, keeping its other parameters (D-353), ${backend}`, async ({ page }) => {
-      await page.goto(`demo/?backend=${backend}`);
+      await page.goto(`demo/?mission-a&backend=${backend}`);
       const link = page.getByTestId('custom-backend-link');
       await expect(link).toBeVisible();
       await expect(link).toBeEnabled();
@@ -620,7 +620,7 @@ for (const backend of ['standin', 'python'] as const) {
       const other = await browser.newContext({ viewport: { width: 1920, height: 1080 }, baseURL: test.info().project.use.baseURL });
       try {
         const plain = await other.newPage();
-        await plain.goto(`demo/?backend=${backend}`);
+        await plain.goto(`demo/?mission-a&backend=${backend}`);
         await expect(plain.getByTestId('flowchart')).toBeVisible({ timeout: SLOW });
         await settled(plain);
         expect(await view(page)).toEqual(await view(plain));

@@ -4,7 +4,7 @@
 // requests go through the relay, like the display client's. The shell's controls (play, restart
 // server, control panel) reach the back-end worker directly: they belong to
 // the demonstrator, not the system.
-import { CORE_MODELS, PY_ZIP, PYODIDE_PATH, RELAY_VERSION, resolve, RUN_PACE_MS, urlParam } from '../config';
+import { CORE_MODELS, MISSION_A, PY_ZIP, PYODIDE_PATH, RELAY_VERSION, resolve, RUN_PACE_MS, urlParam } from '../config';
 import type { ComponentId } from './components';
 import { bus, Captured } from './messages';
 import { STAGE_STEP, Startup } from './startup';
@@ -173,7 +173,7 @@ class Runtime {
       this.progress.set({ stage: 'error', detail: why, pct: 0 });
       this.startup.fail(this.startup.current()?.id ?? 'back end', why);
     };
-    this.backend.postMessage({ type: 'start', pyodideUrl: resolve(PYODIDE_PATH), pyZipUrl: resolve(PY_ZIP), folderUrl: resolve(folderPath()), runPaceMs: RUN_PACE_MS });
+    this.backend.postMessage({ type: 'start', pyodideUrl: resolve(PYODIDE_PATH), pyZipUrl: resolve(PY_ZIP), folderUrl: resolve(folderPath()), runPaceMs: RUN_PACE_MS, missionA: MISSION_A });
     this.backend.postMessage({ type: 'hold', on: system.held.value }); // paused during startup (D-362)
     this.connect();
   }

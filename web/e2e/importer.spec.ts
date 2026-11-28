@@ -115,7 +115,7 @@ for (const backend of ['standin', 'python'] as const) {
     test.beforeAll(async ({ browser }, info) => {
       const context = await browser.newContext({ baseURL: info.project.use.baseURL, viewport: { width: 1920, height: 1080 } });
       page = await context.newPage();
-      await open(page, `demo/?backend=${backend}`);
+      await open(page, `demo/?mission-a&backend=${backend}`);
     });
 
     test.afterAll(async () => {
@@ -299,7 +299,7 @@ for (const backend of ['standin', 'python'] as const) {
     const context = await browser.newContext({ baseURL: info.project.use.baseURL, viewport: { width: 1920, height: 1080 } });
     const page = await context.newPage();
     try {
-      await open(page, `demo/?backend=${backend}&folder=data/e2e-folder/`);
+      await open(page, `demo/?mission-a&backend=${backend}&folder=data/e2e-folder/`);
       expect([...(await catalogue(page)).keys()].sort()).toEqual([A, C]);
       expect((await command(page, 'import', C)).pop()).toBe('COMPLETED');
       const old = (await catalogue(page)).get(C).dataset;

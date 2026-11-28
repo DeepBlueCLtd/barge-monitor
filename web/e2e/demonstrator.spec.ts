@@ -29,7 +29,7 @@ const since = (log: Logged[], t: number) => log.filter((x) => x.at >= t);
 const landing = (u: string) => /\/demo\/api\/?$/.test(u);
 
 async function open(page: Page, backend: string, extra = '') {
-  await page.goto(`demo/?backend=${backend}${extra}`);
+  await page.goto(`demo/?mission-a&backend=${backend}${extra}`);
   await expect(page.getByTestId('flowchart')).toBeVisible({ timeout: SLOW });
   await page.getByTestId('card-client').click();
 }

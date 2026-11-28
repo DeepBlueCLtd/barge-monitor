@@ -138,7 +138,7 @@ interface Captured {
 
 | File | Span (UTC) | Notes |
 |---|---|---|
-| `MISSION_A_20310407.csv` | 2031-04-07T00:00:00Z, +24 h | Imported silently at startup (FR-15) |
+| `MISSION_A_20310407.csv` | 2031-04-07T00:00:00Z, +24 h | Imported silently at startup only with `?mission-a`, for tests (FR-15, D-366) |
 | `MISSION_B_20310414.csv` | 2031-04-14T00:00:00Z, +24 h | |
 | `MISSION_B_20310414_REEXPORT.csv` | 2031-04-14T06:00:00Z, +24 h | Overlaps B by 18 h; about 0.1 % of the readings in the overlap differ (re-calibration) |
 | `MISSION_C_20310421.csv` | 2031-04-21T00:00:00Z, +12 h | No `STN_AWS` column (stern wind speed) |
@@ -274,8 +274,9 @@ imported as a new dataset. The earlier one becomes `superseded` (FR-21a), and it
 datastreams stay.
 
 **At server start** the importer lists the folder and publishes `not-imported`,
-`imported` or `changed` for every file. Then, **once per page load only**, it imports
-`MISSION_A_…csv` with `x-tap-quiet` (silent, FR-15). After Reset instance this silent
+`imported` or `changed` for every file. Then, **once per page load only** and only when
+the page was opened with `?mission-a` (tests; D-366), it imports `MISSION_A_…csv` with
+`x-tap-quiet` (silent, FR-15). Otherwise the page opens with no dataset loaded. After Reset instance this silent
 import does not run until the page is reloaded.
 
 **Speed.** The importer panel shows `rows/s` for the last import. In the stand-in it must
