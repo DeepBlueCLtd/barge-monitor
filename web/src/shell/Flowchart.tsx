@@ -23,6 +23,7 @@ import {
 import layout from './layout.json';
 import openingLayout from './layout-opening.json';
 import { bus, isHandshakeMessage, isUserMessage, Message } from './messages';
+import { mockTraffic } from './mocktraffic';
 import { isRow, isSubsystem, MERGE_SCHEDULE, opening, OPENING_LINES, prefersReducedMotion, subsystem, SUBSYSTEM_IDS } from './opening';
 import { GOLD, INK, ZoneId, ZONES } from './palette';
 import { runtime } from './runtime';
@@ -288,6 +289,8 @@ export function Flowchart() {
 
   const nodes: Node[] = useMemo(() => layoutNodes(mode, t, sel, rev, standin, roles, highlighted), [mode, t, sel, rev, standin, roles, highlighted]);
   const at = mode === 'merging' ? mergeAt(t) : null;
+  // D-361: illustrative traffic in the opening, none with reduced motion (AT-66); it stops at the Adopt click.
+  const illustrative = !prefersReducedMotion();
 
   const onCardClick = (id: string) => {
     if (opening.active) {
@@ -315,9 +318,10 @@ export function Flowchart() {
           {at && at.arrows > 0 && <Arrows opacity={at.arrows} />}
           {/* FR-122: nothing is sent or drawn before hand-over; the key and the god's-eye note come with the messages. */}
           {mode === 'normal' && <Icons />}
+          {illustrative && (mode === 'opening' || mode === 'merging') && <MockIcons />}
           {(mode === 'normal' || (at && at.arrows > 0)) && <Fade opacity={at?.arrows}><GodsEyeNote rect={layout.note as [number, number, number, number]} /></Fade>}
           {mode === 'opening' || (at && at.openingStatus > 0)
-            ? <Fade opacity={at?.openingStatus}><OpeningStatus rect={openingLayout.status as [number, number, number, number]} /></Fade>
+            ? <Fade opacity={at?.openingStatus}><OpeningStatus rect={openingLayout.status as [number, number, number, number]} illustrative={illustrative && mode === 'opening'} /></Fade>
             : <Fade opacity={at?.arrows}><StatusBox rect={layout.status as [number, number, number, number]} /></Fade>}
           {(mode === 'normal' || (at && at.arrows > 0)) && <Fade opacity={at?.arrows}><MessageKey rect={layout.key as [number, number, number, number]} /></Fade>}
         </ViewportPortal>
@@ -417,6 +421,33 @@ function Icons() {
       })}
       <SelectedIcon now={now} />
     </>
+  );
+}
+
+/**
+ * D-361: the opening's illustrative traffic (mocktraffic.ts), drawn with the real icons but not as messages: not
+ * buttons, not clickable, hidden from assistive technology, and never in the message bus. It stops, fading out, at Adopt.
+ */
+function MockIcons() {
+  const [icons, setIcons] = useState(() => mockTraffic.step());
+  useEffect(() => {
+    let raf = 0;
+    const loop = () => {
+      setIcons(mockTraffic.step());
+      if (!mockTraffic.done) raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  return (
+    <div className="mock-traffic" aria-hidden="true" data-testid="mock-traffic">
+      {icons.map((m) => (
+        <div key={m.key} className="mock-icon" data-testid="mock-icon" data-mock-letter={m.letter}
+          style={{ transform: `translate(${m.at[0] - 19}px, ${m.at[1] - 19}px)`, opacity: m.opacity < 1 ? m.opacity : undefined }}>
+          <Glyph letter={m.letter} />
+        </div>
+      ))}
+    </div>
   );
 }
 

@@ -10,6 +10,7 @@
 // and has no other effect. There is no way back in a session (FR-126).
 import { OPENING_MERGE } from '../config';
 import openingLayout from './layout-opening.json';
+import { mockTraffic } from './mocktraffic';
 import { selectedComponent } from './selection';
 import { Store } from './store';
 
@@ -150,6 +151,8 @@ class Opening {
   adopt() {
     if (this.phase.value !== 'build') return;
     this.highlighted.set(null);
+    // D-361: the illustrative traffic stops at once; what is in flight fades out before the cards move.
+    mockTraffic.stop();
     this.adopted.set(true);
     // D-360: the back end starts now, concurrently with the merge (its worker script and, in Python, Pyodide load
     // meanwhile); its startup shows in the status box after hand-over, never in place of the flowchart.
