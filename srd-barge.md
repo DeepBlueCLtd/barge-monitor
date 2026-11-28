@@ -695,6 +695,9 @@ interest" as the requirement term.
 - **FR-105 (4.7)** Below it, the popup lists the analyst's saved records with name, dataset
   and span. Each can be **opened** in any view, **compared**, or **removed**. Opening one
   closes the popup.
+- **FR-105a** A record can be saved with **tags** (optional, comma separated). The list
+  offers each tag in use, with how many records carry it; picking tags shows only the
+  records carrying every one picked. Records saved without tags still list, open and compare.
 - **FR-106** **Opening** a record regenerates it from the server, as the record describes,
   whatever the current dataset. It is labelled with its dataset and span.
 - **FR-107** **Comparing** two records draws them on one chart on **elapsed time** from each

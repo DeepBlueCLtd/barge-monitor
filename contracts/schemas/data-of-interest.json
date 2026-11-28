@@ -26,6 +26,15 @@
     "note": {
       "type": "string"
     },
+    "tags": {
+      "type": "array",
+      "description": "Tags to filter Favourites by (FR-105a). Older records have none.",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
     "dataset": {
       "type": "object",
       "additionalProperties": false,

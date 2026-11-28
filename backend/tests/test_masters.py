@@ -94,7 +94,7 @@ def test_the_importers_weather_record_is_the_master():
 
 
 def test_a_data_of_interest_record_validates():
-    rec = {"version": 1, "label": "Lock at Hollin", "note": "",
+    rec = {"version": 1, "label": "Lock at Hollin", "note": "", "tags": ["lock", "Hollin"],
            "dataset": {"file": "MISSION_A_20310407.csv", "size": 1, "modified": "2031-04-08T02:00:00Z", "sha256": "0" * 64},
            "start": "2031-04-07T06:00:00Z", "end": "2031-04-07T07:00:00Z", "resolution": "PT1M", "aggregation": "as-stored",
            "sources": [{"system": URN + "sensor:bow", "output": "weather", "fields": ["air_temperature"]}],
@@ -103,3 +103,6 @@ def test_a_data_of_interest_record_validates():
     v.validate(rec)
     with pytest.raises(jsonschema.ValidationError):
         v.validate({**rec, "sources": []})
+    v.validate({k: x for k, x in rec.items() if k != "tags"})  # older records have none (FR-105a)
+    with pytest.raises(jsonschema.ValidationError):
+        v.validate({**rec, "tags": [""]})
