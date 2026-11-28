@@ -1,7 +1,7 @@
 {
   "name": "barge-monitor-web",
   "private": true,
-  "version": "4.1.0",
+  "version": "4.7.0",
   "type": "module",
   "scripts": {
     "gen": "openapi-typescript ../contracts/openapi.json -o src/generated/api.d.ts && node scripts/gen-schema-types.mjs",
