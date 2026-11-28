@@ -38,7 +38,9 @@ and sources the server refuses (403) left out generically; and the **4.7 shell**
 Phase 8): the six components in four zones with every flow of §3.1 drawn and labelled "HTTP",
 "push" or "inside the server", the god's-eye note, detail panels for every component (the data
 folder, the CSV importer, the data server, Models with outputs and runs per dataset), the
-control panel and every failure demo of FR-79a. The top bar mirrors the client's clock. The 4.1
+control panel and every failure demo of FR-79a. The top bar's **Pause system** freezes the whole
+system for inspection (icons stay put and clickable, nothing is sent, Resume loses nothing), with a
+slow-motion drawing speed (½×, ¼×) beside it (D-362); replay is the display client's own. The 4.1
 world run, history, logger, store adapter and simulation clock are retired (D-320): the data
 folder is the only data. And the **adoption opening** (SRD §9.8, plan Phase 9): with `?hand-made`
 the demonstrator opens on the data server as we would write it ourselves, a range of subsystem

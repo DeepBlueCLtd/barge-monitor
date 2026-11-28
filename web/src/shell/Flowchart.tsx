@@ -33,6 +33,7 @@ import { sketchLine, sketchRect } from './sketch';
 import { Glyph } from './Glyph';
 import { GodsEyeNote, MessageKey, OpeningStatus, StatusBox } from './StatusBox';
 import { useStore } from './store';
+import { system } from './system';
 
 interface CardData {
   id: string;
@@ -326,6 +327,7 @@ export function Flowchart() {
           {(mode === 'normal' || (at && at.arrows > 0)) && <Fade opacity={at?.arrows}><MessageKey rect={layout.key as [number, number, number, number]} /></Fade>}
         </ViewportPortal>
       </ReactFlow>
+      {mode !== 'opening' && <SystemState />}
     </div>
   );
 }
@@ -449,6 +451,30 @@ function MockIcons() {
       ))}
     </div>
   );
+}
+
+/**
+ * D-362: while the system is paused, a clear indicator over the flowchart (it does not move the layout, so no icon moves
+ * under the pointer); in slow motion, a quieter one with the speed.
+ */
+function SystemState() {
+  const paused = useStore(system.paused);
+  const speed = useStore(system.speed);
+  if (paused) {
+    return (
+      <div className="system-state paused" role="status" aria-live="polite" data-testid="system-paused">
+        <b>System paused</b> · every message holds where it is: click one to inspect it. Nothing is sent until Resume.
+      </div>
+    );
+  }
+  if (speed < 1) {
+    return (
+      <div className="system-state slow" role="status" aria-live="polite" data-testid="system-slow">
+        <b>Slow motion {speed === 0.5 ? '½×' : '¼×'}</b> · the system waits for the drawing
+      </div>
+    );
+  }
+  return null;
 }
 
 /** A selected message, tinted and haloed (VS-14): where it was picked, or travelling on if picked while paused. */

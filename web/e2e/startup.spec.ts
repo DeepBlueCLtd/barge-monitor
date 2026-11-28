@@ -69,12 +69,12 @@ async function started(page: Page) {
   await expect(page.getByTestId('step-models')).toHaveCount(0); // the steps give way to the flowchart
   await expect(page.getByTestId('stall')).toHaveCount(0);
   // Nothing has started playing; a control that cannot act yet says why (FR-125a). 4.7 (D-307): replay is the
-  // display client's own, so Play and the rates wait for a login, and say so (interfaces §13.7).
-  await everyDisabledControlSaysWhy(page);
+  // display client's own, in its own replay bar (D-362: the top bar mirrors it no more); the system's Pause is there.
+  expect(await everyDisabledControlSaysWhy(page)).toBe(0);
   await expect(page.getByTestId('restart-server')).toBeEnabled();
-  await expect(page.getByTestId('play')).toBeDisabled();
-  await expect(page.getByTestId('play')).toHaveAttribute('title', 'Log in to the display client first');
-  await expect(page.getByTestId('play')).toHaveText(/Play/);
+  await expect(page.getByTestId('play')).toHaveCount(0);
+  await expect(page.getByTestId('system-pause')).toBeEnabled();
+  await expect(page.getByTestId('system-pause')).toHaveText(/Pause system/);
   await expect(page.getByTestId('sim-state')).toHaveText('Paused');
   // The relay answers for the system: a request under api/ reaches the back end (with the
   // demo owner's credentials: every request needs them, docs/v4-interfaces.md §9.3).
@@ -105,9 +105,11 @@ test('(a) first load on the sub-path: the steps are named, startup completes, th
   await expect(page.getByTestId('step-back-end')).toHaveAttribute('data-state', 'active');
   await expect(page.getByTestId('step-back-end')).toHaveAttribute('aria-current', 'step');
   // (d) while starting, every top-bar control is disabled and says why.
-  expect(await everyDisabledControlSaysWhy(page)).toBeGreaterThanOrEqual(7);
-  await expect(page.getByTestId('play')).toBeDisabled();
-  await expect(page.getByTestId('play')).toHaveAttribute('title', 'Starting: back end');
+  // D-362: the system's Pause and drawing speed are the exception: they can act from the start.
+  expect(await everyDisabledControlSaysWhy(page)).toBeGreaterThanOrEqual(5);
+  await expect(page.getByTestId('restart-client')).toBeDisabled();
+  await expect(page.getByTestId('restart-client')).toHaveAttribute('title', 'Starting: back end');
+  await expect(page.getByTestId('system-pause')).toBeEnabled();
   await expect(page.getByTestId('control-reason')).toHaveText('Starting: back end');
   release();
   await started(page);
@@ -165,9 +167,9 @@ test('(c) Service Workers blocked: within 10 s the page names the stalled step a
   await expect(stall).toContainText('relay');
   await expect(stall).toContainText('Reload');
   await expect(stall).toContainText('Service Workers');
-  await expect(page.getByTestId('play')).toBeDisabled();
-  await expect(page.getByTestId('play')).toHaveAttribute('title', /^Starting: relay/);
-  expect(await everyDisabledControlSaysWhy(page)).toBeGreaterThanOrEqual(7);
+  await expect(page.getByTestId('restart-client')).toBeDisabled();
+  await expect(page.getByTestId('restart-client')).toHaveAttribute('title', /^Starting: relay/);
+  expect(await everyDisabledControlSaysWhy(page)).toBeGreaterThanOrEqual(5);
   await context.close();
 });
 
@@ -182,7 +184,7 @@ test('(c) the relay fails to register (sw.js not served): the page says so at on
   await expect(stall).toContainText('could not be registered');
   await expect(stall).toContainText('Service Workers');
   await expect(page.getByTestId('step-relay')).toHaveAttribute('data-state', 'failed');
-  expect(await everyDisabledControlSaysWhy(page)).toBeGreaterThanOrEqual(7);
+  expect(await everyDisabledControlSaysWhy(page)).toBeGreaterThanOrEqual(5);
   await context.close();
 });
 
@@ -200,8 +202,8 @@ test('(c) a relay that registers but never takes control: after 10 s the page na
   await expect(stall).toHaveAttribute('data-step', 'relay');
   await expect(stall).toContainText('has not taken control');
   await expect(stall).toContainText('Reload');
-  await expect(page.getByTestId('play')).toHaveAttribute('title', 'Starting: relay (stalled: see the message on the page)');
-  expect(await everyDisabledControlSaysWhy(page)).toBeGreaterThanOrEqual(7);
+  await expect(page.getByTestId('restart-client')).toHaveAttribute('title', 'Starting: relay (stalled: see the message on the page)');
+  expect(await everyDisabledControlSaysWhy(page)).toBeGreaterThanOrEqual(5);
   await context.close();
 });
 

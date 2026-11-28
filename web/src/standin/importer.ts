@@ -23,6 +23,7 @@ import { BULK_ROWS, SENSORS, SIM_EPOCH_UNIX, URN } from './constants';
 import { datasetId, parseCsv, Parsed } from './csv';
 import { QUANTITIES } from './fields';
 import type { Folder, FolderEntry } from './folder';
+import type { Gate } from './gate';
 import { qcFlags } from './qc';
 import type { ControlstreamRec, DatastreamRec, Store, SystemRec } from './resources';
 import { LineReader } from './stream';
@@ -72,6 +73,8 @@ export interface ImporterRuntime {
   real(): number;
   commandStatus(cmdId: string, code: string, message?: string): unknown;
   handle(req: HttpRequest): Promise<HttpResponse | null>;
+  /** The demonstrator's system hold (D-362): the importer stops at its next step while it is held. */
+  gate: Gate;
 }
 
 /** A SWE Common master from contracts/swe, without its description (importer.master). */
@@ -222,6 +225,7 @@ export class Importer {
   }
 
   private async onCommand(cmd: { id: string; parameters?: Record<string, unknown> }): Promise<void> {
+    await this.rt.gate.wait();
     const p = cmd.parameters ?? {};
     const cid = cmd.id;
     const action = p.action;
@@ -277,6 +281,7 @@ export class Importer {
       for (let k = 0; k < 10; k++) {
         const a = Math.floor((k * n) / 10);
         const b = Math.floor(((k + 1) * n) / 10);
+        await this.rt.gate.wait(); // held (D-362): the import stops here, and carries on from this block
         if (gen !== this.generation) throw new Error('the store was reset during the import');
         const tt = t.subarray(a, b);
         for (const [d, cols] of outs) {

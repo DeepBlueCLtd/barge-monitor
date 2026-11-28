@@ -50,6 +50,7 @@ export class Startup {
   readonly steps: Store<Step[]>;
   readonly stall = new Store<Stall | null>(null);
   private timer: ReturnType<typeof setInterval> | null = null;
+  private heldAt: number | null = null;
 
   constructor(python: boolean) {
     const what: Record<StepId, string> = {
@@ -110,6 +111,18 @@ export class Startup {
     return `Starting: ${s.id}${this.stall.value?.step === s.id ? ' (stalled: see the message on the page)' : ''}`;
   }
 
+  /** D-362: while the system is paused a step does not stall: the time paused is not counted against it. */
+  hold(paused: boolean) {
+    if (paused) {
+      this.heldAt ??= performance.now();
+      return;
+    }
+    if (this.heldAt == null) return;
+    const ms = performance.now() - this.heldAt;
+    this.heldAt = null;
+    this.steps.set(this.steps.value.map((s) => (s.state === 'active' && s.since != null ? { ...s, since: s.since + ms } : s)));
+  }
+
   stop() {
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
@@ -124,7 +137,7 @@ export class Startup {
     if (this.timer) return;
     this.timer = setInterval(() => {
       const s = this.current();
-      if (!s || s.state !== 'active' || s.since == null || this.stall.value?.step === s.id) return;
+      if (!s || s.state !== 'active' || s.since == null || this.stall.value?.step === s.id || this.heldAt != null) return;
       if (performance.now() - s.since < STALL_MS) return;
       const message = s.id === 'relay'
         ? 'Startup has stalled at step “relay”: the seam relay (a Service Worker) has not taken control of this page after 10 seconds. The browser may be blocking Service Workers for this site, or an older relay may be in the way.'

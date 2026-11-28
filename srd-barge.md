@@ -25,7 +25,15 @@ change lists are below. Requirements marked **(4.7)** are new or changed here; *
   server. **Models process each dataset as soon as it is imported**; each display client keeps
   its own replay clock and reveals data and results up to it (§8.6). C4 is restated; model
   rate bounds are withdrawn.
-- **No Freeze (4.7).** Play and Pause cover it (FR-92 withdrawn).
+- **No Freeze (4.7).** Play and Pause cover it (FR-92 withdrawn). *Revised by the system's
+  Pause, below (D-362).*
+- **A system-level Pause and slow motion (4.7, D-362; the owner, 2026-11-28).** The display
+  client's Pause stops its replay, but not the system: messages kept passing, too fast to
+  click (for example in the rush after Adopt). The top bar's mirror of the replay bar is
+  removed: the display client's own replay bar is the only replay control. In its place,
+  **Pause system / Resume** freezes everything (icons stay put and clickable; the system is
+  held, so nothing is missed), and a **drawing speed** of 1×, ½× or ¼× slows the messages
+  and holds the system back so that the drawing keeps up (FR-92, FR-92a).
 - **The opening's wording (4.7).** Written ourselves, the data server is **a range of subsystem
   components to develop**, among them those drawn; not a fixed count (FR-120).
 - **Popups in the display client (4.7).** The dataset list becomes a popup **Dataset
@@ -711,8 +719,10 @@ interest" as the requirement term.
 
 ### 9.1 Layout (4.4)
 
-- **Top bar (4.7)**: title, subtitle, a mirror of the replay bar acting on the display
-  client's clock, restart client, restart server, failure demos, control panel, overview.
+- **Top bar (4.7)**: title, subtitle, the system's **Pause system / Resume** and **drawing
+  speed** (FR-92, FR-92a; D-362), restart client, restart server, failure demos, control
+  panel, overview. There is no replay control in the top bar: the display client's replay
+  bar is the only one (§8.6).
 - **Left**: the stacked flowchart: front end, third-party libraries, back end, legacy.
 - **Below it**: status (logged-in analyst or locked, the client's current dataset, replay
   time and rate, back end, server, client, essentials) and the message key.
@@ -764,8 +774,29 @@ interest" as the requirement term.
 
 - **FR-77 (4.4)** At load the display client shows its login screen and nothing else sends.
   After login it handshakes; the replay is paused at the start of Mission A.
-- **FR-78** Messages are drawn in real time, whatever the replay rate.
-- **FR-92** Withdrawn (4.7): Freeze. Pause covers it.
+- **FR-78** Messages are drawn in real time, whatever the replay rate; in slow motion, slower
+  (FR-92a).
+- **FR-92 (4.7, D-362)** **Pause system.** Restated after its withdrawal with Freeze: the
+  display client's Pause stops only its replay. The top bar's **Pause system** freezes
+  everything, and **Resume** continues exactly where it left off, so nothing is missed:
+  - every message icon stops where it is and stays clickable, opening its message as
+    normal (FR-68);
+  - the system is held: no request enters the relay (the display client's, each model's),
+    an answer already on its way waits before it is read, the importer and the models stop
+    at their next step, and pushed commands wait in the server;
+  - the display client's replay clock, polling and idle lock do not advance;
+  - a message captured as Pause is pressed is kept, and drawn on Resume;
+  - "System paused" is shown over the flowchart while paused.
+
+  It is the demonstrator's, not the system's: a developed system has no such hold. It can act
+  as soon as the top bar's controls appear, the startup after Adopt included; a startup step
+  does not stall while paused. A failure demo resumes the system before each step and before
+  "Put everything back", and Pause waits, disabled and saying why, while a step runs.
+- **FR-92a (4.7, D-362)** **Slow motion.** A drawing speed of **1×, ½× or ¼×** beside it.
+  At ½× and ¼× icons travel slower, and the system is held back so that the drawing never
+  falls far behind (about one hop): every message is still drawn, spaced and clickable, and
+  no backlog builds. At 1× nothing is held. The display client's replay rate is its own
+  (FR-86) and is not changed.
 - **FR-79 (4.7)** A viewer's click is answered at once.
 
 ### 9.7 Failure demos (4.4)
@@ -843,8 +874,8 @@ reveal, so nothing is marked as ours in it.
 - **FR-121** **Nothing is gold.** No card is gold. No ★, diamond or "our value-add" appears
   anywhere in the opening, the detail panel included. Clicking the display client or
   Models does not reveal it.
-- **FR-122** **Nothing runs.** The top bar's controls are **hidden, not disabled**: replay
-  mirror, restart client, restart server, failure demos, control panel and
+- **FR-122** **Nothing runs.** The top bar's controls are **hidden, not disabled**: Pause
+  system and the drawing speed (D-362), restart client, restart server, failure demos, control panel and
   overview. No message is sent, captured or drawn; only the illustrative traffic of FR-120a,
   made in the page, is drawn (D-361). The display client does not handshake. **The back
   end does not start (4.6)**: no worker runs, no model registers and nothing is fetched until
@@ -882,14 +913,14 @@ reveal, so nothing is marked as ours in it.
   merge, with the usual named loading steps (NFR-10, NFR-10a). **The flowchart never
   disappears**: until the back end has started, its steps, and any stall, are shown in the
   flowchart's status box, and the controls are disabled, each saying why ("Starting:
-  <step>"). A load without the flag keeps its startup page. The detail panel keeps the adopted savings until the
+  <step>"), except Pause system and the drawing speed, which can act at once (FR-92, D-362). A load without the flag keeps its startup page. The detail panel keeps the adopted savings until the
   viewer clicks a component or closes it. **That panel is the only difference** from a load
   without the flag.
 - **FR-125a (4.7)** **Ready means usable.** After hand-over, and after any load, nothing
   plays until the analyst logs in, a dataset is open (Mission A by default) and Play is
   pressed. A top-bar control that cannot act yet is **disabled and says why** on hover and
-  to assistive technology (for example "Log in to the display client first"). It is enabled
-  as soon as it can act.
+  to assistive technology (for example "Starting: models"). It is enabled as soon as it can
+  act. Play is the display client's own (D-362).
 - **FR-126** **One way.** Adoption cannot be undone in a session. The switch is removed at
   hand-over. To show the opening again, reload with the flag.
 
@@ -1010,6 +1041,7 @@ pace), and in 4.4 and 4.6:
 | **AT-68** | With Service Workers blocked, or an older one in control, the page names the stalled step and what to do within 10 seconds | Delivery |
 | **AT-69** | The Dataset selector and Favourites open as popups, close on Escape, outside click and their main action, work from the keyboard, and keep import progress visible on the selector button | C2, C3 |
 | **AT-70** | Two clients replaying the same dataset at different rates and positions see the same results up to their own replay times, and the server's outputs do not change | C4 |
+| **AT-71** | Pause system (D-362): icons hold where they are (sampled a second apart) and a held icon opens its message; while paused no message is captured, no request completes and the display client's replay time does not advance; Resume continues and nothing is lost. At ¼× icons take four times as long and the drawing's lag stays bounded. The top bar has no replay control. Pause is available in the rush after Adopt | Architecture view |
 
 ---
 
@@ -1089,7 +1121,8 @@ pace), and in 4.4 and 4.6:
   interest on elapsed time.
 - **A shared replay clock (4.7)**: there is no replay on the server; models do not follow
   replay.
-- **Freeze (4.7)**: Pause covers it.
+- **Freeze (4.7)**: withdrawn; the system's Pause (FR-92, D-362) is its successor, as the
+  demonstrator's own control.
 - **An access gateway of ours (4.7)**: clients reach OpenSensorHub directly (FR-93).
 - **More than one analyst logged in at a time** (FR-89).
 - **Replacing and deleting** anything, except Reset instance as a whole (FR-50a).

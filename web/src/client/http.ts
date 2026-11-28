@@ -11,6 +11,7 @@
 import { API_BASE } from '../config';
 import { drawClock } from '../shell/drawclock';
 import { bus, handshakeChains, userChains } from '../shell/messages';
+import { system } from '../shell/system';
 
 /** No answer at all: the server is down or starting (§9.1). */
 export class NetworkFailure extends Error {}
@@ -131,6 +132,10 @@ export class ClientHttp {
       handshakeChains.add(chain);
       if (handshakeChains.size > 500) handshakeChains.delete(handshakeChains.values().next().value!);
     }
+    // D-362: while the demonstrator pauses the system a request waits here, before it enters the relay; in slow motion it
+    // waits its turn, so that the drawing keeps up.
+    await system.wait();
+    if (this.closed || !this.authorization) throw new Closed('the display client was locked or restarted');
     this.onRequest?.({ chain, method, path, query: q, handshake: paced });
     const abort = new AbortController();
     this.inflight.add(abort);
@@ -147,10 +152,12 @@ export class ClientHttp {
       text = await r.text();
     } catch {
       this.inflight.delete(abort);
+      if (!this.closed) await system.waitPaused();
       if (this.closed) throw new Closed('the display client was locked or restarted');
       throw new NetworkFailure('the server did not answer');
     }
     this.inflight.delete(abort);
+    await system.waitPaused(); // D-362: paused, an answer already on its way waits too, before the client reads it
     if (this.closed) throw new Closed('the display client was locked or restarted');
     if (paced) await this.drawn(chain);
     if (r.status === 401) throw new Unauthorized('the name or password was not accepted');

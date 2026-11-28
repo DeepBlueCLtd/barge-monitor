@@ -13,7 +13,8 @@ is wrong. `docs/plan-v4.7.md` gives the order of work.
   resources are listed and refused with `403`, as stock OpenSensorHub does. The `gateway`
   component and §9.5 are withdrawn.
 - **No Freeze.** The `freeze` control action, the relay's hold (`x-relay-hold-ok`,
-  `{held}`) and `frozen` are withdrawn.
+  `{held}`) and `frozen` are withdrawn. *Revised (D-362, 2026-11-28):* the shell's **system
+  hold** (§4, §13.2) pauses the whole system again, and slows it; the relay itself is unchanged.
 - **Startup names its steps**, and a stall says where (§13.7).
 - The opening's back-end band is two rows of five (§12).
 
@@ -97,14 +98,38 @@ interface Captured {
   span (§6). Each **display client** holds its own replay time and current dataset (§8).
   Nothing on the server holds a replay time.
 - **Real time** paces each client's replay clock (`rate` replay seconds per real second)
-  and the drawing. The shell has no speed control (FR-78).
+  and the drawing. The shell's drawing speed (D-362) slows only the drawing (and holds the
+  system back to match), never a client's replay clock.
 - The `SimClock` of 4.1 is withdrawn, together with `CLOCK_RATES`, `DEFAULT_RATE`, `HOP_S`
   in simulated seconds, and `simClock` in the page. One hop takes `HOP_MS = 900` real
   milliseconds; a handshake hop takes `HANDSHAKE_HOP_MS = 350`.
 - **Rates** offered: `0.1, 0.5, 1, 10, 100` (FR-86). Nothing bounds them: models do not
   follow replay (§10.2).
-- **Freeze** is withdrawn (4.7, FR-92). Pausing the client stops its polling (FR-63a); the
-  drawing of messages already sent finishes in real time.
+- **Freeze** is withdrawn (4.7). Pausing the client stops its polling (FR-63a); the drawing
+  of messages already sent finishes in real time.
+- **The drawing clock** (`shell/drawclock.ts`, D-302) runs at the drawing speed, `1`, `0.5`
+  or `0.25` drawing seconds per real second, and **stops while the system is paused**
+  (FR-92, FR-92a; D-362). Every hop's duration and queue (`messages.ts`) is in drawing
+  seconds, so icons slow down and hold still with it.
+- **The system hold** (D-362; `shell/system.ts`). The shell's **Pause system** sets
+  `paused`; slow motion sets `pressure` while the drawing's **lag** (how long the last icon
+  queued waits before it sets off, in drawing seconds) is at least `LAG_HOLD_S = HOP_S`,
+  until it is down to `LAG_RELEASE_S = HOP_S / 4`. `held = paused || pressure`. Each part
+  holds itself, at the relay's entrances, never inside it:
+
+  | Part | While `held` | While `paused` only |
+  |---|---|---|
+  | Display client (`client/http.ts`) | in slow motion, a request enters the relay only while lag < `LAG_HOLD_S`, one per 50 ms | a request waits before it enters the relay, and an answer already on its way before it is read; the replay clock, the poll and the idle lock stand still |
+  | Model worker (`model.worker.ts`) | no step; a request, a subscription and an answer wait | |
+  | Stand-in back end | the core models take no step, and their requests and answers wait; the importer stops at its next block or command; a pushed command waits in the server (written and captured when let go) | |
+  | Python back end (`runtime.set_held`) | the importer stops at its next block or command (`wait_released`); a pushed command waits in the server before it is written to the stream | |
+  | Page (`runtime.ts`) | | messages captured are kept, and drawn on Resume in order; a startup step's stall time does not count |
+
+  A request already inside the relay when Pause is pressed is answered by the server (its
+  capture is kept by the page) and the answer waits at its receiver. Nothing is dropped, so
+  Resume continues where Pause left off. The relay is not made to hold requests itself: a
+  Service Worker may be stopped by the browser while a fetch is held for minutes, and one
+  relay serves every tab of the site.
 
 ## 5. The data folder and its CSV dialect (FR-15, FR-17)
 
@@ -289,8 +314,10 @@ interface ReplayClock {
   Restart client returns to that (FR-85).
 - **Two clients** replaying the same dataset at different rates see the same results up to
   their own times. The server's outputs do not change (AT-70).
-- **The shell** mirrors the clock in the top bar and the status box. It reads and drives it
-  in the page, through the display client; nothing about it crosses the seam.
+- **The shell** mirrors the clock in the status box, read in the page; nothing about it
+  crosses the seam. The top bar has no replay control (D-362): the client's replay bar is
+  the only one. The shell's **Pause system** holds the clock still without changing
+  `playing` (§4, the system hold), and Resume continues from the same `time`.
 
 ## 9. The server: behaviour both stand-ins must have (FR-06c, PR-05, PR-06)
 
@@ -679,7 +706,10 @@ The page sends:
 - `start {folderUrl, ...}`;
 - `connect`, with a port for the relay;
 - `model-connect {model}`;
-- `control {action, arg}`.
+- `control {action, arg}`;
+- `hold {on}` (D-362): the system hold (§4), sent at once after `start` and whenever it
+  changes, also to each model worker. It is not a control action: it may arrive before the
+  server has started, and is kept until it has.
 
 The worker posts:
 - `progress {stage, detail, pct}`;
@@ -696,7 +726,7 @@ The replay clock is the display client's, in the page (§8); no worker holds it.
 worker's answer echoes (D-167).
 
 There is no `play`, `pause`, `rate` or `freeze`: replay is the display client's (§8), and
-Freeze is withdrawn.
+Freeze is withdrawn. The system's Pause is the worker message `hold {on}` (§13.2, D-362).
 
 ### 13.4 Control state
 
@@ -748,10 +778,15 @@ folder of the same site (D-272), and `?idle=<seconds>` shortens the display clie
 - **Any step** that takes more than 10 s shows the same kind of message, naming the step.
 - **Nothing plays** after startup or Adopt until a user logs in, a dataset is open and Play
   is pressed.
+- **Pause system and the drawing speed** (D-362) can act as soon as the top bar's controls
+  appear, during startup too; paused, a step's stall time does not count. Pause is disabled
+  while a failure demo takes a step ("Wait: a failure demo is taking a step"); a demo
+  resumes the system before each step and before "Put everything back".
 - **Disabled controls say why** (FR-125a), in a `title` and `aria-describedby`:
   - before startup completes: "Starting: <step>";
-  - before login: "Log in to the display client first";
-  - with no dataset open: "Open a dataset first".
+  - (until D-362, the replay mirror's "Log in to the display client first" and "Open a
+    dataset first": the top bar has no replay control now, and the client's replay bar is
+    not shown before login or with no dataset open).
 
 ## 14. Open with the OpenSensorHub team (4.7)
 

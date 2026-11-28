@@ -5,7 +5,8 @@
 // password, walking away, an overlapping file, a crafted request). The display client is
 // driven as a viewer would drive it. Reused from the withdrawn 4.6 build (8157eef), read
 // against 4.7: no replay controller, so no "rate above the models" demo; no gateway, so the
-// crafted request is refused with 403; no Freeze.
+// crafted request is refused with 403. The system's Pause (D-362) is resumed before each step and before
+// "Put everything back", and waits (disabled, saying why) while a step runs; slow motion is kept.
 import { commandOutcomes, StatusReport } from '../client/http';
 import { CatalogueEntry, clientSession } from '../client/session';
 import { API_BASE, IDLE_LOCK_MS } from '../config';
@@ -13,6 +14,7 @@ import { DEMO_LOGINS } from './demoAccounts';
 import { runtime } from './runtime';
 import { selectComponent } from './selection';
 import { Store } from './store';
+import { system } from './system';
 
 export interface DemoStep {
   /** The button that takes this step. */
@@ -307,6 +309,7 @@ export async function takeStep() {
   const a = activeDemo.value;
   if (!a || a.running || a.done >= a.demo.steps.length) return;
   selectComponent('client');
+  system.resume(); // D-362: a demo's steps run on a system that runs; Pause waits until the step is taken
   const step = a.demo.steps[a.done];
   activeDemo.set({ demo: a.demo, done: a.done + 1, running: true });
   let found: string | void;
@@ -327,6 +330,7 @@ export async function endDemo(restore: boolean) {
     return;
   }
   if (a) activeDemo.set({ ...a, restoring: true });
+  system.resume(); // D-362: everything is put back on a system that runs
   try {
     await putEverythingBack();
   } finally {

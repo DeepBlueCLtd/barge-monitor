@@ -62,6 +62,10 @@ class Bridge:
     def set_model_phase(self, model: str, phase: str, detail: str, label: str) -> None:
         self.rt.set_phase(model, phase, detail, label)
 
+    def set_held(self, on) -> None:
+        """The demonstrator's system hold (D-362), from the page."""
+        self.rt.set_held(bool(on))
+
     def tick(self) -> str:
         """Advance the system; return captured messages and state as JSON for the page."""
         self.rt.tick()

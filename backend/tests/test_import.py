@@ -250,6 +250,42 @@ def test_at41_import_shows_progress_and_mission_c_opens_degraded(data_folder):
     assert r.rt.control_state()["import_rate"]["file"] == C_FILE
 
 
+def test_d362_held_the_importer_waits_and_carries_on_when_let_go(data_folder):
+    """D-362: while the demonstrator holds the system, a pushed command waits in the server and the importer does not
+    move; let go, the import runs exactly as it would have, every step reported."""
+    r = Rig(models=False, folder=data_folder)
+    r.rt.set_held(True)
+    cmd = r.command(IMPORTER, "import", {"action": "import", "file": C_FILE}).json()["id"]
+    r.step(300)
+    assert [s["statusCode"] for s in r.reports(cmd)] in ([], ["PENDING"])
+    assert not by_file(r, C_FILE) or by_file(r, C_FILE)[0]["status"] == "not-imported"
+    assert not any(d["file"] == C_FILE for d in r.rt.importer.datasets.values())
+    r.rt.set_held(False)
+    st = r.wait(cmd)
+    assert [s["statusCode"] for s in st] == ["ACCEPTED"] + ["EXECUTING"] * 10 + ["COMPLETED"]
+    assert by_file(r, C_FILE)[0]["status"] == "imported"
+
+
+def test_d362_held_mid_import_the_import_stops_at_its_next_block(data_folder):
+    """D-362: held during an import, the importer stops at its next block of rows and resumes from there."""
+    r = Rig(models=False, folder=data_folder)
+    status = r.rt.importer._status
+
+    def hold_at_30(cid, code, message=""):  # the system is held just as the third block's progress is reported
+        status(cid, code, message)
+        if code == "EXECUTING" and message == "30%":
+            r.rt.set_held(True)
+    r.rt.importer._status = hold_at_30
+    cmd = r.command(IMPORTER, "import", {"action": "import", "file": C_FILE}).json()["id"]
+    r.step(300)
+    held = [(s["statusCode"], s.get("message", "")) for s in r.reports(cmd) if s["statusCode"] != "PENDING"]
+    assert held[-1] == ("EXECUTING", "30%")
+    assert by_file(r, C_FILE)[0]["status"] == "importing"
+    r.rt.set_held(False)
+    st = r.wait(cmd)
+    assert [s["statusCode"] for s in st] == ["ACCEPTED"] + ["EXECUTING"] * 10 + ["COMPLETED"]
+
+
 def test_at42_overlapping_files_are_kept_apart(data_folder):
     r = Rig(models=False, folder=data_folder)
     for f in (B_FILE, BX_FILE):

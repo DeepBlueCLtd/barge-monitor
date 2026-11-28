@@ -757,6 +757,7 @@ def create_app(rt) -> Gate:
                         cmd = await sub.queue.get()
                         if cmd is None:
                             return
+                        await rt.wait_released()  # held (D-362): the command waits in the server
                         yield (json.dumps(cmd, separators=(",", ":")) + "\n").encode()
                 finally:
                     rt.hub.unsubscribe(sub)

@@ -20,6 +20,7 @@ import { Model, ModelApi, Runner } from './models/csmodel';
 import { Summaries } from './models/summaries';
 import { Analysis } from './models/analysis';
 import type { Folder } from './folder';
+import { Gate } from './gate';
 import { EMPTY_FOLDER, Importer } from './importer';
 import { ControlstreamRec, Hub, StatusReport, Store } from './resources';
 import { Server } from './server';
@@ -41,8 +42,14 @@ class LocalModels {
   }
 
   add(m: Model): Runner {
-    // The same HTTP requests as a model in its own worker makes, handed straight to the HTTP layer.
-    const r = new Runner(m, new ModelApi(m.id, `svc-${m.id}`, (req) => this.rt.handle(req), this.rt));
+    // The same HTTP requests as a model in its own worker makes, handed straight to the HTTP layer. While the system is
+    // held (D-362) a request waits before it is sent, and its answer before it is read, as a model worker's does.
+    const r = new Runner(m, new ModelApi(m.id, `svc-${m.id}`, async (req) => {
+      await this.rt.gate.wait();
+      const res = await this.rt.handle(req);
+      await this.rt.gate.wait();
+      return res;
+    }, this.rt));
     this.runners.push(r);
     return r;
   }
@@ -104,6 +111,8 @@ export class Runtime {
   /** Mission A is imported silently once per page load: not again after Reset instance (FR-15, FR-50a). */
   silentImport = true;
   instanceResets = 0;
+  /** The demonstrator's system hold (D-362): the importer, the core models and pushed commands wait while it is held. */
+  gate = new Gate();
 
   constructor(folder: Folder = EMPTY_FOLDER, private readonly realSeconds: () => number = () => Date.now() / 1000) {
     this.importer = new Importer(this, folder);
@@ -157,7 +166,7 @@ export class Runtime {
       srv.starting = true;
       void this.startModules(srv);
     }
-    this.models.tick();
+    if (!this.gate.isHeld) this.models.tick(); // held (D-362): no model takes a new step
   }
 
   // --- the server's modules: the CSV importer (§7) -----------------------------------------------
@@ -220,8 +229,11 @@ export class Runtime {
     for (const s of subs) {
       const who = s.account.component === 'models' || s.account.component === 'importer' ? s.account.component : 'client';
       const p = Object.entries(cmd.parameters as Record<string, unknown>).map(([k, v]) => `${k}=${v}`).join(', ');
-      this.tap.emit('server', who, 'K', `${s.model ? s.model + ': ' : ''}push: ${p}`.slice(0, 120), cmd, { model: s.model ?? undefined, push: true });
-      s.put(cmd);
+      // Held (D-362): the command waits in the server, and is written to the stream, and captured, when let go.
+      this.gate.after(() => {
+        this.tap.emit('server', who, 'K', `${s.model ? s.model + ': ' : ''}push: ${p}`.slice(0, 120), cmd, { model: s.model ?? undefined, push: true });
+        s.put(cmd);
+      });
     }
     return subs.length;
   }
