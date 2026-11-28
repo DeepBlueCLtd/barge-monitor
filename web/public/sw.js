@@ -83,7 +83,7 @@ async function forward(request, rootPath) {
       if (controller) {
         if (d.chunk) controller.enqueue(new Uint8Array(d.chunk));
         if (d.end) {
-          try { controller.close(); } catch (e) { /* already closed */ }
+          try { controller.close(); } catch { /* already closed */ }
           reply.port1.close();
         }
         return;

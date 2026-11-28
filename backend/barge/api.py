@@ -49,7 +49,7 @@ from . import config as C
 from . import scoring
 from . import swe
 from .server import SOSA, iso, iso_many, iso_real, parse_iso
-from .store import NUMERIC, URN, Subscription
+from .store import URN, Subscription
 from .tap import COMPONENTS
 from .ucum import bad_codes
 

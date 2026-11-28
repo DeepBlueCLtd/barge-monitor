@@ -1,0 +1,6 @@
+# Minimal lint: Ruff's defaults (pyflakes and the pycodestyle error rules).
+target-version = "py313"
+line-length = 120
+
+[lint]
+select = ["E4", "E9", "F"]  # pyflakes and syntax errors; the compact style (E7) is the house style
