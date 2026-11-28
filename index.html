@@ -98,7 +98,17 @@ dataset as soon as it is imported</strong>; each display client keeps
 its own replay clock and reveals data and results up to it (§8.6). C4 is
 restated; model rate bounds are withdrawn.</li>
 <li><strong>No Freeze (4.7).</strong> Play and Pause cover it (FR-92
-withdrawn).</li>
+withdrawn). <em>Revised by the system's Pause, below (D-362).</em></li>
+<li><strong>A system-level Pause and slow motion (4.7, D-362; the owner,
+2026-11-28).</strong> The display client's Pause stops its replay, but
+not the system: messages kept passing, too fast to click (for example in
+the rush after Adopt). The top bar's mirror of the replay bar is
+removed: the display client's own replay bar is the only replay control.
+In its place, <strong>Pause system / Resume</strong> freezes everything
+(icons stay put and clickable; the system is held, so nothing is
+missed), and a <strong>drawing speed</strong> of 1×, ½× or ¼× slows the
+messages and holds the system back so that the drawing keeps up (FR-92,
+FR-92a).</li>
 <li><strong>The opening's wording (4.7).</strong> Written ourselves, the
 data server is <strong>a range of subsystem components to
 develop</strong>, among them those drawn; not a fixed count
@@ -1245,9 +1255,12 @@ id="9-functional-requirements-the-architecture-view-demonstrator-shell">9.
 Functional requirements: the architecture view (demonstrator shell)</h2>
 <h3 id="91-layout-44">9.1 Layout (4.4)</h3>
 <ul>
-<li><strong>Top bar (4.7)</strong>: title, subtitle, a mirror of the
-replay bar acting on the display client's clock, restart client, restart
-server, failure demos, control panel, overview.</li>
+<li><strong>Top bar (4.7)</strong>: title, subtitle, the system's
+<strong>Pause system / Resume</strong> and <strong>drawing
+speed</strong> (FR-92, FR-92a; D-362), restart client, restart server,
+failure demos, control panel, overview. There is no replay control in
+the top bar: the display client's replay bar is the only one
+(§8.6).</li>
 <li><strong>Left</strong>: the stacked flowchart: front end, third-party
 libraries, back end, legacy.</li>
 <li><strong>Below it</strong>: status (logged-in analyst or locked, the
@@ -1315,15 +1328,44 @@ at load. No component can be revealed during the opening (FR-121).</li>
 </ul>
 <h3 id="96-time-in-the-demonstrator">9.6 Time in the demonstrator</h3>
 <ul>
-<li><strong>FR-77 (4.4)</strong> At load the display client shows its
+<li><p><strong>FR-77 (4.4)</strong> At load the display client shows its
 login screen and nothing else sends. After login it handshakes; the
-replay is paused at the start of Mission A.</li>
-<li><strong>FR-78</strong> Messages are drawn in real time, whatever the
-replay rate.</li>
-<li><strong>FR-92</strong> Withdrawn (4.7): Freeze. Pause covers
-it.</li>
-<li><strong>FR-79 (4.7)</strong> A viewer's click is answered at
-once.</li>
+replay is paused at the start of Mission A.</p></li>
+<li><p><strong>FR-78</strong> Messages are drawn in real time, whatever
+the replay rate; in slow motion, slower (FR-92a).</p></li>
+<li><p><strong>FR-92 (4.7, D-362)</strong> <strong>Pause
+system.</strong> Restated after its withdrawal with Freeze: the display
+client's Pause stops only its replay. The top bar's <strong>Pause
+system</strong> freezes everything, and <strong>Resume</strong>
+continues exactly where it left off, so nothing is missed:</p>
+<ul>
+<li>every message icon stops where it is and stays clickable, opening
+its message as normal (FR-68);</li>
+<li>the system is held: no request enters the relay (the display
+client's, each model's), an answer already on its way waits before it is
+read, the importer and the models stop at their next step, and pushed
+commands wait in the server;</li>
+<li>the display client's replay clock, polling and idle lock do not
+advance;</li>
+<li>a message captured as Pause is pressed is kept, and drawn on
+Resume;</li>
+<li>"System paused" is shown over the flowchart while paused.</li>
+</ul>
+<p>It is the demonstrator's, not the system's: a developed system has no
+such hold. It can act as soon as the top bar's controls appear, the
+startup after Adopt included; a startup step does not stall while
+paused. A failure demo resumes the system before each step and before
+"Put everything back", and Pause waits, disabled and saying why, while a
+step runs.</p></li>
+<li><p><strong>FR-92a (4.7, D-362)</strong> <strong>Slow
+motion.</strong> A drawing speed of <strong>1×, ½× or ¼×</strong> beside
+it. At ½× and ¼× icons travel slower, and the system is held back so
+that the drawing never falls far behind (about one hop): every message
+is still drawn, spaced and clickable, and no backlog builds. At 1×
+nothing is held. The display client's replay rate is its own (FR-86) and
+is not changed.</p></li>
+<li><p><strong>FR-79 (4.7)</strong> A viewer's click is answered at
+once.</p></li>
 </ul>
 <h3 id="97-failure-demos-44">9.7 Failure demos (4.4)</h3>
 <ul>
@@ -1482,17 +1524,17 @@ is gold. No ★, diamond or "our value-add" appears anywhere in the
 opening, the detail panel included. Clicking the display client or
 Models does not reveal it.</p></li>
 <li><p><strong>FR-122</strong> <strong>Nothing runs.</strong> The top
-bar's controls are <strong>hidden, not disabled</strong>: replay mirror,
-restart client, restart server, failure demos, control panel and
-overview. No message is sent, captured or drawn; only the illustrative
-traffic of FR-120a, made in the page, is drawn (D-361). The display
-client does not handshake. <strong>The back end does not start
-(4.6)</strong>: no worker runs, no model registers and nothing is
-fetched until the viewer chooses Adopt (FR-124, FR-125). The status
-panel shows only "Opening", with "· illustrative traffic" while that
-traffic is drawn. The <strong>stand-in banner is hidden</strong> until
-hand-over, because it names OpenSensorHub before there is a data server
-on screen.</p></li>
+bar's controls are <strong>hidden, not disabled</strong>: Pause system
+and the drawing speed (D-362), restart client, restart server, failure
+demos, control panel and overview. No message is sent, captured or
+drawn; only the illustrative traffic of FR-120a, made in the page, is
+drawn (D-361). The display client does not handshake. <strong>The back
+end does not start (4.6)</strong>: no worker runs, no model registers
+and nothing is fetched until the viewer chooses Adopt (FR-124, FR-125).
+The status panel shows only "Opening", with "· illustrative traffic"
+while that traffic is drawn. The <strong>stand-in banner is
+hidden</strong> until hand-over, because it names OpenSensorHub before
+there is a data server on screen.</p></li>
 <li><p><strong>FR-123</strong> <strong>The opening panel (4.7,
 D-359).</strong> The detail panel opens on <strong>The
 components</strong> with:</p>
@@ -1571,17 +1613,19 @@ click</strong>, while the cards merge, with the usual named loading
 steps (NFR-10, NFR-10a). <strong>The flowchart never
 disappears</strong>: until the back end has started, its steps, and any
 stall, are shown in the flowchart's status box, and the controls are
-disabled, each saying why ("Starting: <step>"). A load without the flag
-keeps its startup page. The detail panel keeps the adopted savings until
-the viewer clicks a component or closes it. <strong>That panel is the
-only difference</strong> from a load without the flag.</p></li>
+disabled, each saying why ("Starting: <step>"), except Pause system and
+the drawing speed, which can act at once (FR-92, D-362). A load without
+the flag keeps its startup page. The detail panel keeps the adopted
+savings until the viewer clicks a component or closes it. <strong>That
+panel is the only difference</strong> from a load without the
+flag.</p></li>
 <li><p><strong>FR-125a (4.7)</strong> <strong>Ready means
 usable.</strong> After hand-over, and after any load, nothing plays
 until the analyst logs in, a dataset is open (Mission A by default) and
 Play is pressed. A top-bar control that cannot act yet is
 <strong>disabled and says why</strong> on hover and to assistive
-technology (for example "Log in to the display client first"). It is
-enabled as soon as it can act.</p></li>
+technology (for example "Starting: models"). It is enabled as soon as it
+can act. Play is the display client's own (D-362).</p></li>
 <li><p><strong>FR-126</strong> <strong>One way.</strong> Adoption cannot
 be undone in a session. The Open Standards button and its choices are
 removed at the Adopt click (D-363). To show the opening again, reload
@@ -2035,6 +2079,16 @@ positions see the same results up to their own replay times, and the
 server's outputs do not change</td>
 <td>C4</td>
 </tr>
+<tr>
+<td><strong>AT-71</strong></td>
+<td>Pause system (D-362): icons hold where they are (sampled a second
+apart) and a held icon opens its message; while paused no message is
+captured, no request completes and the display client's replay time does
+not advance; Resume continues and nothing is lost. At ¼× icons take four
+times as long and the drawing's lag stays bounded. The top bar has no
+replay control. Pause is available in the rush after Adopt</td>
+<td>Architecture view</td>
+</tr>
 </tbody>
 </table>
 <hr />
@@ -2140,7 +2194,8 @@ the data folder.</li>
 (FR-84a); comparison is by data of interest on elapsed time.</li>
 <li><strong>A shared replay clock (4.7)</strong>: there is no replay on
 the server; models do not follow replay.</li>
-<li><strong>Freeze (4.7)</strong>: Pause covers it.</li>
+<li><strong>Freeze (4.7)</strong>: withdrawn; the system's Pause (FR-92,
+D-362) is its successor, as the demonstrator's own control.</li>
 <li><strong>An access gateway of ours (4.7)</strong>: clients reach
 OpenSensorHub directly (FR-93).</li>
 <li><strong>More than one analyst logged in at a time</strong>
