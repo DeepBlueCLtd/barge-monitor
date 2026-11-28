@@ -282,7 +282,7 @@ with all four: **12 of 12 `need` checks and 8 of 8 `standin` checks** (`at32-osh
 
 ## Version 4.7: the owner's review (2026-11-26)
 
-The owner reviewed the first 4.6 build and withdrew it (`docs/software-changes-v4.6-branch.md`).
+The owner reviewed the first 4.6 build and withdrew it (`docs/software-changes-v4.6-branch.md`, removed from the tree; read it at commit `2ddcbb5`).
 These rows record the review decisions written into SRD 4.7 and `docs/v4-interfaces.md`, and
 the design choices that follow from them. They supersede the rows they name.
 

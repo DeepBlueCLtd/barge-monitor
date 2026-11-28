@@ -4,7 +4,7 @@
 once on the branch `claude/loving-curie-lkx8d3`, then withdrawn after the owner's review,
 because the software had drifted too far from `main` in one long branch. What that build
 did, its known problems and the review requests are recorded in
-`docs/software-changes-v4.6-branch.md`. Its code is at commit **`8157eef`**.
+`docs/software-changes-v4.6-branch.md` (removed from the tree; read it at commit `2ddcbb5`). Its code is at commit **`8157eef`**.
 
 **Starting point:** `main`, whose software is still Version 4.1 with the 4.2 redraw
 (`91489be`):
