@@ -19,7 +19,7 @@ import {
 } from './discovery';
 import { buildView, datasetDatastreams, DatasetView, essentialFor, outputOf, Property, RES_SECONDS, Resolution, RESOLUTIONS, Source, sourceAt } from './fields';
 import { Closed, ClientHttp, commandOutcomes, HttpError, NetworkFailure, StatusReport, Unauthorized } from './http';
-import { DEFAULT_PERIOD, iso, parseIso, Period, periodFor, periodSeconds, readableUntil, resFor, statsRes, windowOf } from './plan';
+import { iso, parseIso, PeriodId, periodFor, periodOf, readableUntil, resFor, statsRes, windowOf } from './plan';
 
 export type Phase = 'login' | 'handshake' | 'ready' | 'unreachable' | 'rejected' | 'locked';
 
@@ -55,7 +55,7 @@ export interface Notice {
 
 export interface Selection {
   fields: string[];
-  period: Period;
+  period: PeriodId;
   /** In the whole dataset, the range picked on the twin-handle timeline, for the dataset it was picked on; null for all of it. */
   range: { dataset: string; from: number; to: number } | null;
 }
@@ -172,7 +172,7 @@ interface Place {
   selection: Selection;
 }
 
-const DEFAULT_SELECTION: Selection = { fields: [], period: DEFAULT_PERIOD, range: null };
+const DEFAULT_SELECTION: Selection = { fields: [], period: '1h', range: null };
 const SWE = 'application/swe+json';
 /** The workspace's datastream of data of interest (interfaces §11). */
 const DOI_OUTPUT = 'data-of-interest';
@@ -777,12 +777,12 @@ export class DisplayClientSession {
   /** The resolution the period reads: by the window's length; hourly for all of the whole dataset. */
   private periodRes(): Resolution {
     const r = this.wholeDataset() ? this.wholeRange() : null;
-    return resFor(r ? r[1] - r[0] : periodSeconds(this.selection.value.period));
+    return r ? resFor(r[1] - r[0]) : periodOf(this.selection.value.period).res;
   }
 
   /** D-358: "Whole dataset" shows all of the dataset (or a range of it) at once, so there is nothing to replay. */
   wholeDataset(): boolean {
-    return periodSeconds(this.selection.value.period) === null;
+    return periodOf(this.selection.value.period).seconds === null;
   }
 
   /** Why Play, the rates and the timeline cannot act now, or null (FR-125a). */
@@ -1018,8 +1018,7 @@ export class DisplayClientSession {
     void this.act((http) => this.readData(http, true));
   }
 
-  setPeriod(period: Period) {
-    if (!(period.n >= 1)) return;
+  setPeriod(period: PeriodId) {
     this.selection.set({ ...this.selection.value, period });
     // D-358: the whole dataset is shown at once; a replay in progress stops where it is.
     if (this.wholeDataset() && this.clock.state.value?.playing) this.clock.pause();
@@ -1217,9 +1216,10 @@ export class DisplayClientSession {
   }
 
   /** FR-104, FR-94a: save the current window; a resolution no datastream holds is refused, naming those that do. */
-  async saveDoi(label: string, note: string, resolution: string, tags: string[] = []): Promise<string | null> {
+  /** `win` is the window to keep, [from, to]; the current window when left out. */
+  async saveDoi(label: string, note: string, resolution: string, tags: string[] = [], win?: [number, number]): Promise<string | null> {
     const s = this.clock.state.value;
-    const w = this.window();
+    const w = win ?? this.window();
     const v = this.view.value;
     if (!s || !w || !v) return 'Nothing to save: no dataset is open.';
     if (!label.trim()) return 'Give it a name.';
@@ -1342,7 +1342,8 @@ export class DisplayClientSession {
     if (!ds || !e || e.start == null || e.end == null) return;
     const from = parseIso(r.start);
     const to = Math.min(e.end, Math.max(e.start, parseIso(r.end)));
-    this.selection.set({ ...this.selection.value, period: periodFor(from, to, e.start, e.end), range: null });
+    const p = periodFor(from, to, e.start, e.end);
+    this.selection.set({ ...this.selection.value, period: p.period, range: p.range && { dataset: ds, from: p.range[0], to: p.range[1] } });
     if (!this.current(ds)) {
       await this.openDataset(http, ds, to);
       return;

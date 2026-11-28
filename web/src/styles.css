@@ -504,6 +504,7 @@ a.btn { color: inherit; text-decoration: none; display: inline-block; }
 .dc-period { display: inline-flex; gap: 4px; align-items: center; }
 .dc-period-n { width: 5.5em; }
 .dc-period-n.bad { outline: 2px solid #b91c1c; }
+.dc-period-span { display: block; font-size: 12.5px; color: #4b5563; margin-top: 2px; }
 .dc-range { position: relative; height: 22px; min-width: 240px; }
 .dc-replay .dc-time { white-space: nowrap; }
 .dc-range input[type="range"] { position: absolute; inset: 0; width: 100%; margin: 0; background: transparent; pointer-events: none; -webkit-appearance: none; appearance: none; }

@@ -1,17 +1,62 @@
-// The period (FR-54): a number and a unit, ending at the replay time, or the whole dataset. The resolution read
-// follows the window's length: readings up to an hour, 1-minute summaries up to a day, hourly summaries beyond, and
-// for the whole dataset unless a narrower range is picked on its twin-handle timeline.
+// Period presets (FR-54), each ending at the replay time, and the resolution each reads: readings up to an hour,
+// 1-minute summaries for 6 hours and a day, hourly summaries for the whole dataset (or, for a range picked on its
+// twin-handle timeline, by the range's length). A favourite's period is set more finely: a number and a unit.
 import { RES_SECONDS, Resolution } from './fields';
 
-export type PeriodUnit = 's' | 'min' | 'h' | 'd' | 'all';
+export type PeriodId = '1m' | '1h' | '6h' | '1d' | 'all';
 
-/** `n` is kept while the unit is the whole dataset, so choosing a unit again gives the number back. */
 export interface Period {
-  n: number;
-  unit: PeriodUnit;
+  id: PeriodId;
+  label: string;
+  /** Seconds before the replay time; null for the whole dataset. */
+  seconds: number | null;
+  res: Resolution;
 }
 
-export const UNITS: { id: PeriodUnit; label: string; seconds: number | null }[] = [
+export const PERIODS: Period[] = [
+  { id: '1m', label: '1 min', seconds: 60, res: 'PT1S' },
+  { id: '1h', label: '1 h', seconds: 3600, res: 'PT1S' },
+  { id: '6h', label: '6 h', seconds: 6 * 3600, res: 'PT1M' },
+  { id: '1d', label: 'A day', seconds: 86400, res: 'PT1M' },
+  { id: 'all', label: 'Whole dataset', seconds: null, res: 'PT1H' },
+];
+
+export const periodOf = (id: PeriodId): Period => PERIODS.find((p) => p.id === id) ?? PERIODS[1];
+
+/** The window a period covers, in Unix seconds: [from, to], never before the dataset's start. */
+export function windowOf(id: PeriodId, replayTime: number, start: number): [number, number] {
+  const p = periodOf(id);
+  return [p.seconds === null ? start : Math.max(start, replayTime - p.seconds), replayTime];
+}
+
+/** The resolution a range of this many seconds reads, as the presets do. */
+export const resFor = (seconds: number): Resolution => (seconds <= 3600 ? 'PT1S' : seconds <= 86400 ? 'PT1M' : 'PT1H');
+
+/**
+ * What gives a saved window back (FR-106): the preset of its length, or, for a window clipped at the dataset's start,
+ * the shortest that covers it; otherwise the whole dataset, narrowed to the window on its twin-handle timeline.
+ */
+export function periodFor(from: number, to: number, datasetStart: number, datasetEnd: number): { period: PeriodId; range: [number, number] | null } {
+  const span = to - from;
+  const exact = PERIODS.find((p) => p.seconds === span);
+  if (exact) return { period: exact.id, range: null };
+  if (from <= datasetStart) {
+    if (to >= datasetEnd) return { period: 'all', range: null };
+    const cover = PERIODS.find((p) => p.seconds !== null && p.seconds >= span);
+    if (cover) return { period: cover.id, range: null };
+  }
+  return { period: 'all', range: [Math.max(from, datasetStart), Math.min(to, datasetEnd)] };
+}
+
+// --- a favourite's period: a number and a unit (FR-104) --------------------------------------------------------
+export type SpanUnit = 's' | 'min' | 'h' | 'd' | 'all';
+
+export interface Span {
+  n: number;
+  unit: SpanUnit;
+}
+
+export const UNITS: { id: SpanUnit; label: string; seconds: number | null }[] = [
   { id: 's', label: 'seconds', seconds: 1 },
   { id: 'min', label: 'minutes', seconds: 60 },
   { id: 'h', label: 'hours', seconds: 3600 },
@@ -19,41 +64,22 @@ export const UNITS: { id: PeriodUnit; label: string; seconds: number | null }[] 
   { id: 'all', label: 'Whole dataset', seconds: null },
 ];
 
-export const DEFAULT_PERIOD: Period = { n: 1, unit: 'h' };
-
-/** The period's length in seconds; null for the whole dataset. */
-export function periodSeconds(p: Period): number | null {
+/** A span's length in seconds; null for the whole dataset. */
+export function spanSeconds(p: Span): number | null {
   const u = UNITS.find((x) => x.id === p.unit)?.seconds;
   return u == null ? null : Math.max(1, Math.round(p.n)) * u;
 }
 
-/** The resolution a window of this many seconds reads; null (the whole dataset) reads hourly summaries. */
-export function resFor(seconds: number | null): Resolution {
-  if (seconds === null) return 'PT1H';
-  return seconds <= 3600 ? 'PT1S' : seconds <= 86400 ? 'PT1M' : 'PT1H';
-}
-
-export const periodLabel = (p: Period) => {
-  const s = periodSeconds(p);
-  if (s === null) return 'Whole dataset';
-  return `${Math.round(p.n)} ${p.unit}`;
-};
-
-/** The window a period covers, in Unix seconds: [from, to], never before the dataset's start. */
-export function windowOf(p: Period, replayTime: number, start: number): [number, number] {
-  const s = periodSeconds(p);
-  return [s === null ? start : Math.max(start, replayTime - s), replayTime];
-}
-
 /**
- * The period that gives a saved window back (FR-106): its length, in the largest unit that divides it; the whole
- * dataset when the window covers all of it. A window clipped at the dataset's start is given back by its length too.
+ * A length as a span, in the largest unit that divides it to within a second (a range's end is inclusive, so 11:59:59
+ * reads as 12 hours); null gives the whole dataset.
  */
-export function periodFor(from: number, to: number, datasetStart: number, datasetEnd: number): Period {
-  if (from <= datasetStart && to >= datasetEnd) return { n: 1, unit: 'all' };
-  const span = Math.max(1, Math.round(to - from));
-  const u = [...UNITS].reverse().find((x) => x.seconds !== null && span % x.seconds === 0)!;
-  return { n: span / u.seconds!, unit: u.id };
+export function spanOf(seconds: number | null): Span {
+  if (seconds === null) return { n: 1, unit: 'all' };
+  const len = Math.max(1, Math.round(seconds));
+  const near = (u: number) => Math.round(len / u) >= 1 && Math.abs(len - Math.round(len / u) * u) <= 1;
+  const u = [...UNITS].reverse().find((x) => x.seconds !== null && near(x.seconds))!;
+  return { n: Math.round(len / u.seconds!), unit: u.id };
 }
 
 /**

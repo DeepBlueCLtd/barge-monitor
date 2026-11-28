@@ -56,15 +56,6 @@ const bar = (page: Page) => page.getByTestId('replay-bar');
 const chipLabels = async (page: Page) => (await page.getByTestId('chip').allInnerTexts()).join(' | ');
 const monitorText = (page: Page) => page.getByTestId('monitor').innerText();
 
-/** The period (FR-54): a number and a unit, or the whole dataset. */
-async function period(page: Page, n: number | 'all', unit?: string) {
-  const p = page.getByTestId('period');
-  await page.getByTestId('period-unit').selectOption(n === 'all' ? 'all' : unit!);
-  if (n !== 'all') await page.getByTestId('period-n').fill(String(n));
-  if (n !== 'all') await expect(p).toHaveAttribute('data-n', String(n));
-  await expect(p).toHaveAttribute('data-unit', n === 'all' ? 'all' : unit!);
-}
-
 async function play(page: Page) {
   await page.getByTestId('dc-play').click();
   await expect(bar(page)).toHaveAttribute('data-playing', 'true');
@@ -284,7 +275,7 @@ for (const backend of BACKENDS) {
       await results(page);
       await page.getByTestId('dc-rate-100').click();
       await play(page);
-      await period(page, 'all');
+      await page.getByTestId('preset-all').click();
       // A replay in progress stops; Play and the rates say why they cannot act; the timeline becomes a twin-handle range.
       await expect(bar(page)).toHaveAttribute('data-playing', 'false');
       const why = 'Whole dataset: drag the handles to narrow it; pick a period to play';
@@ -318,8 +309,14 @@ for (const backend of BACKENDS) {
       await expect.poll(async () => Date.parse((await range.getAttribute('data-to'))!) / 1000).toBeGreaterThan(to);
       const slid = [await range.getAttribute('data-from'), await range.getAttribute('data-to')].map((x) => Date.parse(x!) / 1000);
       expect(slid[1] - slid[0]).toBe(len);
-      // A period turns replay on again.
-      await period(page, 1, 'h');
+      // FR-104: a favourite's period starts as the range picked.
+      await page.getByTestId('favourites-button').click();
+      const clockOf = (t: number) => new Date(t * 1000).toISOString().replace('.000Z', '').replace('T', ' ');
+      await expect(page.getByTestId('window-period')).toHaveText(`${clockOf(slid[0])} to ${clockOf(slid[1])}`);
+      await expect(page.getByTestId('doi-period')).not.toHaveAttribute('data-unit', 'all');
+      await page.keyboard.press('Escape');
+      // A shorter period turns replay on again.
+      await page.getByTestId('preset-1h').click();
       await expect(page.getByTestId('dc-play')).toBeEnabled();
       await expect(page.getByTestId('dc-replay-off')).toHaveCount(0);
     });
@@ -330,7 +327,7 @@ for (const backend of BACKENDS) {
       await results(page);
       const before = await serverOutputs(page);
       // A day, not the whole dataset: the whole dataset is shown at once, with nothing to replay (D-358).
-      await period(page, 1, 'd');
+      await page.getByTestId('preset-1d').click();
       await page.getByTestId('dc-rate-100').click();
       await play(page);
       await page.waitForTimeout(6000);
@@ -339,11 +336,11 @@ for (const backend of BACKENDS) {
       const one = await shown(page);
       // A second display client on the same server: the same code, not on screen (D-306).
       const two = await page.evaluate(async () => {
-        type C = { login: (u: string, p: string) => Promise<boolean>; setPeriod: (p: { n: number; unit: string }) => void; setRate: (r: number) => void; play: () => void; pause: () => void;
+        type C = { login: (u: string, p: string) => Promise<boolean>; setPeriod: (p: string) => void; setRate: (r: number) => void; play: () => void; pause: () => void;
           seek: (t: number) => void; clock: { state: { value: { start: number } } }; shown: () => unknown; lock: () => void };
         const c = (window as unknown as { bargeNewClient: () => C }).bargeNewClient();
         await c.login('owner', 'demo-owner');
-        c.setPeriod({ n: 1, unit: 'd' });
+        c.setPeriod('1d');
         c.setRate(10);
         c.seek(c.clock.state.value.start + 5 * 3600);
         c.play();
@@ -561,7 +558,7 @@ for (const backend of BACKENDS) {
       const humid = page.getByTestId('chip').filter({ hasText: 'Bow · Humidity' });
       await humid.click();
       await expect(humid).toHaveAttribute('aria-pressed', 'true');
-      await period(page, 6, 'h');
+      await page.getByTestId('preset-6h').click();
       await page.getByTestId('dc-rate-100').click();
       await play(page);
       await page.waitForTimeout(2000);
@@ -579,8 +576,7 @@ for (const backend of BACKENDS) {
       await page.getByTestId('login-submit').click();
       await expect(page.getByTestId('chips')).toBeVisible({ timeout: SLOW });
       await expect(page.getByTestId('chip').filter({ hasText: 'Bow · Humidity' })).toHaveAttribute('aria-pressed', 'true');
-      await expect(page.getByTestId('period')).toHaveAttribute('data-n', '6');
-      await expect(page.getByTestId('period')).toHaveAttribute('data-unit', 'h');
+      await expect(page.getByTestId('preset-6h')).toHaveAttribute('aria-pressed', 'true');
       await expect(page.getByTestId('dataset-button')).toContainText(A);
       expect(Date.parse((await bar(page).getAttribute('data-time'))!)).toBeGreaterThan(Date.parse('2031-04-07T00:01:00Z'));
       // After inactivity (6 s here, 5 minutes by default): locked, blanked, and nothing more is sent.
@@ -599,7 +595,7 @@ for (const backend of BACKENDS) {
       await play(page);
       await page.waitForTimeout(4000);
       await pause(page);
-      await period(page, 1, 'min');
+      await page.getByTestId('preset-1m').click();
       const savedAt = await bar(page).getAttribute('data-time');
       const star = page.getByTestId('favourites-button');
       await expect(star).toHaveAttribute('data-saved', 'false');
@@ -630,7 +626,7 @@ for (const backend of BACKENDS) {
       await expect(opened).toContainText(A);
       const sum1 = await opened.getAttribute('data-checksum');
       // And the same span and more at 1-minute resolution.
-      await period(page, 6, 'h');
+      await page.getByTestId('preset-6h').click();
       await star.click();
       await expect(pop.getByTestId('window-resolution')).toHaveText('PT1M');
       await page.getByTestId('doi-label').fill('Minutes');
@@ -645,8 +641,7 @@ for (const backend of BACKENDS) {
       await expect(page.getByTestId('doi-opened')).toContainText(A);
       // Opening also returns the replay to the record: its dataset, its time and its period.
       await expect(page.getByTestId('dataset-button')).toContainText(A);
-      await expect(page.getByTestId('period')).toHaveAttribute('data-n', '1');
-      await expect(page.getByTestId('period')).toHaveAttribute('data-unit', 'min');
+      await expect(page.getByTestId('preset-1m')).toHaveAttribute('aria-pressed', 'true');
       await expect(bar(page)).toHaveAttribute('data-time', savedAt!);
       // AT-46: compared on elapsed time, at the coarser resolution, labelled "elapsed".
       await star.click();

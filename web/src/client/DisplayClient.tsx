@@ -1,7 +1,7 @@
 // The display client's screen (SRD §8.1), inside the monitor frame. Before login,
 // the login screen only (FR-97). After login, from top to bottom: a status strip with
 // the analyst's name, the Dataset selector button, the Favourites button and Lock; the
-// replay bar; the field chips, the period and clustering; the views. The dataset
+// replay bar; the field chips, period presets and clustering; the views. The dataset
 // list and the Favourites are popups (FR-127), not always on screen.
 // It is deliberately small and generic. It draws what discovery finds and nothing
 // else: which sources a user sees is decided by the server.
@@ -13,7 +13,7 @@ import { RATES } from '../config';
 import { useStore } from '../shell/store';
 import { essentialLabel } from './discovery';
 import { problemText, RESOLUTIONS } from './fields';
-import { iso, Period, PeriodUnit, UNITS } from './plan';
+import { iso, PERIODS, Span, spanOf, spanSeconds, SpanUnit, UNITS } from './plan';
 import { CatalogueEntry, clientSession, DisplayClientSession, DoiItem, hasTags, parseTags, tagsOf } from './session';
 import { PanelGrid } from './views/PanelGrid';
 import { ClusterView, ErrorBarView, HeatmapView, LineView, OpenedView } from './views/views';
@@ -351,31 +351,7 @@ function RangeTimeline({ session, start, end }: { session: DisplayClientSession;
   );
 }
 
-/** FR-54: the period, as a number and a unit, or the whole dataset. A number is applied once typing pauses. */
-function PeriodPicker({ session, period }: { session: DisplayClientSession; period: Period }) {
-  const [text, setText] = useState(String(period.n));
-  useEffect(() => setText(String(period.n)), [period.n]);
-  useEffect(() => {
-    const n = Number(text);
-    if (!Number.isInteger(n) || n < 1 || n === period.n) return;
-    const t = setTimeout(() => session.setPeriod({ ...period, n }), 400);
-    return () => clearTimeout(t);
-  }, [text, period, session]);
-  const whole = period.unit === 'all';
-  const bad = !whole && !(Number.isInteger(Number(text)) && Number(text) >= 1);
-  return (
-    <span className="dc-period" data-testid="period" data-unit={period.unit} data-n={String(period.n)}>
-      <input type="number" min={1} step={1} className={`dc-period-n${bad ? ' bad' : ''}`} value={whole ? '' : text} disabled={whole} aria-label="Period length"
-        title={whole ? 'The whole dataset is shown: choose a unit to set a length' : bad ? 'A whole number, 1 or more' : undefined}
-        onChange={(e) => setText(e.target.value)} onBlur={() => bad && setText(String(period.n))} data-testid="period-n" />
-      <select value={period.unit} aria-label="Period unit" onChange={(e) => session.setPeriod({ ...period, unit: e.target.value as PeriodUnit })} data-testid="period-unit">
-        {UNITS.map((u) => <option key={u.id} value={u.id}>{u.label}</option>)}
-      </select>
-    </span>
-  );
-}
-
-/** FR-53 to FR-55: the field chips of this dataset, the period and clustering. */
+/** FR-53 to FR-55: the field chips of this dataset, the period presets and clustering. */
 function Selectors({ session }: { session: DisplayClientSession }) {
   const view = useStore(session.view);
   const sel = useStore(session.selection);
@@ -394,7 +370,11 @@ function Selectors({ session }: { session: DisplayClientSession }) {
       </div>
       <div className="dc-row">
         <span className="dc-label">Period</span>
-        <PeriodPicker session={session} period={sel.period} />
+        <div className="presets">
+          {PERIODS.map((p) => (
+            <button key={p.id} className={`preset${sel.period === p.id ? ' on' : ''}`} aria-pressed={sel.period === p.id} onClick={() => session.setPeriod(p.id)} data-testid={`preset-${p.id}`}>{p.label}</button>
+          ))}
+        </div>
         <span className="dc-label">Clustering</span>
         <div className="presets">
           {['A', 'B', 'C'].map((a) => (
@@ -427,9 +407,29 @@ function Favourites({ session }: { session: DisplayClientSession }) {
   const win = view && replay ? session.dataWindow() : null;
   const saved = win ? session.isSaved() : false;
   useEffect(() => setRes(session.currentRes()), [sel, view, session, open]);
+  // FR-104: the favourite's period, a number and a unit ending where the current window ends; it starts as the
+  // current window's length (a range picked on the whole dataset's timeline included).
+  const current = view && replay ? session.window() : null;
+  const [span, setSpan] = useState<Span>({ n: 1, unit: 'h' });
+  const [spanText, setSpanText] = useState('1');
+  // Until the period is changed here, the favourite keeps the current window exactly.
+  const [spanTouched, setSpanTouched] = useState(false);
+  useEffect(() => {
+    setSpanTouched(false);
+    const w = session.window();
+    const s = session.clock.state.value;
+    const sp = !w || !s ? spanOf(3600) : w[0] <= s.start && w[1] >= s.end ? spanOf(null) : spanOf(w[1] - w[0]);
+    setSpan(sp);
+    setSpanText(String(sp.n));
+  }, [sel, view, session, open]);
+  const spanN = Number(spanText);
+  const spanBad = span.unit !== 'all' && !(Number.isInteger(spanN) && spanN >= 1);
+  const len = spanSeconds({ ...span, n: spanBad ? span.n : spanN });
+  const favWin: [number, number] | null = current && replay ? (!spanTouched ? current : len === null ? [replay.start, replay.end] : [Math.max(replay.start, current[1] - len), current[1]]) : null;
   const save = async (e: FormEvent) => {
     e.preventDefault();
-    const err = await session.saveDoi(label, note, res, parseTags(tagText));
+    if (spanBad || !favWin) return setError('Give the period as a whole number, 1 or more.');
+    const err = await session.saveDoi(label, note, res, parseTags(tagText), favWin);
     setError(err);
     if (!err) {
       setLabel('');
@@ -457,7 +457,23 @@ function Favourites({ session }: { session: DisplayClientSession }) {
             <>
               <dl className="dc-window">
                 <dt>Dataset</dt><dd data-testid="window-dataset">{win.file}</dd>
-                <dt>Period</dt><dd data-testid="window-period">{iso(win.start).replace('T', ' ').replace('Z', '')} to {iso(win.end).replace('T', ' ').replace('Z', '')}</dd>
+                <dt>Period</dt>
+                <dd>
+                  <span className="dc-period" data-testid="doi-period" data-unit={span.unit} data-n={spanText}>
+                    <input type="number" min={1} step={1} className={`dc-period-n${spanBad ? ' bad' : ''}`} value={span.unit === 'all' ? '' : spanText} disabled={span.unit === 'all'}
+                      aria-label="Period length" onChange={(e) => {
+                        setSpanText(e.target.value);
+                        setSpanTouched(true);
+                      }} data-testid="doi-period-n" />
+                    <select value={span.unit} aria-label="Period unit" onChange={(e) => {
+                      setSpan({ ...span, unit: e.target.value as SpanUnit });
+                      setSpanTouched(true);
+                    }} data-testid="doi-period-unit">
+                      {UNITS.map((u) => <option key={u.id} value={u.id}>{u.label}</option>)}
+                    </select>
+                  </span>
+                  <span className="dc-period-span" data-testid="window-period">{favWin ? `${clock(favWin[0])} to ${clock(favWin[1])}` : '–'}</span>
+                </dd>
                 <dt>Resolution</dt><dd data-testid="window-resolution">{win.resolution}</dd>
                 <dt>Fields</dt><dd data-testid="window-fields">{win.fields.join(', ') || 'none selected'}</dd>
                 {win.run && <><dt>Run</dt><dd data-testid="window-run">{win.run}</dd></>}
