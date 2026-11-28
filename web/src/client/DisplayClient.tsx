@@ -479,13 +479,13 @@ function Favourites({ session }: { session: DisplayClientSession }) {
         <section className="dc-doi" data-testid="doi-panel">
           <div className="dc-row-head"><span className="dc-label">Saved</span></div>
           {tags.length > 0 && (
-            <div className="dc-doi-tags" role="group" aria-label="Filter by tag" data-testid="doi-tag-filter">
+            <fieldset className="dc-doi-tags" aria-label="Filter by tag" data-testid="doi-tag-filter">
               {tags.map((t) => (
                 <button key={t.tag} className={`dc-btn small preset${live.includes(t.tag) ? ' on' : ''}`} aria-pressed={live.includes(t.tag)}
                   onClick={() => toggleTag(t.tag)} data-testid="doi-tag" data-tag={t.tag}>{t.tag} <span className="dc-doi-count">{t.count}</span></button>
               ))}
               {live.length > 0 && <button className="dc-btn small" onClick={() => setFilter([])} data-testid="doi-tag-clear">Show all</button>}
-            </div>
+            </fieldset>
           )}
           {!items.length ? <p className="dc-note-plain" data-testid="doi-empty">None saved yet.</p> : !shown.length ? <p className="dc-note-plain">None carries every picked tag.</p> : (
             <ul className="dc-doi-list">
