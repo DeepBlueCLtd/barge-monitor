@@ -1327,9 +1327,10 @@ card of the opening, in the flowchart's order (<code>ROWS</code> in
 <code>opening.ts</code>); clicking any card highlights its row. After
 Adopt a column, "With OpenSensorHub", ticks the subsystems and says what
 became of the rest.</p></li>
-<li><p><strong>Open Standards</strong> (FR-123a, D-363). Above the
-table, until Adopt, one button, <code>open-standards</code>.
-<code>opening.view</code> (<code>'components' | 'standards'</code>, a
+<li><p><strong>Open Standards</strong> (FR-123a, D-363, D-365). Below
+the table, until Adopt, one button, <code>open-standards</code>.
+<code>opening.view</code>
+(<code>'components' | 'standards' | 'opensource'</code>, a
 <code>Store</code> in <code>opening.ts</code>) says what the panel shows
 while the phase is <code>build</code>; <code>showStandards()</code> and
 <code>showComponents()</code> set it and do nothing else: no request,
@@ -1344,12 +1345,18 @@ with <code>data-entity</code> and <code>data-part</code> <code>p1</code>
 or <code>p2</code>), a sentence relating it to the demonstrator
 (<code>standards-here</code>) and the two buttons,
 <code>choose-custom</code> ("Custom Components":
-<code>showComponents()</code>) and <code>choose-osh</code>
-("OpenSensorHub": <code>opening.adopt()</code>).
-<code>highlight()</code> (a card click) and <code>adopt()</code> set the
-view back to <code>components</code>. A reload starts on
-<code>components</code>. The history's periods and the part numbers are
-the opening's only digits, in this view only.</p></li>
+<code>showComponents()</code>) and <code>choose-open-source</code>
+("Open Source": <code>showOpenSource()</code>).
+<code>web/src/detail/OpenSourceView.tsx</code> draws the Open Source
+view (D-365; <code>data-testid="open-source"</code>, title "Open
+Source"): one lead sentence, a short list of facts about OpenSensorHub
+(<code>OPEN_SOURCE</code>, <code>open-source-facts</code>: who made it,
+who it was made for, licence, its place here; no digits), then one
+button, <code>choose-adopt</code> ("Adopt":
+<code>opening.adopt()</code>). <code>highlight()</code> (a card click)
+and <code>adopt()</code> set the view back to <code>components</code>. A
+reload starts on <code>components</code>. The history's periods and the
+part numbers are the opening's only digits, in this view only.</p></li>
 <li><p><strong>Before Adopt:</strong></p>
 <ul>
 <li><code>runtime.start()</code> is <strong>not called</strong>: no
