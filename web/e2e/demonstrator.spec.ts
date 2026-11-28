@@ -587,7 +587,7 @@ for (const backend of BACKENDS) {
       expect(since(log, t2)).toEqual([]);
     });
 
-    test(`Favourites: save the current window, open it exactly after switching dataset, compare on elapsed time, refuse a missing resolution, remove; Reset instance empties the list (AT-45 to AT-48), ${backend}`, async ({ page }) => {
+    test(`Favourites: save the current window, open it after switching dataset, compare on elapsed time, refuse a missing resolution, remove; Reset instance empties the list (AT-45 to AT-48), ${backend}`, async ({ page }) => {
       await open(page, backend);
       await login(page);
       await results(page);
@@ -615,13 +615,6 @@ for (const backend of BACKENDS) {
       await page.getByTestId('doi-save').click();
       await expect(page.getByTestId('doi-item').filter({ hasText: 'Last minute' })).toBeVisible();
       await expect(star).toHaveAttribute('data-saved', 'true');
-      // Opening one closes the popup and draws it, labelled with its dataset and span.
-      await page.getByTestId('doi-item').filter({ hasText: 'Last minute' }).getByTestId('doi-open').click();
-      await expect(pop).toHaveCount(0);
-      const opened = page.getByTestId('doi-opened');
-      await expect(opened).toBeVisible();
-      await expect(opened).toContainText(A);
-      const sum1 = await opened.getAttribute('data-checksum');
       // And the same span and more at 1-minute resolution.
       await page.getByTestId('preset-6h').click();
       await star.click();
@@ -630,16 +623,15 @@ for (const backend of BACKENDS) {
       await page.getByTestId('doi-save').click();
       await expect(page.getByTestId('doi-item').filter({ hasText: 'Minutes' })).toBeVisible();
       await page.keyboard.press('Escape');
-      // AT-45: after switching dataset, the record regenerates exactly the same values.
+      // AT-45: opening after switching dataset draws no chart of its own; it returns the replay to the record (D-367).
       await openFile(page, C);
       await star.click();
       await page.getByTestId('doi-item').filter({ hasText: 'Last minute' }).getByTestId('doi-open').click();
-      await expect(page.getByTestId('doi-opened')).toHaveAttribute('data-checksum', sum1!);
-      await expect(page.getByTestId('doi-opened')).toContainText(A);
-      // Opening also returns the replay to the record: its dataset, its time and its period.
+      await expect(pop).toHaveCount(0);
       await expect(page.getByTestId('dataset-button')).toContainText(A);
       await expect(page.getByTestId('preset-1m')).toHaveAttribute('aria-pressed', 'true');
       await expect(bar(page)).toHaveAttribute('data-time', savedAt!);
+      await expect(page.locator('.dc-opened')).toHaveCount(0);
       // AT-46: compared on elapsed time, at the coarser resolution, labelled "elapsed".
       await star.click();
       await page.getByTestId('doi-item').filter({ hasText: 'Last minute' }).getByTestId('doi-pick').check();
