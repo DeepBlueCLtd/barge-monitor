@@ -30,6 +30,18 @@ export function windowOf(id: PeriodId, replayTime: number, start: number): [numb
 }
 
 /**
+ * The period preset that gives a saved window back (FR-106): the one of its length, or, for a window clipped at the
+ * dataset's start, the shortest that covers it; the whole dataset when none does.
+ */
+export function periodFor(from: number, to: number, datasetStart: number): PeriodId {
+  const span = to - from;
+  const exact = PERIODS.find((p) => p.seconds === span);
+  if (exact) return exact.id;
+  if (from <= datasetStart) return PERIODS.find((p) => p.seconds !== null && p.seconds >= span)?.id ?? 'all';
+  return 'all';
+}
+
+/**
  * The latest phenomenon time a datastream at a resolution may be read up to (FR-63b): a reading at the replay time,
  * a summary only once its interval has ended, so nothing after the replay time is shown.
  */
