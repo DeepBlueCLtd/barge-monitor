@@ -29,6 +29,22 @@ const ROW_IDS = ['client', 'models', 'importer', ...SUBS, 'scilibs', 'folder'];
 /** Words the 4.7 opening must never use (4.7: no access gateway, no replay controller, no Freeze; no count of subsystems). */
 const GONE = /gateway|replay controller|freeze|\beight\b/i;
 
+/** D-363: the entities the Open Standards tree labels. */
+const ENTITIES = ['System', 'Subsystems', 'Datastreams', 'Schema', 'Observations', 'Control streams', 'Commands', 'Command status',
+  'Deployments', 'Procedures', 'Sampling features', 'Properties'];
+/** D-363: the only digits allowed on the page, and only in the Open Standards view: its periods and the standard's part numbers. */
+const STANDARDS_DIGITS = /\b(?:(?:19|20)\d0s|20\d\d|Part [12])\b/g;
+
+/** FR-124 (D-363): Adopt is "Open Standards", then "OpenSensorHub". */
+async function openStandards(page: Page) {
+  await page.getByTestId('open-standards').click();
+  await expect(page.getByTestId('standards')).toBeVisible();
+}
+async function adopt(page: Page) {
+  await openStandards(page);
+  await page.getByTestId('choose-osh').click();
+}
+
 /** Count every worker the page creates (AT-63: no back-end or model worker before Adopt). */
 async function countWorkers(page: Page) {
   await page.addInitScript(() => {
@@ -122,7 +138,7 @@ test('the fixed layouts: two rows of five, the subsystem cards the size of the i
 });
 
 test('the opening\'s words: "a range of subsystem components", never a count, a gateway, a replay controller or Freeze (FR-120, FR-123, D-230)', () => {
-  const src = ['../src/shell/opening.ts', '../src/detail/OpeningPanel.tsx'].map((f) => readFileSync(new URL(f, import.meta.url), 'utf8')).join('\n');
+  const src = ['../src/shell/opening.ts', '../src/detail/OpeningPanel.tsx', '../src/detail/StandardsView.tsx'].map((f) => readFileSync(new URL(f, import.meta.url), 'utf8')).join('\n');
   expect(src).toContain(LEAD);
   expect(src).not.toMatch(GONE);
 });
@@ -151,12 +167,15 @@ for (const backend of ['standin', 'python'] as const) {
       await expect(page.getByTestId('opening-panel')).toHaveCount(0);
       await expect(page.getByTestId('card-sub-webapi')).toHaveCount(0);
       await openOpening(page);
-      await expect(page.getByTestId('switch-build')).toHaveAttribute('aria-checked', 'true');
-      await expect(page.getByTestId('switch-adopt')).toHaveAttribute('aria-checked', 'false');
+      await expect(page.getByTestId('opening-panel')).toHaveAttribute('data-view', 'components');
+      await expect(page.getByTestId('open-standards')).toBeVisible();
+      await openStandards(page);
       await page.reload();
       await expect(page.getByTestId('opening-panel')).toBeVisible();
       await expect(page.getByTestId('flowchart')).toHaveAttribute('data-mode', 'opening');
-      await expect(page.getByTestId('switch-build')).toHaveAttribute('aria-checked', 'true');
+      // A reload repeats the opening from its start: the components, not the Open Standards view.
+      await expect(page.getByTestId('opening-panel')).toHaveAttribute('data-view', 'components');
+      await expect(page.getByTestId('open-standards')).toBeVisible();
       // Any value, or none, is the flag (FR-119).
       await openOpening(page, `demo/?backend=${backend}&hand-made=yes`);
     });
@@ -304,11 +323,13 @@ for (const backend of ['standin', 'python'] as const) {
       expect(requests).toEqual([]);
       expect(await page.locator('body').innerText()).not.toMatch(GONE);
       expect(await page.locator('body').innerText()).not.toMatch(/\d/);
-      // Adopt: the traffic stops at once. Every animation frame from the click records whether a mock icon is drawn.
+      // The Open Standards view changes only the panel: the traffic keeps running (D-363).
+      await openStandards(page);
+      // Adopt ("OpenSensorHub"): the traffic stops at once. Every animation frame from the click records whether a mock icon is drawn.
       await page.evaluate(() => {
         const w = window as unknown as { __mock: { click: number; last: number; frames: number } };
         w.__mock = { click: 0, last: -1, frames: 0 };
-        document.querySelector('[data-testid="switch-adopt"]')!.addEventListener('click', () => { w.__mock.click = performance.now(); }, { capture: true });
+        document.querySelector('[data-testid="choose-osh"]')!.addEventListener('click', () => { w.__mock.click = performance.now(); }, { capture: true });
         const loop = () => {
           const m = w.__mock;
           if (m.click) {
@@ -320,7 +341,7 @@ for (const backend of ['standin', 'python'] as const) {
         requestAnimationFrame(loop);
       });
       await expect.poll(() => mock.count(), { timeout: 10_000 }).toBeGreaterThan(0);
-      await page.getByTestId('switch-adopt').click();
+      await page.getByTestId('choose-osh').click();
       await expect(page.getByTestId('flowchart')).toHaveAttribute('data-mode', 'merging');
       await page.waitForTimeout(500);
       // Sampled shortly after the click: none left, while the cards are still merging.
@@ -343,6 +364,118 @@ for (const backend of ['standin', 'python'] as const) {
       expect(real.filter((m) => /^sub-/.test(m.src) || /^sub-/.test(m.dst))).toEqual([]);
       expect(Object.keys(await page.evaluate(() => (globalThis as any).bargeCaptured())).filter((k) => k.includes('sub-'))).toEqual([]);
       await expect(page.getByTestId('message-strip')).toBeVisible();
+      expect(errors).toEqual([]);
+    });
+
+    test(`D-363: Open Standards shows a short history and a tree of the entities; Custom Components goes back to the table with nothing started, ${backend}`, async ({ page }) => {
+      const requests: string[] = [];
+      page.on('request', (r: Request) => /\/api(\/|\?|$)/.test(new URL(r.url()).pathname) && requests.push(r.url()));
+      const errors: string[] = [];
+      page.on('pageerror', (e) => errors.push(e.message));
+      await openOpening(page);
+      const status = async () => (await page.getByTestId('status-box').innerText()).replace(/\s+/g, ' ').trim().toLowerCase();
+      const before = await status();
+      await openStandards(page);
+      // In the panel only: the flowchart is the opening's, unchanged, and its illustrative traffic keeps running.
+      await expect(page.getByTestId('detail-panel')).toHaveAttribute('data-showing', 'opening');
+      await expect(page.getByTestId('opening-panel')).toHaveAttribute('data-view', 'standards');
+      await expect(page.getByTestId('detail-title')).toHaveText('Open Standards');
+      await expect(page.getByTestId('opening-table')).toHaveCount(0);
+      await expect(page.getByTestId('flowchart')).toHaveAttribute('data-mode', 'opening');
+      for (const id of SUBS) await expect(page.getByTestId(`card-${id}`)).toBeVisible();
+      await expect(page.getByTestId('card-server')).toHaveCount(0);
+      await expect.poll(() => page.getByTestId('mock-icon').count(), { timeout: 10_000 }).toBeGreaterThan(0);
+      expect(await status()).toBe(before);
+      // The history: short, oldest first, from Sensor Web Enablement to Connected Systems and OpenSensorHub.
+      const history = page.getByTestId('standards-history');
+      await expect(history.locator('li')).toHaveCount(4);
+      const text = (await history.innerText()).replace(/\s+/g, ' ');
+      const order = ['Sensor Web Enablement', 'SensorML', 'Observations & Measurements', 'SOS', 'SPS', 'OGC API family', 'OGC API – Features',
+        'OGC API – Connected Systems', 'Part 1', 'Part 2', 'OpenSensorHub'];
+      for (const w of order) expect(text, w).toContain(w);
+      expect(order.map((w) => text.indexOf(w))).toEqual(order.map((w) => text.indexOf(w)).sort((a, b) => a - b));
+      // The tree: an inline SVG image with a title and a description, every entity labelled and readable.
+      const tree = page.getByTestId('standards-tree');
+      await expect(tree).toBeVisible();
+      expect(await tree.evaluate((e) => e.tagName.toLowerCase())).toBe('svg');
+      await expect(tree).toHaveAttribute('role', 'img');
+      expect(await tree.locator('title').textContent()).toMatch(/Connected Systems/);
+      expect((await tree.locator('desc').textContent())!.length).toBeGreaterThan(80);
+      const label = await tree.evaluate((e) => (e.getAttribute('aria-labelledby') ?? '').split(' ').map((id) => document.getElementById(id)?.textContent ?? '').join(' '));
+      expect(label).toMatch(/Connected Systems/);
+      expect(await tree.locator('[data-entity]').evaluateAll((els) => els.map((e) => e.getAttribute('data-entity')))).toEqual(
+        ['System', 'Subsystems', 'Datastreams', 'Schema', 'Observations', 'Control streams', 'Commands', 'Command status', 'Deployments', 'Procedures', 'Sampling features', 'Properties']);
+      for (const name of ENTITIES) {
+        const t = tree.locator(`[data-entity="${name}"] > text`).first();
+        expect((await t.textContent())!.toLowerCase(), name).toBe(name.toLowerCase());
+        const b = (await t.boundingBox())!;
+        expect(b.height, `${name} is readable`).toBeGreaterThanOrEqual(11);
+      }
+      // The tree's shape: what hangs from a System, and what is Part 1 and what is Part 2.
+      const part = (name: string) => tree.locator(`[data-entity="${name}"]`).first().getAttribute('data-part');
+      for (const n of ['System', 'Subsystems', 'Deployments', 'Procedures', 'Sampling features', 'Properties']) expect(await part(n), n).toBe('p1');
+      for (const n of ['Datastreams', 'Observations', 'Control streams', 'Commands', 'Command status']) expect(await part(n), n).toBe('p2');
+      // Every label inside the drawing, none overlapping another.
+      const overlaps = await tree.evaluate((svg) => {
+        const vb = svg.getBoundingClientRect();
+        const r = Array.from(svg.querySelectorAll('text')).map((t) => ({ s: t.textContent, b: t.getBoundingClientRect() }));
+        const bad: string[] = [];
+        for (const a of r) if (a.b.left < vb.left - 0.5 || a.b.right > vb.right + 0.5 || a.b.top < vb.top - 0.5 || a.b.bottom > vb.bottom + 0.5) bad.push(`${a.s} outside`);
+        for (let i = 0; i < r.length; i++) for (let j = i + 1; j < r.length; j++) {
+          const [a, b] = [r[i].b, r[j].b];
+          if (a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1) bad.push(`${r[i].s} / ${r[j].s}`);
+        }
+        return bad;
+      });
+      expect(overlaps).toEqual([]);
+      // Related to this demonstrator.
+      await expect(page.getByTestId('standards-here')).toContainText('Systems');
+      await expect(page.getByTestId('standards-here')).toContainText('Datastream');
+      await expect(page.getByTestId('standards-here')).toContainText('Commands');
+      // The two choices.
+      await expect(page.getByTestId('choose-custom')).toHaveText('Custom Components');
+      await expect(page.getByTestId('choose-osh')).toHaveText('OpenSensorHub');
+      // No count (FR-120, AT-64): the only digits on the page are the history's periods and the standard's part numbers.
+      const body = await page.locator('body').innerText();
+      const standards = await page.getByTestId('standards').innerText();
+      const rest = await page.evaluate(() => {
+        const el = document.querySelector<HTMLElement>('[data-testid="standards"]')!;
+        el.style.display = 'none';
+        const t = document.body.innerText;
+        el.style.display = '';
+        return t;
+      });
+      expect(rest).not.toMatch(/\d/);
+      expect(standards.replace(STANDARDS_DIGITS, '')).not.toMatch(/\d/);
+      expect(body).not.toMatch(GONE);
+      expect(body).not.toContain('★');
+      expect(body.toLowerCase()).not.toContain('value-add');
+      await expect(page.locator('.gold, [data-revealed="true"], .va-pill, .card-diamond, .diamond')).toHaveCount(0);
+      // Custom Components: back to the table as it was; nothing else changes, nothing has started.
+      await page.getByTestId('choose-custom').click();
+      await expect(page.getByTestId('opening-panel')).toHaveAttribute('data-view', 'components');
+      await expect(page.getByTestId('standards')).toHaveCount(0);
+      await expect(page.getByTestId('detail-title')).toHaveText('The components');
+      await expect(page.getByTestId('open-standards')).toBeVisible();
+      await expect(page.getByTestId('opening-lead')).toHaveText(LEAD);
+      expect(await page.getByTestId('opening-table').locator('tbody tr').evaluateAll((rs) => rs.map((r) => r.getAttribute('data-testid')))).toEqual(ROW_IDS.map((id) => `row-${id}`));
+      await expect(page.getByTestId('tick')).toHaveCount(0);
+      expect(await page.locator('body').innerText()).not.toMatch(/\d/);
+      await expect(page.getByTestId('flowchart')).toHaveAttribute('data-mode', 'opening');
+      await expect(page.getByTestId('card-server')).toHaveCount(0);
+      expect(await status()).toBe(before);
+      // A card clicked while Open Standards is shown brings the table back, its row highlighted (FR-123).
+      await openStandards(page);
+      await page.getByTestId('card-sub-registry').click();
+      await expect(page.getByTestId('opening-panel')).toHaveAttribute('data-view', 'components');
+      await expect(page.getByTestId('row-sub-registry')).toHaveClass(/highlighted/);
+      // Still nothing runs (FR-122, AT-63).
+      await page.waitForTimeout(1000);
+      for (const id of CONTROLS) await expect(page.getByTestId(id)).toHaveCount(0);
+      expect(await workers(page)).toBe(0);
+      expect(await page.evaluate(async () => (await navigator.serviceWorker.getRegistrations()).length)).toBe(0);
+      expect(requests).toEqual([]);
+      expect(await page.evaluate(() => (globalThis as any).bargeCaptured())).toEqual({});
       expect(errors).toEqual([]);
     });
 
@@ -406,8 +539,9 @@ for (const backend of ['standin', 'python'] as const) {
       const outline = () => page.locator('[data-testid="card-sub-webapi"] svg.sketch path').first().getAttribute('d');
       const before = await outline();
       const card0 = await box(page, 'card-sub-webapi');
+      await openStandards(page);
       const t0 = Date.now();
-      await page.getByTestId('switch-adopt').click();
+      await page.getByTestId('choose-osh').click();
       // D-360: about six seconds of merge; the outlines move and shrink with their cards, they are not redrawn (VS-25).
       await expect(flow).toHaveAttribute('data-mode', 'merging');
       expect(await outline()).toBe(before);
@@ -444,11 +578,14 @@ for (const backend of ['standin', 'python'] as const) {
       expect(seen.startupPage, 'frames with the startup page').toBe(0);
       expect(seen.flowcharts, 'flowchart elements').toBe(1);
       for (const r of seen.reasons) expect(r).toMatch(/^Starting: /);
-      // The opening panel: every subsystem ticked, no number; the switch removed, there is no way back (FR-124, FR-126).
+      // The opening panel: every subsystem ticked, no number; Open Standards and its choices removed, there is no way back
+      // (FR-124, FR-126, D-363).
       await expect(page.getByTestId('detail-panel')).toHaveAttribute('data-showing', 'opening');
+      await expect(page.getByTestId('opening-panel')).toHaveAttribute('data-view', 'components');
       await expect(page.getByTestId('tick')).toHaveCount(SUBS.length);
       expect(await page.getByTestId('opening-panel').innerText()).not.toMatch(/\d/);
-      await expect(page.getByTestId('opening-switch')).toHaveCount(0);
+      await expect(page.getByTestId('open-standards')).toHaveCount(0);
+      await expect(page.getByTestId('standards')).toHaveCount(0);
       // One Data server card, in the third-party zone; the subsystem cards and the opening's lines are gone.
       await expect(page.getByTestId('card-server')).toHaveCount(1);
       for (const id of SUBS) await expect(page.getByTestId(`card-${id}`)).toHaveCount(0);
@@ -557,7 +694,7 @@ for (const backend of ['standin', 'python'] as const) {
 
     test(`AT-65: closing the opening panel after hand-over shows the overview; there is no way back, ${backend}`, async ({ page }) => {
       await openOpening(page);
-      await page.getByTestId('switch-adopt').click();
+      await adopt(page);
       await expect(page.getByTestId('flowchart')).toHaveAttribute('data-mode', 'normal', { timeout: SLOW });
       await expect(page.getByTestId('detail-panel')).toHaveAttribute('data-showing', 'opening');
       await page.getByTestId('detail-close').click();
@@ -565,7 +702,8 @@ for (const backend of ['standin', 'python'] as const) {
       await expect(page.getByTestId('detail-panel')).toHaveAttribute('data-showing', 'none');
       await expect(page.getByTestId('written')).toBeVisible();
       // There is no way back to the opening in this session (FR-126).
-      await expect(page.getByTestId('opening-switch')).toHaveCount(0);
+      await expect(page.getByTestId('open-standards')).toHaveCount(0);
+      await expect(page.getByTestId('choose-osh')).toHaveCount(0);
       await expect(page.locator('[data-testid^="card-sub-"]')).toHaveCount(0);
     });
 
@@ -583,8 +721,9 @@ for (const backend of ['standin', 'python'] as const) {
         new MutationObserver(() => w.__modes.push(el.getAttribute('data-mode')!)).observe(el, { attributes: true, attributeFilter: ['data-mode'] });
       });
       await watchHandOver(page);
+      await openStandards(page);
       const t0 = Date.now();
-      await page.getByTestId('switch-adopt').click();
+      await page.getByTestId('choose-osh').click();
       // At once: the controls of the normal startup are there, and the back end is starting.
       await expect(page.getByTestId('controls')).toBeVisible({ timeout: 1000 });
       expect(Date.now() - t0).toBeLessThan(1000);

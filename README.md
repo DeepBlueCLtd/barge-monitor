@@ -43,7 +43,8 @@ world run, history, logger, store adapter and simulation clock are retired (D-32
 folder is the only data. And the **adoption opening** (SRD §9.8, plan Phase 9): with `?hand-made`
 the demonstrator opens on the data server as we would write it ourselves, a range of subsystem
 components to develop drawn as the equals of the CSV importer and Models, in two rows of five;
-nothing runs until *Adopt OpenSensorHub*, which starts the back end and merges them, one at a time,
+nothing runs until *Open Standards* (a short history of OGC API – Connected Systems and a tree of
+its entities, D-363) and then *OpenSensorHub*, which starts the back end and merges them, one at a time,
 into the one Data server card, then hands over to the normal layout; the flowchart stays on screen
 while the back end finishes starting (D-360).
 
