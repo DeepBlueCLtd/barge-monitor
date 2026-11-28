@@ -12,7 +12,7 @@ import { FormEvent, PointerEvent as ReactPointerEvent, ReactNode, RefObject, use
 import { RATES } from '../config';
 import { useStore } from '../shell/store';
 import { essentialLabel } from './discovery';
-import { problemText, RESOLUTIONS } from './fields';
+import { problemText } from './fields';
 import { iso, PERIODS, Span, spanOf, spanSeconds, SpanUnit, UNITS } from './plan';
 import { CatalogueEntry, clientSession, DisplayClientSession, DoiItem, hasTags, parseTags, tagsOf } from './session';
 import { PanelGrid } from './views/PanelGrid';
@@ -295,6 +295,8 @@ function ReplayBar({ session }: { session: DisplayClientSession }) {
   );
 }
 
+const RES_WORDS: Record<string, string> = { PT1S: 'Readings (1 s)', PT1M: '1-minute summaries', PT1H: 'Hourly summaries' };
+
 const clock = (t: number) => iso(t).replace('T', ' ').replace('Z', '');
 
 /** D-358: in the whole dataset, a twin-handle timeline picks the range shown; nothing is replayed. */
@@ -406,7 +408,12 @@ function Favourites({ session }: { session: DisplayClientSession }) {
   const close = () => setOpen(false);
   const win = view && replay ? session.dataWindow() : null;
   const saved = win ? session.isSaved() : false;
-  useEffect(() => setRes(session.currentRes()), [sel, view, session, open]);
+  const resOptions = view ? session.availableRes() : [];
+  useEffect(() => {
+    const ok = session.availableRes();
+    const cur = session.currentRes();
+    setRes(ok.includes(cur) ? cur : ok[0] ?? '');
+  }, [sel, view, session, open]);
   // FR-104: the favourite's period, a number and a unit ending where the current window ends; it starts as the
   // current window's length (a range picked on the whole dataset's timeline included).
   const current = view && replay ? session.window() : null;
@@ -484,8 +491,12 @@ function Favourites({ session }: { session: DisplayClientSession }) {
                 <input placeholder="Tags, comma separated" value={tagText} onChange={(e) => setTagText(e.target.value)} data-testid="doi-tags" aria-label="Tags"
                   list="doi-tag-list" title={tags.length ? `Tags in use: ${tags.map((t) => t.tag).join(', ')}` : 'Comma separated, for filtering the saved list'} />
                 <datalist id="doi-tag-list">{tags.map((t) => <option key={t.tag} value={t.tag} />)}</datalist>
-                <input className="mono" value={res} onChange={(e) => setRes(e.target.value)} aria-label="Resolution"
-                  title={`Resolution, as an ISO 8601 duration: ${RESOLUTIONS.join(', ')}`} data-testid="doi-resolution" size={6} />
+                <label className="dc-doi-res">Resolution{' '}
+                  <select value={res} onChange={(e) => setRes(e.target.value)} disabled={!resOptions.length} data-testid="doi-resolution"
+                    title={resOptions.length ? 'Only the resolutions every selected field is held at' : 'Select a field first'}>
+                    {resOptions.map((r) => <option key={r} value={r}>{RES_WORDS[r]}</option>)}
+                  </select>
+                </label>
                 <button className="dc-btn small" type="submit" data-testid="doi-save">Save</button>
               </form>
             </>

@@ -527,7 +527,7 @@ for (const backend of BACKENDS) {
       await page.getByTestId('favourites-button').click();
       await page.getByTestId('doi-label').fill('Engine CO₂');
       await page.getByTestId('doi-tags').fill(' engine , Emissions, ENGINE');
-      await page.getByTestId('doi-resolution').fill('PT1S');
+      await page.getByTestId('doi-resolution').selectOption('PT1S');
       await page.getByTestId('doi-save').click();
       await expect(page.getByTestId('doi-item').filter({ hasText: 'Engine' })).toHaveAttribute('data-greyed', 'false');
       // FR-105a: tags saved trimmed, without repeats, and offered as a filter.
@@ -605,16 +605,13 @@ for (const backend of BACKENDS) {
       await expect(pop.getByTestId('window-dataset')).toHaveText(A);
       await expect(pop.getByTestId('window-resolution')).toHaveText('PT1S');
       await expect(pop.getByTestId('window-fields')).toContainText('Bow · Air temperature');
-      // AT-47: a resolution no datastream holds is refused, naming those that do.
-      await page.getByTestId('doi-label').fill('Bad');
-      await page.getByTestId('doi-resolution').fill('PT10M');
-      await page.getByTestId('doi-save').click();
-      await expect(page.getByTestId('doi-error')).toContainText('No datastream holds PT10M');
-      await expect(page.getByTestId('doi-error')).toContainText('PT1S, PT1M, PT1H');
+      // AT-47: only the resolutions the selected fields' datastreams hold are offered.
+      await expect(page.getByTestId('doi-resolution').locator('option')).toHaveText(['Readings (1 s)', '1-minute summaries', 'Hourly summaries']);
+      expect(await page.getByTestId('doi-resolution').locator('option').evaluateAll((o) => o.map((x) => (x as HTMLOptionElement).value))).toEqual(['PT1S', 'PT1M', 'PT1H']);
       // Save a minute of readings.
       await page.getByTestId('doi-label').fill('Last minute');
       await page.getByTestId('doi-note').fill('a gust');
-      await page.getByTestId('doi-resolution').fill('PT1S');
+      await page.getByTestId('doi-resolution').selectOption('PT1S');
       await page.getByTestId('doi-save').click();
       await expect(page.getByTestId('doi-item').filter({ hasText: 'Last minute' })).toBeVisible();
       await expect(star).toHaveAttribute('data-saved', 'true');

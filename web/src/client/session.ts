@@ -1054,6 +1054,13 @@ export class DisplayClientSession {
     return [...out.values()];
   }
 
+  /** The resolutions every selected field is held at: those a favourite can be saved at (AT-47). */
+  availableRes(): Resolution[] {
+    const v = this.view.value;
+    const props = v ? this.selection.value.fields.map((k) => v.props.find((p) => p.key === k)).filter((p): p is Property => !!p) : [];
+    return props.length ? RESOLUTIONS.filter((r) => props.every((p) => p.byRes[r])) : [];
+  }
+
   /** The current selection's resolution: the coarsest its fields are read at. */
   currentRes(): Resolution {
     const rs = this.inUse().filter((u) => u.use === 'line').map((u) => u.res);
