@@ -8,7 +8,7 @@
 //
 // The demonstrator's demo credentials are passed in by the shell (FR-102): a developed
 // system never pre-populates credentials, and this file knows no account.
-import { FormEvent, ReactNode, RefObject, useEffect, useRef, useState } from 'react';
+import { FormEvent, PointerEvent as ReactPointerEvent, ReactNode, RefObject, useEffect, useRef, useState } from 'react';
 import { RATES } from '../config';
 import { useStore } from '../shell/store';
 import { essentialLabel } from './discovery';
@@ -289,7 +289,7 @@ function ReplayBar({ session }: { session: DisplayClientSession }) {
           <span className="dc-time mono" data-testid="dc-time">{iso(pos).replace('T', ' ').replace('Z', '')}</span>
         </>
       )}
-      {offWhy && <span id="dc-replay-off" className="dc-sent" data-testid="dc-replay-off">{offWhy}</span>}
+      {offWhy && <span id="dc-replay-off" className="sr-only" data-testid="dc-replay-off">{offWhy}</span>}
       <span className="dc-sent" data-testid="dc-at-end">{s.atEnd ? 'At the end of the dataset: paused' : ''}</span>
     </div>
   );
@@ -307,6 +307,29 @@ function RangeTimeline({ session, start, end }: { session: DisplayClientSession;
     setDrag(null);
   };
   const pct = (t: number) => `${((t - start) / Math.max(1, end - start)) * 100}%`;
+  const track = useRef<HTMLSpanElement>(null);
+  // Dragging the bar between the handles slides the range, keeping its length.
+  const slide = (e: ReactPointerEvent) => {
+    const w = track.current?.getBoundingClientRect().width ?? 0;
+    if (!w) return;
+    e.preventDefault();
+    const x0 = e.clientX;
+    const len = b - a;
+    let last: [number, number] = [a, b];
+    const move = (m: PointerEvent) => {
+      const from = Math.round(Math.min(end - len, Math.max(start, a + ((m.clientX - x0) / w) * (end - start))));
+      last = [from, from + len];
+      setDrag(last);
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      if (last[0] !== a) session.setRange(last[0], last[1]);
+      setDrag(null);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
   const handle = (which: 0 | 1) => (
     <input type="range" min={start} max={end} step={1} value={Math.floor(which ? b : a)} data-testid={which ? 'dc-range-to' : 'dc-range-from'}
       aria-label={which ? 'End of the range shown' : 'Start of the range shown'}
@@ -317,12 +340,13 @@ function RangeTimeline({ session, start, end }: { session: DisplayClientSession;
   );
   return (
     <>
-      <span className="dc-timeline dc-range" data-testid="dc-range" data-from={iso(a)} data-to={iso(b)}>
-        <span className="dc-range-fill" style={{ left: pct(a), width: `calc(${pct(b)} - ${pct(a)})` }} />
+      <span ref={track} className="dc-timeline dc-range" data-testid="dc-range" data-from={iso(a)} data-to={iso(b)}>
+        <span className="dc-range-fill" style={{ left: pct(a), width: `calc(${pct(b)} - ${pct(a)})` }} onPointerDown={slide}
+          title="Drag to move the range" data-testid="dc-range-bar" />
         {handle(0)}
         {handle(1)}
       </span>
-      <span className="dc-time mono" data-testid="dc-time">{clock(a)} to {clock(b)}</span>
+      <span className="dc-time dc-time-range mono" data-testid="dc-time"><span>{clock(a)}</span><span>{clock(b)}</span></span>
     </>
   );
 }

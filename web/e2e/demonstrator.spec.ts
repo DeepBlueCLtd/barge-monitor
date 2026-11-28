@@ -308,6 +308,16 @@ for (const backend of BACKENDS) {
       await expect.poll(async () => Date.parse((await range.getAttribute('data-to'))!) / 1000).toBeLessThan(fullTo - 3600);
       const to = Date.parse((await range.getAttribute('data-to'))!) / 1000;
       await expect.poll(async () => Math.max(...(await shown(page)).lines.flatMap((l) => l.rows.map(([t]) => t))), { timeout: SLOW }).toBeLessThanOrEqual(to);
+      // Dragging the bar between the handles slides the range, keeping its length.
+      const len = to - Date.parse((await range.getAttribute('data-from'))!) / 1000;
+      const barBox = (await page.getByTestId('dc-range-bar').boundingBox())!;
+      await page.mouse.move(barBox.x + barBox.width / 2, barBox.y + barBox.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(barBox.x + barBox.width / 2 + 40, barBox.y + barBox.height / 2, { steps: 4 });
+      await page.mouse.up();
+      await expect.poll(async () => Date.parse((await range.getAttribute('data-to'))!) / 1000).toBeGreaterThan(to);
+      const slid = [await range.getAttribute('data-from'), await range.getAttribute('data-to')].map((x) => Date.parse(x!) / 1000);
+      expect(slid[1] - slid[0]).toBe(len);
       // A period turns replay on again.
       await period(page, 1, 'h');
       await expect(page.getByTestId('dc-play')).toBeEnabled();
