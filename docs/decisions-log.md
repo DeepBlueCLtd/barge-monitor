@@ -150,7 +150,7 @@ they are now Summaries and Analysis (D-98).
 | D-111 | When the display client turns gold | on the first click; once clicked and showing its views | **Once clicked and showing its views, at your request.** Models still reveals on the first click | During the handshake the panel shows only a waiting message, so gold and a diamond pointed at value-add that was not yet on screen |
 | D-112 | When the display client turns gold (revises D-111) | once clicked and configured; when configured and its panel is on screen | **When configured and its detail panel is on screen, both at once, at your request.** Then it stays revealed | Under D-111 a click during the handshake armed it, so it turned gold in the background while another panel was open. The presenter wants to reveal Models first and choose the moment for the display client |
 | D-113 | Showing user configuration of the display client | leave the views in fixed places; write drag and resize by hand; a docking layout (tabs, splitters); a grid layout library | **A grid, on react-grid-layout 2.3.0, at your request: each view is moved by its header and resized from its lower right corner, and its chart follows. A placeholder: the four views are fixed, none is added or removed, and the arrangement lasts until the page is reloaded** | The library is the one Grafana and Kibana use and costs a few lines; a docking layout offers tabs and pop-outs that nothing here asks for. Dragging is by the header so the charts keep their own hover. Not yet in the SRD |
-| D-114 | The OpenSensorHub spike (AT-32) | — | Run against stock `osh-core` 2.0.4 with `backend/spike/osh_spike.py`; results in the finding of 2026-11-23 and ADR 0005. **ADR 0005 stays proposed.** Requirements are not changed yet | Sensing, discovery, creation and reading work as shipped. Commands (pushed, not polled), restart recognition and replacing a result do not. The store adapter as a module was not tried. The contract suite passed 0 of 15 unchanged, mostly for addressing resources by the stand-in's identifiers |
+| D-114 | The OpenSensorHub spike (AT-32) | — | Run against stock `osh-core` 2.0.4 with `backend/spike/osh_spike.py` (removed from the tree; commit `2ddcbb5`); results in the finding of 2026-11-23 and ADR 0005. **ADR 0005 stays proposed.** Requirements are not changed yet | Sensing, discovery, creation and reading work as shipped. Commands (pushed, not polled), restart recognition and replacing a result do not. The store adapter as a module was not tried. The contract suite passed 0 of 15 unchanged, mostly for addressing resources by the stand-in's identifiers |
 
 ## Version 4.6
 
@@ -282,7 +282,7 @@ with all four: **12 of 12 `need` checks and 8 of 8 `standin` checks** (`at32-osh
 
 ## Version 4.7: the owner's review (2026-11-26)
 
-The owner reviewed the first 4.6 build and withdrew it (`docs/software-changes-v4.6-branch.md`).
+The owner reviewed the first 4.6 build and withdrew it (`docs/software-changes-v4.6-branch.md`, removed from the tree; read it at commit `2ddcbb5`).
 These rows record the review decisions written into SRD 4.7 and `docs/v4-interfaces.md`, and
 the design choices that follow from them. They supersede the rows they name.
 

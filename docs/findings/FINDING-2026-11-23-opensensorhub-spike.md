@@ -4,7 +4,7 @@
 commit `75bb094`, its Connected Systems service with resource creation switched on and
 access control off; nothing else changed · **Where:** one development machine, client and
 server on the same host · **How:** `backend/spike/osh_spike.py`; the record of the run is
-`backend/spike/results.json`.
+`backend/spike/results.json` (removed from the tree; read it at commit `2ddcbb5`).
 
 ## Summary
 

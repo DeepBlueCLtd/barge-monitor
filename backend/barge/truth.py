@@ -11,7 +11,6 @@ from functools import lru_cache
 
 import numpy as np
 
-from . import config as C
 
 KIND_CODES = {"move": 0, "lock": 1, "dwell": 2, "stoppage": 3}
 _MASS_PROPS = ["T", "RH", "P", "wind", "wind_from", "clear", "water"]
