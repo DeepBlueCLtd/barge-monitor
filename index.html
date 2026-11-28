@@ -115,6 +115,12 @@ disabled and no explanation.</li>
 Before Adopt, made-up message icons travel the opening's lines in
 realistic sequences, so the hand-made system looks alive; nothing runs,
 and they stop at the Adopt click (FR-120a, FR-122).</li>
+<li><strong>Open Standards before Adopt (4.7, D-363).</strong> The
+opening panel's switch becomes one <strong>Open Standards</strong>
+button: a very short history of OGC API – Connected Systems and a tree
+of its entities, related to this demonstrator, then two choices:
+<strong>Custom Components</strong> (back to the table) or
+<strong>OpenSensorHub</strong> (Adopt) (FR-123, FR-123a, FR-124).</li>
 </ul>
 <h3 id="changes-from-version-45">Changes from Version 4.5</h3>
 <ul>
@@ -1454,23 +1460,23 @@ belongs to, and the lines between the subsystems are drawn too:</p>
 </tr>
 </tbody>
 </table>
-<p><strong>Illustrative traffic (4.7, D-361).</strong> While <em>Build
-it ourselves</em> is shown, message icons, with the real letters (§5),
-travel these lines in realistic sequences, each request followed by the
-work behind it and its reply: the display client querying the Web API,
-which checks Permissions (and Accounts at a login) and asks the Query
-engine, which reads the Observation store; discovery from the Registry;
-the CSV importer reading the data folder and writing to the Registry and
-the Observation store; Commands pushing to the importer and Models, and
-their status back; Models reading observations, calling the scientific
-libraries and publishing; Admin changing a setting. A few run at once,
-at a gentle pace, looping with some variety. They are
-<strong>illustrative only</strong>: made in the page, from a fixed list,
-with nothing running (FR-122); they are not messages, so they cannot be
-clicked, are not counted or captured and never appear in the message
-strip. The status says so. At the Adopt click they stop at once, the
-icons in flight fading out before the cards move. With reduced motion
-there is none.</p></li>
+<p><strong>Illustrative traffic (4.7, D-361).</strong> Until Adopt,
+whichever view the opening panel shows (D-363), message icons, with the
+real letters (§5), travel these lines in realistic sequences, each
+request followed by the work behind it and its reply: the display client
+querying the Web API, which checks Permissions (and Accounts at a login)
+and asks the Query engine, which reads the Observation store; discovery
+from the Registry; the CSV importer reading the data folder and writing
+to the Registry and the Observation store; Commands pushing to the
+importer and Models, and their status back; Models reading observations,
+calling the scientific libraries and publishing; Admin changing a
+setting. A few run at once, at a gentle pace, looping with some variety.
+They are <strong>illustrative only</strong>: made in the page, from a
+fixed list, with nothing running (FR-122); they are not messages, so
+they cannot be clicked, are not counted or captured and never appear in
+the message strip. The status says so. At the Adopt click they stop at
+once, the icons in flight fading out before the cards move. With reduced
+motion there is none.</p></li>
 <li><p><strong>FR-121</strong> <strong>Nothing is gold.</strong> No card
 is gold. No ★, diamond or "our value-add" appears anywhere in the
 opening, the detail panel included. Clicking the display client or
@@ -1491,8 +1497,9 @@ on screen.</p></li>
 D-359).</strong> The detail panel opens on <strong>The
 components</strong> with:</p>
 <ul>
-<li>a two-way switch, <strong>Build it ourselves | Adopt
-OpenSensorHub</strong>, with <em>Build it ourselves</em> selected;</li>
+<li>an <strong>Open Standards</strong> button (D-363, replacing 4.6's
+two-way switch, <em>Build it ourselves | Adopt OpenSensorHub</em>),
+which shows FR-123a's view;</li>
 <li>one table of <strong>every component</strong> in the opening, in the
 flowchart's order: the display client, Models, the CSV importer, the
 subsystems of FR-120, the scientific libraries and the data folder. Each
@@ -1503,9 +1510,39 @@ written is not yet decided.</li>
 </ul>
 <p>Before Adopt nothing in the panel says which components could be
 adopted or which are written by us. Clicking any card highlights its
-row; nothing is revealed (FR-121).</p></li>
-<li><p><strong>FR-124 (D-360)</strong> <strong>Adopt.</strong> Choosing
-<em>Adopt OpenSensorHub</em>:</p>
+row, bringing the table back if FR-123a's view is shown; nothing is
+revealed (FR-121).</p></li>
+<li><p><strong>FR-123a (4.7, D-363)</strong> <strong>Open
+Standards.</strong> The button replaces the panel's content, and only
+that: the flowchart, its illustrative traffic and the status are
+unchanged, and nothing starts (FR-122). The panel, titled <strong>Open
+Standards</strong>, shows:</p>
+<ul>
+<li>a <strong>very short history</strong> of the standard, oldest first,
+a plain sentence or two per period: OGC's Sensor Web Enablement
+(SensorML, Observations &amp; Measurements, SOS and SPS) in the 2000s;
+the OGC API family from the late 2010s; OGC API – Connected Systems in
+the 2020s, Part 1 (feature resources: what exists) and Part 2 (dynamic
+data: what changes), both approved in 2025; and today OpenSensorHub, an
+open-source server that implements it;</li>
+<li>a <strong>tree of the entities</strong>, drawn crisply, with a title
+and description for assistive technology: a System, its subsystems
+(Systems too), its datastreams (each with a schema) of observations, and
+its control streams of commands, each with a command status; and, also
+in Part 1, deployments, procedures, sampling features and properties.
+Each entity has an example from this demonstrator: the barge and each
+model are Systems, the bow and stern sensors subsystems, the weather
+fields datastreams, a model's settings commands;</li>
+<li>two buttons: <strong>Custom Components</strong>, which returns to
+the table exactly as it was, and <strong>OpenSensorHub</strong>, which
+is Adopt (FR-124).</li>
+</ul>
+<p>The history's periods and the standard's part numbers are the only
+digits the opening may show, and only in this view: they are dates and
+names, not counts (FR-120, §16, D-363).</p></li>
+<li><p><strong>FR-124 (D-360, D-363)</strong> <strong>Adopt.</strong>
+Choosing <strong>OpenSensorHub</strong> in the Open Standards view
+(FR-123a) brings the table back and:</p>
 <ol type="1">
 <li>fades the opening's lines and shows the single <strong>Data
 server</strong> card (OpenSensorHub, OGC Connected Systems) in the
@@ -1546,8 +1583,9 @@ Play is pressed. A top-bar control that cannot act yet is
 technology (for example "Log in to the display client first"). It is
 enabled as soon as it can act.</p></li>
 <li><p><strong>FR-126</strong> <strong>One way.</strong> Adoption cannot
-be undone in a session. The switch is removed at hand-over. To show the
-opening again, reload with the flag.</p></li>
+be undone in a session. The Open Standards button and its choices are
+removed at the Adopt click (D-363). To show the opening again, reload
+with the flag.</p></li>
 </ul>
 <hr />
 <h2 id="10-implementation-direction">10. Implementation direction</h2>
@@ -1939,7 +1977,11 @@ no message is captured or drawn: the only icons are FR-120a's
 illustrative traffic, on the opening's lines, not clickable, and gone
 shortly after the Adopt click; the third-party zone has no data server;
 nothing gold, no ★ and no diamond anywhere, and clicking the display
-client or Models reveals nothing</td>
+client or Models reveals nothing; Open Standards shows the history and
+the tree of entities, labelled, without changing the flowchart or its
+traffic, and its only digits are its periods and part numbers; Custom
+Components returns to the table with nothing started (FR-123a,
+D-363)</td>
 <td>Architecture view</td>
 </tr>
 <tr>
@@ -1951,13 +1993,14 @@ group; no count of them is shown</td>
 </tr>
 <tr>
 <td><strong>AT-65</strong></td>
-<td>After Adopt: the subsystem cards merge one at a time, shrinking as
-they go, into one Data server card in the third-party zone, and the
-normal arrows are drawn; the table shows every subsystem ticked, with no
-number; the back end starts at the Adopt click, the top-bar controls and
-banner appear, and the flowchart stays on screen throughout; once it has
-started, everything but the detail panel matches a load without the
-flag, and the state passes AT-19 and AT-20</td>
+<td>After Adopt (Open Standards, then OpenSensorHub): the subsystem
+cards merge one at a time, shrinking as they go, into one Data server
+card in the third-party zone, and the normal arrows are drawn; the table
+shows every subsystem ticked, with no number; the back end starts at the
+Adopt click, the top-bar controls and banner appear, and the flowchart
+stays on screen throughout; once it has started, everything but the
+detail panel matches a load without the flag, and the state passes AT-19
+and AT-20</td>
 <td>Architecture view</td>
 </tr>
 <tr>
@@ -2129,8 +2172,8 @@ numbers would read as a sales pitch.</li>
 Every subsystem is ticked once adopted. What the authentication and
 bulk-import spikes have still to prove is recorded in §15 and ADR 0005,
 not on screen.</li>
-<li><strong>Returning to "Build it ourselves"</strong> after adoption,
-in a session (FR-126).</li>
+<li><strong>Returning to "Custom Components"</strong> after adoption, in
+a session (FR-126).</li>
 <li><strong>The adoption opening in a developed system (4.6)</strong>:
 it is demonstrator shell only.</li>
 </ul>
