@@ -1,6 +1,8 @@
 // A model card's live activity (Models panel): the illustrative view inside the
 // model and a busy indicator that turns while the model has a run in progress
 // (4.7: models process each dataset on import, D-220; no simulation clock, D-302).
+// Models now run rarely, so while the Models panel is open each card shows its
+// work all the time, labelled 'showing its work' when no run is in progress.
 import { useEffect, useState } from 'react';
 import { runtime } from '../shell/runtime';
 import { useStore } from '../shell/store';
@@ -9,13 +11,13 @@ import { ModelInner } from './ModelInner';
 export function ModelActivity({ model }: { model: string }) {
   const control = useStore(runtime.control);
   const phase = control?.models?.find((m) => m.id === model)?.phase ?? '';
-  const playing = phase !== '' && phase !== 'live' && phase !== 'failed';
+  const working = phase !== '' && phase !== 'live' && phase !== 'failed';
   return (
     <>
-      <ModelInner model={model} playing={playing} />
-      <div className="summariesctivity" data-testid={`activity-${model}`}>
-        <Busy on={playing} />
-        <span className="model-quiet">{playing ? 'working' : 'idle'}</span>
+      <ModelInner model={model} playing />
+      <div className="summariesctivity" data-testid={`activity-${model}`} data-working={working}>
+        <Busy on />
+        <span className="model-quiet">{working ? 'working' : 'showing its work'}</span>
       </div>
     </>
   );
