@@ -1,9 +1,9 @@
-// The Open Source view of the opening panel (D-364): reached from "Open Source" in the Open Standards view, a short
+// The Open Source view of the opening panel (D-365): reached from "Open Source" in the Open Standards view, a short
 // account of OpenSensorHub (what it is, who made it, its licence, who it was made for), then "Adopt", which starts the
 // merge (FR-124, D-360). Shown in the panel only: the flowchart and its illustrative traffic are unchanged, and nothing
 // starts before Adopt (FR-122). Crisp (VS-18); nothing gold (FR-121); no digits (FR-120, §16).
 //
-// Facts kept conservative, each from a public source (D-364): the origins from GPS World, "OpenSensorHub: Tackling a
+// Facts kept conservative, each from a public source (D-365): the origins from GPS World, "OpenSensorHub: Tackling a
 // modern geospatial 'Tower of Babel'" (2016); the licence from osh-core's LICENSE on GitHub; GeoRobotix from
 // georobotix.com. No current government user was found in a public source, so none is named.
 import { opening } from '../shell/opening';

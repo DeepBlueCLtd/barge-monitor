@@ -35,7 +35,7 @@ const ENTITIES = ['System', 'Subsystems', 'Datastreams', 'Schema', 'Observations
 /** D-363: the only digits allowed on the page, and only in the Open Standards view: its periods and the standard's part numbers. */
 const STANDARDS_DIGITS = /\b(?:(?:19|20)\d0s|20\d\d|Part [12])\b/g;
 
-/** FR-124 (D-363, D-364): Adopt is "Open Standards", then "Open Source", then "Adopt". */
+/** FR-124 (D-363, D-365): Adopt is "Open Standards", then "Open Source", then "Adopt". */
 async function openStandards(page: Page) {
   await page.getByTestId('open-standards').click();
   await expect(page.getByTestId('standards')).toBeVisible();
@@ -328,7 +328,7 @@ for (const backend of ['standin', 'python'] as const) {
       expect(requests).toEqual([]);
       expect(await page.locator('body').innerText()).not.toMatch(GONE);
       expect(await page.locator('body').innerText()).not.toMatch(/\d/);
-      // The Open Standards and Open Source views change only the panel: the traffic keeps running (D-363, D-364).
+      // The Open Standards and Open Source views change only the panel: the traffic keeps running (D-363, D-365).
       await openOpenSource(page);
       // Adopt: the traffic stops at once. Every animation frame from the click records whether a mock icon is drawn.
       await page.evaluate(() => {
@@ -399,6 +399,11 @@ for (const backend of ['standin', 'python'] as const) {
         'OGC API – Connected Systems', 'Part 1', 'Part 2', 'OpenSensorHub'];
       for (const w of order) expect(text, w).toContain(w);
       expect(order.map((w) => text.indexOf(w))).toEqual(order.map((w) => text.indexOf(w)).sort((a, b) => a - b));
+      // The Connected Systems overview image, served by the site itself and loaded.
+      const img = page.getByTestId('standards-overview').locator('img');
+      await expect(img).toHaveAttribute('alt', 'Connected Systems ecosystem overview');
+      await img.scrollIntoViewIfNeeded();
+      await expect.poll(() => img.evaluate((i: HTMLImageElement) => i.complete && i.naturalWidth)).toBeGreaterThan(0);
       // The tree: an inline SVG image with a title and a description, every entity labelled and readable.
       const tree = page.getByTestId('standards-tree');
       await expect(tree).toBeVisible();
@@ -469,7 +474,7 @@ for (const backend of ['standin', 'python'] as const) {
       await expect(page.getByTestId('flowchart')).toHaveAttribute('data-mode', 'opening');
       await expect(page.getByTestId('card-server')).toHaveCount(0);
       expect(await status()).toBe(before);
-      // D-364: Open Source: a short account of OpenSensorHub, no digits, then Adopt; still nothing has started.
+      // D-365: Open Source: a short account of OpenSensorHub, no digits, then Adopt; still nothing has started.
       await openStandards(page);
       await page.getByTestId('choose-open-source').click();
       await expect(page.getByTestId('opening-panel')).toHaveAttribute('data-view', 'opensource');

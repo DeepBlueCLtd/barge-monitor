@@ -1,7 +1,7 @@
 // The opening panel (SRD 4.7 §9.8, FR-123 to FR-126; D-359): every component, as we would develop
 // it ourselves, with what it does; an "Open Standards" button, which shows a short history of OGC API – Connected
 // Systems and a tree of its entities, then "Custom Components" (back to the table) or "Open Source" (D-363), a short
-// account of OpenSensorHub whose "Adopt" starts the merge (D-364). The button sits below the table (D-364).
+// account of OpenSensorHub whose "Adopt" starts the merge (D-365). The button sits below the table (D-365).
 // Before Adopt nothing
 // says which could be adopted; after it, a column says what became of each. Crisp, not sketched (VS-18). Nothing in
 // it is gold and nothing is marked as ours (FR-121); no count or number is shown (FR-120,
@@ -69,7 +69,7 @@ export function OpeningPanel() {
           ))}
         </tbody>
       </table>
-      {/* FR-123, FR-126 (D-363, D-364): "Open Standards", below the table, leads to the choice; gone once Adopt is chosen. */}
+      {/* FR-123, FR-126 (D-363, D-365): "Open Standards", below the table, leads to the choice; gone once Adopt is chosen. */}
       {phase === 'build' && (
         <button className="btn opening-standards" data-testid="open-standards" onClick={() => opening.showStandards()}>Open Standards</button>
       )}

@@ -3,7 +3,7 @@
 // subsystem components to develop, the main ones drawn beside the CSV importer and Models,
 // which we write either way. "Open Standards" shows, in the panel, a short history of OGC API – Connected
 // Systems and a tree of its entities (D-363); from there "Custom Components" goes back to the table and
-// "Open Source" shows a short account of OpenSensorHub (D-364), whose "Adopt" merges them into the single Data server card, one at a time, and hands over to the normal layout (FR-77, FR-125a). The back end starts at the
+// "Open Source" shows a short account of OpenSensorHub (D-365), whose "Adopt" merges them into the single Data server card, one at a time, and hands over to the normal layout (FR-77, FR-125a). The back end starts at the
 // Adopt click, while the cards merge, and its startup is shown in the flowchart's status box: the flowchart stays on
 // screen throughout (D-360). Nothing runs before Adopt (FR-122).
 //
@@ -121,7 +121,7 @@ export type OpeningPhase = 'off' | 'build' | 'merging' | 'adopted';
 /**
  * What the opening panel shows while the phase is `build` (FR-123, D-363): the components table, or the Open
  * Standards view (a short history and a tree of the entities) with its two choices, or the Open Source view (a short
- * account of OpenSensorHub, D-364) with Adopt. Changing it starts nothing.
+ * account of OpenSensorHub, D-365) with Adopt. Changing it starts nothing.
  */
 export type OpeningView = 'components' | 'standards' | 'opensource';
 
@@ -165,7 +165,7 @@ class Opening {
     if (this.phase.value === 'build') this.view.set('standards');
   }
 
-  /** D-364: "Open Source": a short account of OpenSensorHub, in the panel; nothing starts and the flowchart is unchanged. */
+  /** D-365: "Open Source": a short account of OpenSensorHub, in the panel; nothing starts and the flowchart is unchanged. */
   showOpenSource() {
     if (this.phase.value === 'build') this.view.set('opensource');
   }
@@ -175,7 +175,7 @@ class Opening {
     if (this.phase.value === 'build') this.view.set('components');
   }
 
-  /** FR-124: Adopt OpenSensorHub (the "Adopt" button of the Open Source view, D-364). One way (FR-126). */
+  /** FR-124: Adopt OpenSensorHub (the "Adopt" button of the Open Source view, D-365). One way (FR-126). */
   adopt() {
     if (this.phase.value !== 'build') return;
     this.highlighted.set(null);
