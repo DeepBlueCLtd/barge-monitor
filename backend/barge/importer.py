@@ -209,6 +209,7 @@ class Importer:
                          {"command@id": cid, "statusCode": code, "message": message})
 
     async def _handle(self, cmd: dict) -> None:
+        await self.rt.wait_released()  # held (D-362): the command waits
         p = cmd.get("parameters") or {}
         cid = cmd["id"]
         action, file = p.get("action"), str(p.get("file") or "").strip()
@@ -269,6 +270,7 @@ class Importer:
             written = 0
             for k in range(10):
                 a, b = int(bounds[k]), int(bounds[k + 1])
+                await self.rt.wait_released()  # held (D-362): the import stops here, and carries on from this block
                 if gen != self.generation:
                     raise RuntimeError("the store was reset during the import")
                 for d, cols in outs:

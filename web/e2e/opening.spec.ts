@@ -17,7 +17,7 @@ const openingLayout = readJson('../src/shell/layout-opening.json') as { zones: {
 const SUBS = ['sub-webapi', 'sub-registry', 'sub-obsstore', 'sub-query', 'sub-commands', 'sub-accounts', 'sub-permissions', 'sub-admin'];
 /** Written by us either way, beside the subsystems in the back end (FR-120, 4.7: no replay controller, no gateway). */
 const BACK = ['importer', 'models'];
-const CONTROLS = ['play', 'speed', 'restart-client', 'restart-server', 'demo-menu', 'control-panel-toggle', 'overview-button', 'custom-backend-link'];
+const CONTROLS = ['system-pause', 'draw-speed', 'restart-client', 'restart-server', 'demo-menu', 'control-panel-toggle', 'overview-button', 'custom-backend-link'];
 /** FR-120a: every flow of the opening, as "from>to". */
 const LINES = ['client>sub-webapi', 'models>sub-webapi', 'sub-commands>importer', 'sub-commands>models', 'importer>sub-obsstore', 'importer>sub-registry',
   'sub-webapi>sub-query', 'sub-webapi>sub-registry', 'sub-webapi>sub-commands', 'sub-webapi>sub-permissions', 'sub-query>sub-obsstore',
@@ -633,9 +633,10 @@ for (const backend of ['standin', 'python'] as const) {
       await expect(page.getByTestId('analyst-state')).toHaveText('Not logged in');
       await expect(page.getByTestId('dataset-state')).toHaveText('None');
       await expect(page.getByTestId('sim-state')).toHaveText('Paused');
-      expect(await everyDisabledControlSaysWhy(page)).toBeGreaterThanOrEqual(6);
-      await expect(page.getByTestId('play')).toHaveAttribute('title', 'Log in to the display client first');
-      for (const r of ['0.1', '0.5', '1', '10', '100']) await expect(page.getByTestId(`speed-${r}`)).toBeDisabled();
+      // D-362: the replay is the display client's own, in its replay bar after login; every top-bar control can act now.
+      expect(await everyDisabledControlSaysWhy(page)).toBe(0);
+      await expect(page.getByTestId('play')).toHaveCount(0);
+      await expect(page.getByTestId('system-pause')).toBeEnabled();
       await page.waitForTimeout(2000);
       expect(log).toEqual([]);
       // The panel keeps the savings until a component is clicked (FR-125); AT-20 from here: nothing gold yet.
@@ -664,21 +665,21 @@ for (const backend of ['standin', 'python'] as const) {
       await expect(page.getByTestId('replay-bar')).toHaveAttribute('data-playing', 'false');
       await expect(page.getByTestId('replay-bar')).toHaveAttribute('data-time', '2031-04-07T00:00:00Z');
       await expect(page.getByTestId('sim-state')).toHaveText('Paused');
-      await expect(page.getByTestId('play')).toBeEnabled();
+      await expect(page.getByTestId('dc-play')).toBeEnabled();
       // AT-19: while paused, the client polls nothing.
       await page.waitForTimeout(2000);
       let t = Date.now();
       await page.waitForTimeout(3000);
       expect(log.filter((x) => x.at >= t)).toEqual([]);
       await expect(page.getByTestId('replay-bar')).toHaveAttribute('data-time', '2031-04-07T00:00:00Z');
-      // Play, from the top bar: the replay moves and the client polls.
-      await page.getByTestId('play').click();
+      // Play, from the client's replay bar: the replay moves and the client polls.
+      await page.getByTestId('dc-play').click();
       await expect(page.getByTestId('sim-state')).toHaveText('Playing');
       await expect(page.getByTestId('replay-bar')).not.toHaveAttribute('data-time', '2031-04-07T00:00:00Z', { timeout: 10_000 });
       t = Date.now();
       await page.waitForTimeout(3000);
       expect(log.filter((x) => x.at >= t).length).toBeGreaterThan(0);
-      await page.getByTestId('play').click();
+      await page.getByTestId('dc-play').click();
       await expect(page.getByTestId('sim-state')).toHaveText('Paused');
       // AT-19: while locked, nothing is sent.
       await page.getByTestId('dc-lock').click();

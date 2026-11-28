@@ -34,6 +34,8 @@ export const GOLD = { fill: '#fbe6a2', outline: '#a16207', text: '#6f4500', pale
 /** The ring around the selected component (FR-69). */
 export const SELECT_RING = '#1d4ed8';
 export const FLOW_LABEL = '#57534e';
+/** D-362: the indicator over the flowchart while the system is paused, or in slow motion (styles.css .system-state). */
+export const SYSTEM_STATE = { paused: { text: '#7c2d12', fill: '#fff4e5' }, slow: { text: '#1e3a8a', fill: '#eef4ff' } };
 
 /** WCAG relative luminance and contrast ratio. */
 function lum(hex: string) {
@@ -54,6 +56,8 @@ export function contrastPairs(): { what: string; fg: string; bg: string }[] {
     { what: 'ink on gold', fg: INK, bg: GOLD.fill }, { what: 'gold text on gold', fg: GOLD.text, bg: GOLD.fill },
     { what: 'gold text on pale gold', fg: GOLD.text, bg: GOLD.pale }, { what: 'gold text on paper', fg: GOLD.text, bg: PAPER },
     { what: 'gold outline on card (icon)', fg: GOLD.outline, bg: CARD },
+    { what: 'system paused indicator', fg: SYSTEM_STATE.paused.text, bg: SYSTEM_STATE.paused.fill },
+    { what: 'slow motion indicator', fg: SYSTEM_STATE.slow.text, bg: SYSTEM_STATE.slow.fill },
   ];
   for (const [l, c] of Object.entries(LETTER_COLOURS)) {
     pairs.push({ what: `letter ${l} on its icon`, fg: c, bg: CARD }, { what: `letter ${l} on paper`, fg: c, bg: PAPER });

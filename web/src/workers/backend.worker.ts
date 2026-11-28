@@ -10,6 +10,8 @@ declare const self: DedicatedWorkerGlobalScope;
 let bridge: any = null;
 let py: any = null;
 const queue: Array<() => void> = [];
+/** The demonstrator's system hold (D-362), kept from before the server starts: the page may pause during startup. */
+let held = false;
 
 const post = (p: Progress) => self.postMessage({ type: 'progress', ...p });
 
@@ -41,6 +43,7 @@ from barge.bridge import Bridge
 bridge = Bridge(fetch_index=_fetch_index, fetch_file=_fetch_file)
 `);
   bridge = py.globals.get('bridge');
+  bridge.set_held(held);
   self.postMessage({ type: 'state', state: JSON.parse(bridge.control('state')) });
   let n = 0;
   setInterval(() => {
@@ -119,7 +122,10 @@ async function serve(req: any, reply: MessagePort) {
 self.onmessage = (e: MessageEvent) => {
   const d = e.data;
   if (d.type === 'start') start(d.pyodideUrl, d.pyZipUrl, d.folderUrl ?? null).catch((err) => post({ stage: 'error', detail: String(err), pct: 0 }));
-  else if (d.type === 'connect') {
+  else if (d.type === 'hold') {
+    held = !!d.on; // D-362: the importer and pushed commands wait in the server while held
+    bridge?.set_held(held);
+  } else if (d.type === 'connect') {
     const port: MessagePort = e.ports[0];
     port.onmessage = (m) => serve(m.data, m.ports[0]);
   } else if (d.type === 'model-connect') {

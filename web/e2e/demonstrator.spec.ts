@@ -133,12 +133,12 @@ for (const backend of ['standin', 'python'] as const) {
       await expect(page.getByTestId('demo-credentials')).toContainText('Demo credentials');
       await expect(page.getByTestId('demo-login-owner')).toBeVisible();
       await expect(page.getByTestId('demo-login-friend')).toBeVisible();
-      // FR-97, AT-19: nothing shown and nothing sent before login; the top bar's replay says why it cannot act.
+      // FR-97, AT-19: nothing shown and nothing sent before login, no replay bar; the top bar has none (D-362).
       await page.waitForTimeout(3000);
       expect(log).toEqual([]);
       expect(await monitorText(page)).not.toMatch(/MISSION|mission-/);
-      await expect(page.getByTestId('play')).toBeDisabled();
-      await expect(page.getByTestId('play')).toHaveAttribute('title', 'Log in to the display client first');
+      await expect(page.getByTestId('dc-play')).toHaveCount(0);
+      await expect(page.getByTestId('play')).toHaveCount(0);
       await expect(page.getByTestId('analyst-state')).toHaveText('Not logged in');
       // AT-49: without credentials, discovery and the catalogue are refused with 401; the browser's dialog is kept away.
       const anon = await page.evaluate(async () => Promise.all(['api/', 'api/systems', 'api/datastreams', 'api/profile.json'].map(async (u) => {
@@ -164,7 +164,7 @@ for (const backend of ['standin', 'python'] as const) {
       await expect(bar(page)).toHaveAttribute('data-playing', 'false');
       await expect(bar(page)).toHaveAttribute('data-time', '2031-04-07T00:00:00Z');
       await expect(page.getByTestId('analyst-state')).toHaveText('owner');
-      await expect(page.getByTestId('play')).toBeEnabled();
+      await expect(page.getByTestId('dc-play')).toBeEnabled();
       // The display client is revealed once it shows its views in its panel (FR-75).
       await expect(page.getByTestId('card-client')).toHaveAttribute('data-revealed', 'true');
       await results(page);
@@ -219,11 +219,11 @@ for (const backend of ['standin', 'python'] as const) {
       const ends = since(log, t0).map((x) => new URL(x.url).searchParams.get('phenomenonTime')).filter((p): p is string => !!p).map((p) => Date.parse(p.split('/')[1]) / 1000);
       expect(ends.length).toBeGreaterThan(10);
       expect(Math.max(...ends)).toBeLessThanOrEqual(time + 1);
-      // The top bar's mirror drives the same clock (interfaces §8).
-      await page.getByTestId('play').click();
+      // The replay bar drives the client's clock, and the status box mirrors it (interfaces §8; D-362: the top bar no more).
+      await page.getByTestId('dc-play').click();
       await expect(bar(page)).toHaveAttribute('data-playing', 'false');
       await expect(page.getByTestId('sim-state')).toHaveText('Paused');
-      await page.getByTestId('speed-10').click();
+      await page.getByTestId('dc-rate-10').click();
       await expect(bar(page)).toHaveAttribute('data-rate', '10');
       // FR-63a, AT-19: while paused, the client polls nothing.
       await page.waitForTimeout(3000);
@@ -275,7 +275,7 @@ for (const backend of ['standin', 'python'] as const) {
       await page.getByTestId('dc-rate-100').click();
       await play(page);
       await page.getByTestId('preset-all').click();
-      // A replay in progress stops; Play, the rates and the timeline say why they cannot act, in the client and the top bar.
+      // A replay in progress stops; Play, the rates and the timeline say why they cannot act, in the client's replay bar.
       await expect(bar(page)).toHaveAttribute('data-playing', 'false');
       const why = 'Whole dataset shows everything: choose a shorter period to play';
       await expect(page.getByTestId('dc-play')).toBeDisabled();
@@ -283,8 +283,6 @@ for (const backend of ['standin', 'python'] as const) {
       await expect(page.getByTestId('dc-rate-10')).toBeDisabled();
       await expect(page.getByTestId('dc-timeline')).toBeDisabled();
       await expect(page.getByTestId('dc-replay-off')).toHaveText(why);
-      await expect(page.getByTestId('play')).toBeDisabled();
-      await expect(page.getByTestId('replay-reason')).toContainText(why);
       // All of the dataset is drawn: the lines reach far beyond the replay time (here, early in the day).
       await expect.poll(async () => {
         const v = await shown(page);
@@ -536,7 +534,7 @@ for (const backend of ['standin', 'python'] as const) {
       await page.getByTestId('dc-lock').click();
       await expect(page.getByTestId('dc-locked')).toBeVisible();
       await expect(page.getByTestId('analyst-state')).toHaveText('Locked');
-      await expect(page.getByTestId('play')).toBeDisabled();
+      await expect(page.getByTestId('dc-play')).toHaveCount(0);
       expect(await monitorText(page)).not.toMatch(/MISSION|mission-|Humidity/);
       await page.waitForTimeout(1000);
       const t = Date.now();

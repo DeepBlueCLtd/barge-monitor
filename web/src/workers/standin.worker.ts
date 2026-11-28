@@ -4,20 +4,22 @@
 // ?backend=standin. It speaks the same protocol with the page as the Python
 // back-end worker (docs/v4-interfaces.md §8): `start`, `connect` (a port from
 // the relay), `control`; it posts `progress`, `tick` every 100 ms, `state`
-// once a second and after each control, and `relay-failed`.
+// once a second and after each control, and `relay-failed`. `hold {on}` holds the system (D-362).
 // The stand-in runs its own models: `model-connect` is not used (FR-06f).
-import { createStandin, fetchFolder, HttpRequest, Progress, Runtime } from '../standin';
+import { createStandin, fetchFolder, Gate, HttpRequest, Progress, Runtime } from '../standin';
 import { Runner } from '../standin/models/csmodel';
 
 declare const self: DedicatedWorkerGlobalScope;
 
 let rt: Runtime | null = null;
+/** The demonstrator's system hold (D-362), kept from before the server starts: the page may pause during startup. */
+const gate = new Gate();
 const queue: Array<() => void> = [];
 const post = (p: Progress) => self.postMessage({ type: 'progress', ...p });
 
 async function start(folderUrl: string | null) {
   // The data folder (FR-15): read by the CSV importer only, through its listing and each file (FR-20, FR-17a).
-  rt = await createStandin(folderUrl ? fetchFolder(folderUrl) : undefined, post);
+  rt = await createStandin(folderUrl ? fetchFolder(folderUrl) : undefined, post, undefined, gate);
   const runtime = rt;
   self.postMessage({ type: 'state', state: runtime.controlState() });
   let n = 0;
@@ -73,6 +75,8 @@ self.onmessage = (e: MessageEvent) => {
   } else if (d.type === 'connect') {
     const port: MessagePort = e.ports[0];
     port.onmessage = (m) => serve(m.data, m.ports[0]);
+  } else if (d.type === 'hold') {
+    gate.set(!!d.on); // D-362: the page holds the system (Pause, or slow motion's back-pressure)
   } else if (d.type === 'control') {
     if (!rt) return;
     try {

@@ -9,6 +9,7 @@ import type { ComponentId } from './components';
 import { bus, Captured } from './messages';
 import { STAGE_STEP, Startup } from './startup';
 import { Store } from './store';
+import { system } from './system';
 
 export type BackendKind = 'python' | 'standin';
 
@@ -134,6 +135,8 @@ class Runtime {
   private controlSeq = 0;
 
   private started = false;
+  /** Messages captured while the system is paused: drawn on Resume, so none is missed (D-362). */
+  private heldMessages: Captured[] = [];
 
   /**
    * True once every core model is ready: registered and subscribed, so processing or live (D-350). Startup ends here;
@@ -171,6 +174,7 @@ class Runtime {
       this.startup.fail(this.startup.current()?.id ?? 'back end', why);
     };
     this.backend.postMessage({ type: 'start', pyodideUrl: resolve(PYODIDE_PATH), pyZipUrl: resolve(PY_ZIP), folderUrl: resolve(folderPath()), runPaceMs: RUN_PACE_MS });
+    this.backend.postMessage({ type: 'hold', on: system.held.value }); // paused during startup (D-362)
     this.connect();
   }
 
@@ -267,7 +271,7 @@ class Runtime {
         break;
       case 'tick':
         if (d.server && d.server !== this.server.value) this.server.set(d.server);
-        bus.add(d.messages ?? []);
+        this.draw(d.messages ?? []);
         break;
       case 'state':
         this.control.set(d.state);
@@ -281,7 +285,7 @@ class Runtime {
       case 'relay-failed': {
         // A request that got no answer (server down) is drawn stopped at the boundary (VS-14).
         const kOrQ = d.method === 'POST' && String(d.path).endsWith('/commands') ? 'K' : 'Q';
-        bus.add([{ t: 0, src: d.model ? 'models' : 'client', dst: 'server', letter: kOrQ, ...(d.model ? { model: d.model } : {}), summary: `${d.method} ${d.path}: no answer, the server is down`,
+        this.draw([{ t: 0, src: d.model ? 'models' : 'client', dst: 'server', letter: kOrQ, ...(d.model ? { model: d.model } : {}), summary: `${d.method} ${d.path}: no answer, the server is down`,
           content: `${d.method} ${d.path}\n\nnetwork failure: the relay found no server to answer`, failed: true, chain: d.chain ?? null, hop: 0 }]);
         break;
       }
@@ -356,7 +360,31 @@ class Runtime {
     const ch = new MessageChannel();
     this.backend.postMessage({ type: 'model-connect', model }, [ch.port1]);
     w.postMessage({ type: 'start', pyodideUrl: resolve(PYODIDE_PATH), pyZipUrl: resolve(PY_ZIP), model, apiUrl: resolve('api'), ...(code ? { code } : {}) }, [ch.port2]);
+    w.postMessage({ type: 'hold', on: system.held.value });
     return true;
+  }
+
+  /**
+   * D-362: hold the system, or let it go on. Each worker holds its own part: the back end its importer, its pushed
+   * commands and (in the stand-in) its models; a model worker its requests and its stepping. The display client's
+   * requests wait in the page (client/http.ts).
+   */
+  hold(on: boolean) {
+    this.backend?.postMessage({ type: 'hold', on });
+    for (const w of this.models.values()) w.postMessage({ type: 'hold', on });
+  }
+
+  /** Captured messages to the flowchart; kept while paused, and drawn on Resume (D-362). */
+  private draw(list: Captured[]) {
+    if (!list.length) return;
+    if (system.paused.value) this.heldMessages.push(...list);
+    else bus.add(list);
+  }
+
+  /** On Resume: what was captured while paused, drawn now, in order. */
+  release() {
+    const list = this.heldMessages.splice(0);
+    if (list.length) bus.add(list);
   }
 
   private setModel(model: string, s: Partial<ModelWorkerStatus>) {
@@ -367,7 +395,7 @@ class Runtime {
   private onModel(model: string, d: any) {
     switch (d?.type) {
       case 'tap':
-        bus.add((d.messages ?? []).map((m: Captured) => ({ ...m, model: m.model ?? model, src: m.src as ComponentId, dst: m.dst as ComponentId })));
+        this.draw((d.messages ?? []).map((m: Captured) => ({ ...m, model: m.model ?? model, src: m.src as ComponentId, dst: m.dst as ComponentId })));
         break;
       case 'progress':
         this.setModel(model, { progress: d, detail: d.detail });
@@ -384,6 +412,11 @@ class Runtime {
 }
 
 export const runtime = new Runtime();
+system.held.subscribe((on) => runtime.hold(on));
+system.paused.subscribe((paused) => {
+  runtime.startup.hold(paused); // a step's stall is not counted while paused
+  if (!paused) runtime.release();
+});
 // Read-only, for the end-to-end tests (beside D-273's bargeCaptured; D-323): the back end's control state as the shell holds it.
 (globalThis as { bargeControlState?: () => ControlState | null }).bargeControlState = () => runtime.control.value;
 // For the end-to-end tests only (AT-02's Pyodide half, D-341): a port to the back end, as the relay is given one.

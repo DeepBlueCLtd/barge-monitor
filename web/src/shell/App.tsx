@@ -7,9 +7,10 @@
 // steps show in its status box until the server answers (FR-125, NFR-10a, D-360).
 import { useEffect, useState } from 'react';
 import { clientSession } from '../client/session';
-import { RATES, STARTUP_BUDGET_MS } from '../config';
+import { STARTUP_BUDGET_MS } from '../config';
 import { DetailPanel } from '../detail/DetailPanel';
 import { ControlPanel } from './ControlPanel';
+import { activeDemo } from './demos';
 import { DemoBanner, DemoMenu } from './Demos';
 import { Flowchart } from './Flowchart';
 import { opening } from './opening';
@@ -18,6 +19,7 @@ import { selectComponent, unrevealAll } from './selection';
 import { sketchEnabled } from './sketch';
 import type { StepState } from './startup';
 import { useStore } from './store';
+import { DRAW_SPEEDS, DrawSpeed, system } from './system';
 
 const TITLE = 'Canal barge weather demonstrator';
 /** FR-06h: the notice under the title in stand-in mode, word for word. */
@@ -134,17 +136,6 @@ function useReason(ready: boolean): string | null {
   return ready ? null : runtime.startup.reason() ?? 'Starting';
 }
 
-/** Why the replay mirror cannot act (§13.7): before login, and with no dataset open. */
-function useReplayReason(startup: string | null): string | null {
-  const phase = useStore(clientSession.phase);
-  const replay = useStore(clientSession.clock.state);
-  useStore(clientSession.selection);
-  if (startup) return startup;
-  if (phase === 'login' || phase === 'locked') return 'Log in to the display client first';
-  if (!replay) return 'Open a dataset first';
-  return clientSession.replayOff();
-}
-
 const REASON_ID = 'control-reason';
 
 /** Props that disable a control and say why, or nothing when it can act. */
@@ -153,15 +144,10 @@ function disabledBy(reason: string | null) {
 }
 
 function TopBar({ ready }: { ready: boolean }) {
-  const replay = useStore(clientSession.clock.state);
   const control = useStore(runtime.control);
   const [drawer, setDrawer] = useState(false);
   const reason = useReason(ready);
   const off = disabledBy(reason);
-  const replayReason = useReplayReason(reason);
-  const replayOff = replayReason === reason ? off : { disabled: true, title: replayReason!, 'aria-describedby': 'replay-reason' };
-  const playing = replay?.playing ?? false;
-  const rate = replay?.rate ?? null;
   return (
     <>
       <header className="topbar">
@@ -171,15 +157,8 @@ function TopBar({ ready }: { ready: boolean }) {
           {runtime.kind === 'standin' && <p className="standin-notice" data-testid="standin-notice">{STANDIN_NOTICE}</p>}
         </div>
         <nav className="controls" aria-label="Controls" data-testid="controls">
-          {/* §8.6, interfaces §8: a mirror of the display client's replay bar, driving its own clock in the page. */}
-          <button className={`btn play${playing ? '' : ' primary'}`} onClick={() => (playing ? clientSession.pause() : clientSession.play())} data-testid="play" {...replayOff}>
-            {playing ? '❚❚ Pause' : '▶ Play'}
-          </button>
-          <div className="segmented" role="group" aria-label="Replay rate" data-testid="speed">
-            {RATES.map((r) => (
-              <button key={r} className={`btn${r === rate ? ' on' : ''}`} aria-pressed={r === rate} onClick={() => clientSession.setRate(r)} data-testid={`speed-${r}`} {...replayOff}>{r}×</button>
-            ))}
-          </div>
+          {/* D-362: the system's own Pause and slow motion. The display client's replay bar is the only replay control. */}
+          <SystemControls />
           {/* FR-46, FR-75: discard all client state, credentials included; un-reveal. §9.1: Restart client and Restart server are here, in the top bar. */}
           <button className="btn" data-testid="restart-client" onClick={() => {
             clientSession.restart();
@@ -199,12 +178,41 @@ function TopBar({ ready }: { ready: boolean }) {
             title="Reload on the opening: the data server written ourselves, before adopting OpenSensorHub">Custom backend</a>
           {/* FR-125a: why controls are disabled, in sight. A browser shows no tooltip on a disabled button, so a title alone is not enough. */}
           {reason && <p id={REASON_ID} className="control-reason" data-testid="control-reason">{reason}</p>}
-          {replayReason && replayReason !== reason && <p id="replay-reason" className="control-reason" data-testid="replay-reason">Play and speed: {replayReason}</p>}
         </nav>
         {ready && <DemoBanner />}
       </header>
       {ready && drawer && <ControlPanel onClose={() => setDrawer(false)} />}
     </>
+  );
+}
+
+const SPEED_LABEL: Record<DrawSpeed, string> = { 1: '1×', 0.5: '½×', 0.25: '¼×' };
+
+/**
+ * D-362: Pause or Resume the whole system, and the drawing speed (1×, or slow motion). Available as soon as the top
+ * bar's controls appear, the startup after Adopt included, so a rush of messages can be stopped and inspected. Pause
+ * waits while a failure demo takes a step (FR-125a: disabled, saying why); a demo resumes the system before each step.
+ */
+function SystemControls() {
+  const paused = useStore(system.paused);
+  const speed = useStore(system.speed);
+  const demo = useStore(activeDemo);
+  const busy = demo?.running || demo?.restoring ? 'Wait: a failure demo is taking a step' : null;
+  const pauseOff = busy && !paused ? { disabled: true, title: busy, 'aria-describedby': 'system-reason' } : {};
+  return (
+    <div className="system-controls" role="group" aria-label="System" data-testid="system-controls">
+      <button className={`btn system-pause${paused ? ' attention' : ''}`} aria-pressed={paused} data-testid="system-pause"
+        title={paused ? undefined : 'Hold the whole system still: messages stop where they are, nothing is sent until Resume'}
+        onClick={() => (paused ? system.resume() : system.pause())} {...pauseOff}>{paused ? '▶ Resume' : '⏸ Pause system'}</button>
+      <div className="segmented" role="group" aria-label="Drawing speed" data-testid="draw-speed">
+        {DRAW_SPEEDS.map((r) => (
+          <button key={r} className={`btn${r === speed ? ' on' : ''}`} aria-pressed={r === speed} onClick={() => system.setSpeed(r)}
+            title={r === 1 ? 'Messages in real time' : `Slow motion: messages travel at ${SPEED_LABEL[r]}, and the system waits for the drawing`}
+            data-testid={`draw-speed-${r}`}>{SPEED_LABEL[r]}</button>
+        ))}
+      </div>
+      {busy && !paused && <span id="system-reason" className="sr-only">{busy}</span>}
+    </div>
   );
 }
 

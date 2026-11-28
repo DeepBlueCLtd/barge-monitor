@@ -28,6 +28,18 @@ export class ReplayClock {
   onEnd: (() => void) | null = null;
   private timer: ReturnType<typeof setInterval> | null = null;
   private last = 0;
+  private held = false;
+
+  /**
+   * D-362: the demonstrator's Pause holds the whole system, this clock included: while held the replay time does not
+   * advance, whether playing or not, and it carries on from the same time when let go. Playing stays as it was.
+   */
+  hold(on: boolean) {
+    if (on === this.held) return;
+    if (on) this.advance();
+    this.held = on;
+    this.last = performance.now();
+  }
 
   /** Open a dataset: time at its start, paused (interfaces §8). The rate is kept. */
   open(dataset: string, start: number, end: number, time = start) {
@@ -86,7 +98,7 @@ export class ReplayClock {
   /** Bring the replay time up to real time, quietly (no store update unless it reaches the end). */
   private advance() {
     const s = this.state.value;
-    if (!s || !s.playing) return;
+    if (!s || !s.playing || this.held) return;
     const now = performance.now();
     const t = s.time + ((now - this.last) / 1000) * s.rate;
     this.last = now;

@@ -2,6 +2,7 @@
 // rather than designs, what is written for this system, and what a developed
 // system needs that is deliberately not here. Crisp, not sketched (VS-18).
 // It marks nothing as value-add: the reveal does that (FR-74).
+import { BUILD_SHA, BUILD_TIME } from '../config';
 
 /** A decision this system did not have to make, and the default it adopted instead. */
 const ADOPTED: [string, string, string][] = [
@@ -47,7 +48,7 @@ export function Overview() {
   return (
     <div className="overview" data-testid="overview">
       <p className="invite">Click a component on the flowchart to see it here.</p>
-      <p className="hint">Click a moving message to read it. Failure demos, in the top bar, break things on purpose.</p>
+      <p className="hint">Click a moving message to read it; Pause system, in the top bar, holds them all still. Failure demos break things on purpose.</p>
       <section>
         <h3 className="small-caps">Sensible defaults: adopted, not designed</h3>
         <table className="adopted" data-testid="adopted">
@@ -63,6 +64,10 @@ export function Overview() {
           <h3 className="small-caps">Not in this demonstrator</h3>
           <ul className="plain not-here" data-testid="not-here">{NOT_HERE.map(([n, t]) => <li key={n}><b>{n}</b>{t && <span>{t}</span>}</li>)}</ul>
       </section>
+      {/* D-364: which build is on screen, to compare with the preview comment. */}
+      <p className="build-stamp" data-testid="build-stamp">
+        {BUILD_SHA ? `Build ${BUILD_SHA}${BUILD_TIME ? ` · ${BUILD_TIME}` : ''}` : 'Local build'}
+      </p>
     </div>
   );
 }

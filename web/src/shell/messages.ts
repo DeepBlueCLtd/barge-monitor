@@ -49,7 +49,8 @@ export const LETTER_ORDER: Letter[] = ['Q', 'D', 'O', 'K', 'P', 'H', 'S', 'L', '
 
 // Scheduling on the flowchart, in real seconds on the drawing clock (D-302). If a line falls far
 // behind, spacing is relaxed rather than letting the drawing lag ever
-// further behind the system: every message is still drawn.
+// further behind the system: every message is still drawn. In slow motion the system is
+// held long before that (system.ts, D-362), so icons keep their spacing.
 const GAP_S = HOP_S * 0.34;
 const MAX_LAG_S = 6;
 /** How many recent messages are kept for the message strip and chains (not for drawing). */
@@ -129,6 +130,14 @@ class MessageBus {
   private prune(list = this.live.value): Message[] {
     const now = drawClock.now();
     return list.filter((m) => m.start + m.dur > now);
+  }
+
+  /** How long the last icon queued waits before it sets off, in drawing seconds (0 when none waits; D-362). */
+  lag(): number {
+    const now = drawClock.now();
+    let lag = 0;
+    for (const m of this.live.value) if (m.start - now > lag) lag = m.start - now;
+    return lag;
   }
 
   tick() {
