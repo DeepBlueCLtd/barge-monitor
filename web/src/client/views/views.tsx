@@ -284,36 +284,32 @@ export function ClusterView({ session }: { session: DisplayClientSession }) {
   );
 }
 
-/** FR-106, FR-107: an opened record, or two compared on elapsed time. */
+/** FR-107: two records compared on elapsed time. */
 export function OpenedView({ opened, onClose }: { opened: Opened; onClose: () => void }) {
-  const compare = opened.kind === 'compare';
   const option = useMemo<EChartsOption>(() => {
     const series = opened.records.flatMap((rec, ri) => rec.series.map((s, si) => ({
-      name: compare ? `${rec.item.record.label} · ${s.label}` : s.label, type: 'line', showSymbol: false, lineStyle: { width: 1.4, type: ri ? 'dashed' : 'solid' },
+      name: `${rec.item.record.label} · ${s.label}`, type: 'line', showSymbol: false, lineStyle: { width: 1.4, type: ri ? 'dashed' : 'solid' },
       color: SERIES[(ri * 3 + si) % SERIES.length],
-      data: s.rows.map((r) => [compare ? r.t : ms(r.t), isNum(r.v) ? r.v : null]),
+      data: s.rows.map((r) => [r.t, isNum(r.v) ? r.v : null]),
     })));
     return {
       grid: { left: 52, right: 14, top: 28, bottom: 34 },
       legend: { top: 0, textStyle: { ...AXIS, fontSize: 12 } },
       tooltip: { trigger: 'axis', valueFormatter: (v: unknown) => fmt(v) },
-      xAxis: compare
-        ? { type: 'value', name: 'elapsed', nameLocation: 'middle', nameGap: 20, nameTextStyle: AXIS, axisLabel: { ...AXIS, formatter: (v: number) => elapsed(v) } }
-        : { type: 'time', axisLabel: { ...AXIS, hideOverlap: true } },
+      xAxis: { type: 'value', name: 'elapsed', nameLocation: 'middle', nameGap: 20, nameTextStyle: AXIS, axisLabel: { ...AXIS, formatter: (v: number) => elapsed(v) } },
       yAxis: { type: 'value', scale: true, axisLabel: AXIS },
       series,
     } as EChartsOption;
-  }, [opened, compare]);
-  const r0 = opened.records[0].item.record;
+  }, [opened]);
   return (
-    <section className="dc-opened" data-testid={compare ? 'doi-compare' : 'doi-opened'} data-checksum={opened.checksum}>
+    <section className="dc-opened" data-testid="doi-compare" data-checksum={opened.checksum}>
       <header>
-        <h4>{compare ? 'Compared on elapsed time' : `Favourite: ${r0.label}`}</h4>
+        <h4>Compared on elapsed time</h4>
         <p data-testid="opened-what">{opened.records.map((r) => `${r.item.record.label}: ${r.item.record.dataset.file}, ${r.item.record.start} to ${r.item.record.end} at ${r.item.record.resolution}`).join(' · ')}
-          {compare ? ` · each from its own start, at ${opened.res}, labelled elapsed: never simultaneous` : ''}</p>
+          {` · each from its own start, at ${opened.res}, labelled elapsed: never simultaneous`}</p>
         <button className="dc-btn small" onClick={onClose} data-testid="doi-close">Close</button>
       </header>
-      <EChart option={option} testid={compare ? 'chart-compare' : 'chart-opened'} />
+      <EChart option={option} testid="chart-compare" />
     </section>
   );
 }

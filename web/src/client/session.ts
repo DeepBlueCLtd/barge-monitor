@@ -123,10 +123,10 @@ export interface DoiSeries {
   rows: { t: number; v: number | string | null }[];
 }
 
+/** Two records compared on elapsed time (FR-107). Opening one draws nothing of its own (D-367). */
 export interface Opened {
-  kind: 'open' | 'compare';
   title: string;
-  /** Per record: its label, dataset, span and series; on elapsed time when comparing (FR-107). */
+  /** Per record: its label, dataset, span and series, on elapsed time. */
   records: { item: DoiItem; start: number; res: Resolution; series: DoiSeries[] }[];
   /** The resolution compared at: the coarser of the two (FR-107). */
   res?: Resolution;
@@ -1291,7 +1291,7 @@ export class DisplayClientSession {
     await this.act((http) => this.readDois(http));
   }
 
-  /** FR-106: regenerate a record from the server exactly as it describes, whatever the current dataset. */
+  /** Regenerate a record from the server exactly as it describes, whatever the current dataset (FR-107, AT-45). */
   private async regenerate(http: ClientHttp, item: DoiItem): Promise<{ start: number; res: Resolution; series: DoiSeries[] } | string> {
     const d = this.discovery.value!;
     const r = item.record;
@@ -1329,20 +1329,16 @@ export class DisplayClientSession {
     return rows.map((x) => String(x.run_id)).reduce((a, b) => (runNumber(b) > runNumber(a) ? b : a), '');
   }
 
+  /** Opening a record draws no chart of its own: it returns the replay to the record (FR-106, D-367). */
   async openDoi(item: DoiItem) {
-    await this.act(async (http) => {
-      const g = await this.regenerate(http, item);
-      if (typeof g === 'string') {
-        this.notify(g, true);
-        return;
-      }
-      const r = item.record;
-      await this.restoreWindow(http, r);
-      this.opened.set({ kind: 'open', title: `${r.label} · ${r.dataset.file} · ${r.start} to ${r.end}`, records: [{ item, ...g }], checksum: digest(g.series) });
-    });
+    if (item.greyed) {
+      this.notify(item.greyed, true);
+      return;
+    }
+    await this.act((http) => this.restoreWindow(http, item.record));
   }
 
-  /** Opening a record also returns the replay to it: its dataset made current, the time at its end, its period (FR-106). */
+  /** The replay returned to a record: its dataset made current, the time at its end, its period (FR-106). The views keep their fields. */
   private async restoreWindow(http: ClientHttp, r: DoiRecord) {
     const ds = this.datasetOf(r);
     const e = ds ? this.catalogue.value.find((x) => x.dataset === ds) : null;
@@ -1388,7 +1384,7 @@ export class DisplayClientSession {
         { item: a, start: ga.start, res: ga.res, series: bring(ga) },
         { item: b, start: gb.start, res: gb.res, series: bring(gb) },
       ];
-      this.opened.set({ kind: 'compare', title: `${a.record.label} and ${b.record.label}, on elapsed time`, records, res, checksum: digest(records.flatMap((r) => r.series)) });
+      this.opened.set({ title: `${a.record.label} and ${b.record.label}, on elapsed time`, records, res, checksum: digest(records.flatMap((r) => r.series)) });
     });
   }
 

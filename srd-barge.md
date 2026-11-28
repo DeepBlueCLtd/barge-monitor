@@ -698,8 +698,9 @@ interest" as the requirement term.
 - **FR-105a** A record can be saved with **tags** (optional, comma separated). The list
   offers each tag in use, with how many records carry it; picking tags shows only the
   records carrying every one picked. Records saved without tags still list, open and compare.
-- **FR-106** **Opening** a record regenerates it from the server, as the record describes,
-  whatever the current dataset. It is labelled with its dataset and span.
+- **FR-106** **Opening** a record draws no chart of its own: it makes the record's dataset
+  current and sets the period (or the Whole dataset range) and the time to the record's span,
+  whatever the current dataset. The views keep their fields (D-367).
 - **FR-107** **Comparing** two records draws them on one chart on **elapsed time** from each
   record's own start, labelled "elapsed", never as simultaneous. A finer resolution is
   brought to the coarser one; a shorter record ends earlier.
@@ -1043,7 +1044,7 @@ pace), and in 4.4 and 4.6:
 | **AT-42** | Mission B and its re-export are imported into separate datastreams; a query on one never returns the other's readings | C1 |
 | **AT-43** | A file changed since import is imported as a new dataset; the earlier one is marked superseded and still opens | C1 |
 | **AT-44** | Changing the current dataset rebuilds the field list without a full handshake; a dataset already processed shows its results at once; one still being processed says so (FR-35b) | C2, C3 |
-| **AT-45** | A saved data of interest, opened after switching dataset, regenerates exactly the same values | C3 |
+| **AT-45** | A saved data of interest, opened after switching dataset, returns the replay to its dataset, period and time, and draws no chart of its own | C3 |
 | **AT-46** | Two data of interest compared on elapsed time are drawn from each one's start, at the coarser resolution, labelled "elapsed" | C3 |
 | **AT-47** | A resolution with no datastream is refused, naming those available | C3 |
 | **AT-48** | After Reset instance, every user's data of interest list is empty; re-importing a file restores nothing saved before the reset | C1, C3 |
