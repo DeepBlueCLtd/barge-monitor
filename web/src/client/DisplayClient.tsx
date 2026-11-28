@@ -1,7 +1,7 @@
 // The display client's screen (SRD §8.1), inside the monitor frame. Before login,
 // the login screen only (FR-97). After login, from top to bottom: a status strip with
 // the analyst's name, the Dataset selector button, the Favourites button and Lock; the
-// replay bar; the field chips, period presets and clustering; the views. The dataset
+// replay bar; the field chips, the period and clustering; the views. The dataset
 // list and the Favourites are popups (FR-127), not always on screen.
 // It is deliberately small and generic. It draws what discovery finds and nothing
 // else: which sources a user sees is decided by the server.
@@ -13,7 +13,7 @@ import { RATES } from '../config';
 import { useStore } from '../shell/store';
 import { essentialLabel } from './discovery';
 import { problemText, RESOLUTIONS } from './fields';
-import { iso, PERIODS } from './plan';
+import { iso, Period, PeriodUnit, UNITS } from './plan';
 import { CatalogueEntry, clientSession, DisplayClientSession, DoiItem } from './session';
 import { PanelGrid } from './views/PanelGrid';
 import { ClusterView, ErrorBarView, HeatmapView, LineView, OpenedView } from './views/views';
@@ -262,9 +262,10 @@ function ReplayBar({ session }: { session: DisplayClientSession }) {
   const s = useStore(session.clock.state);
   useStore(session.selection);
   const offWhy = session.replayOff();
-  const off = offWhy ? { disabled: true, title: offWhy, 'aria-describedby': 'dc-replay-off' } : {};
+  const offAttrs = offWhy ? { disabled: true, title: offWhy, 'aria-describedby': 'dc-replay-off' } : {};
   const [drag, setDrag] = useState<number | null>(null);
   if (!s) return null;
+  const whole = session.wholeDataset();
   const pos = drag ?? s.time;
   const commit = () => {
     if (drag != null) session.seek(drag);
@@ -273,24 +274,84 @@ function ReplayBar({ session }: { session: DisplayClientSession }) {
   return (
     <div className="dc-replay" data-testid="replay-bar" data-playing={String(s.playing)} data-rate={String(s.rate)} data-dataset={s.dataset}
       data-time={iso(s.time)} data-at-end={String(s.atEnd)}>
-      <button className={`dc-btn${s.playing ? '' : ' primary'}`} onClick={() => (s.playing ? session.pause() : session.play())} data-testid="dc-play" {...off}>
+      <button className={`dc-btn${s.playing ? '' : ' primary'}`} onClick={() => (s.playing ? session.pause() : session.play())} data-testid="dc-play" {...offAttrs}>
         {s.playing ? '❚❚ Pause' : '▶ Play'}
       </button>
       <span className="dc-rates" aria-label="Rate">
         {RATES.map((r) => (
-          <button key={r} className={`dc-btn small${s.rate === r ? ' on' : ''}`} aria-pressed={s.rate === r} onClick={() => session.setRate(r)} data-testid={`dc-rate-${r}`} {...off}>{r}×</button>
+          <button key={r} className={`dc-btn small${s.rate === r ? ' on' : ''}`} aria-pressed={s.rate === r} onClick={() => session.setRate(r)} data-testid={`dc-rate-${r}`} {...offAttrs}>{r}×</button>
         ))}
       </span>
-      <input type="range" className="dc-timeline" min={s.start} max={s.end} step={1} value={Math.floor(pos)} data-testid="dc-timeline" aria-label="Replay position" {...off}
-        onChange={(e) => setDrag(Number(e.target.value))} onPointerUp={commit} onKeyUp={commit} />
-      <span className="dc-time mono" data-testid="dc-time">{iso(pos).replace('T', ' ').replace('Z', '')}</span>
+      {whole ? <RangeTimeline session={session} start={s.start} end={s.end} /> : (
+        <>
+          <input type="range" className="dc-timeline" min={s.start} max={s.end} step={1} value={Math.floor(pos)} data-testid="dc-timeline" aria-label="Replay position"
+            onChange={(e) => setDrag(Number(e.target.value))} onPointerUp={commit} onKeyUp={commit} />
+          <span className="dc-time mono" data-testid="dc-time">{iso(pos).replace('T', ' ').replace('Z', '')}</span>
+        </>
+      )}
       {offWhy && <span id="dc-replay-off" className="dc-sent" data-testid="dc-replay-off">{offWhy}</span>}
       <span className="dc-sent" data-testid="dc-at-end">{s.atEnd ? 'At the end of the dataset: paused' : ''}</span>
     </div>
   );
 }
 
-/** FR-53 to FR-55: the field chips of this dataset, the period presets and clustering. */
+const clock = (t: number) => iso(t).replace('T', ' ').replace('Z', '');
+
+/** D-358: in the whole dataset, a twin-handle timeline picks the range shown; nothing is replayed. */
+function RangeTimeline({ session, start, end }: { session: DisplayClientSession; start: number; end: number }) {
+  const [from, to] = session.window() ?? [start, end];
+  const [drag, setDrag] = useState<[number, number] | null>(null);
+  const [a, b] = drag ?? [from, to];
+  const commit = () => {
+    if (drag) session.setRange(drag[0], drag[1]);
+    setDrag(null);
+  };
+  const pct = (t: number) => `${((t - start) / Math.max(1, end - start)) * 100}%`;
+  const handle = (which: 0 | 1) => (
+    <input type="range" min={start} max={end} step={1} value={Math.floor(which ? b : a)} data-testid={which ? 'dc-range-to' : 'dc-range-from'}
+      aria-label={which ? 'End of the range shown' : 'Start of the range shown'}
+      onChange={(e) => {
+        const v = Number(e.target.value);
+        setDrag(which ? [a, Math.max(v, a + 1)] : [Math.min(v, b - 1), b]);
+      }} onPointerUp={commit} onKeyUp={commit} onBlur={commit} />
+  );
+  return (
+    <>
+      <span className="dc-timeline dc-range" data-testid="dc-range" data-from={iso(a)} data-to={iso(b)}>
+        <span className="dc-range-fill" style={{ left: pct(a), width: `calc(${pct(b)} - ${pct(a)})` }} />
+        {handle(0)}
+        {handle(1)}
+      </span>
+      <span className="dc-time mono" data-testid="dc-time">{clock(a)} to {clock(b)}</span>
+    </>
+  );
+}
+
+/** FR-54: the period, as a number and a unit, or the whole dataset. A number is applied once typing pauses. */
+function PeriodPicker({ session, period }: { session: DisplayClientSession; period: Period }) {
+  const [text, setText] = useState(String(period.n));
+  useEffect(() => setText(String(period.n)), [period.n]);
+  useEffect(() => {
+    const n = Number(text);
+    if (!Number.isInteger(n) || n < 1 || n === period.n) return;
+    const t = setTimeout(() => session.setPeriod({ ...period, n }), 400);
+    return () => clearTimeout(t);
+  }, [text, period, session]);
+  const whole = period.unit === 'all';
+  const bad = !whole && !(Number.isInteger(Number(text)) && Number(text) >= 1);
+  return (
+    <span className="dc-period" data-testid="period" data-unit={period.unit} data-n={String(period.n)}>
+      <input type="number" min={1} step={1} className={`dc-period-n${bad ? ' bad' : ''}`} value={whole ? '' : text} disabled={whole} aria-label="Period length"
+        title={whole ? 'The whole dataset is shown: choose a unit to set a length' : bad ? 'A whole number, 1 or more' : undefined}
+        onChange={(e) => setText(e.target.value)} onBlur={() => bad && setText(String(period.n))} data-testid="period-n" />
+      <select value={period.unit} aria-label="Period unit" onChange={(e) => session.setPeriod({ ...period, unit: e.target.value as PeriodUnit })} data-testid="period-unit">
+        {UNITS.map((u) => <option key={u.id} value={u.id}>{u.label}</option>)}
+      </select>
+    </span>
+  );
+}
+
+/** FR-53 to FR-55: the field chips of this dataset, the period and clustering. */
 function Selectors({ session }: { session: DisplayClientSession }) {
   const view = useStore(session.view);
   const sel = useStore(session.selection);
@@ -309,11 +370,7 @@ function Selectors({ session }: { session: DisplayClientSession }) {
       </div>
       <div className="dc-row">
         <span className="dc-label">Period</span>
-        <div className="presets">
-          {PERIODS.map((p) => (
-            <button key={p.id} className={`preset${sel.period === p.id ? ' on' : ''}`} aria-pressed={sel.period === p.id} onClick={() => session.setPeriod(p.id)} data-testid={`preset-${p.id}`}>{p.label}</button>
-          ))}
-        </div>
+        <PeriodPicker session={session} period={sel.period} />
         <span className="dc-label">Clustering</span>
         <div className="presets">
           {['A', 'B', 'C'].map((a) => (

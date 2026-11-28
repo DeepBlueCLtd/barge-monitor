@@ -10,7 +10,6 @@ import { ReactNode, useMemo } from 'react';
 import { Diamond } from '../../shell/Diamond';
 import { useStore } from '../../shell/store';
 import type { Property, Source } from '../fields';
-import { periodOf } from '../plan';
 import { DisplayClientSession, Opened, Row } from '../session';
 import { AXIS, EChart, EChartsOption, ms, SERIES, timeLabel } from './chart';
 
@@ -324,4 +323,3 @@ function elapsed(s: number): string {
   return h ? `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}` : `${m}:${String(sec).padStart(2, '0')}`;
 }
 
-export const periodLabel = (id: Parameters<typeof periodOf>[0]) => periodOf(id).label;

@@ -1,44 +1,59 @@
-// Period presets (FR-54), each ending at the replay time, and the resolution each
-// reads: readings up to an hour, 1-minute summaries for 6 hours and a day, hourly
-// summaries for the whole dataset.
+// The period (FR-54): a number and a unit, ending at the replay time, or the whole dataset. The resolution read
+// follows the window's length: readings up to an hour, 1-minute summaries up to a day, hourly summaries beyond, and
+// for the whole dataset unless a narrower range is picked on its twin-handle timeline.
 import { RES_SECONDS, Resolution } from './fields';
 
-export type PeriodId = '1m' | '1h' | '6h' | '1d' | 'all';
+export type PeriodUnit = 's' | 'min' | 'h' | 'd' | 'all';
 
+/** `n` is kept while the unit is the whole dataset, so choosing a unit again gives the number back. */
 export interface Period {
-  id: PeriodId;
-  label: string;
-  /** Seconds before the replay time; null for the whole dataset. */
-  seconds: number | null;
-  res: Resolution;
+  n: number;
+  unit: PeriodUnit;
 }
 
-export const PERIODS: Period[] = [
-  { id: '1m', label: '1 min', seconds: 60, res: 'PT1S' },
-  { id: '1h', label: '1 h', seconds: 3600, res: 'PT1S' },
-  { id: '6h', label: '6 h', seconds: 6 * 3600, res: 'PT1M' },
-  { id: '1d', label: 'A day', seconds: 86400, res: 'PT1M' },
-  { id: 'all', label: 'Whole dataset', seconds: null, res: 'PT1H' },
+export const UNITS: { id: PeriodUnit; label: string; seconds: number | null }[] = [
+  { id: 's', label: 'seconds', seconds: 1 },
+  { id: 'min', label: 'minutes', seconds: 60 },
+  { id: 'h', label: 'hours', seconds: 3600 },
+  { id: 'd', label: 'days', seconds: 86400 },
+  { id: 'all', label: 'Whole dataset', seconds: null },
 ];
 
-export const periodOf = (id: PeriodId): Period => PERIODS.find((p) => p.id === id) ?? PERIODS[1];
+export const DEFAULT_PERIOD: Period = { n: 1, unit: 'h' };
+
+/** The period's length in seconds; null for the whole dataset. */
+export function periodSeconds(p: Period): number | null {
+  const u = UNITS.find((x) => x.id === p.unit)?.seconds;
+  return u == null ? null : Math.max(1, Math.round(p.n)) * u;
+}
+
+/** The resolution a window of this many seconds reads; null (the whole dataset) reads hourly summaries. */
+export function resFor(seconds: number | null): Resolution {
+  if (seconds === null) return 'PT1H';
+  return seconds <= 3600 ? 'PT1S' : seconds <= 86400 ? 'PT1M' : 'PT1H';
+}
+
+export const periodLabel = (p: Period) => {
+  const s = periodSeconds(p);
+  if (s === null) return 'Whole dataset';
+  return `${Math.round(p.n)} ${p.unit}`;
+};
 
 /** The window a period covers, in Unix seconds: [from, to], never before the dataset's start. */
-export function windowOf(id: PeriodId, replayTime: number, start: number): [number, number] {
-  const p = periodOf(id);
-  return [p.seconds === null ? start : Math.max(start, replayTime - p.seconds), replayTime];
+export function windowOf(p: Period, replayTime: number, start: number): [number, number] {
+  const s = periodSeconds(p);
+  return [s === null ? start : Math.max(start, replayTime - s), replayTime];
 }
 
 /**
- * The period preset that gives a saved window back (FR-106): the one of its length, or, for a window clipped at the
- * dataset's start, the shortest that covers it; the whole dataset when none does.
+ * The period that gives a saved window back (FR-106): its length, in the largest unit that divides it; the whole
+ * dataset when the window covers all of it. A window clipped at the dataset's start is given back by its length too.
  */
-export function periodFor(from: number, to: number, datasetStart: number): PeriodId {
-  const span = to - from;
-  const exact = PERIODS.find((p) => p.seconds === span);
-  if (exact) return exact.id;
-  if (from <= datasetStart) return PERIODS.find((p) => p.seconds !== null && p.seconds >= span)?.id ?? 'all';
-  return 'all';
+export function periodFor(from: number, to: number, datasetStart: number, datasetEnd: number): Period {
+  if (from <= datasetStart && to >= datasetEnd) return { n: 1, unit: 'all' };
+  const span = Math.max(1, Math.round(to - from));
+  const u = [...UNITS].reverse().find((x) => x.seconds !== null && span % x.seconds === 0)!;
+  return { n: span / u.seconds!, unit: u.id };
 }
 
 /**
@@ -54,4 +69,4 @@ export const iso = (t: number) => new Date(Math.round(t) * 1000).toISOString().r
 export const parseIso = (s: string) => Date.parse(s) / 1000;
 
 /** The resolution the error-bar view reads: summaries, never readings (FR-29, FR-58). */
-export const statsRes = (id: PeriodId): Resolution => (periodOf(id).res === 'PT1H' ? 'PT1H' : 'PT1M');
+export const statsRes = (res: Resolution): Resolution => (res === 'PT1H' ? 'PT1H' : 'PT1M');
