@@ -35,14 +35,19 @@ const ENTITIES = ['System', 'Subsystems', 'Datastreams', 'Schema', 'Observations
 /** D-363: the only digits allowed on the page, and only in the Open Standards view: its periods and the standard's part numbers. */
 const STANDARDS_DIGITS = /\b(?:(?:19|20)\d0s|20\d\d|Part [12])\b/g;
 
-/** FR-124 (D-363): Adopt is "Open Standards", then "OpenSensorHub". */
+/** FR-124 (D-363, D-364): Adopt is "Open Standards", then "Open Source", then "Adopt". */
 async function openStandards(page: Page) {
   await page.getByTestId('open-standards').click();
   await expect(page.getByTestId('standards')).toBeVisible();
 }
-async function adopt(page: Page) {
+async function openOpenSource(page: Page) {
   await openStandards(page);
-  await page.getByTestId('choose-osh').click();
+  await page.getByTestId('choose-open-source').click();
+  await expect(page.getByTestId('open-source')).toBeVisible();
+}
+async function adopt(page: Page) {
+  await openOpenSource(page);
+  await page.getByTestId('choose-adopt').click();
 }
 
 /** Count every worker the page creates (AT-63: no back-end or model worker before Adopt). */
@@ -323,13 +328,13 @@ for (const backend of ['standin', 'python'] as const) {
       expect(requests).toEqual([]);
       expect(await page.locator('body').innerText()).not.toMatch(GONE);
       expect(await page.locator('body').innerText()).not.toMatch(/\d/);
-      // The Open Standards view changes only the panel: the traffic keeps running (D-363).
-      await openStandards(page);
-      // Adopt ("OpenSensorHub"): the traffic stops at once. Every animation frame from the click records whether a mock icon is drawn.
+      // The Open Standards and Open Source views change only the panel: the traffic keeps running (D-363, D-364).
+      await openOpenSource(page);
+      // Adopt: the traffic stops at once. Every animation frame from the click records whether a mock icon is drawn.
       await page.evaluate(() => {
         const w = window as unknown as { __mock: { click: number; last: number; frames: number } };
         w.__mock = { click: 0, last: -1, frames: 0 };
-        document.querySelector('[data-testid="choose-osh"]')!.addEventListener('click', () => { w.__mock.click = performance.now(); }, { capture: true });
+        document.querySelector('[data-testid="choose-adopt"]')!.addEventListener('click', () => { w.__mock.click = performance.now(); }, { capture: true });
         const loop = () => {
           const m = w.__mock;
           if (m.click) {
@@ -341,7 +346,7 @@ for (const backend of ['standin', 'python'] as const) {
         requestAnimationFrame(loop);
       });
       await expect.poll(() => mock.count(), { timeout: 10_000 }).toBeGreaterThan(0);
-      await page.getByTestId('choose-osh').click();
+      await page.getByTestId('choose-adopt').click();
       await expect(page.getByTestId('flowchart')).toHaveAttribute('data-mode', 'merging');
       await page.waitForTimeout(500);
       // Sampled shortly after the click: none left, while the cards are still merging.
@@ -434,7 +439,7 @@ for (const backend of ['standin', 'python'] as const) {
       await expect(page.getByTestId('standards-here')).toContainText('Commands');
       // The two choices.
       await expect(page.getByTestId('choose-custom')).toHaveText('Custom Components');
-      await expect(page.getByTestId('choose-osh')).toHaveText('OpenSensorHub');
+      await expect(page.getByTestId('choose-open-source')).toHaveText('Open Source');
       // No count (FR-120, AT-64): the only digits on the page are the history's periods and the standard's part numbers.
       const body = await page.locator('body').innerText();
       const standards = await page.getByTestId('standards').innerText();
@@ -464,6 +469,19 @@ for (const backend of ['standin', 'python'] as const) {
       await expect(page.getByTestId('flowchart')).toHaveAttribute('data-mode', 'opening');
       await expect(page.getByTestId('card-server')).toHaveCount(0);
       expect(await status()).toBe(before);
+      // D-364: Open Source: a short account of OpenSensorHub, no digits, then Adopt; still nothing has started.
+      await openStandards(page);
+      await page.getByTestId('choose-open-source').click();
+      await expect(page.getByTestId('opening-panel')).toHaveAttribute('data-view', 'opensource');
+      await expect(page.getByTestId('detail-title')).toHaveText('Open Source');
+      for (const w of ['Connected Systems', 'Mike Botts', 'Alex Robin', 'NASA', 'Mozilla Public License']) await expect(page.getByTestId('open-source')).toContainText(w);
+      expect(await page.getByTestId('open-source').innerText()).not.toMatch(/\d/);
+      await expect(page.getByTestId('choose-adopt')).toHaveText('Adopt');
+      await expect(page.getByTestId('flowchart')).toHaveAttribute('data-mode', 'opening');
+      expect(await status()).toBe(before);
+      // A card clicked in the Open Source view brings the table back too.
+      await page.getByTestId('card-sub-webapi').click();
+      await expect(page.getByTestId('opening-panel')).toHaveAttribute('data-view', 'components');
       // A card clicked while Open Standards is shown brings the table back, its row highlighted (FR-123).
       await openStandards(page);
       await page.getByTestId('card-sub-registry').click();
@@ -539,9 +557,9 @@ for (const backend of ['standin', 'python'] as const) {
       const outline = () => page.locator('[data-testid="card-sub-webapi"] svg.sketch path').first().getAttribute('d');
       const before = await outline();
       const card0 = await box(page, 'card-sub-webapi');
-      await openStandards(page);
+      await openOpenSource(page);
       const t0 = Date.now();
-      await page.getByTestId('choose-osh').click();
+      await page.getByTestId('choose-adopt').click();
       // D-360: about six seconds of merge; the outlines move and shrink with their cards, they are not redrawn (VS-25).
       await expect(flow).toHaveAttribute('data-mode', 'merging');
       expect(await outline()).toBe(before);
@@ -704,7 +722,7 @@ for (const backend of ['standin', 'python'] as const) {
       await expect(page.getByTestId('written')).toBeVisible();
       // There is no way back to the opening in this session (FR-126).
       await expect(page.getByTestId('open-standards')).toHaveCount(0);
-      await expect(page.getByTestId('choose-osh')).toHaveCount(0);
+      await expect(page.getByTestId('choose-adopt')).toHaveCount(0);
       await expect(page.locator('[data-testid^="card-sub-"]')).toHaveCount(0);
     });
 
@@ -722,9 +740,9 @@ for (const backend of ['standin', 'python'] as const) {
         new MutationObserver(() => w.__modes.push(el.getAttribute('data-mode')!)).observe(el, { attributes: true, attributeFilter: ['data-mode'] });
       });
       await watchHandOver(page);
-      await openStandards(page);
+      await openOpenSource(page);
       const t0 = Date.now();
-      await page.getByTestId('choose-osh').click();
+      await page.getByTestId('choose-adopt').click();
       // At once: the controls of the normal startup are there, and the back end is starting.
       await expect(page.getByTestId('controls')).toBeVisible({ timeout: 1000 });
       expect(Date.now() - t0).toBeLessThan(1000);

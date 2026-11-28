@@ -1,6 +1,7 @@
 // The Open Standards view of the opening panel (SRD 4.7 §9.8, FR-123a; D-363): a very short history of the OGC
 // Connected Systems standard and a tree of its entities, related to this demonstrator, then the two choices:
-// "Custom Components" (back to the table) and "OpenSensorHub" (Adopt, FR-124). Shown in the panel only: the flowchart
+// "Custom Components" (back to the table) and "Open Source" (a short account of OpenSensorHub, whose "Adopt" is
+// FR-124; D-364). Shown in the panel only: the flowchart
 // and its illustrative traffic are unchanged, and nothing starts (FR-122). Crisp, not sketched (VS-18); nothing gold
 // (FR-121). The only digits are the history's periods and the standard's part numbers, which are not counts (D-363).
 import { opening } from '../shell/opening';
@@ -123,7 +124,7 @@ export function StandardsView() {
       </p>
       <div className="standards-choice" role="group" aria-label="The data server" data-testid="standards-choice">
         <button className="btn" data-testid="choose-custom" onClick={() => opening.showComponents()}>Custom Components</button>
-        <button className="btn" data-testid="choose-osh" onClick={() => opening.adopt()}>OpenSensorHub</button>
+        <button className="btn" data-testid="choose-open-source" onClick={() => opening.showOpenSource()}>Open Source</button>
       </div>
     </div>
   );
