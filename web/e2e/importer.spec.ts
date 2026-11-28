@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { gunzipSync, gzipSync } from 'node:zlib';
 import { expect, Page, test } from '@playwright/test';
+import { BACKENDS } from './site';
 
 // The CSV importer (plan Phase 5; docs/v4-interfaces.md §5–§7; SRD §6.1, §6.2), in the browser, through the
 // relay, in both back ends: the JavaScript stand-in and the Python back end in Pyodide. Every request is a
@@ -106,7 +107,7 @@ async function open(page: Page, url: string) {
   await expect.poll(async () => (await systems(page)).has(URN + 'process:analysis'), { timeout: SLOW_MS, intervals: [1000] }).toBe(true);
 }
 
-for (const backend of ['standin', 'python'] as const) {
+for (const backend of BACKENDS) {
   test.describe(`the CSV importer, ${backend === 'python' ? 'Python in Pyodide' : 'JavaScript stand-in'}`, () => {
     test.describe.configure({ mode: 'serial' });
     let page: Page;

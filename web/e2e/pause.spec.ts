@@ -1,4 +1,5 @@
 import { expect, Page, test } from '@playwright/test';
+import { BACKENDS } from './site';
 
 // The system-level Pause and slow motion (D-362; SRD FR-92, revised; docs/v4-interfaces.md §4, §13.2), in both back
 // ends. Pause freezes everything: icons hold where they are and can be clicked; no message is captured, no request
@@ -53,7 +54,7 @@ test('the top bar has no replay controls: the display client\'s replay bar is th
   await expect(page.getByTestId('draw-speed-1')).toHaveAttribute('aria-pressed', 'true');
 });
 
-for (const backend of ['standin', 'python'] as const) {
+for (const backend of BACKENDS) {
   const name = backend === 'python' ? 'Python in Pyodide' : 'JavaScript stand-in';
   test.describe(`the system's Pause and slow motion, ${name}`, () => {
     test.describe.configure({ mode: 'serial' });
@@ -85,8 +86,14 @@ for (const backend of ['standin', 'python'] as const) {
       // The display client's replay time does not advance, though it is still playing.
       await expect(page.getByTestId('replay-bar')).toHaveAttribute('data-time', before.time!);
       await expect(page.getByTestId('replay-bar')).toHaveAttribute('data-playing', 'true');
-      // A frozen icon is clicked and opens its message, as normal.
-      const icon = page.getByTestId('message-icon').first();
+      // A frozen icon is clicked and opens its message, as normal. Icons can be frozen on top of one another, so
+      // pick one that nothing covers (the topmost at its own centre).
+      const top = await page.getByTestId('message-icon').evaluateAll((els) => els.findIndex((e) => {
+        const r = e.getBoundingClientRect();
+        return e.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2));
+      }));
+      expect(top).toBeGreaterThanOrEqual(0);
+      const icon = page.getByTestId('message-icon').nth(top);
       const label = (await icon.getAttribute('aria-label'))!;
       await icon.click();
       await expect(page.getByTestId('message-strip')).toBeVisible();
@@ -170,7 +177,8 @@ for (const backend of ['standin', 'python'] as const) {
       // Hidden in the opening (FR-122), there the moment the controls appear after Adopt, while the back end starts.
       await expect(page.getByTestId('system-pause')).toHaveCount(0);
       await page.getByTestId('open-standards').click();
-      await page.getByTestId('choose-osh').click();
+      await page.getByTestId('choose-open-source').click();
+      await page.getByTestId('choose-adopt').click();
       // Enabled the moment it appears, whether or not the back end has started yet (FR-125a: Restart server waits for it).
       await expect(page.getByTestId('system-pause')).toBeVisible({ timeout: 10_000 });
       await expect(page.getByTestId('system-pause')).toBeEnabled({ timeout: 1 });

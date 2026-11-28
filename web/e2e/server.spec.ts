@@ -1,4 +1,5 @@
 import { expect, Page, test } from '@playwright/test';
+import { BACKENDS } from './site';
 
 // The server behaves as a configured stock OpenSensorHub (plan Phase 4; docs/v4-interfaces.md
 // §9.1-§9.3), proved in the browser, through the relay, in both back ends: the JavaScript
@@ -36,7 +37,7 @@ async function systems(page: Page, user: User = 'owner'): Promise<Map<string, st
   return new Map(json(a).items.map((s: any) => [s.uniqueId, s.id]));
 }
 
-for (const backend of ['standin', 'python'] as const) {
+for (const backend of BACKENDS) {
   test.describe(`the server as OpenSensorHub, ${backend === 'python' ? 'Python in Pyodide' : 'JavaScript stand-in'}`, () => {
     test.describe.configure({ mode: 'serial' });
     let page: Page;

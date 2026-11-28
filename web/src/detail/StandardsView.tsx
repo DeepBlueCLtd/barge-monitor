@@ -1,9 +1,14 @@
 // The Open Standards view of the opening panel (SRD 4.7 §9.8, FR-123a; D-363): a very short history of the OGC
 // Connected Systems standard and a tree of its entities, related to this demonstrator, then the two choices:
-// "Custom Components" (back to the table) and "OpenSensorHub" (Adopt, FR-124). Shown in the panel only: the flowchart
+// "Custom Components" (back to the table) and "Open Source" (a short account of OpenSensorHub, whose "Adopt" is
+// FR-124; D-365). Shown in the panel only: the flowchart
 // and its illustrative traffic are unchanged, and nothing starts (FR-122). Crisp, not sketched (VS-18); nothing gold
 // (FR-121). The only digits are the history's periods and the standard's part numbers, which are not counts (D-363).
-import { opening } from '../shell/opening';
+import overview from '../assets/connected-systems-overview.webp';
+import { handMade, opening } from '../shell/opening';
+
+// Fetch the overview image at load, in the opening only, so it is there when Open Standards is clicked.
+if (handMade) new Image().src = overview;
 
 /** The history, oldest first: a period and a plain sentence or two. Facts kept conservative (D-363). */
 export const HISTORY: { when: string; what: string }[] = [
@@ -116,6 +121,12 @@ export function StandardsView() {
           <li key={h.when}><b>{h.when}</b><span>{h.what}</span></li>
         ))}
       </ol>
+      {/* The owner, 2026-11-28: the Connected Systems ecosystem overview, from the OGC developer site
+          (csapi.developer.ogc.org/assets/img/overview.png), bundled so nothing is fetched from a third party (NFR-06). */}
+      <figure className="standards-overview" data-testid="standards-overview">
+        <img src={overview} alt="Connected Systems ecosystem overview" width={1400} height={765} />
+        <figcaption>Image: OGC, Connected Systems developer site.</figcaption>
+      </figure>
       <Tree />
       <p className="standards-here" data-testid="standards-here">
         Here, the barge, its sensors and the models are Systems; each weather field is a Datastream of Observations; a
@@ -123,7 +134,7 @@ export function StandardsView() {
       </p>
       <div className="standards-choice" role="group" aria-label="The data server" data-testid="standards-choice">
         <button className="btn" data-testid="choose-custom" onClick={() => opening.showComponents()}>Custom Components</button>
-        <button className="btn" data-testid="choose-osh" onClick={() => opening.adopt()}>OpenSensorHub</button>
+        <button className="btn" data-testid="choose-open-source" onClick={() => opening.showOpenSource()}>Open Source</button>
       </div>
     </div>
   );

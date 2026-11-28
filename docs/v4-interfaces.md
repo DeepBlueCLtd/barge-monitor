@@ -664,8 +664,8 @@ The master is `contracts/schemas/data-of-interest.json`:
 - **The table** (FR-123, D-359) has a row for every card of the opening, in the flowchart's
   order (`ROWS` in `opening.ts`); clicking any card highlights its row. After Adopt a column,
   "With OpenSensorHub", ticks the subsystems and says what became of the rest.
-- **Open Standards** (FR-123a, D-363). Above the table, until Adopt, one button,
-  `open-standards`. `opening.view` (`'components' | 'standards'`, a `Store` in `opening.ts`)
+- **Open Standards** (FR-123a, D-363, D-365). Below the table, until Adopt, one button,
+  `open-standards`. `opening.view` (`'components' | 'standards' | 'opensource'`, a `Store` in `opening.ts`)
   says what the panel shows while the phase is `build`; `showStandards()` and
   `showComponents()` set it and do nothing else: no request, worker, layout or status change,
   and the illustrative traffic runs on. `web/src/detail/StandardsView.tsx` draws the view
@@ -673,8 +673,11 @@ The master is `contracts/schemas/data-of-interest.json`:
   `standards-history`), the tree (an inline `svg`, `standards-tree`, `role="img"` labelled by
   its `title` and `desc`; each entity a `g` with `data-entity` and `data-part` `p1` or `p2`),
   a sentence relating it to the demonstrator (`standards-here`) and the two buttons,
-  `choose-custom` ("Custom Components": `showComponents()`) and `choose-osh` ("OpenSensorHub":
-  `opening.adopt()`). `highlight()` (a card click) and `adopt()` set the view back to
+  `choose-custom` ("Custom Components": `showComponents()`) and `choose-open-source` ("Open Source":
+  `showOpenSource()`). `web/src/detail/OpenSourceView.tsx` draws the Open Source view (D-365;
+  `data-testid="open-source"`, title "Open Source"): one lead sentence, a short list of facts about
+  OpenSensorHub (`OPEN_SOURCE`, `open-source-facts`: who made it, who it was made for, licence, its
+  place here; no digits), then one button, `choose-adopt` ("Adopt": `opening.adopt()`). `highlight()` (a card click) and `adopt()` set the view back to
   `components`. A reload starts on `components`. The history's periods and the part numbers
   are the opening's only digits, in this view only.
 - **Before Adopt:**
