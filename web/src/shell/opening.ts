@@ -12,7 +12,7 @@
 import { OPENING_MERGE } from '../config';
 import openingLayout from './layout-opening.json';
 import { mockTraffic } from './mocktraffic';
-import { selectedComponent } from './selection';
+import { selectedComponent, selectedMessage } from './selection';
 import { Store } from './store';
 
 export type SubsystemId =
@@ -213,6 +213,10 @@ export const opening = new Opening();
 // FR-125: after hand-over, the savings stay in the detail panel until a component is clicked.
 selectedComponent.subscribe((id) => {
   if (id && opening.phase.value === 'adopted') opening.dismissPanel();
+});
+// D-362: so does a clicked message, so that one picked from the rush after Adopt (paused, perhaps) shows its detail.
+selectedMessage.subscribe((m) => {
+  if (m && opening.phase.value === 'adopted') opening.dismissPanel();
 });
 
 export function prefersReducedMotion(): boolean {

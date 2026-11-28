@@ -57,6 +57,10 @@ class Runtime:
             folder = DirFolder(folder)
         self.importer = Importer(self, folder if folder is not None else EmptyFolder(), parser)
         self.silent_import = True  # Mission A, once per page load: not again after Reset instance (FR-15, FR-50a)
+        # The demonstrator's system hold (D-362): while held, the importer stops at its next step and pushed commands
+        # wait in the server; let go, each carries on where it stopped. Scaffolding: a developed system has none.
+        self.held = False
+        self._held_waiters: list = []
         # CPython: an event loop of the runtime's own, run at each tick. Pyodide: the page's (own_loop=False).
         self.loop = asyncio.new_event_loop() if own_loop else None
         if self.loop is not None:
@@ -74,6 +78,23 @@ class Runtime:
     def now(self) -> float:
         """Real time, Unix seconds (there is no simulated time any more)."""
         return self.real()
+
+    # --- the demonstrator's system hold (D-362) ------------------------------------------
+    def set_held(self, on) -> None:
+        """Hold the system (the page's Pause, or slow motion's back-pressure), or let it go on."""
+        self.held = bool(on)
+        if not self.held:
+            waiters, self._held_waiters = self._held_waiters, []
+            for f in waiters:
+                if not f.done():
+                    f.set_result(None)
+
+    async def wait_released(self) -> None:
+        """Return at once unless the system is held; else when it is let go."""
+        while self.held:
+            f = asyncio.get_running_loop().create_future()
+            self._held_waiters.append(f)
+            await f
 
     # --- the running system ---------------------------------------------------------
     def tick(self) -> None:

@@ -12,6 +12,7 @@
 // ClientHttp object, in memory, and every list and value is dropped on lock.
 import { API_BASE, IDLE_LOCK_MS, POLL_MS } from '../config';
 import { Store } from '../shell/store';
+import { system } from '../shell/system';
 import { ReplayClock } from './clock';
 import {
   controlFields, Discovery, DatastreamInfo, essentialLabel, fetchSchemas, findControlStreamByInput, findDatastream, handshake, readable, systemByUid,
@@ -239,6 +240,22 @@ export class DisplayClientSession {
       };
       for (const ev of ['pointerdown', 'keydown', 'wheel', 'pointermove']) window.addEventListener(ev, touch, { passive: true, capture: true });
     }
+    // D-362: the demonstrator's Pause holds the client too: its replay clock, its polling and its idle lock stand still,
+    // and carry on where they stopped. (Slow motion's back-pressure holds only its requests, in http.ts.)
+    let pausedAt = 0;
+    system.paused.subscribe((paused) => {
+      this.clock.hold(paused);
+      if (paused) {
+        pausedAt = Date.now();
+        return;
+      }
+      const ms = Date.now() - pausedAt;
+      this.lastInput += ms;
+      this.lastHandshake += ms;
+      this.lastRetry += ms;
+      if (this.watchUntil) this.watchUntil += ms;
+      this.statusWatch = this.statusWatch.map((w) => ({ ...w, until: w.until + ms }));
+    });
     this.clock.onEnd = () => {
       this.notify('The replay reached the end of the dataset and paused.');
       void this.act(async (http) => {
@@ -827,6 +844,7 @@ export class DisplayClientSession {
   private async tick() {
     const http = this.http;
     if (!this.live(http)) return;
+    if (system.paused.value) return; // D-362: paused, the client polls nothing and does not lock
     // FR-99: lock after a period without input.
     if (Date.now() - this.lastInput > this.idleMs) {
       this.lock();

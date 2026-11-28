@@ -22,6 +22,20 @@ let modelId = '';
 let apiUrl = '';
 
 let busy = false;
+/**
+ * The demonstrator's system hold (D-362): while held, the model takes no step, a request waits before it enters the
+ * relay, and an answer already on its way waits before the model reads it. Let go, it carries on where it stopped.
+ */
+let held = false;
+const waiters: Array<() => void> = [];
+/** The calls into the scientific libraries so far, to the page: at each request, so that slow motion's back-pressure
+ * sees them before the model goes on to its next window (D-362), and at the end of each step. */
+function flushTaps() {
+  if (!taps.length) return;
+  post({ type: 'tap', messages: taps });
+  taps = [];
+}
+const released = () => (held ? new Promise<void>((r) => waiters.push(r)) : Promise.resolve());
 let taps: any[] = [];
 let tapSeq = 0;
 
@@ -37,14 +51,20 @@ async function http(method: string, path: string, headers: any, body: any): Prom
   headers?.destroy?.();
   body?.destroy?.();
   let res: Response;
+  let bytes: Uint8Array;
+  flushTaps();
+  await released();
   try {
     res = await fetch(apiUrl + path, { method, headers: h, body: b, cache: 'no-store' });
+    bytes = new Uint8Array(await res.arrayBuffer());
   } catch {
+    await released();
     return null;
   }
+  await released();
   const out: Record<string, string> = {};
   res.headers.forEach((v, k) => (out[k.toLowerCase()] = v));
-  return [res.status, out, new Uint8Array(await res.arrayBuffer())];
+  return [res.status, out, bytes];
 }
 
 /** A push subscription (§9.2): a streamed answer through the relay, read chunk by chunk. Null when there is no answer. */
@@ -52,11 +72,13 @@ async function openStream(path: string, headers: any, internal: boolean): Promis
   const h = headers?.toJs ? headers.toJs({ dict_converter: Object.fromEntries }) : headers;
   headers?.destroy?.();
   let res: Response;
+  await released();
   try {
     res = await fetch((internal ? apiUrl + '-internal' : apiUrl) + path, { method: 'GET', headers: h, cache: 'no-store' });
   } catch {
     return null;
   }
+  await released();
   const reader = res.body?.getReader();
   return {
     status: res.status,
@@ -151,6 +173,7 @@ function schedule(working: boolean) {
 
 async function loop() {
   if (!py || busy) return;
+  if (held) return void setTimeout(loop, 100); // held (D-362): no new step
   busy = true;
   let phase = 'live';
   let working = false;
@@ -170,16 +193,16 @@ async function loop() {
   } finally {
     busy = false;
   }
-  if (taps.length) {
-    post({ type: 'tap', messages: taps });
-    taps = [];
-  }
+  flushTaps();
   schedule(working);
 }
 
 self.onmessage = (e: MessageEvent) => {
   const d = e.data;
-  if (d.type === 'start') {
+  if (d.type === 'hold') {
+    held = !!d.on;
+    if (!held) for (const w of waiters.splice(0)) w();
+  } else if (d.type === 'start') {
     port = e.ports[0]; // to the back-end worker, for the shell only: the model says which phase it is in
     start(d.pyodideUrl, d.pyZipUrl, d.model, d.code ?? null, d.apiUrl).catch((err) =>
       post({ type: 'progress', model: d.model, stage: 'error', detail: String(err), pct: 0 }));

@@ -47,7 +47,7 @@ export function Overview() {
   return (
     <div className="overview" data-testid="overview">
       <p className="invite">Click a component on the flowchart to see it here.</p>
-      <p className="hint">Click a moving message to read it. Failure demos, in the top bar, break things on purpose.</p>
+      <p className="hint">Click a moving message to read it; Pause system, in the top bar, holds them all still. Failure demos break things on purpose.</p>
       <section>
         <h3 className="small-caps">Sensible defaults: adopted, not designed</h3>
         <table className="adopted" data-testid="adopted">

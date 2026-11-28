@@ -182,8 +182,11 @@ for (const backend of ['standin', 'python'] as const) {
       await expect(status(page, 'dataset')).toHaveText('None');
       await expect(status(page, 'server')).toHaveText(/^Ready · start 1$/);
       await expect(status(page, 'backend')).toHaveText(backend === 'python' ? 'Python' : 'JavaScript stand-in');
-      expect(await everyDisabledControlSaysWhy(page)).toBeGreaterThanOrEqual(6);
-      // No Freeze (4.7); Restart client and Restart server are in the top bar.
+      // D-362: the replay is the display client's own (no mirror in the top bar), so every top-bar control can act now.
+      expect(await everyDisabledControlSaysWhy(page)).toBe(0);
+      await expect(page.getByTestId('play')).toHaveCount(0);
+      await expect(page.getByTestId('system-pause')).toBeEnabled();
+      // No Freeze (4.7; D-362's Pause system is the shell's own); Restart client and Restart server are in the top bar.
       await expect(page.getByTestId('controls')).not.toContainText('Freeze');
       await expect(page.getByTestId('restart-client')).toBeEnabled();
       await expect(page.getByTestId('restart-server')).toBeEnabled();
