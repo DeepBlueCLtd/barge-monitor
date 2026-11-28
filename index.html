@@ -111,6 +111,10 @@ button; both free screen space (§8.1, FR-103, §8.5).</li>
 yet says why, and a startup that stalls says where (FR-125a, NFR-10a).
 The first build stalled at the seam relay's start, with every control
 disabled and no explanation.</li>
+<li><strong>Illustrative traffic in the opening (4.7, D-361).</strong>
+Before Adopt, made-up message icons travel the opening's lines in
+realistic sequences, so the hand-made system looks alive; nothing runs,
+and they stop at the Adopt click (FR-120a, FR-122).</li>
 </ul>
 <h3 id="changes-from-version-45">Changes from Version 4.5</h3>
 <ul>
@@ -1404,10 +1408,11 @@ from the other components, and the opening states no count of them:</p>
 </tbody>
 </table>
 <p>The flows of §3.1 are drawn between the subsystems and the other
-components as plain lines, with no message letters (FR-120a). The
-back-end band has <strong>two rows</strong> in the opening (five cards
-each), with every card at its normal size. The zones below it move down,
-and return at the merge.</p></li>
+components as plain lines, without labels; only illustrative traffic
+travels on them (FR-120a). The back-end band has <strong>two
+rows</strong> in the opening (five cards each), with every card at its
+normal size. The zones below it move down, and return at the
+merge.</p></li>
 <li><p><strong>FR-120a (4.6)</strong> <strong>Flows in the
 opening.</strong> Each external flow is drawn to the subsystem it
 belongs to, and the lines between the subsystems are drawn too:</p>
@@ -1448,7 +1453,24 @@ belongs to, and the lines between the subsystems are drawn too:</p>
 <td>Web API</td>
 </tr>
 </tbody>
-</table></li>
+</table>
+<p><strong>Illustrative traffic (4.7, D-361).</strong> While <em>Build
+it ourselves</em> is shown, message icons, with the real letters (§5),
+travel these lines in realistic sequences, each request followed by the
+work behind it and its reply: the display client querying the Web API,
+which checks Permissions (and Accounts at a login) and asks the Query
+engine, which reads the Observation store; discovery from the Registry;
+the CSV importer reading the data folder and writing to the Registry and
+the Observation store; Commands pushing to the importer and Models, and
+their status back; Models reading observations, calling the scientific
+libraries and publishing; Admin changing a setting. A few run at once,
+at a gentle pace, looping with some variety. They are
+<strong>illustrative only</strong>: made in the page, from a fixed list,
+with nothing running (FR-122); they are not messages, so they cannot be
+clicked, are not counted or captured and never appear in the message
+strip. The status says so. At the Adopt click they stop at once, the
+icons in flight fading out before the cards move. With reduced motion
+there is none.</p></li>
 <li><p><strong>FR-121</strong> <strong>Nothing is gold.</strong> No card
 is gold. No ★, diamond or "our value-add" appears anywhere in the
 opening, the detail panel included. Clicking the display client or
@@ -1456,12 +1478,15 @@ Models does not reveal it.</p></li>
 <li><p><strong>FR-122</strong> <strong>Nothing runs.</strong> The top
 bar's controls are <strong>hidden, not disabled</strong>: replay mirror,
 restart client, restart server, failure demos, control panel and
-overview. No message is sent or drawn. The display client does not
-handshake. <strong>The back end does not start (4.6)</strong>: no worker
-runs, no model registers and nothing is fetched until the viewer chooses
-Adopt (FR-124, FR-125). The status panel shows only "Opening". The
-<strong>stand-in banner is hidden</strong> until hand-over, because it
-names OpenSensorHub before there is a data server on screen.</p></li>
+overview. No message is sent, captured or drawn; only the illustrative
+traffic of FR-120a, made in the page, is drawn (D-361). The display
+client does not handshake. <strong>The back end does not start
+(4.6)</strong>: no worker runs, no model registers and nothing is
+fetched until the viewer chooses Adopt (FR-124, FR-125). The status
+panel shows only "Opening", with "· illustrative traffic" while that
+traffic is drawn. The <strong>stand-in banner is hidden</strong> until
+hand-over, because it names OpenSensorHub before there is a data server
+on screen.</p></li>
 <li><p><strong>FR-123</strong> <strong>The opening panel (4.7,
 D-359).</strong> The detail panel opens on <strong>The
 components</strong> with:</p>
@@ -1909,10 +1934,12 @@ repeats the opening</td>
 <tr>
 <td><strong>AT-63</strong></td>
 <td>In the opening: no top-bar control and no stand-in banner is in the
-page; no back-end or model worker has started; no message is captured or
-drawn; the third-party zone has no data server; nothing gold, no ★ and
-no diamond anywhere, and clicking the display client or Models reveals
-nothing</td>
+page; no back-end or model worker has started and nothing is requested;
+no message is captured or drawn: the only icons are FR-120a's
+illustrative traffic, on the opening's lines, not clickable, and gone
+shortly after the Adopt click; the third-party zone has no data server;
+nothing gold, no ★ and no diamond anywhere, and clicking the display
+client or Models reveals nothing</td>
 <td>Architecture view</td>
 </tr>
 <tr>
@@ -1935,8 +1962,8 @@ flag, and the state passes AT-19 and AT-20</td>
 </tr>
 <tr>
 <td><strong>AT-66</strong></td>
-<td>With reduced motion, Adopt changes the layout immediately, without
-animation</td>
+<td>With reduced motion, the opening draws no illustrative traffic, and
+Adopt changes the layout immediately, without animation</td>
 <td>Visual style</td>
 </tr>
 <tr>

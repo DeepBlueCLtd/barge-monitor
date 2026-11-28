@@ -1227,6 +1227,24 @@ end's label sits at its bottom left.</p></li>
 <code>opening.ts</code>, without letters or labels; a two-way flow has a
 head at each end. Besides FR-120a's table, <code>models ↔︎ scilibs</code>
 and <code>importer ↔︎ folder</code> are drawn, as in §3.1.</p></li>
+<li><p><strong>Illustrative traffic</strong> (FR-120a, D-361) is made by
+<code>web/src/shell/mocktraffic.ts</code>, in the page: a fixed list of
+flows (<code>MOCK_FLOWS</code>), each a sequence of hops along the
+opening's lines in either direction, with the real letters; a hop's time
+grows with its line's length (0.7 to 2.2 s), the next hop sets off when
+it arrives, icons on one line keep a gap, a flow starts every 1.6 to 2.8
+s, at most four at once, chosen at random by weight and rarely the same
+twice running. The flowchart draws them with <code>Glyph</code>, as
+<code>div.mock-icon</code> (<code>data-testid="mock-icon"</code>,
+<code>data-mock-letter</code>) inside an <code>aria-hidden</code> layer
+with no pointer events. They never pass through the message bus
+(<code>bus</code>), so <code>bargeCaptured</code>,
+<code>bargeMessages</code>, the counters and the message strip never see
+them; no <code>fetch</code>, worker or Service Worker is involved.
+<code>opening.adopt()</code> calls <code>mockTraffic.stop()</code>
+first: nothing new sets off and what is in flight fades out over 0.25 s.
+With <code>prefers-reduced-motion</code> none is drawn. While it is
+drawn the status reads "Opening · illustrative traffic".</p></li>
 <li><p><strong>Wording.</strong> The lead reads: written ourselves, the
 system is a range of components to develop; which of them could be
 adopted rather than written is not yet decided. No count appears
@@ -1242,7 +1260,8 @@ became of the rest.</p></li>
 worker starts, the relay is not registered and nothing is fetched
 (FR-122);</li>
 <li>the top bar renders only the title;</li>
-<li>the status reads "Opening";</li>
+<li>the status reads "Opening" (with "· illustrative traffic" while that
+is drawn);</li>
 <li>the banner is not rendered.</li>
 </ul></li>
 <li><p><strong>Adopt</strong> (D-360) calls <code>runtime.start()</code>
