@@ -5,7 +5,10 @@
 // and its illustrative traffic are unchanged, and nothing starts (FR-122). Crisp, not sketched (VS-18); nothing gold
 // (FR-121). The only digits are the history's periods and the standard's part numbers, which are not counts (D-363).
 import overview from '../assets/connected-systems-overview.webp';
-import { opening } from '../shell/opening';
+import { handMade, opening } from '../shell/opening';
+
+// Fetch the overview image at load, in the opening only, so it is there when Open Standards is clicked.
+if (handMade) new Image().src = overview;
 
 /** The history, oldest first: a period and a plain sentence or two. Facts kept conservative (D-363). */
 export const HISTORY: { when: string; what: string }[] = [
@@ -121,7 +124,7 @@ export function StandardsView() {
       {/* The owner, 2026-11-28: the Connected Systems ecosystem overview, from the OGC developer site
           (csapi.developer.ogc.org/assets/img/overview.png), bundled so nothing is fetched from a third party (NFR-06). */}
       <figure className="standards-overview" data-testid="standards-overview">
-        <img src={overview} alt="Connected Systems ecosystem overview" width={1400} height={765} loading="lazy" />
+        <img src={overview} alt="Connected Systems ecosystem overview" width={1400} height={765} />
         <figcaption>Image: OGC, Connected Systems developer site.</figcaption>
       </figure>
       <Tree />

@@ -6,7 +6,11 @@
 // Facts kept conservative, each from a public source (D-365): the origins from GPS World, "OpenSensorHub: Tackling a
 // modern geospatial 'Tower of Babel'" (2016); the licence from osh-core's LICENSE on GitHub; GeoRobotix from
 // georobotix.com. No current government user was found in a public source, so none is named.
-import { opening } from '../shell/opening';
+import logo from '../assets/opensensorhub-logo.png';
+import { handMade, opening } from '../shell/opening';
+
+// The OpenSensorHub logo (its GitHub organisation's avatar), fetched at load in the opening so it shows at once.
+if (handMade) new Image().src = logo;
 
 export const OPEN_SOURCE: { head: string; text: string }[] = [
   { head: 'Who made it', text: 'It grew from the work of Mike Botts, of Botts Innovative Research, and Alex Robin, of Sensia Software, both long involved in OGC\'s sensor standards. GeoRobotix offers development and support for it.' },
@@ -18,7 +22,10 @@ export const OPEN_SOURCE: { head: string; text: string }[] = [
 export function OpenSourceView() {
   return (
     <div className="standards open-source" data-testid="open-source">
-      <p className="standards-lead">OpenSensorHub is an open-source server for sensors and the systems around them. It implements OGC API – Connected Systems.</p>
+      <div className="open-source-head">
+        <img src={logo} alt="OpenSensorHub logo" width={80} height={80} data-testid="osh-logo" />
+        <p className="standards-lead">OpenSensorHub is an open-source server for sensors and the systems around them. It implements OGC API – Connected Systems.</p>
+      </div>
       <dl className="open-source-facts" data-testid="open-source-facts">
         {OPEN_SOURCE.map((f) => (
           <div key={f.head}><dt>{f.head}</dt><dd>{f.text}</dd></div>
