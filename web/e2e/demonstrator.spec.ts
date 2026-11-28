@@ -276,13 +276,14 @@ for (const backend of BACKENDS) {
       await page.getByTestId('dc-rate-100').click();
       await play(page);
       await page.getByTestId('preset-all').click();
-      // A replay in progress stops; Play, the rates and the timeline say why they cannot act, in the client's replay bar.
+      // A replay in progress stops; Play and the rates say why they cannot act; the timeline becomes a twin-handle range.
       await expect(bar(page)).toHaveAttribute('data-playing', 'false');
-      const why = 'Whole dataset shows everything: choose a shorter period to play';
+      const why = 'Whole dataset: drag the handles to narrow it; pick a period to play';
       await expect(page.getByTestId('dc-play')).toBeDisabled();
       await expect(page.getByTestId('dc-play')).toHaveAttribute('title', why);
       await expect(page.getByTestId('dc-rate-10')).toBeDisabled();
-      await expect(page.getByTestId('dc-timeline')).toBeDisabled();
+      await expect(page.getByTestId('dc-timeline')).toHaveCount(0);
+      await expect(page.getByTestId('dc-range')).toBeVisible();
       await expect(page.getByTestId('dc-replay-off')).toHaveText(why);
       // All of the dataset is drawn: the lines reach far beyond the replay time (here, early in the day).
       await expect.poll(async () => {
@@ -290,6 +291,30 @@ for (const backend of BACKENDS) {
         const last = Math.max(...v.lines.flatMap((l) => l.rows.map(([t]) => t)));
         return last - (v.time ?? 0);
       }, { timeout: SLOW }).toBeGreaterThan(12 * 3600);
+      // Narrowing the range from its end: nothing after the end handle is drawn.
+      const range = page.getByTestId('dc-range');
+      const fullTo = Date.parse((await range.getAttribute('data-to'))!) / 1000;
+      await page.getByTestId('dc-range-to').focus();
+      for (let i = 0; i < 3; i++) await page.keyboard.press('PageDown');
+      await expect.poll(async () => Date.parse((await range.getAttribute('data-to'))!) / 1000).toBeLessThan(fullTo - 3600);
+      const to = Date.parse((await range.getAttribute('data-to'))!) / 1000;
+      await expect.poll(async () => Math.max(...(await shown(page)).lines.flatMap((l) => l.rows.map(([t]) => t))), { timeout: SLOW }).toBeLessThanOrEqual(to);
+      // Dragging the bar between the handles slides the range, keeping its length.
+      const len = to - Date.parse((await range.getAttribute('data-from'))!) / 1000;
+      const barBox = (await page.getByTestId('dc-range-bar').boundingBox())!;
+      await page.mouse.move(barBox.x + barBox.width / 2, barBox.y + barBox.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(barBox.x + barBox.width / 2 + 40, barBox.y + barBox.height / 2, { steps: 4 });
+      await page.mouse.up();
+      await expect.poll(async () => Date.parse((await range.getAttribute('data-to'))!) / 1000).toBeGreaterThan(to);
+      const slid = [await range.getAttribute('data-from'), await range.getAttribute('data-to')].map((x) => Date.parse(x!) / 1000);
+      expect(slid[1] - slid[0]).toBe(len);
+      // FR-104: a favourite's period starts as the range picked.
+      await page.getByTestId('favourites-button').click();
+      const clockOf = (t: number) => new Date(t * 1000).toISOString().replace('.000Z', '').replace('T', ' ');
+      await expect(page.getByTestId('window-period')).toHaveText(`${clockOf(slid[0])} to ${clockOf(slid[1])}`);
+      await expect(page.getByTestId('doi-period')).not.toHaveAttribute('data-unit', 'all');
+      await page.keyboard.press('Escape');
       // A shorter period turns replay on again.
       await page.getByTestId('preset-1h').click();
       await expect(page.getByTestId('dc-play')).toBeEnabled();
@@ -502,7 +527,7 @@ for (const backend of BACKENDS) {
       await page.getByTestId('favourites-button').click();
       await page.getByTestId('doi-label').fill('Engine CO₂');
       await page.getByTestId('doi-tags').fill(' engine , Emissions, ENGINE');
-      await page.getByTestId('doi-resolution').fill('PT1S');
+      await page.getByTestId('doi-resolution').selectOption('PT1S');
       await page.getByTestId('doi-save').click();
       await expect(page.getByTestId('doi-item').filter({ hasText: 'Engine' })).toHaveAttribute('data-greyed', 'false');
       // FR-105a: tags saved trimmed, without repeats, and offered as a filter.
@@ -580,16 +605,13 @@ for (const backend of BACKENDS) {
       await expect(pop.getByTestId('window-dataset')).toHaveText(A);
       await expect(pop.getByTestId('window-resolution')).toHaveText('PT1S');
       await expect(pop.getByTestId('window-fields')).toContainText('Bow · Air temperature');
-      // AT-47: a resolution no datastream holds is refused, naming those that do.
-      await page.getByTestId('doi-label').fill('Bad');
-      await page.getByTestId('doi-resolution').fill('PT10M');
-      await page.getByTestId('doi-save').click();
-      await expect(page.getByTestId('doi-error')).toContainText('No datastream holds PT10M');
-      await expect(page.getByTestId('doi-error')).toContainText('PT1S, PT1M, PT1H');
+      // AT-47: only the resolutions the selected fields' datastreams hold are offered.
+      await expect(page.getByTestId('doi-resolution').locator('option')).toHaveText(['Readings (1 s)', '1-minute summaries', 'Hourly summaries']);
+      expect(await page.getByTestId('doi-resolution').locator('option').evaluateAll((o) => o.map((x) => (x as HTMLOptionElement).value))).toEqual(['PT1S', 'PT1M', 'PT1H']);
       // Save a minute of readings.
       await page.getByTestId('doi-label').fill('Last minute');
       await page.getByTestId('doi-note').fill('a gust');
-      await page.getByTestId('doi-resolution').fill('PT1S');
+      await page.getByTestId('doi-resolution').selectOption('PT1S');
       await page.getByTestId('doi-save').click();
       await expect(page.getByTestId('doi-item').filter({ hasText: 'Last minute' })).toBeVisible();
       await expect(star).toHaveAttribute('data-saved', 'true');

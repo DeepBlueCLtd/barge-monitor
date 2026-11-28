@@ -19,7 +19,7 @@ import {
 } from './discovery';
 import { buildView, datasetDatastreams, DatasetView, essentialFor, outputOf, Property, RES_SECONDS, Resolution, RESOLUTIONS, Source, sourceAt } from './fields';
 import { Closed, ClientHttp, commandOutcomes, HttpError, NetworkFailure, StatusReport, Unauthorized } from './http';
-import { iso, parseIso, PeriodId, periodFor, periodOf, readableUntil, statsRes, windowOf } from './plan';
+import { iso, parseIso, PeriodId, periodFor, periodOf, readableUntil, resFor, statsRes, windowOf } from './plan';
 
 export type Phase = 'login' | 'handshake' | 'ready' | 'unreachable' | 'rejected' | 'locked';
 
@@ -56,6 +56,8 @@ export interface Notice {
 export interface Selection {
   fields: string[];
   period: PeriodId;
+  /** In the whole dataset, the range picked on the twin-handle timeline, for the dataset it was picked on; null for all of it. */
+  range: { dataset: string; from: number; to: number } | null;
 }
 
 /** A data of interest record (FR-94; contracts/schemas/data-of-interest.json). */
@@ -170,7 +172,7 @@ interface Place {
   selection: Selection;
 }
 
-const DEFAULT_SELECTION: Selection = { fields: [], period: '1h' };
+const DEFAULT_SELECTION: Selection = { fields: [], period: '1h', range: null };
 const SWE = 'application/swe+json';
 /** The workspace's datastream of data of interest (interfaces §11). */
 const DOI_OUTPUT = 'data-of-interest';
@@ -745,36 +747,53 @@ export class DisplayClientSession {
     for (const key of sel.fields) {
       const p = v.props.find((x) => x.key === key);
       if (!p) continue;
-      const at = sourceAt(p, periodOf(sel.period).res);
+      const at = sourceAt(p, this.periodRes());
       if (at) out.push({ prop: p, src: at.src, res: at.res, use: 'line' });
-      const st = p.byRes[statsRes(sel.period)];
-      if (st?.stats) out.push({ prop: p, src: st, res: statsRes(sel.period), use: 'stats' });
+      const sr = statsRes(this.periodRes());
+      const st = p.byRes[sr];
+      if (st?.stats) out.push({ prop: p, src: st, res: sr, use: 'stats' });
     }
     return out;
   }
 
-  /** The current period's window, ending at the replay time; for the whole dataset, all of it (D-358). */
+  /** The current period's window, ending at the replay time; for the whole dataset, all of it or its picked range (D-358). */
   window(): [number, number] | null {
     const s = this.clock.state.value;
     if (!s || !this.view.value) return null;
-    if (this.wholeDataset()) return [s.start, s.end];
+    if (this.wholeDataset()) return this.wholeRange() ?? [s.start, s.end];
     return windowOf(this.selection.value.period, s.time, s.start);
   }
 
-  /** D-358: "Whole dataset" shows all of the dataset at once, so there is nothing to replay. */
+  /** The range picked on the whole dataset's timeline, within the current dataset; null for all of it. */
+  wholeRange(): [number, number] | null {
+    const s = this.clock.state.value;
+    const r = this.selection.value.range;
+    if (!s || !r || r.dataset !== s.dataset) return null;
+    const from = Math.max(s.start, r.from);
+    const to = Math.min(s.end, r.to);
+    return to > from && (from > s.start || to < s.end) ? [from, to] : null;
+  }
+
+  /** The resolution the period reads: by the window's length; hourly for all of the whole dataset. */
+  private periodRes(): Resolution {
+    const r = this.wholeDataset() ? this.wholeRange() : null;
+    return r ? resFor(r[1] - r[0]) : periodOf(this.selection.value.period).res;
+  }
+
+  /** D-358: "Whole dataset" shows all of the dataset (or a range of it) at once, so there is nothing to replay. */
   wholeDataset(): boolean {
     return periodOf(this.selection.value.period).seconds === null;
   }
 
   /** Why Play, the rates and the timeline cannot act now, or null (FR-125a). */
   replayOff(): string | null {
-    return this.wholeDataset() ? 'Whole dataset shows everything: choose a shorter period to play' : null;
+    return this.wholeDataset() ? 'Whole dataset: drag the handles to narrow it; pick a period to play' : null;
   }
 
   /** The time reads run up to: the replay time, or the dataset's end for the whole dataset (FR-63b, D-358). */
   private readTime(): number {
     const s = this.clock.state.value;
-    return s && this.wholeDataset() ? s.end : this.clock.now();
+    return s && this.wholeDataset() ? this.window()?.[1] ?? s.end : this.clock.now();
   }
 
   /** Rows of a datastream within the window. */
@@ -1006,6 +1025,18 @@ export class DisplayClientSession {
     void this.act((http) => this.readData(http, true));
   }
 
+  /** In the whole dataset, show only [from, to] of it: the twin-handle timeline (D-358). */
+  setRange(from: number, to: number) {
+    const s = this.clock.state.value;
+    if (!s || !this.wholeDataset()) return;
+    const [a, b] = from <= to ? [from, to] : [to, from];
+    this.selection.set({ ...this.selection.value, range: { dataset: s.dataset, from: a, to: b } });
+    void this.act(async (http) => {
+      await this.readData(http, true);
+      await this.readAnalysis(http, true);
+    });
+  }
+
   /** The current selection's sources at a resolution: each field's datastream, by system unique id and output name (§11). */
   currentSources(res?: Resolution): { system: string; output: string; fields: string[] }[] {
     const out = new Map<string, { system: string; output: string; fields: string[] }>();
@@ -1013,7 +1044,7 @@ export class DisplayClientSession {
     if (!v) return [];
     for (const key of this.selection.value.fields) {
       const p = v.props.find((x) => x.key === key);
-      const src = p && (res ? p.byRes[res] : sourceAt(p, periodOf(this.selection.value.period).res)?.src);
+      const src = p && (res ? p.byRes[res] : sourceAt(p, this.periodRes())?.src);
       if (!src) continue;
       const k = `${src.ds.systemUid}|${src.output}`;
       const o = out.get(k) ?? { system: src.ds.systemUid, output: src.output, fields: [] };
@@ -1023,10 +1054,17 @@ export class DisplayClientSession {
     return [...out.values()];
   }
 
+  /** The resolutions every selected field is held at: those a favourite can be saved at (AT-47). */
+  availableRes(): Resolution[] {
+    const v = this.view.value;
+    const props = v ? this.selection.value.fields.map((k) => v.props.find((p) => p.key === k)).filter((p): p is Property => !!p) : [];
+    return props.length ? RESOLUTIONS.filter((r) => props.every((p) => p.byRes[r])) : [];
+  }
+
   /** The current selection's resolution: the coarsest its fields are read at. */
   currentRes(): Resolution {
     const rs = this.inUse().filter((u) => u.use === 'line').map((u) => u.res);
-    return rs.reduce<Resolution>((a, r) => (RES_SECONDS[r] > RES_SECONDS[a] ? r : a), periodOf(this.selection.value.period).res);
+    return rs.reduce<Resolution>((a, r) => (RES_SECONDS[r] > RES_SECONDS[a] ? r : a), this.periodRes());
   }
 
   /** The current data window (FR-104): dataset, period, resolution, fields and, where a datastream holds runs, the run. */
@@ -1185,9 +1223,10 @@ export class DisplayClientSession {
   }
 
   /** FR-104, FR-94a: save the current window; a resolution no datastream holds is refused, naming those that do. */
-  async saveDoi(label: string, note: string, resolution: string, tags: string[] = []): Promise<string | null> {
+  /** `win` is the window to keep, [from, to]; the current window when left out. */
+  async saveDoi(label: string, note: string, resolution: string, tags: string[] = [], win?: [number, number]): Promise<string | null> {
     const s = this.clock.state.value;
-    const w = this.window();
+    const w = win ?? this.window();
     const v = this.view.value;
     if (!s || !w || !v) return 'Nothing to save: no dataset is open.';
     if (!label.trim()) return 'Give it a name.';
@@ -1310,7 +1349,8 @@ export class DisplayClientSession {
     if (!ds || !e || e.start == null || e.end == null) return;
     const from = parseIso(r.start);
     const to = Math.min(e.end, Math.max(e.start, parseIso(r.end)));
-    this.selection.set({ ...this.selection.value, period: periodFor(from, to, e.start) });
+    const p = periodFor(from, to, e.start, e.end);
+    this.selection.set({ ...this.selection.value, period: p.period, range: p.range && { dataset: ds, from: p.range[0], to: p.range[1] } });
     if (!this.current(ds)) {
       await this.openDataset(http, ds, to);
       return;

@@ -8,12 +8,12 @@
 //
 // The demonstrator's demo credentials are passed in by the shell (FR-102): a developed
 // system never pre-populates credentials, and this file knows no account.
-import { FormEvent, ReactNode, RefObject, useEffect, useRef, useState } from 'react';
+import { FormEvent, PointerEvent as ReactPointerEvent, ReactNode, RefObject, useEffect, useRef, useState } from 'react';
 import { RATES } from '../config';
 import { useStore } from '../shell/store';
 import { essentialLabel } from './discovery';
-import { problemText, RESOLUTIONS } from './fields';
-import { iso, PERIODS } from './plan';
+import { problemText } from './fields';
+import { iso, PERIODS, Span, spanOf, spanSeconds, SpanUnit, UNITS } from './plan';
 import { CatalogueEntry, clientSession, DisplayClientSession, DoiItem, hasTags, parseTags, tagsOf } from './session';
 import { PanelGrid } from './views/PanelGrid';
 import { ClusterView, ErrorBarView, HeatmapView, LineView, OpenedView } from './views/views';
@@ -262,9 +262,10 @@ function ReplayBar({ session }: { session: DisplayClientSession }) {
   const s = useStore(session.clock.state);
   useStore(session.selection);
   const offWhy = session.replayOff();
-  const off = offWhy ? { disabled: true, title: offWhy, 'aria-describedby': 'dc-replay-off' } : {};
+  const offAttrs = offWhy ? { disabled: true, title: offWhy, 'aria-describedby': 'dc-replay-off' } : {};
   const [drag, setDrag] = useState<number | null>(null);
   if (!s) return null;
+  const whole = session.wholeDataset();
   const pos = drag ?? s.time;
   const commit = () => {
     if (drag != null) session.seek(drag);
@@ -273,20 +274,82 @@ function ReplayBar({ session }: { session: DisplayClientSession }) {
   return (
     <div className="dc-replay" data-testid="replay-bar" data-playing={String(s.playing)} data-rate={String(s.rate)} data-dataset={s.dataset}
       data-time={iso(s.time)} data-at-end={String(s.atEnd)}>
-      <button className={`dc-btn${s.playing ? '' : ' primary'}`} onClick={() => (s.playing ? session.pause() : session.play())} data-testid="dc-play" {...off}>
+      <button className={`dc-btn${s.playing ? '' : ' primary'}`} onClick={() => (s.playing ? session.pause() : session.play())} data-testid="dc-play" {...offAttrs}>
         {s.playing ? '❚❚ Pause' : '▶ Play'}
       </button>
       <span className="dc-rates" aria-label="Rate">
         {RATES.map((r) => (
-          <button key={r} className={`dc-btn small${s.rate === r ? ' on' : ''}`} aria-pressed={s.rate === r} onClick={() => session.setRate(r)} data-testid={`dc-rate-${r}`} {...off}>{r}×</button>
+          <button key={r} className={`dc-btn small${s.rate === r ? ' on' : ''}`} aria-pressed={s.rate === r} onClick={() => session.setRate(r)} data-testid={`dc-rate-${r}`} {...offAttrs}>{r}×</button>
         ))}
       </span>
-      <input type="range" className="dc-timeline" min={s.start} max={s.end} step={1} value={Math.floor(pos)} data-testid="dc-timeline" aria-label="Replay position" {...off}
-        onChange={(e) => setDrag(Number(e.target.value))} onPointerUp={commit} onKeyUp={commit} />
-      <span className="dc-time mono" data-testid="dc-time">{iso(pos).replace('T', ' ').replace('Z', '')}</span>
-      {offWhy && <span id="dc-replay-off" className="dc-sent" data-testid="dc-replay-off">{offWhy}</span>}
+      {whole ? <RangeTimeline session={session} start={s.start} end={s.end} /> : (
+        <>
+          <input type="range" className="dc-timeline" min={s.start} max={s.end} step={1} value={Math.floor(pos)} data-testid="dc-timeline" aria-label="Replay position"
+            onChange={(e) => setDrag(Number(e.target.value))} onPointerUp={commit} onKeyUp={commit} />
+          <span className="dc-time mono" data-testid="dc-time">{iso(pos).replace('T', ' ').replace('Z', '')}</span>
+        </>
+      )}
+      {offWhy && <span id="dc-replay-off" className="sr-only" data-testid="dc-replay-off">{offWhy}</span>}
       <span className="dc-sent" data-testid="dc-at-end">{s.atEnd ? 'At the end of the dataset: paused' : ''}</span>
     </div>
+  );
+}
+
+const RES_WORDS: Record<string, string> = { PT1S: 'Readings (1 s)', PT1M: '1-minute summaries', PT1H: 'Hourly summaries' };
+
+const clock = (t: number) => iso(t).replace('T', ' ').replace('Z', '');
+
+/** D-358: in the whole dataset, a twin-handle timeline picks the range shown; nothing is replayed. */
+function RangeTimeline({ session, start, end }: { session: DisplayClientSession; start: number; end: number }) {
+  const [from, to] = session.window() ?? [start, end];
+  const [drag, setDrag] = useState<[number, number] | null>(null);
+  const [a, b] = drag ?? [from, to];
+  const commit = () => {
+    if (drag) session.setRange(drag[0], drag[1]);
+    setDrag(null);
+  };
+  const pct = (t: number) => `${((t - start) / Math.max(1, end - start)) * 100}%`;
+  const track = useRef<HTMLSpanElement>(null);
+  // Dragging the bar between the handles slides the range, keeping its length.
+  const slide = (e: ReactPointerEvent) => {
+    const w = track.current?.getBoundingClientRect().width ?? 0;
+    if (!w) return;
+    e.preventDefault();
+    const x0 = e.clientX;
+    const len = b - a;
+    let last: [number, number] = [a, b];
+    const move = (m: PointerEvent) => {
+      const from = Math.round(Math.min(end - len, Math.max(start, a + ((m.clientX - x0) / w) * (end - start))));
+      last = [from, from + len];
+      setDrag(last);
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      if (last[0] !== a) session.setRange(last[0], last[1]);
+      setDrag(null);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
+  const handle = (which: 0 | 1) => (
+    <input type="range" min={start} max={end} step={1} value={Math.floor(which ? b : a)} data-testid={which ? 'dc-range-to' : 'dc-range-from'}
+      aria-label={which ? 'End of the range shown' : 'Start of the range shown'}
+      onChange={(e) => {
+        const v = Number(e.target.value);
+        setDrag(which ? [a, Math.max(v, a + 1)] : [Math.min(v, b - 1), b]);
+      }} onPointerUp={commit} onKeyUp={commit} onBlur={commit} />
+  );
+  return (
+    <>
+      <span ref={track} className="dc-timeline dc-range" data-testid="dc-range" data-from={iso(a)} data-to={iso(b)}>
+        <span className="dc-range-fill" style={{ left: pct(a), width: `calc(${pct(b)} - ${pct(a)})` }} onPointerDown={slide}
+          title="Drag to move the range" data-testid="dc-range-bar" />
+        {handle(0)}
+        {handle(1)}
+      </span>
+      <span className="dc-time dc-time-range mono" data-testid="dc-time"><span>{clock(a)}</span><span>{clock(b)}</span></span>
+    </>
   );
 }
 
@@ -345,10 +408,35 @@ function Favourites({ session }: { session: DisplayClientSession }) {
   const close = () => setOpen(false);
   const win = view && replay ? session.dataWindow() : null;
   const saved = win ? session.isSaved() : false;
-  useEffect(() => setRes(session.currentRes()), [sel, view, session, open]);
+  const resOptions = view ? session.availableRes() : [];
+  useEffect(() => {
+    const ok = session.availableRes();
+    const cur = session.currentRes();
+    setRes(ok.includes(cur) ? cur : ok[0] ?? '');
+  }, [sel, view, session, open]);
+  // FR-104: the favourite's period, a number and a unit ending where the current window ends; it starts as the
+  // current window's length (a range picked on the whole dataset's timeline included).
+  const current = view && replay ? session.window() : null;
+  const [span, setSpan] = useState<Span>({ n: 1, unit: 'h' });
+  const [spanText, setSpanText] = useState('1');
+  // Until the period is changed here, the favourite keeps the current window exactly.
+  const [spanTouched, setSpanTouched] = useState(false);
+  useEffect(() => {
+    setSpanTouched(false);
+    const w = session.window();
+    const s = session.clock.state.value;
+    const sp = !w || !s ? spanOf(3600) : w[0] <= s.start && w[1] >= s.end ? spanOf(null) : spanOf(w[1] - w[0]);
+    setSpan(sp);
+    setSpanText(String(sp.n));
+  }, [sel, view, session, open]);
+  const spanN = Number(spanText);
+  const spanBad = span.unit !== 'all' && !(Number.isInteger(spanN) && spanN >= 1);
+  const len = spanSeconds({ ...span, n: spanBad ? span.n : spanN });
+  const favWin: [number, number] | null = current && replay ? (!spanTouched ? current : len === null ? [replay.start, replay.end] : [Math.max(replay.start, current[1] - len), current[1]]) : null;
   const save = async (e: FormEvent) => {
     e.preventDefault();
-    const err = await session.saveDoi(label, note, res, parseTags(tagText));
+    if (spanBad || !favWin) return setError('Give the period as a whole number, 1 or more.');
+    const err = await session.saveDoi(label, note, res, parseTags(tagText), favWin);
     setError(err);
     if (!err) {
       setLabel('');
@@ -376,7 +464,23 @@ function Favourites({ session }: { session: DisplayClientSession }) {
             <>
               <dl className="dc-window">
                 <dt>Dataset</dt><dd data-testid="window-dataset">{win.file}</dd>
-                <dt>Period</dt><dd data-testid="window-period">{iso(win.start).replace('T', ' ').replace('Z', '')} to {iso(win.end).replace('T', ' ').replace('Z', '')}</dd>
+                <dt>Period</dt>
+                <dd>
+                  <span className="dc-period" data-testid="doi-period" data-unit={span.unit} data-n={spanText}>
+                    <input type="number" min={1} step={1} className={`dc-period-n${spanBad ? ' bad' : ''}`} value={span.unit === 'all' ? '' : spanText} disabled={span.unit === 'all'}
+                      aria-label="Period length" onChange={(e) => {
+                        setSpanText(e.target.value);
+                        setSpanTouched(true);
+                      }} data-testid="doi-period-n" />
+                    <select value={span.unit} aria-label="Period unit" onChange={(e) => {
+                      setSpan({ ...span, unit: e.target.value as SpanUnit });
+                      setSpanTouched(true);
+                    }} data-testid="doi-period-unit">
+                      {UNITS.map((u) => <option key={u.id} value={u.id}>{u.label}</option>)}
+                    </select>
+                  </span>
+                  <span className="dc-period-span" data-testid="window-period">{favWin ? `${clock(favWin[0])} to ${clock(favWin[1])}` : '–'}</span>
+                </dd>
                 <dt>Resolution</dt><dd data-testid="window-resolution">{win.resolution}</dd>
                 <dt>Fields</dt><dd data-testid="window-fields">{win.fields.join(', ') || 'none selected'}</dd>
                 {win.run && <><dt>Run</dt><dd data-testid="window-run">{win.run}</dd></>}
@@ -387,8 +491,12 @@ function Favourites({ session }: { session: DisplayClientSession }) {
                 <input placeholder="Tags, comma separated" value={tagText} onChange={(e) => setTagText(e.target.value)} data-testid="doi-tags" aria-label="Tags"
                   list="doi-tag-list" title={tags.length ? `Tags in use: ${tags.map((t) => t.tag).join(', ')}` : 'Comma separated, for filtering the saved list'} />
                 <datalist id="doi-tag-list">{tags.map((t) => <option key={t.tag} value={t.tag} />)}</datalist>
-                <input className="mono" value={res} onChange={(e) => setRes(e.target.value)} aria-label="Resolution"
-                  title={`Resolution, as an ISO 8601 duration: ${RESOLUTIONS.join(', ')}`} data-testid="doi-resolution" size={6} />
+                <label className="dc-doi-res">Resolution{' '}
+                  <select value={res} onChange={(e) => setRes(e.target.value)} disabled={!resOptions.length} data-testid="doi-resolution"
+                    title={resOptions.length ? 'Only the resolutions every selected field is held at' : 'Select a field first'}>
+                    {resOptions.map((r) => <option key={r} value={r}>{RES_WORDS[r]}</option>)}
+                  </select>
+                </label>
                 <button className="dc-btn small" type="submit" data-testid="doi-save">Save</button>
               </form>
             </>
@@ -398,13 +506,13 @@ function Favourites({ session }: { session: DisplayClientSession }) {
         <section className="dc-doi" data-testid="doi-panel">
           <div className="dc-row-head"><span className="dc-label">Saved</span></div>
           {tags.length > 0 && (
-            <div className="dc-doi-tags" role="group" aria-label="Filter by tag" data-testid="doi-tag-filter">
+            <fieldset className="dc-doi-tags" aria-label="Filter by tag" data-testid="doi-tag-filter">
               {tags.map((t) => (
                 <button key={t.tag} className={`dc-btn small preset${live.includes(t.tag) ? ' on' : ''}`} aria-pressed={live.includes(t.tag)}
                   onClick={() => toggleTag(t.tag)} data-testid="doi-tag" data-tag={t.tag}>{t.tag} <span className="dc-doi-count">{t.count}</span></button>
               ))}
               {live.length > 0 && <button className="dc-btn small" onClick={() => setFilter([])} data-testid="doi-tag-clear">Show all</button>}
-            </div>
+            </fieldset>
           )}
           {!items.length ? <p className="dc-note-plain" data-testid="doi-empty">None saved yet.</p> : !shown.length ? <p className="dc-note-plain">None carries every picked tag.</p> : (
             <ul className="dc-doi-list">
