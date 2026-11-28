@@ -15,7 +15,7 @@ import { Store } from '../shell/store';
 import { system } from '../shell/system';
 import { ReplayClock } from './clock';
 import {
-  controlFields, Discovery, DatastreamInfo, essentialLabel, fetchSchemas, findControlStreamByInput, findDatastream, handshake, readable, systemByUid,
+  controlFields, Discovery, DatastreamInfo, essentialLabel, fetchSchemas, findControlStreamByInput, findDatastream, handshake, systemByUid,
 } from './discovery';
 import { buildView, datasetDatastreams, DatasetView, essentialFor, outputOf, Property, RES_SECONDS, Resolution, RESOLUTIONS, Source, sourceAt } from './fields';
 import { Closed, ClientHttp, commandOutcomes, HttpError, NetworkFailure, StatusReport, Unauthorized } from './http';

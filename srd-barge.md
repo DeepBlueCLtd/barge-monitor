@@ -3,7 +3,7 @@
 
 **Status:** Draft. Builds on Version 4.6, with the decisions of the owner's review of the
 first 4.6 build (2026-11-26). That build was withdrawn; what it did is recorded in
-`docs/software-changes-v4.6-branch.md`. Version 4.6 added an **opening act** for
+`docs/software-changes-v4.6-branch.md` (removed from the tree; read it at commit `2ddcbb5`). Version 4.6 added an **opening act** for
 non-engineers: the demonstrator opens with the data server shown as subsystem components we
 would have to build, and one click adopts OpenSensorHub (§9.8).
 **Author:** Doc

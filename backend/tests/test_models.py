@@ -255,7 +255,6 @@ def test_at13_a_new_model_registers_and_processes_every_dataset(rig):
 
 def test_at61_a_new_model_cannot_read_co2(rig):
     """AT-61, FR-113: a new model's service account reads Data cleanse's weather output, never its CO₂."""
-    import asyncio
 
     import csmodel
     from barge.accounts import password_of

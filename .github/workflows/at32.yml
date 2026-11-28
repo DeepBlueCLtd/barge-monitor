@@ -19,7 +19,7 @@ jobs:
           distribution: temurin
           java-version: '21'
       - run: pip install -r backend/requirements-dev.txt websockets==17.4
-      - name: OpenSensorHub osh-core 2.0.4 (75bb094), unmodified (backend/spike/README.md)
+      - name: OpenSensorHub osh-core 2.0.4 (75bb094), unmodified (backend/independent/README.md)
         run: |
           git clone https://github.com/opensensorhub/osh-core ../osh-core
           cd ../osh-core && git checkout 75bb094

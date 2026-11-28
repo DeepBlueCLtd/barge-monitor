@@ -1,6 +1,6 @@
 """A stock OpenSensorHub for AT-32, configured as interfaces §14 allows: its configuration and its process.
 
-OpenSensorHub ``osh-core`` 2.0.4 (commit ``75bb094``), built from source as ``backend/spike/README.md`` says,
+OpenSensorHub ``osh-core`` 2.0.4 (commit ``75bb094``), built from source as ``backend/independent/README.md`` says,
 unmodified. Nothing stands between the clients and it (4.7: no gateway, ADR 0010). The configuration is the
 distribution's own modules with:
 
@@ -227,7 +227,7 @@ def find_home(given: str | None) -> Path:
             return p
         if (p / "build" / "install" / "osh-core" / "lib").is_dir():
             return p / "build" / "install" / "osh-core"
-    raise SystemExit("OpenSensorHub not found: build osh-core 2.0.4 (backend/spike/README.md) and pass --osh "
+    raise SystemExit("OpenSensorHub not found: build osh-core 2.0.4 (backend/independent/README.md) and pass --osh "
                      "<osh-core>/build/install/osh-core, or set OSH_HOME")
 
 

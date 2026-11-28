@@ -1,7 +1,7 @@
 # Finding: the CSV importer as an OpenSensorHub module (S-IMPORT, FR-20a, §15)
 
 **Date:** 2026-11-25 · **Server:** OpenSensorHub `osh-core` 2.0.4, built from source at
-commit `75bb094`, configured as in `backend/spike/osh-config.json` plus one module · **Where:**
+commit `75bb094`, configured as in `backend/spike/osh-config.json` (commit `2ddcbb5`) plus one module · **Where:**
 one cloud VM (4 vCPU Xeon 2.1 GHz, 15 GB, OpenJDK 21), client and server on the same host
 · **How:** the module in `backend/spike/import-module/`; the record of the runs is
 `backend/spike/import-results.json`.
