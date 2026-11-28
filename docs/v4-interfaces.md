@@ -610,7 +610,7 @@ The receiver validates every bound, and answers `REJECTED` naming it (FR-27).
 The master is `contracts/schemas/data-of-interest.json`:
 
 ```json
-{ "version": 1, "label": "…", "note": "…",
+{ "version": 1, "label": "…", "note": "…", "tags": ["lock", "…"],
   "dataset": {"file": "…", "size": 0, "modified": "…", "sha256": "…"},
   "start": "…Z", "end": "…Z", "resolution": "PT1S|PT1M|PT1H", "aggregation": "as-stored",
   "sources": [{"system": "urn:…", "output": "weather", "fields": ["air_temperature"]}],
@@ -623,6 +623,8 @@ The master is `contracts/schemas/data-of-interest.json`:
 - **Saving** appends an observation to `urn:x-barge:workspace:{user}|data-of-interest`
   with fields `time` (save time), `doi_id` (Text), `action` (`save` or `remove`) and
   `record` (Text, the JSON). The list is folded from these.
+- `tags` is optional (FR-105a): trimmed, without repeats ignoring case. A record without it
+  has no tags; the tags offered for filtering are gathered from the saved records.
 - **On screen** these are **Favourites** (SRD §8.5). The record's name stays "data of
   interest".
 - **Resolution** maps to datastreams: `PT1S` reads `weather` (Data cleanse's `cleaned-*`

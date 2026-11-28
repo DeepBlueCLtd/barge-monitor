@@ -529,9 +529,14 @@ for (const backend of BACKENDS) {
       await expect(co2).toHaveAttribute('aria-pressed', 'true');
       await page.getByTestId('favourites-button').click();
       await page.getByTestId('doi-label').fill('Engine CO₂');
+      await page.getByTestId('doi-tags').fill(' engine , Emissions, ENGINE');
       await page.getByTestId('doi-resolution').fill('PT1S');
       await page.getByTestId('doi-save').click();
       await expect(page.getByTestId('doi-item').filter({ hasText: 'Engine' })).toHaveAttribute('data-greyed', 'false');
+      // FR-105a: tags saved trimmed, without repeats, and offered as a filter.
+      await expect(page.getByTestId('doi-item-tags')).toHaveText('engineEmissions');
+      await page.getByTestId('doi-tag').filter({ hasText: 'Emissions' }).click();
+      await expect(page.getByTestId('doi-item')).toHaveCount(1);
       await page.keyboard.press('Escape');
       // The owner changes the analyst's role in OpenSensorHub's administration (the stand-in, §13.5).
       await page.getByTestId('control-panel-toggle').click();
