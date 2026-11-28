@@ -481,6 +481,7 @@ for (const backend of ['standin', 'python'] as const) {
       await expect(page.getByTestId('detail-title')).toHaveText('Open Source');
       for (const w of ['Connected Systems', 'Mike Botts', 'Alex Robin', 'NASA', 'Mozilla Public License']) await expect(page.getByTestId('open-source')).toContainText(w);
       expect(await page.getByTestId('open-source').innerText()).not.toMatch(/\d/);
+      await expect(page.getByTestId('osh-logo')).toHaveAttribute('alt', 'OpenSensorHub logo');
       await expect(page.getByTestId('choose-adopt')).toHaveText('Adopt');
       await expect(page.getByTestId('flowchart')).toHaveAttribute('data-mode', 'opening');
       expect(await status()).toBe(before);
