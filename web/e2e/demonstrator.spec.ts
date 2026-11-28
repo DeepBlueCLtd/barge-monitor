@@ -3,6 +3,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { contrast, contrastPairs } from '../src/shell/palette';
+import { BACKENDS } from './site';
 
 // End-to-end tests of the 4.7 display client (plan Phase 7; SRD §7.5, §7.6, §8; docs/v4-interfaces.md §8, §9.3,
 // §11) against the assembled static site, in both back ends: the JavaScript stand-in and the Python back end in
@@ -118,7 +119,7 @@ test('every text and icon colour of the shell meets 4.5:1 (AT-22)', () => {
   expect(failing).toEqual([]);
 });
 
-for (const backend of ['standin', 'python'] as const) {
+for (const backend of BACKENDS) {
   const name = backend === 'python' ? 'Python in Pyodide' : 'JavaScript stand-in';
   test.describe(`the display client, ${name}`, () => {
     test.describe.configure({ mode: 'serial' });

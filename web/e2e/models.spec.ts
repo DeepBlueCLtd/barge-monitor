@@ -1,4 +1,5 @@
 import { expect, Page, test } from '@playwright/test';
+import { BACKENDS } from './site';
 
 // The models on import (plan Phase 6; docs/v4-interfaces.md §10; SRD §6.4), in the browser, through the relay,
 // in both back ends: the JavaScript stand-in and the Python back end in Pyodide, where each model has its own
@@ -113,7 +114,7 @@ async function blocks(page: Page, uid: string, output: string, runId: string): P
 const timings: string[] = [];
 test.afterAll(() => console.log(timings.join('\n')));
 
-for (const backend of ['standin', 'python'] as const) {
+for (const backend of BACKENDS) {
   const name = backend === 'python' ? 'Python in Pyodide' : 'JavaScript stand-in';
   test.describe(`the models on import, ${name}`, () => {
     test.describe.configure({ mode: 'serial' });

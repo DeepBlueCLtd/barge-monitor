@@ -1,14 +1,47 @@
 # Tests: the backend in CPython (contract suite under uvicorn, acceptance
 # tests), the vocabulary gate, independent
 # Connected Systems clients (AT-16), the web build and the browser tests.
+#
+# Cost on pull requests (see the e2e notes on the web job):
+#   - a newer push to the same PR cancels the older run;
+#   - a docs-only PR runs the python job (it holds the vocabulary gate, which reads every file) and skips the rest;
+#   - the browser tests run the JavaScript stand-in only, plus the Pyodide smoke tests in hardening.spec.ts.
+# Pushes to main and a manual run (Actions -> ci -> Run workflow, on any branch) run the Python in Pyodide half too.
 name: ci
 
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  changes:
+    # Is anything other than documentation changed? Pushes and manual runs always say yes.
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.diff.outputs.code }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: diff
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then echo "code=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          # Docs only: Markdown anywhere, or anything under docs/. Everything else counts as code.
+          if git diff --name-only "$BASE" "$HEAD" | grep -qvE '(\.md$|^docs/)'; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "code=false" >> "$GITHUB_OUTPUT"
+          fi
+
   lint:
     runs-on: ubuntu-latest
     steps:
@@ -45,6 +78,8 @@ jobs:
 
   independent-clients:
     # AT-05, in an environment of its own: OSHConnect pins its own library versions.
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -57,7 +92,19 @@ jobs:
       - run: python backend/independent/oshconnect_browse.py
 
   web:
+    # The browser tests take most of the time, so they are split over two runners (Playwright --shard).
+    # Both shards repeat the ~1.5 min of set-up below. Each shard runs with one worker: several tests
+    # are timing-sensitive (NFR-10 cold-start budget, replay pace), so they get a whole runner each.
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    env:
+      # Pull requests: the stand-in half only (hardening.spec.ts still boots Python in Pyodide).
+      E2E_BACKENDS: ${{ github.event_name == 'pull_request' && 'standin' || 'standin,python' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -89,10 +136,10 @@ jobs:
         working-directory: web
       - run: npx playwright install --with-deps chromium
         working-directory: web
-      - run: npx playwright test --trace off
+      - run: npx playwright test --trace off --shard=${{ matrix.shard }}/2
         working-directory: web
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: e2e-results
+          name: e2e-results-${{ matrix.shard }}
           path: web/e2e-results.json

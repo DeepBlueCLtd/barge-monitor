@@ -1,4 +1,5 @@
 import { expect, Page, test } from '@playwright/test';
+import { BACKENDS } from './site';
 
 // The demonstrator shell (plan Phase 8; SRD §9 but §9.8, §7.3, §7.4, FR-79a; docs/v4-interfaces.md §1 to §3, §13),
 // in both back ends: the JavaScript stand-in and the Python back end in Pyodide. One page per back end, its tests in
@@ -129,7 +130,7 @@ async function putBack(page: Page) {
   }
 }
 
-for (const backend of ['standin', 'python'] as const) {
+for (const backend of BACKENDS) {
   const name = backend === 'python' ? 'Python in Pyodide' : 'JavaScript stand-in';
   test.describe(`the shell, ${name}`, () => {
     test.describe.configure({ mode: 'serial' });

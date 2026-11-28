@@ -10,3 +10,11 @@ export const SUB_PREFIXES = `${PR_PATH},/barge-monitor/`;
 export const SUB_ORIGIN = `http://localhost:${SUB_PORT}`;
 /** The demonstrator under the sub-path, as in the preview link. */
 export const SUB_DEMO = `${SUB_ORIGIN}${PR_PATH}demo/`;
+
+/** The back ends the per-back-end suites run against. E2E_BACKENDS=standin skips the Python in Pyodide
+ *  half (pull requests do this; pushes to main run both). hardening.spec.ts always runs both, as the
+ *  Pyodide smoke test: cold start and the contract suite in the browser. */
+export const BACKENDS = (process.env.E2E_BACKENDS ?? 'standin,python')
+  .split(',')
+  .map((s) => s.trim())
+  .filter((s): s is 'standin' | 'python' => s === 'standin' || s === 'python');
