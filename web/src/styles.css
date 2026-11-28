@@ -441,13 +441,29 @@ a.btn { color: inherit; text-decoration: none; display: inline-block; }
 }
 /* The opening panel (FR-123): crisp, plain, nothing gold (FR-121). */
 .opening-panel { display: flex; flex-direction: column; gap: 14px; font-family: var(--sans); font-size: 16px; }
-.opening-switch { display: inline-flex; align-self: flex-start; border: 1.5px solid #3a3d44; border-radius: 9px; overflow: hidden; }
-.switch-option { font-family: var(--hand); font-size: 20px; padding: 6px 18px; background: #fff; color: var(--ink); border: 0; cursor: pointer; }
-.switch-option + .switch-option { border-left: 1.5px solid #3a3d44; }
-.switch-option.on { background: var(--ink); color: #fff; }
-.switch-option:disabled { cursor: default; }
-.switch-option:not(.on):not(:disabled):hover { background: #f3f1ea; }
-.switch-option:focus-visible { outline: 3px solid var(--ring); outline-offset: -3px; }
+.opening-standards { align-self: flex-start; }
+/* D-363: the Open Standards view: a short history, a tree of the entities, the two choices. Crisp (VS-18), nothing gold. */
+.standards { display: flex; flex-direction: column; gap: 12px; }
+.standards p { margin: 0; line-height: 1.4; }
+.standards-lead { font-family: var(--hand); font-size: 22px; }
+.standards-history { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; }
+.standards-history li { display: contents; }
+.standards-history b { font-weight: 600; color: var(--ink); white-space: nowrap; }
+.standards-history span { line-height: 1.4; }
+.standards-tree { width: 100%; max-width: 720px; height: auto; display: block; font-family: var(--sans); }
+.standards-tree text { font-size: 13px; fill: var(--ink); }
+.standards-tree .std-name { font-size: 14px; font-weight: 600; }
+.standards-tree .std-example { fill: var(--muted); }
+.standards-tree .std-around-head { fill: var(--muted); }
+.standards-tree .std-box { stroke-width: 1.5; }
+.standards-tree .std-p1 { fill: #eef2f7; stroke: #475569; }
+.standards-tree .std-p2 { fill: #e6f4f1; stroke: #0f766e; }
+.standards-tree .std-schema { fill: #fff; stroke: #0f766e; stroke-width: 1.2; stroke-dasharray: 3 2; }
+.standards-tree .std-schema-text { font-size: 12px; fill: #0f5f58; }
+.standards-tree .std-link { fill: none; stroke: #8a8f98; stroke-width: 1.4; }
+.standards-tree .std-rule { stroke: var(--line); stroke-width: 1; }
+.standards-here { color: var(--muted); }
+.standards-choice { display: flex; gap: 12px; flex-wrap: wrap; }
 .opening-lead { margin: 0; font-family: var(--hand); font-size: 22px; }
 .opening-table { width: 100%; border-collapse: collapse; }
 .opening-table th { text-align: left; font-weight: 600; font-size: 14px; color: var(--muted); padding: 4px 10px 6px 8px; border-bottom: 1px solid var(--line); }

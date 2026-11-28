@@ -636,6 +636,19 @@ The master is `contracts/schemas/data-of-interest.json`:
 - **The table** (FR-123, D-359) has a row for every card of the opening, in the flowchart's
   order (`ROWS` in `opening.ts`); clicking any card highlights its row. After Adopt a column,
   "With OpenSensorHub", ticks the subsystems and says what became of the rest.
+- **Open Standards** (FR-123a, D-363). Above the table, until Adopt, one button,
+  `open-standards`. `opening.view` (`'components' | 'standards'`, a `Store` in `opening.ts`)
+  says what the panel shows while the phase is `build`; `showStandards()` and
+  `showComponents()` set it and do nothing else: no request, worker, layout or status change,
+  and the illustrative traffic runs on. `web/src/detail/StandardsView.tsx` draws the view
+  (`data-testid="standards"`, title "Open Standards"): the history (`HISTORY`, an `ol`,
+  `standards-history`), the tree (an inline `svg`, `standards-tree`, `role="img"` labelled by
+  its `title` and `desc`; each entity a `g` with `data-entity` and `data-part` `p1` or `p2`),
+  a sentence relating it to the demonstrator (`standards-here`) and the two buttons,
+  `choose-custom` ("Custom Components": `showComponents()`) and `choose-osh` ("OpenSensorHub":
+  `opening.adopt()`). `highlight()` (a card click) and `adopt()` set the view back to
+  `components`. A reload starts on `components`. The history's periods and the part numbers
+  are the opening's only digits, in this view only.
 - **Before Adopt:**
   - `runtime.start()` is **not called**: no worker starts, the relay is not
     registered and nothing is fetched (FR-122);
@@ -659,7 +672,7 @@ The master is `contracts/schemas/data-of-interest.json`:
   disabled with "Starting: <step>", and the cards open their panels once the server has
   answered. Nothing plays (FR-125a, §13.7).
 - **After hand-over** the detail panel keeps the opening panel, with every subsystem ticked
-  and no switch, until a component is clicked, the panel is closed or Overview is pressed
+  and no Open Standards button, until a component is clicked, the panel is closed or Overview is pressed
   (FR-125).
 
 ## 13. Workers, the page and controls

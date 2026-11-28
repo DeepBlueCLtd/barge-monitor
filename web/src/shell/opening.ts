@@ -1,8 +1,9 @@
 // The adoption opening (SRD 4.7 §9.8, docs/v4-interfaces.md §12). With `?hand-made` in the
 // URL the demonstrator opens on the data server as we would write it ourselves: a range of
 // subsystem components to develop, the main ones drawn beside the CSV importer and Models,
-// which we write either way. Choosing "Adopt OpenSensorHub" merges them into the single
-// Data server card, one at a time, and hands over to the normal layout (FR-77, FR-125a). The back end starts at the
+// which we write either way. "Open Standards" shows, in the panel, a short history of OGC API – Connected
+// Systems and a tree of its entities (D-363); from there "Custom Components" goes back to the table and
+// "OpenSensorHub" (Adopt) merges them into the single Data server card, one at a time, and hands over to the normal layout (FR-77, FR-125a). The back end starts at the
 // Adopt click, while the cards merge, and its startup is shown in the flowchart's status box: the flowchart stays on
 // screen throughout (D-360). Nothing runs before Adopt (FR-122).
 //
@@ -111,11 +112,17 @@ export const handMade: boolean = (() => {
 /**
  * Where the opening is:
  * - `off`: no flag; the demonstrator starts as FR-77 describes;
- * - `build`: "Build it ourselves" is shown; nothing runs (FR-122);
+ * - `build`: the components as we would write them ourselves; nothing runs (FR-122);
  * - `merging`: the subsystem cards are moving into the Data server card (FR-124);
  * - `adopted`: handed over to the normal layout and the normal startup (FR-125).
  */
 export type OpeningPhase = 'off' | 'build' | 'merging' | 'adopted';
+
+/**
+ * What the opening panel shows while the phase is `build` (FR-123, D-363): the components table, or the Open
+ * Standards view (a short history and a tree of the entities) with its two choices. Changing it starts nothing.
+ */
+export type OpeningView = 'components' | 'standards';
 
 class Opening {
   readonly phase = new Store<OpeningPhase>(handMade ? 'build' : 'off');
@@ -128,6 +135,8 @@ class Opening {
   private onStart: (() => void) | null = null;
   /** The subsystem whose table row is highlighted (FR-123). */
   readonly highlighted = new Store<string | null>(null);
+  /** D-363: the table, or the Open Standards view; only before Adopt. */
+  readonly view = new Store<OpeningView>('components');
   /** The opening panel is in the detail panel: from load, and after hand-over until the viewer clicks a component or closes it (FR-125). */
   readonly panel = new Store<boolean>(handMade);
 
@@ -144,13 +153,28 @@ class Opening {
 
   /** FR-123: a subsystem card highlights its row. */
   highlight(id: string) {
-    if (this.phase.value === 'build') this.highlighted.set(id);
+    if (this.phase.value !== 'build') return;
+    // The row is in the table: a card clicked while Open Standards is shown goes back to it (D-363).
+    this.view.set('components');
+    this.highlighted.set(id);
   }
 
-  /** FR-124: Adopt OpenSensorHub. One way (FR-126). */
+  /** D-363: "Open Standards": the history and the tree, in the panel; nothing starts and the flowchart is unchanged. */
+  showStandards() {
+    if (this.phase.value === 'build') this.view.set('standards');
+  }
+
+  /** D-363: "Custom Components": back to the table, as it was. Nothing else changes. */
+  showComponents() {
+    if (this.phase.value === 'build') this.view.set('components');
+  }
+
+  /** FR-124: Adopt OpenSensorHub (the "OpenSensorHub" choice of the Open Standards view, D-363). One way (FR-126). */
   adopt() {
     if (this.phase.value !== 'build') return;
     this.highlighted.set(null);
+    // The table comes back, to tick the subsystems as they land (D-360).
+    this.view.set('components');
     // D-361: the illustrative traffic stops at once; what is in flight fades out before the cards move.
     mockTraffic.stop();
     this.adopted.set(true);
