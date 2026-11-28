@@ -272,6 +272,9 @@ for (const backend of ['standin', 'python'] as const) {
         await expect(page.getByTestId(`outputs-${m}-${a}`)).toContainText(/[1-9]\d* outputs/);
         await expect(page.locator(`[data-testid="model-run"][data-run="${m}-${a}-1"]`)).toHaveAttribute('data-status', 'complete');
       }
+      // The models stay animated while the panel is open, even when idle (no run in progress).
+      await expect(page.getByTestId('activity-summaries')).toContainText('showing its work');
+      await expect(page.getByTestId('inner-summaries').locator('animateMotion').first()).toBeAttached();
       await page.getByTestId('card-server').click();
       await expect(page.getByTestId('server-osh')).toContainText('OpenSensorHub');
       await expect(page.getByTestId('server-osh')).toContainText('stand-in');
