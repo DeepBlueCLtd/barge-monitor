@@ -565,6 +565,7 @@ for (const backend of ['standin', 'python'] as const) {
       await page.waitForTimeout(4000);
       await pause(page);
       await page.getByTestId('preset-1m').click();
+      const savedAt = await bar(page).getAttribute('data-time');
       const star = page.getByTestId('favourites-button');
       await expect(star).toHaveAttribute('data-saved', 'false');
       await star.click();
@@ -607,6 +608,10 @@ for (const backend of ['standin', 'python'] as const) {
       await page.getByTestId('doi-item').filter({ hasText: 'Last minute' }).getByTestId('doi-open').click();
       await expect(page.getByTestId('doi-opened')).toHaveAttribute('data-checksum', sum1!);
       await expect(page.getByTestId('doi-opened')).toContainText(A);
+      // Opening also returns the replay to the record: its dataset, its time and its period.
+      await expect(page.getByTestId('dataset-button')).toContainText(A);
+      await expect(page.getByTestId('preset-1m')).toHaveAttribute('aria-pressed', 'true');
+      await expect(bar(page)).toHaveAttribute('data-time', savedAt!);
       // AT-46: compared on elapsed time, at the coarser resolution, labelled "elapsed".
       await star.click();
       await page.getByTestId('doi-item').filter({ hasText: 'Last minute' }).getByTestId('doi-pick').check();

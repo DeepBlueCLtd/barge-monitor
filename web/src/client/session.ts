@@ -19,7 +19,7 @@ import {
 } from './discovery';
 import { buildView, datasetDatastreams, DatasetView, essentialFor, outputOf, Property, RES_SECONDS, Resolution, RESOLUTIONS, Source, sourceAt } from './fields';
 import { Closed, ClientHttp, commandOutcomes, HttpError, NetworkFailure, StatusReport, Unauthorized } from './http';
-import { iso, parseIso, PeriodId, periodOf, readableUntil, statsRes, windowOf } from './plan';
+import { iso, parseIso, PeriodId, periodFor, periodOf, readableUntil, statsRes, windowOf } from './plan';
 
 export type Phase = 'login' | 'handshake' | 'ready' | 'unreachable' | 'rejected' | 'locked';
 
@@ -1264,8 +1264,27 @@ export class DisplayClientSession {
         return;
       }
       const r = item.record;
+      await this.restoreWindow(http, r);
       this.opened.set({ kind: 'open', title: `${r.label} · ${r.dataset.file} · ${r.start} to ${r.end}`, records: [{ item, ...g }], checksum: digest(g.series) });
     });
+  }
+
+  /** Opening a record also returns the replay to it: its dataset made current, the time at its end, its period (FR-106). */
+  private async restoreWindow(http: ClientHttp, r: DoiRecord) {
+    const ds = this.datasetOf(r);
+    const e = ds ? this.catalogue.value.find((x) => x.dataset === ds) : null;
+    if (!ds || !e || e.start == null || e.end == null) return;
+    const from = parseIso(r.start);
+    const to = Math.min(e.end, Math.max(e.start, parseIso(r.end)));
+    this.selection.set({ ...this.selection.value, period: periodFor(from, to, e.start) });
+    if (!this.current(ds)) {
+      await this.openDataset(http, ds, to);
+      return;
+    }
+    if (this.clock.state.value?.playing) this.clock.pause();
+    this.clock.seek(to);
+    await this.readData(http, true);
+    await this.readAnalysis(http, true);
   }
 
   /** FR-107: two records on elapsed time from each one's start, the finer brought to the coarser resolution. */
