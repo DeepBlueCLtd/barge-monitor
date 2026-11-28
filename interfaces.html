@@ -350,7 +350,8 @@ CI).</p>
 <tr>
 <td><code>MISSION_A_20310407.csv</code></td>
 <td>2031-04-07T00:00:00Z, +24 h</td>
-<td>Imported silently at startup (FR-15)</td>
+<td>Imported silently at startup only with <code>?mission-a</code>, for
+tests (FR-15, D-366)</td>
 </tr>
 <tr>
 <td><code>MISSION_B_20310414.csv</code></td>
@@ -715,9 +716,11 @@ sha256 differ is imported as a new dataset. The earlier one becomes
 <p><strong>At server start</strong> the importer lists the folder and
 publishes <code>not-imported</code>, <code>imported</code> or
 <code>changed</code> for every file. Then, <strong>once per page load
-only</strong>, it imports <code>MISSION_A_…csv</code> with
-<code>x-tap-quiet</code> (silent, FR-15). After Reset instance this
-silent import does not run until the page is reloaded.</p>
+only</strong> and only when the page was opened with
+<code>?mission-a</code> (tests; D-366), it imports
+<code>MISSION_A_…csv</code> with <code>x-tap-quiet</code> (silent,
+FR-15). Otherwise the page opens with no dataset loaded. After Reset
+instance this silent import does not run until the page is reloaded.</p>
 <p><strong>Speed.</strong> The importer panel shows <code>rows/s</code>
 for the last import. In the stand-in it must beat 50,000 rows/s, so that
 24 h imports in under 4 s.</p>
