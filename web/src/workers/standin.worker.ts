@@ -17,9 +17,9 @@ const gate = new Gate();
 const queue: Array<() => void> = [];
 const post = (p: Progress) => self.postMessage({ type: 'progress', ...p });
 
-async function start(folderUrl: string | null) {
+async function start(folderUrl: string | null, missionA: boolean) {
   // The data folder (FR-15): read by the CSV importer only, through its listing and each file (FR-20, FR-17a).
-  rt = await createStandin(folderUrl ? fetchFolder(folderUrl) : undefined, post, undefined, gate);
+  rt = await createStandin(folderUrl ? fetchFolder(folderUrl) : undefined, post, undefined, gate, missionA);
   const runtime = rt;
   self.postMessage({ type: 'state', state: runtime.controlState() });
   let n = 0;
@@ -71,7 +71,7 @@ self.onmessage = (e: MessageEvent) => {
   const d = e.data;
   if (d.type === 'start') {
     Runner.paceMs = Number(d.runPaceMs) || 0;
-    start(d.folderUrl ?? null).catch((err) => post({ stage: 'error', detail: String(err?.message ?? err), pct: 0 }));
+    start(d.folderUrl ?? null, !!d.missionA).catch((err) => post({ stage: 'error', detail: String(err?.message ?? err), pct: 0 }));
   } else if (d.type === 'connect') {
     const port: MessagePort = e.ports[0];
     port.onmessage = (m) => serve(m.data, m.ports[0]);

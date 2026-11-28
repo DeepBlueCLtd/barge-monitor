@@ -108,8 +108,9 @@ export class Runtime {
   holdS = 5;
   /** The CSV importer, a module of the data server (§7). */
   readonly importer: Importer;
-  /** Mission A is imported silently once per page load: not again after Reset instance (FR-15, FR-50a). */
-  silentImport = true;
+  /** Mission A is imported silently once per page load, only when asked (D-366: `?mission-a`, for tests); not again
+   * after Reset instance (FR-15, FR-50a). By default the page opens with no dataset loaded. */
+  silentImport = false;
   instanceResets = 0;
   /** The demonstrator's system hold (D-362): the importer, the core models and pushed commands wait while it is held. */
   gate = new Gate();
@@ -147,7 +148,7 @@ export class Runtime {
    */
   async catchUp(progress?: (p: Progress) => void): Promise<void> {
     const srv = this.server!;
-    progress?.({ stage: 'import', detail: 'the CSV importer: listing the data folder and importing Mission A', pct: 94 });
+    progress?.({ stage: 'import', detail: `the CSV importer: listing the data folder${this.silentImport ? ' and importing Mission A' : ''}`, pct: 94 });
     srv.starting = true;
     await this.startModules(srv);
     // The models register and subscribe before the flowchart appears; they then process each dataset (§10.2).

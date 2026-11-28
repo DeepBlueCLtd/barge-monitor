@@ -45,7 +45,7 @@ for (const backend of BACKENDS) {
     test.beforeAll(async ({ browser }, info) => {
       const context = await browser.newContext({ baseURL: info.project.use.baseURL, viewport: { width: 1920, height: 1080 } });
       page = await context.newPage();
-      await page.goto(`demo/?backend=${backend}`);
+      await page.goto(`demo/?mission-a&backend=${backend}`);
       await expect(page.getByTestId('flowchart')).toBeVisible({ timeout: SLOW_MS });
       await expect(page.getByTestId('backend-state')).toHaveText(backend === 'python' ? 'Python' : 'JavaScript stand-in');
       // In Python mode the models start in their own workers after the server: wait until they have registered (FR-28).

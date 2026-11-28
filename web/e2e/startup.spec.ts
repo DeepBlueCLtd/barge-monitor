@@ -113,6 +113,9 @@ test('(a) first load on the sub-path: the steps are named, startup completes, th
   await expect(page.getByTestId('control-reason')).toHaveText('Starting: back end');
   release();
   await started(page);
+  // D-366: the page opens with no dataset loaded: the folder is listed, nothing in it imported.
+  await expect.poll(() => page.evaluate(() => ((globalThis as any).bargeControlState?.()?.folder ?? []).map((f: any) => f.status)))
+    .toEqual(Array(4).fill('not-imported'));
   expect(await relayVersion(page)).toMatch(/^4\.7/);
   expect(errors).toEqual([]);
   await context.close();

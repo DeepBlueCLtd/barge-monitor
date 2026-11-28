@@ -20,7 +20,7 @@ const port = Number(opt('port', String(20000 + Math.floor(Math.random() * 20000)
 const B = `http://127.0.0.1:${port}`;
 const HOLD_S = 1;
 
-const extra = argv.includes('--folder') ? ['--folder', opt('folder')] : [];
+const extra = ['--mission-a', ...(argv.includes('--folder') ? ['--folder', opt('folder')] : [])];
 const child = spawn(process.execPath, [join(here, 'standin-server.mjs'), '--port', String(port), '--hold', String(HOLD_S), ...extra],
   { stdio: ['pipe', 'pipe', 'inherit'] });
 await new Promise((res, rej) => {

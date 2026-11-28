@@ -6,7 +6,8 @@
 // serves the stand-in's HTTP interface at the root of the given port; the
 // server's internal endpoint (§9.2, D-223) is /api-internal beside it.
 //
-// Usage: node web/scripts/standin-server.mjs [--port N] [--folder DIR] [--hold S]
+// Usage: node web/scripts/standin-server.mjs [--port N] [--folder DIR] [--hold S] [--mission-a]
+//   --mission-a: import Mission A silently at startup, as the page does with ?mission-a (D-366).
 //   --hold S: how long a command's POST is held, in seconds (§9.1; 5 by default).
 //   --folder DIR: the data folder the CSV importer reads (index.json and <file>.gz, as
 //   scripts/build_data_folder.py writes it); by default web/public/data/folder, when built.
@@ -56,7 +57,7 @@ const bundle = await build({
 const mod = await import('data:text/javascript;base64,' + Buffer.from(bundle.outputFiles[0].text).toString('base64'));
 const tBundle = performance.now();
 
-const rt = await mod.createStandin(folder, undefined, hold === null ? undefined : Number(hold));
+const rt = await mod.createStandin(folder, undefined, hold === null ? undefined : Number(hold), undefined, process.argv.includes('--mission-a'));
 const tReady = performance.now();
 
 setInterval(() => {

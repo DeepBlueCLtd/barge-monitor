@@ -21,8 +21,9 @@ export { Gate } from './gate';
  * Start the stand-in over a data folder: start the CSV importer (which imports Mission A silently, FR-15), let the
  * models register and subscribe, ready to serve. The 4.1 pre-calculated history is retired (D-320).
  */
-export async function createStandin(folder?: Folder, progress?: (p: Progress) => void, holdS?: number, gate?: Gate): Promise<Runtime> {
+export async function createStandin(folder?: Folder, progress?: (p: Progress) => void, holdS?: number, gate?: Gate, missionA = false): Promise<Runtime> {
   const rt = new Runtime(folder);
+  rt.silentImport = missionA; // D-366: Mission A only when asked
   if (holdS !== undefined) rt.holdS = holdS;
   if (gate) rt.gate = gate; // the demonstrator's system hold, from before the server starts (D-362)
   await rt.catchUp(progress);

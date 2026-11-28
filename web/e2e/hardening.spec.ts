@@ -99,7 +99,7 @@ for (const backend of ['standin', 'python'] as const) {
     const bytes = [...served.values()].reduce((a, b) => a + b, 0);
     const folder = [...served].filter(([p]) => p.includes('/data/folder/')).reduce((a, [, b]) => a + b, 0);
     const top = [...served].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([p, b]) => `${MB(b)} ${p.replace(/^.*\//, '')}`);
-    console.log(`${name}: startup ${started} ms from navigation to every core model ready, registered and subscribed (${wall} ms by the test's clock; every core model live, Mission A processed, at ${live} ms; steps done, ms: ${Object.entries(times).map(([k, v]) => `${k} ${Math.round(v)}`).join(', ')}); ` +
+    console.log(`${name}: startup ${started} ms from navigation to every core model ready, registered and subscribed (${wall} ms by the test's clock; every core model live at ${live} ms; steps done, ms: ${Object.entries(times).map(([k, v]) => `${k} ${Math.round(v)}`).join(', ')}); ` +
       `downloaded ${MB(bytes)} (data folder ${MB(folder)}); largest: ${top.join('; ')}`);
     expect(started, `${name}: startup took ${started} ms`).toBeLessThanOrEqual(STARTUP_BUDGET_MS);
     expect(bytes, `${name}: a start downloaded ${MB(bytes)}`).toBeLessThanOrEqual(DOWNLOAD_BUDGET_BYTES[backend]);
@@ -119,7 +119,7 @@ for (const backend of ['standin', 'python'] as const) {
     test.setTimeout(300_000);
     const context = await browser.newContext();
     const page = await context.newPage();
-    await page.goto(`demo/?backend=${backend}`);
+    await page.goto(`demo/?mission-a&backend=${backend}`);
     await expect(page.getByTestId('flowchart')).toBeVisible({ timeout: STARTUP_BUDGET_MS });
     await modelsAt(page, 300_000, true); // Mission A processed: the models' outputs exist, as in the CPython half (D-285)
     const t0 = Date.now();

@@ -40,7 +40,8 @@ from .tap import Tap
 
 class Runtime:
     def __init__(self, capture: bool = True, local_models: bool = False, real=real_seconds,
-                 hold_s: float = C.COMMAND_HOLD_S, folder=None, parser=None, own_loop: bool = True):
+                 hold_s: float = C.COMMAND_HOLD_S, folder=None, parser=None, own_loop: bool = True,
+                 silent_import: bool = False):
         self.real = real  # real time, Unix seconds: commands, status reports and captures are stamped with it (§9.1)
         self.hold_s = hold_s  # how long a command's POST is held before it is answered (§9.1)
         self.tap = Tap(now=self.real)
@@ -56,7 +57,9 @@ class Runtime:
         if folder is not None and not hasattr(folder, "list"):
             folder = DirFolder(folder)
         self.importer = Importer(self, folder if folder is not None else EmptyFolder(), parser)
-        self.silent_import = True  # Mission A, once per page load: not again after Reset instance (FR-15, FR-50a)
+        # Mission A, imported silently once per page load, only when asked (D-366): the page opens with no dataset
+        # loaded unless a test asks with ?mission-a. Not again after Reset instance (FR-15, FR-50a).
+        self.silent_import = silent_import
         # The demonstrator's system hold (D-362): while held, the importer stops at its next step and pushed commands
         # wait in the server; let go, each carries on where it stopped. Scaffolding: a developed system has none.
         self.held = False

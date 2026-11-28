@@ -32,15 +32,16 @@ function folderReaders(folderUrl: string) {
   };
 }
 
-async function start(pyodideUrl: string, pyZipUrl: string, folderUrl: string | null) {
+async function start(pyodideUrl: string, pyZipUrl: string, folderUrl: string | null, missionA: boolean) {
   py = await loadRuntime(pyodideUrl, pyZipUrl, ['numpy', 'fastapi', 'jsonschema'], post);
   post({ stage: 'server', detail: 'the data server: starting', pct: 90 });
   const folder = folderUrl ? folderReaders(folderUrl) : null;
   py.globals.set('_fetch_index', folder ? folder.index : null);
   py.globals.set('_fetch_file', folder ? folder.file : null);
+  py.globals.set('_mission_a', missionA);
   py.runPython(`
 from barge.bridge import Bridge
-bridge = Bridge(fetch_index=_fetch_index, fetch_file=_fetch_file)
+bridge = Bridge(fetch_index=_fetch_index, fetch_file=_fetch_file, silent_import=_mission_a)
 `);
   bridge = py.globals.get('bridge');
   bridge.set_held(held);
@@ -55,12 +56,12 @@ bridge = Bridge(fetch_index=_fetch_index, fetch_file=_fetch_file)
       console.error(e);
     }
   }, 100);
-  // The server answers once the importer has started: Mission A is imported silently first, at this first start
-  // only (FR-15). The steps are named while that happens (§13.7).
+  // The server answers once the importer has started: when asked (D-366), Mission A is imported silently first, at
+  // this first start only (FR-15). The steps are named while that happens (§13.7).
   for (;;) {
     const phase = String(bridge.startup_phase());
     if (phase === 'ready') break;
-    if (phase === 'import') post({ stage: 'import', detail: 'the CSV importer: listing the data folder and importing Mission A', pct: 95 });
+    if (phase === 'import') post({ stage: 'import', detail: `the CSV importer: listing the data folder${missionA ? ' and importing Mission A' : ''}`, pct: 95 });
     await new Promise((r) => setTimeout(r, 100));
   }
   post({ stage: 'ready', detail: 'running', pct: 100 });
@@ -121,7 +122,7 @@ async function serve(req: any, reply: MessagePort) {
 
 self.onmessage = (e: MessageEvent) => {
   const d = e.data;
-  if (d.type === 'start') start(d.pyodideUrl, d.pyZipUrl, d.folderUrl ?? null).catch((err) => post({ stage: 'error', detail: String(err), pct: 0 }));
+  if (d.type === 'start') start(d.pyodideUrl, d.pyZipUrl, d.folderUrl ?? null, !!d.missionA).catch((err) => post({ stage: 'error', detail: String(err), pct: 0 }));
   else if (d.type === 'hold') {
     held = !!d.on; // D-362: the importer and pushed commands wait in the server while held
     bridge?.set_held(held);

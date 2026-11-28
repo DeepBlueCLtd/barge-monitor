@@ -73,7 +73,7 @@ def standin(data_folder):
     s.bind(("127.0.0.1", 0))
     port = s.getsockname()[1]
     s.close()
-    proc = subprocess.Popen(["node", str(SCRIPT), "--port", str(port), "--hold", "0.5", "--folder", str(data_folder)],
+    proc = subprocess.Popen(["node", str(SCRIPT), "--port", str(port), "--hold", "0.5", "--folder", str(data_folder), "--mission-a"],
                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, cwd=ROOT)
     try:
         deadline = time.monotonic() + 180
@@ -158,7 +158,7 @@ def test_the_importer_is_the_same_in_both_back_ends(standin, data_folder):
     from barge.api import create_app
     from barge.runtime import Runtime
 
-    rt = Runtime(folder=data_folder)
+    rt = Runtime(folder=data_folder, silent_import=True)
     while not (rt.running and rt.importer.subscribed):
         rt.tick()
     c_file = "MISSION_C_20310421.csv"
@@ -217,7 +217,7 @@ def test_the_models_declare_the_same_outputs_in_both_back_ends(standin, data_fol
     from barge.api import create_app
     from barge.runtime import Runtime
 
-    rt = Runtime(folder=data_folder, local_models=True)
+    rt = Runtime(folder=data_folder, local_models=True, silent_import=True)
     while not (rt.running and rt.local.live and all(r.completed for r in rt.local.runners)):
         rt.tick()
     py = TestClient(create_app(rt), headers=OWNER)

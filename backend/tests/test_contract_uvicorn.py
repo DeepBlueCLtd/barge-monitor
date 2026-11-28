@@ -20,7 +20,7 @@ def server(data_folder):
     port = s.getsockname()[1]
     s.close()
     # Over the data folder: Mission A imported and processed, so that the models' outputs exist (D-285).
-    rt = Runtime(local_models=True, hold_s=0.5, folder=data_folder)
+    rt = Runtime(local_models=True, hold_s=0.5, folder=data_folder, silent_import=True)
     while not (rt.server.ready and rt.local.live):
         rt.tick()
     srv = uvicorn.Server(uvicorn.Config(create_app(rt), host="127.0.0.1", port=port, log_level="warning"))

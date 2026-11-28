@@ -144,7 +144,7 @@ for (const backend of BACKENDS) {
       page.on('pageerror', (e) => errors.push(e.message));
       // NFR-06 (AT-23): nothing is fetched from another origin.
       page.on('request', (r) => !r.url().startsWith(new URL(info.project.use.baseURL!).origin) && !r.url().startsWith('data:') && !r.url().startsWith('blob:') && foreign.push(r.url()));
-      await page.goto(`demo/?backend=${backend}`);
+      await page.goto(`demo/?mission-a&backend=${backend}`);
       await expect(page.getByTestId('flowchart')).toBeVisible({ timeout: SLOW });
       // In Python mode the models start in their own workers after the server: wait until they are live.
       await expect.poll(async () => (await getOrNull(page, 'api/systems?searchMembers=true&f=application/sml%2Bjson&limit=1000'))?.items

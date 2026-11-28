@@ -57,7 +57,7 @@ export class Startup {
       relay: 'registering the seam relay (Service Worker) and waiting until it controls this page',
       'back end': python ? 'loading the Python back end (Pyodide) in its worker' : 'starting the JavaScript stand-in in its worker',
       server: 'starting the data server',
-      import: 'the CSV importer: listing the data folder and importing Mission A, silently (FR-15)',
+      import: 'the CSV importer: listing the data folder (FR-15)',
       models: 'starting each core model',
     };
     this.steps = new Store<Step[]>((Object.keys(what) as StepId[]).map((id) => ({ id, what: what[id], state: 'pending', detail: '', since: null })));

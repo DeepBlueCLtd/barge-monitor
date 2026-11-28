@@ -45,13 +45,13 @@ def _none(x):
 
 
 class Bridge:
-    def __init__(self, fetch_index=None, fetch_file=None):
+    def __init__(self, fetch_index=None, fetch_file=None, silent_import=False):
         """``fetch_index()`` and ``fetch_file(name)`` read the data folder in the browser (``folder.FetchFolder``):
         the worker fetches ``index.json`` and each ``<file>.gz``, and decompresses them."""
         folder = FetchFolder(fetch_index, fetch_file) if _none(fetch_index) is not None else None
         # In Pyodide the page's event loop runs the importer: its subscription and imports are tasks on it. In
         # CPython (tests) the runtime keeps a loop of its own, run at each tick.
-        self.rt = Runtime(folder=folder, own_loop=sys.platform != "emscripten")
+        self.rt = Runtime(folder=folder, own_loop=sys.platform != "emscripten", silent_import=bool(_none(silent_import)))
         self.app = create_app(self.rt)
         self._tasks: dict = {}  # request id -> the task answering it (start, cancel)
 

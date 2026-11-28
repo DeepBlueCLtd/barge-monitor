@@ -33,6 +33,9 @@ export const RUN_PACE_MS = (() => {
   const s = Number(urlParam('runpace'));
   return Number.isFinite(s) && s > 0 ? Math.min(s, 5000) : 0;
 })();
+/** `?mission-a`, for tests only (D-366): import Mission A silently at startup, as every load did before. Without it the
+ * page opens with no dataset loaded, and the user opens one from the catalogue. */
+export const MISSION_A = urlParam('mission-a') !== null;
 /**
  * FR-124 (D-360): the adoption merge, in steps. The opening's lines fade and the Data server card appears (intro); the
  * subsystem cards then travel into it one at a time, each shrinking as it goes and ticking its row as it lands (each
@@ -48,7 +51,7 @@ export function resolve(rel: string): string {
   return new URL(rel, document.baseURI).toString();
 }
 
-/** URL parameters (docs/v4-interfaces.md §13.6): ?backend=python|standin, ?sketch=off, ?hand-made, and for tests ?folder=, ?idle= and ?runpace=. */
+/** URL parameters (docs/v4-interfaces.md §13.6): ?backend=python|standin, ?sketch=off, ?hand-made, and for tests ?folder=, ?idle=, ?runpace= and ?mission-a. */
 export function urlParam(name: string): string | null {
   try {
     return new URLSearchParams(location.search).get(name);

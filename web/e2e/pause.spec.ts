@@ -19,7 +19,7 @@ const icons = (page: Page) => page.getByTestId('message-icon').evaluateAll((els)
 const liveModels = (page: Page) => page.evaluate(() => ((globalThis as any).bargeControlState()?.models ?? []).filter((m: any) => m.phase === 'live').length);
 
 async function open(page: Page, backend: string) {
-  await page.goto(`demo/?backend=${backend}`);
+  await page.goto(`demo/?mission-a&backend=${backend}`);
   await expect(page.getByTestId('flowchart')).toBeVisible({ timeout: SLOW });
   await expect(page.getByTestId('flowchart')).toHaveAttribute('data-ready', 'true', { timeout: SLOW });
 }
@@ -172,7 +172,7 @@ for (const backend of BACKENDS) {
     test(`Pause is there during the rush after Adopt, and holds it for inspection, ${backend}`, async ({ page }) => {
       const errors: string[] = [];
       page.on('pageerror', (e) => errors.push(e.message));
-      await page.goto(`demo/?hand-made&backend=${backend}`);
+      await page.goto(`demo/?mission-a&hand-made&backend=${backend}`);
       await expect(page.getByTestId('flowchart')).toHaveAttribute('data-mode', 'opening');
       // Hidden in the opening (FR-122), there the moment the controls appear after Adopt, while the back end starts.
       await expect(page.getByTestId('system-pause')).toHaveCount(0);
