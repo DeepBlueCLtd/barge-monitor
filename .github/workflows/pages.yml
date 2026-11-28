@@ -65,6 +65,15 @@ jobs:
             echo "banner=" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Say on the PR that the preview is building
+        if: env.IS_PR == 'true' && env.CAN_DEPLOY == 'true'
+        uses: actions/github-script@v7
+        env:
+          PREVIEW_URL: ${{ steps.paths.outputs.url }}
+        with:
+          script: |
+            await require('./.github/scripts/preview-comment.js')({ github, context, state: 'building' });
+
       - name: Build site
         run: scripts/build-site.sh site "${{ steps.paths.outputs.banner }}"
 
@@ -90,6 +99,9 @@ jobs:
           # preview (same origin, NFR-08); the path is relative.
           VITE_SHARED_PATH: ${{ env.IS_PR == 'true' && '../../../' || '../' }}
         run: |
+          # D-364: stamp the build, for the Overview panel and for the live check below.
+          export VITE_BUILD_SHA="${SOURCE_SHA::7}"
+          export VITE_BUILD_TIME="$(date -u '+%Y-%m-%d %H:%M UTC')"
           pip install -r ../backend/requirements-dev.txt
           python ../scripts/build_data_folder.py
           python ../scripts/build_data_folder.py --check
@@ -97,6 +109,7 @@ jobs:
           npm run pyodide
           npm run build
           cp -r dist ../site/demo
+          printf '{"sha":"%s","built":"%s"}\n' "$VITE_BUILD_SHA" "$VITE_BUILD_TIME" > ../site/demo/version.json
           mkdir -p ../shared/pyodide
           cp -r ../.cache/pyodide/0.29.5 ../shared/pyodide/
 
@@ -128,28 +141,25 @@ jobs:
           keep_files: true
           commit_message: "deploy shared pyodide from ${{ env.SOURCE_SHA }}"
 
-      - name: Comment preview link on the PR
+      - name: Wait until the preview serves this build, then say so on the PR
         if: env.IS_PR == 'true' && env.CAN_DEPLOY == 'true'
         uses: actions/github-script@v7
         env:
           PREVIEW_URL: ${{ steps.paths.outputs.url }}
-          SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
         with:
           script: |
-            const marker = '<!-- pages-preview -->';
-            const body = [
-              marker,
-              `**Demonstrator preview:** ${process.env.PREVIEW_URL}demo/`,
-              `**Documents preview:** ${process.env.PREVIEW_URL}`,
-              '',
-              `Rendered from ${process.env.SOURCE_SHA.substring(0, 7)}. The link is persistent: it is updated on every push and stays after the PR closes. Pages may take a minute to refresh.`,
-            ].join('\n');
-            const { owner, repo } = context.repo;
-            const issue_number = context.issue.number;
-            const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number, per_page: 100 });
-            const existing = comments.find(c => c.user.type === 'Bot' && c.body && c.body.includes(marker));
-            if (existing) {
-              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
-            } else {
-              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            // D-364: GitHub Pages publishes the gh-pages branch some time after the push; poll the preview's
+            // version.json until it names this commit (up to ten minutes).
+            const sha = process.env.SOURCE_SHA.substring(0, 7);
+            const started = Date.now();
+            let live = false;
+            while (Date.now() - started < 10 * 60_000) {
+              try {
+                const r = await fetch(`${process.env.PREVIEW_URL}demo/version.json?t=${Date.now()}`, { cache: 'no-store' });
+                if (r.ok && (await r.json()).sha === sha) { live = true; break; }
+              } catch {}
+              await new Promise((res) => setTimeout(res, 15_000));
             }
+            const when = new Date().toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
+            const waited = `${Math.round((Date.now() - started) / 60_000)} min`;
+            await require('./.github/scripts/preview-comment.js')({ github, context, state: live ? 'live' : 'late', detail: live ? `since ${when}` : waited });

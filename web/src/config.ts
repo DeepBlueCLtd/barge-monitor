@@ -3,6 +3,9 @@ export const API_BASE = 'api/';
 // Pyodide is published once at the site root and shared by every preview
 // (decision log D-34); the path to it is relative.
 export const SHARED_PATH: string = import.meta.env.VITE_SHARED_PATH ?? '../';
+/** D-364: which build this is, stamped by the pages workflow; a local build has neither. */
+export const BUILD_SHA: string | null = import.meta.env.VITE_BUILD_SHA || null;
+export const BUILD_TIME: string | null = import.meta.env.VITE_BUILD_TIME || null;
 export const PYODIDE_PATH = SHARED_PATH + 'pyodide/0.29.5/';
 export const PY_ZIP = 'py/barge.zip';
 /** The example model offered in an empty slot (FR-36), copied into the build from backend/models/. */
