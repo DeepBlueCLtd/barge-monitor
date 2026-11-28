@@ -1,0 +1,29 @@
+{
+ "folder_version": "4.7.0",
+ "files": [
+  {
+   "file": "MISSION_A_20310407.csv",
+   "size": 6689076,
+   "modified": "2031-04-08T02:00:00Z",
+   "sha256": "424e1911d6be496b9831d854962aa2f9a216638a54d2ff3d2f4cfa077b9e32f7"
+  },
+  {
+   "file": "MISSION_B_20310414.csv",
+   "size": 6753037,
+   "modified": "2031-04-15T02:00:00Z",
+   "sha256": "526525ac8a5aafa279c3262e2491fcf35876adcbfa16507d6fc02f729c2b3fbc"
+  },
+  {
+   "file": "MISSION_B_20310414_REEXPORT.csv",
+   "size": 6759024,
+   "modified": "2031-04-15T08:00:00Z",
+   "sha256": "31cf78b27c913f777674c2787e5332daa26cd9d522bdc7234d1b440aaced9fdc"
+  },
+  {
+   "file": "MISSION_C_20310421.csv",
+   "size": 3138901,
+   "modified": "2031-04-21T14:00:00Z",
+   "sha256": "805b1c4d3dce735c3185631ec277345bccf977f6ee6f1e950fac6cf68e34167e"
+  }
+ ]
+}
