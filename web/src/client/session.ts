@@ -63,6 +63,8 @@ export interface DoiRecord {
   version: 1;
   label: string;
   note?: string;
+  /** Free-text tags, to filter Favourites by (FR-105a). Older records have none. */
+  tags?: string[];
   dataset: { file: string; size: number; modified: string; sha256: string };
   start: string;
   end: string;
@@ -71,6 +73,38 @@ export interface DoiRecord {
   sources: { system: string; output: string; fields: string[] }[];
   run?: string;
   created: { at: string; by: string };
+}
+
+/** Tags as typed, comma separated: trimmed, inner spaces collapsed, empties and case-insensitive repeats dropped (FR-105a). */
+export function parseTags(text: string): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of text.split(',')) {
+    const t = raw.trim().replace(/\s+/g, ' ');
+    if (t && !seen.has(t.toLowerCase())) {
+      seen.add(t.toLowerCase());
+      out.push(t);
+    }
+  }
+  return out;
+}
+
+/** The tags of saved records, each once (case-insensitively, as first seen), with how many records carry it, by name. */
+export function tagsOf(records: DoiRecord[]): { tag: string; count: number }[] {
+  const by = new Map<string, { tag: string; count: number }>();
+  for (const r of records) for (const t of r.tags ?? []) {
+    const k = t.toLowerCase();
+    const e = by.get(k);
+    if (e) e.count++;
+    else by.set(k, { tag: t, count: 1 });
+  }
+  return [...by.values()].sort((a, b) => a.tag.localeCompare(b.tag, undefined, { sensitivity: 'base' }));
+}
+
+/** A record carries every one of these tags (case-insensitively). */
+export function hasTags(r: DoiRecord, tags: string[]): boolean {
+  const own = new Set((r.tags ?? []).map((t) => t.toLowerCase()));
+  return tags.every((t) => own.has(t.toLowerCase()));
 }
 
 export interface DoiItem {
@@ -1151,7 +1185,7 @@ export class DisplayClientSession {
   }
 
   /** FR-104, FR-94a: save the current window; a resolution no datastream holds is refused, naming those that do. */
-  async saveDoi(label: string, note: string, resolution: string): Promise<string | null> {
+  async saveDoi(label: string, note: string, resolution: string, tags: string[] = []): Promise<string | null> {
     const s = this.clock.state.value;
     const w = this.window();
     const v = this.view.value;
@@ -1167,7 +1201,7 @@ export class DisplayClientSession {
     const entry = this.catalogue.value.find((x) => x.dataset === s.dataset);
     if (!entry) return 'The dataset is not in the catalogue.';
     const record: DoiRecord = {
-      version: 1, label: label.trim(), ...(note.trim() ? { note: note.trim() } : {}),
+      version: 1, label: label.trim(), ...(note.trim() ? { note: note.trim() } : {}), ...(tags.length ? { tags } : {}),
       dataset: { file: entry.file, size: entry.size, modified: entry.modified, sha256: entry.sha256 },
       start: iso(w[0]), end: iso(w[1]), resolution: res, aggregation: 'as-stored', sources: this.currentSources(res),
       created: { at: new Date().toISOString().replace(/\.\d+Z$/, 'Z'), by: this.user.value ?? '' },

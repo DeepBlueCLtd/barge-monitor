@@ -14,7 +14,7 @@ import { useStore } from '../shell/store';
 import { essentialLabel } from './discovery';
 import { problemText, RESOLUTIONS } from './fields';
 import { iso, PERIODS } from './plan';
-import { CatalogueEntry, clientSession, DisplayClientSession, DoiItem } from './session';
+import { CatalogueEntry, clientSession, DisplayClientSession, DoiItem, hasTags, parseTags, tagsOf } from './session';
 import { PanelGrid } from './views/PanelGrid';
 import { ClusterView, ErrorBarView, HeatmapView, LineView, OpenedView } from './views/views';
 
@@ -337,6 +337,8 @@ function Favourites({ session }: { session: DisplayClientSession }) {
   const anchor = useRef<HTMLButtonElement>(null);
   const [label, setLabel] = useState('');
   const [note, setNote] = useState('');
+  const [tagText, setTagText] = useState('');
+  const [filter, setFilter] = useState<string[]>([]);
   const [res, setRes] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [picked, setPicked] = useState<string[]>([]);
@@ -346,15 +348,21 @@ function Favourites({ session }: { session: DisplayClientSession }) {
   useEffect(() => setRes(session.currentRes()), [sel, view, session, open]);
   const save = async (e: FormEvent) => {
     e.preventDefault();
-    const err = await session.saveDoi(label, note, res);
+    const err = await session.saveDoi(label, note, res, parseTags(tagText));
     setError(err);
     if (!err) {
       setLabel('');
       setNote('');
+      setTagText('');
     }
   };
   const pick = (id: string) => setPicked(picked.includes(id) ? picked.filter((x) => x !== id) : [...picked, id].slice(-2));
   const byId = (id: string) => items.find((x) => x.id === id);
+  // FR-105a: the tags in use, and the records carrying every one picked. A picked tag no record carries now is dropped.
+  const tags = tagsOf(items.map((x) => x.record));
+  const live = filter.filter((f) => tags.some((t) => t.tag.toLowerCase() === f.toLowerCase()));
+  const shown = items.filter((x) => hasTags(x.record, live));
+  const toggleTag = (t: string) => setFilter(live.includes(t) ? live.filter((x) => x !== t) : [...live, t]);
   return (
     <span className="dc-anchor">
       <button ref={anchor} className={`dc-btn small dc-star${saved ? ' saved' : ''}`} aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(!open)}
@@ -376,6 +384,9 @@ function Favourites({ session }: { session: DisplayClientSession }) {
               <form className="dc-doi-save" onSubmit={save}>
                 <input placeholder="Name" value={label} onChange={(e) => setLabel(e.target.value)} data-testid="doi-label" aria-label="Name" />
                 <input placeholder="Why it was kept (optional)" value={note} onChange={(e) => setNote(e.target.value)} data-testid="doi-note" aria-label="Note" />
+                <input placeholder="Tags, comma separated" value={tagText} onChange={(e) => setTagText(e.target.value)} data-testid="doi-tags" aria-label="Tags"
+                  list="doi-tag-list" title={tags.length ? `Tags in use: ${tags.map((t) => t.tag).join(', ')}` : 'Comma separated, for filtering the saved list'} />
+                <datalist id="doi-tag-list">{tags.map((t) => <option key={t.tag} value={t.tag} />)}</datalist>
                 <input className="mono" value={res} onChange={(e) => setRes(e.target.value)} aria-label="Resolution"
                   title={`Resolution, as an ISO 8601 duration: ${RESOLUTIONS.join(', ')}`} data-testid="doi-resolution" size={6} />
                 <button className="dc-btn small" type="submit" data-testid="doi-save">Save</button>
@@ -386,9 +397,18 @@ function Favourites({ session }: { session: DisplayClientSession }) {
         </section>
         <section className="dc-doi" data-testid="doi-panel">
           <div className="dc-row-head"><span className="dc-label">Saved</span></div>
-          {!items.length ? <p className="dc-note-plain" data-testid="doi-empty">None saved yet.</p> : (
+          {tags.length > 0 && (
+            <div className="dc-doi-tags" role="group" aria-label="Filter by tag" data-testid="doi-tag-filter">
+              {tags.map((t) => (
+                <button key={t.tag} className={`dc-btn small preset${live.includes(t.tag) ? ' on' : ''}`} aria-pressed={live.includes(t.tag)}
+                  onClick={() => toggleTag(t.tag)} data-testid="doi-tag" data-tag={t.tag}>{t.tag} <span className="dc-doi-count">{t.count}</span></button>
+              ))}
+              {live.length > 0 && <button className="dc-btn small" onClick={() => setFilter([])} data-testid="doi-tag-clear">Show all</button>}
+            </div>
+          )}
+          {!items.length ? <p className="dc-note-plain" data-testid="doi-empty">None saved yet.</p> : !shown.length ? <p className="dc-note-plain">None carries every picked tag.</p> : (
             <ul className="dc-doi-list">
-              {items.map((it) => <DoiRow key={it.id} item={it} picked={picked.includes(it.id)} onPick={() => pick(it.id)} session={session} onOpened={close} />)}
+              {shown.map((it) => <DoiRow key={it.id} item={it} picked={picked.includes(it.id)} onPick={() => pick(it.id)} session={session} onOpened={close} />)}
             </ul>
           )}
           {picked.length === 2 && byId(picked[0]) && byId(picked[1]) && (
@@ -411,6 +431,7 @@ function DoiRow({ item, picked, onPick, session, onOpened }: { item: DoiItem; pi
       <input type="checkbox" checked={picked} disabled={!!greyed} title={greyed ? `Cannot be compared: ${greyed}` : undefined} onChange={onPick} aria-label={`Pick ${r.label} to compare`} data-testid="doi-pick" />
       <b>{r.label}</b> <span>{r.dataset.file} · {r.start.slice(5, 16).replace('T', ' ')} to {r.end.slice(5, 16).replace('T', ' ')} · {r.resolution}</span>
       {r.note && <i> · {r.note}</i>}
+      {!!r.tags?.length && <span className="dc-doi-rowtags" data-testid="doi-item-tags">{r.tags.map((t) => <span key={t} className="dc-tag">{t}</span>)}</span>}
       {greyed && <span className="dc-greyed" data-testid="doi-greyed">{greyed}</span>}
       <span className="dc-doi-actions">
         <button className="dc-btn small" disabled={!!greyed} title={greyed ? `Cannot be opened: ${greyed}` : undefined} onClick={() => {
