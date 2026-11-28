@@ -1,4 +1,5 @@
 import { expect, Page, test } from '@playwright/test';
+import { BACKENDS } from './site';
 
 // The system-level Pause and slow motion (D-362; SRD FR-92, revised; docs/v4-interfaces.md §4, §13.2), in both back
 // ends. Pause freezes everything: icons hold where they are and can be clicked; no message is captured, no request
@@ -53,7 +54,7 @@ test('the top bar has no replay controls: the display client\'s replay bar is th
   await expect(page.getByTestId('draw-speed-1')).toHaveAttribute('aria-pressed', 'true');
 });
 
-for (const backend of ['standin', 'python'] as const) {
+for (const backend of BACKENDS) {
   const name = backend === 'python' ? 'Python in Pyodide' : 'JavaScript stand-in';
   test.describe(`the system's Pause and slow motion, ${name}`, () => {
     test.describe.configure({ mode: 'serial' });

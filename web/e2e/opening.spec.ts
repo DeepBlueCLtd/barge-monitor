@@ -1,5 +1,6 @@
 import { expect, Page, Request, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
+import { BACKENDS } from './site';
 
 // The adoption opening (plan Phase 9; SRD 4.7 §9.8, AT-62 to AT-67; docs/v4-interfaces.md §12), in both back ends:
 // the JavaScript stand-in and the Python back end in Pyodide. The opening is the same in both, because nothing runs
@@ -143,7 +144,7 @@ test('the opening\'s words: "a range of subsystem components", never a count, a 
   expect(src).not.toMatch(GONE);
 });
 
-for (const backend of ['standin', 'python'] as const) {
+for (const backend of BACKENDS) {
   const name = backend === 'python' ? 'Python in Pyodide' : 'JavaScript stand-in';
   const flag = `demo/?hand-made&backend=${backend}`;
 
